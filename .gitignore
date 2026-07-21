@@ -1,0 +1,23 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Local Spring configuration
+src/main/resources/application-local.yml
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Gradle
+.gradle/
+build/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
