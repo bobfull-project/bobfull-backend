@@ -41,6 +41,8 @@
 | 문서 | 역할 |
 |---|---|
 | [`docs/PROJECT_CONTEXT.md`](./docs/PROJECT_CONTEXT.md) | 확정 정책·버전·역할 |
+| [`docs/PM_MODE.md`](./docs/PM_MODE.md) | 아침 스크럼·일일 운영 브리핑 |
+| [`docs/ISSUE_TITLE_RULES.md`](./docs/ISSUE_TITLE_RULES.md) | Issue 버전·유형 제목 규칙 |
 | [`AGENTS.md`](./AGENTS.md) | AI 작업 진입점 |
 | [`docs/bobfull_full_flowchart_mermaid.md`](./docs/bobfull_full_flowchart_mermaid.md) | 전체 업무 흐름 |
 | [`docs/DOMAIN_DEPENDENCIES.md`](./docs/DOMAIN_DEPENDENCIES.md) | 도메인 변경 영향 |
@@ -52,6 +54,8 @@
 | [`docs/GITHUB_RULES.md`](./docs/GITHUB_RULES.md) | Git 협업 규칙 |
 
 AI 에이전트는 `AGENTS.md`에서 현재 작업에 필요한 문서만 선택해 읽는다.
+
+아침 스크럼에서는 `PM 모드 시작`, 하루 마감에는 `PM 모드 마감`으로 운영 브리핑을 실행한다.
 
 ## Repositories
 
