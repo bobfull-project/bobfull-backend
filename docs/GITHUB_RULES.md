@@ -37,6 +37,20 @@ develop → main PR
 main 병합 후 배포
 ```
 
+### 초기 저장소 설정 예외
+
+`develop` 브랜치가 아직 생성되지 않은 최초 설정 단계에서는 팀 규칙·AI 워크플로우·Issue/PR 템플릿 등 저장소 기반 문서를 `feature/*` 브랜치에서 작성하고 `main`으로 PR을 올릴 수 있다.
+
+초기 설정 PR을 `main`에 Merge한 뒤 최신 `main`에서 `develop`을 생성한다. 이후 기능 개발부터는 일반 브랜치 흐름을 따른다.
+
+```text
+초기 설정 feature 브랜치
+→ main PR
+→ 리뷰·승인·Merge
+→ 최신 main에서 develop 생성
+→ 이후 feature/* → develop
+```
+
 ### 브랜치 이름
 
 ```text
