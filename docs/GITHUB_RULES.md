@@ -64,7 +64,7 @@ main
     ├── feature/reservation-create
     ├── feature/payment-deposit
     ├── feature/refund-cancel
-    ├── feature/checkin-manage
+    ├── feature/visit-status-manage
     ├── feature/noshow-manage
     ├── feature/chat-reservation
     └── feature/deploy-aws
@@ -74,9 +74,10 @@ main
 
 - 영어 소문자로 작성한다.
 - 슬래시(`/`)와 하이픈(`-`)을 사용한다.
-- `feature/도메인-기능명` 형식으로 작성한다.
+- `feature/domain-feature` 형식으로 작성한다.
 - 너무 길지 않게 핵심 단어만 사용한다.
 - 브랜치명에는 담당자 이름을 사용하지 않는다.
+- 폐기된 정책이나 구현하지 않는 기능명을 사용하지 않는다.
 
 ## 2. 커밋 컨벤션
 
