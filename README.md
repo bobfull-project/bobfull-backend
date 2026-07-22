@@ -40,6 +40,7 @@
 
 | 문서 | 역할 |
 |---|---|
+| [`docs/PROJECT_CONTEXT.md`](./docs/PROJECT_CONTEXT.md) | 프로젝트 확정 정책·버전 범위·역할의 단일 기준 |
 | [`AGENTS.md`](./AGENTS.md) | AI 작업 진입점과 필수 경계 |
 | [`docs/bobfull_full_flowchart_mermaid.md`](./docs/bobfull_full_flowchart_mermaid.md) | 최신 정책 기준 전체 업무 플로우 |
 | [`docs/DOMAIN_DEPENDENCIES.md`](./docs/DOMAIN_DEPENDENCIES.md) | 도메인 의존성과 정책 변경 영향 확인 |
