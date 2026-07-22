@@ -27,11 +27,18 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 | PR 작성 | `.github/pull_request_template.md` |
 | PR 검토 | `docs/AI_REVIEW_GUIDE.md` |
 
+문서별 책임은 다음처럼 구분한다.
+
+- AI가 어디까지 작업할 수 있는지는 `docs/AI_WORKFLOW.md`와 `docs/AI_IMPLEMENTATION_GUIDE.md`가 정한다.
+- Java·Spring 코드 작성 방식은 `docs/CODE_CONVENTION.md`가 정한다.
+- 테스트 코드 작성 방식과 증거 기준은 `docs/TEST_CONVENTION.md`가 정한다.
+
 존재하지 않는 문서나 확정되지 않은 정책을 추정하지 않는다.
 
 ## 필수 경계
 
 - 한 번에 하나의 승인된 Issue만 처리한다.
+- Human이 `READY`로 승인한 Issue는 구현 AI가 코드·테스트·검증·Draft PR까지 수행할 수 있다.
 - Git 작업은 `docs/GITHUB_RULES.md`를 따른다.
 - Java·Spring 구현은 `docs/CODE_CONVENTION.md`를 따른다.
 - 테스트는 `docs/TEST_CONVENTION.md`에 따라 한글 테스트명과 given-when-then 구조로 작성한다.
