@@ -7,9 +7,10 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 ## 작업 시작
 
 1. 대상 GitHub Issue를 먼저 읽는다.
-2. 승인된 구현 범위와 완료 조건을 확인한다.
-3. 관련 코드와 테스트를 읽는다.
-4. 필요한 문서만 추가로 읽는다.
+2. [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)의 확정 정책과 충돌하지 않는지 확인한다.
+3. 승인된 구현 범위와 완료 조건을 확인한다.
+4. 관련 코드와 테스트를 읽는다.
+5. 필요한 문서만 추가로 읽는다.
 
 승인된 구현 계약이 없거나 정책 결정이 남아 있으면 구현하지 않는다.
 
@@ -17,6 +18,7 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 
 | 작업 | 확인할 대상 |
 |---|---|
+| 프로젝트 확정 정책·버전 범위·역할 | `docs/PROJECT_CONTEXT.md` |
 | Git 브랜치·커밋·PR·Merge | `docs/GITHUB_RULES.md` |
 | Java·Spring 구현 | `docs/CODE_CONVENTION.md` |
 | 테스트 작성·실행·증거 | `docs/TEST_CONVENTION.md` |
@@ -31,12 +33,13 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 
 문서별 책임은 다음처럼 구분한다.
 
+- 확정 정책과 v1·v2·v3 범위는 `docs/PROJECT_CONTEXT.md`가 정한다.
 - AI가 어디까지 작업할 수 있는지는 `docs/AI_WORKFLOW.md`와 `docs/AI_IMPLEMENTATION_GUIDE.md`가 정한다.
 - Java·Spring 코드 작성 방식은 `docs/CODE_CONVENTION.md`가 정한다.
 - 테스트 코드 작성 방식과 증거 기준은 `docs/TEST_CONVENTION.md`가 정한다.
 - 정책 변경 시 관련 도메인·담당자·문서·테스트 영향은 `docs/DOMAIN_DEPENDENCIES.md`로 확인한다.
 
-존재하지 않는 문서나 확정되지 않은 정책을 추정하지 않는다.
+문서가 충돌하면 `docs/PROJECT_CONTEXT.md`의 확정 정책을 우선한다. 존재하지 않는 문서나 확정되지 않은 정책을 추정하지 않는다.
 
 ## 필수 경계
 
