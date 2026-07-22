@@ -40,16 +40,16 @@
 
 | 문서 | 역할 |
 |---|---|
-| [`docs/PROJECT_CONTEXT.md`](./docs/PROJECT_CONTEXT.md) | 프로젝트 확정 정책·버전 범위·역할의 단일 기준 |
-| [`AGENTS.md`](./AGENTS.md) | AI 작업 진입점과 필수 경계 |
-| [`docs/bobfull_full_flowchart_mermaid.md`](./docs/bobfull_full_flowchart_mermaid.md) | 최신 정책 기준 전체 업무 플로우 |
-| [`docs/DOMAIN_DEPENDENCIES.md`](./docs/DOMAIN_DEPENDENCIES.md) | 도메인 의존성과 정책 변경 영향 확인 |
-| [`docs/AI_WORKFLOW.md`](./docs/AI_WORKFLOW.md) | Issue부터 Human Merge까지의 AI 협업 절차 |
-| [`docs/AI_IMPLEMENTATION_GUIDE.md`](./docs/AI_IMPLEMENTATION_GUIDE.md) | 구현 AI의 코드·테스트·검증·Draft PR 기준 |
-| [`docs/AI_REVIEW_GUIDE.md`](./docs/AI_REVIEW_GUIDE.md) | ChatGPT PR 리뷰와 최신 Head 재검토 기준 |
-| [`docs/CODE_CONVENTION.md`](./docs/CODE_CONVENTION.md) | Java·Spring 코드 작성 규칙 |
-| [`docs/TEST_CONVENTION.md`](./docs/TEST_CONVENTION.md) | 테스트명·given-when-then·실행 증거 규칙 |
-| [`docs/GITHUB_RULES.md`](./docs/GITHUB_RULES.md) | 브랜치·커밋·리뷰·Merge 규칙 |
+| [`docs/PROJECT_CONTEXT.md`](./docs/PROJECT_CONTEXT.md) | 확정 정책·버전·역할 |
+| [`AGENTS.md`](./AGENTS.md) | AI 작업 진입점 |
+| [`docs/bobfull_full_flowchart_mermaid.md`](./docs/bobfull_full_flowchart_mermaid.md) | 전체 업무 흐름 |
+| [`docs/DOMAIN_DEPENDENCIES.md`](./docs/DOMAIN_DEPENDENCIES.md) | 도메인 변경 영향 |
+| [`docs/AI_WORKFLOW.md`](./docs/AI_WORKFLOW.md) | AI 협업 전체 흐름 |
+| [`docs/AI_IMPLEMENTATION_GUIDE.md`](./docs/AI_IMPLEMENTATION_GUIDE.md) | 구현 AI 실행 기준 |
+| [`docs/AI_REVIEW_GUIDE.md`](./docs/AI_REVIEW_GUIDE.md) | AI PR 리뷰 기준 |
+| [`docs/CODE_CONVENTION.md`](./docs/CODE_CONVENTION.md) | 코드 작성 규칙 |
+| [`docs/TEST_CONVENTION.md`](./docs/TEST_CONVENTION.md) | 테스트·검증 규칙 |
+| [`docs/GITHUB_RULES.md`](./docs/GITHUB_RULES.md) | Git 협업 규칙 |
 
 ## Repositories
 
