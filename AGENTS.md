@@ -19,7 +19,6 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 | 작업 | 확인할 대상 |
 |---|---|
 | 프로젝트 확정 정책·버전 범위·역할 | `docs/PROJECT_CONTEXT.md` |
-| 아침 스크럼·일일 운영 브리핑 | `docs/PM_MODE.md` |
 | Issue 제목 버전·유형 규칙 | `docs/ISSUE_TITLE_RULES.md` |
 | Git 브랜치·커밋·PR·Merge | `docs/GITHUB_RULES.md` |
 | Java·Spring 구현 | `docs/CODE_CONVENTION.md` |
@@ -36,7 +35,6 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 문서별 책임은 다음처럼 구분한다.
 
 - 확정 정책과 v1·v2·v3 범위는 `docs/PROJECT_CONTEXT.md`가 정한다.
-- 일일 프로젝트 운영 브리핑은 `docs/PM_MODE.md`가 정한다.
 - Issue 제목의 버전과 유형은 `docs/ISSUE_TITLE_RULES.md`가 정한다.
 - AI가 어디까지 작업할 수 있는지는 `docs/AI_WORKFLOW.md`와 `docs/AI_IMPLEMENTATION_GUIDE.md`가 정한다.
 - Java·Spring 코드 작성 방식은 `docs/CODE_CONVENTION.md`가 정한다.
