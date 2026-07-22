@@ -143,10 +143,12 @@ flowchart TD
         direction TD
         CH1[로그인 사용자 채팅방 접근 요청] --> CH2{해당 예약의 최초 예약자 또는<br/>유효한 참여자인가?}
         CH2 -- 아니오 --> CH_FAIL[입장·조회·전송 차단]
-        CH2 -- 예 --> CH3[예약 전용 채팅방 입장]
+        CH2 -- 예 --> CH_STATE{현재 예약 상태에서<br/>채팅이 허용되는가?}
+        CH_STATE -- 아니오 --> CH_FAIL
+        CH_STATE -- 예 --> CH3[예약 전용 채팅방 입장]
         CH3 --> CH4[메시지 조회·전송 시<br/>참여 관계 재검증]
         CH4 --> CH5[사장님·관리자·비참여자 접근 불가]
-        CH3 -.-> PENDING_CHAT["결정 필요<br/>채팅방 생성 시점<br/>RECRUITING 접근 여부<br/>취소·종료 후 권한<br/>저장·보관 기간"]
+        CH_STATE -.-> PENDING_CHAT["결정 필요<br/>채팅방 생성 시점<br/>RECRUITING 접근 여부<br/>취소·종료 후 권한<br/>저장·보관 기간"]
     end
 
     N8 --> CH1
@@ -164,8 +166,10 @@ flowchart TD
         V5 --> V8{모든 유효 참여자 처리가<br/>완료되었는가?}
         V6 --> V8
         V8 -- 아니오 --> V2
-        V8 -- 예 --> V9[예약 CLOSED 전환]
-        V8 -.-> PENDING_VISIT["결정 필요<br/>처리 시작·마감 시간<br/>잘못된 상태 정정<br/>미처리 참여자 기본 처리<br/>CLOSED 전환 방식"]
+        V8 -- 예 --> V9{CLOSED 전환 조건을<br/>충족했는가?}
+        V9 -- 아니오 --> V2
+        V9 -- 예 --> V10[예약 CLOSED 전환]
+        V9 -.-> PENDING_VISIT["결정 필요<br/>처리 시작·마감 시간<br/>잘못된 상태 정정<br/>미처리 참여자 기본 처리<br/>CLOSED 전환 방식"]
     end
 
     D7 --> V1
@@ -182,7 +186,7 @@ flowchart TD
         S6 --> S7[실제 계좌 송금·POS 정산은 구현하지 않음]
     end
 
-    V9 --> S1
+    V10 --> S1
     C19 --> S1
     CS2 --> S1
     D4 --> S1
@@ -244,10 +248,10 @@ flowchart TD
     classDef pending fill:#FFF1F2,stroke:#E11D48,stroke-width:2px,stroke-dasharray:6 4,color:#9F1239;
 
     class AUTH,O1,O2,O3,O4,O5,O6,O7,O8,O9,U1,U2,U3,N1,N2,N3,N4,N5,N6,N7,N8,N9,N10,N11,J1,J2,J3,J4,J5,J6,J7,J8,J9,J10,J11,J12,J13,J14,M1 v1;
-    class D1,D2,D3,D4,D5,D6,D7,D8,D9,C1,C2,C3,C4,C5,C6,C7,C8,C9,C10,C11,C12,C13,C14,C15,C16,C17,C18,C19,C20,C21,C22,C23,C24,C25,C26,CS1,CS2,CS3,CS4,CH1,CH2,CH3,CH4,CH5,V1,V2,V3,V4,V5,V6,V7,V8,V9,S1,S2,S3,S4,S5,S6,S7,A1,A2,A3,A4,A5 v2;
+    class D1,D2,D3,D4,D5,D6,D7,D8,D9,C1,C2,C3,C4,C5,C6,C7,C8,C9,C10,C11,C12,C13,C14,C15,C16,C17,C18,C19,C20,C21,C22,C23,C24,C25,C26,CS1,CS2,CS3,CS4,CH1,CH2,CH_STATE,CH3,CH4,CH5,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,S1,S2,S3,S4,S5,S6,S7,A1,A2,A3,A4,A5 v2;
     class X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16 v3;
-    class AUTH_OK,ROLE,O5,N2,N3,N5,J3,J5,J9,J12,D2,C2,C3,C4,C12,C16,C22,CH2,V3,V4,V8,X4,X13 decision;
-    class N10,J10,J11,D7,V5,V6,V9 state;
+    class AUTH_OK,ROLE,O5,N2,N3,N5,J3,J5,J9,J12,D2,C2,C3,C4,C12,C16,C22,CH2,CH_STATE,V3,V4,V8,V9,X4,X13 decision;
+    class N10,J10,J11,D7,V5,V6,V10 state;
     class AUTH_FAIL,O_ERR,N_FAIL1,N_FAIL2,N_FAIL3,J_FAIL1,J_FAIL2,CH_FAIL,V_FAIL error;
     class PENDING_CANCEL,PENDING_CHAT,PENDING_VISIT,PENDING_ADMIN,P1,P2,P3,P4,P5 pending;
     class JCOND decision;
@@ -265,7 +269,7 @@ stateDiagram-v2
     RECRUITING --> CANCELLED: 모집 마감 시 1명 또는 최초 예약자 조기 취소
     CONFIRMED --> CANCELLED: 식당·시스템 귀책 또는 취소 후 진행 불가
 
-    CONFIRMED --> CLOSED: 사장님의 참여자별 방문·노쇼 처리 완료
+    CONFIRMED --> CLOSED: 참여자별 방문·노쇼 처리 후\n전환 방식 결정 필요
 
     CANCELLED --> [*]
     CLOSED --> [*]
