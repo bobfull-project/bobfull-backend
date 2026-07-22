@@ -56,18 +56,18 @@ main 병합 후 배포
 ```text
 main
   develop
-    ├── feature/member-기능
-    ├── feature/auth-기능
-    ├── feature/restaurant-기능
-    ├── feature/table-기능
-    ├── feature/timeslot-기능
-    ├── feature/reservation-기능
-    ├── feature/payment-기능
-    ├── feature/refund-기능
-    ├── feature/checkin-기능
-    ├── feature/noshow-기능
-    ├── feature/chat-기능
-    └── feature/deploy-기능
+    ├── feature/member-signup
+    ├── feature/auth-login
+    ├── feature/restaurant-register
+    ├── feature/table-manage
+    ├── feature/timeslot-manage
+    ├── feature/reservation-create
+    ├── feature/payment-deposit
+    ├── feature/refund-cancel
+    ├── feature/checkin-manage
+    ├── feature/noshow-manage
+    ├── feature/chat-reservation
+    └── feature/deploy-aws
 ```
 
 ### 브랜치 네이밍 컨벤션
