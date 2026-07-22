@@ -20,6 +20,7 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 | Git 브랜치·커밋·PR·Merge | `docs/GITHUB_RULES.md` |
 | Java·Spring 구현과 테스트 | `docs/CODE_CONVENTION.md` |
 | AI 협업 절차 | `docs/AI_WORKFLOW.md` |
+| 구현 AI 실행·검증·이해도 질문 | `docs/AI_IMPLEMENTATION_GUIDE.md` |
 | 기능 구현 | 대상 Issue, 관련 코드와 테스트 |
 | Issue 작성 | `.github/ISSUE_TEMPLATE/feature.md` |
 | PR 작성 | `.github/pull_request_template.md` |
@@ -51,4 +52,4 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 - 테스트 삭제·약화 또는 Issue 범위 밖 변경이 필요함
 - 필요한 환경이나 권한이 없어 핵심 검증을 할 수 없음
 
-상세 실행·검증·리뷰 절차는 `docs/AI_WORKFLOW.md`를 따른다.
+상세 협업 흐름은 `docs/AI_WORKFLOW.md`, 구현 AI 실행 기준은 `docs/AI_IMPLEMENTATION_GUIDE.md`를 따른다.
