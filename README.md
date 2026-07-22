@@ -51,6 +51,8 @@
 | [`docs/TEST_CONVENTION.md`](./docs/TEST_CONVENTION.md) | 테스트·검증 규칙 |
 | [`docs/GITHUB_RULES.md`](./docs/GITHUB_RULES.md) | Git 협업 규칙 |
 
+AI 에이전트는 `AGENTS.md`에서 현재 작업에 필요한 문서만 선택해 읽는다.
+
 ## Repositories
 
 - `bobfull-backend` — Spring Boot 백엔드
