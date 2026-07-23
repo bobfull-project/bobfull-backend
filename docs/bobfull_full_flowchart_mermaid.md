@@ -1,7 +1,8 @@
 # 밥풀(BobFull) 전체 플로우차트
 
-> 기준: 2026-07-23 최신 초기 기획  
-> 정책 상세는 [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)를 우선한다.  
+> 기준: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md), [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md), [`ERD.md`](./ERD.md)
+>
+> 정책 상세는 API 명세와 PROJECT_CONTEXT를 우선한다.
 > 상태 판단 기준은 참여 사용자 수가 아니라 결제 완료된 `partySize` 합계다.
 
 ## 1. 서비스 전체 흐름
@@ -9,9 +10,9 @@
 ```mermaid
 flowchart TD
     START([밥풀 서비스 시작]) --> AUTH[회원가입 또는 로그인]
-    AUTH --> ROLE{사용자 역할}
+    AUTH --> ROLE{"사용자 역할"}
 
-    ROLE -- 사장님 --> O1[본인 식당 등록·수정·조회]
+    ROLE -- OWNER --> O1[본인 식당 등록·수정·조회]
     O1 --> O2[합석 테이블 등록]
     O2 --> O3[정원 선택: 2·4·6·8인]
     O3 --> O4[테이블별 예약 날짜·시작 시간 등록]
@@ -19,11 +20,14 @@ flowchart TD
     O5 -- 예 --> OERR[회차 등록 실패]
     O5 -- 아니오 --> O6[예약 가능 회차 생성]
 
-    ROLE -- 일반 사용자 --> U1[예약 가능한 식당·시간·테이블 조회]
+    ROLE -- MEMBER --> U1[예약 가능한 식당·시간·테이블 조회]
     U1 --> PURPOSE{이용 목적}
     PURPOSE -- 최초 예약 --> N1[테이블과 partySize 선택]
     PURPOSE -- 추가 참여 --> J1[추가 참여 가능한 예약 조회]
     PURPOSE -- 내역 조회 --> M1[내 예약·결제 내역 조회]
+
+    ROLE -- ADMIN --> A1[V2 운영 현황·통계 조회]
+    A1 --> A2[V3 실패 결제·환불 재처리와 재집계]
 
     subgraph NEW[최초 예약 생성]
         N1 --> N2{partySize가 1 이상이고<br/>테이블 정원 이하인가?}
@@ -34,10 +38,10 @@ flowchart TD
         N4 -- 아니오 --> NERR3[모집 마감으로 생성 차단]
         N4 -- 예 --> N5[좌석 10분 임시 선점<br/>Payment READY·paymentId 생성]
         N5 --> N6[PortOne 예약금 결제]
-        N6 --> N7{서버 결제 상태·금액·통화 검증 성공?}
+        N6 --> N7{"인증 사용자와 Payment member가 일치하고 서버 결제 검증이 성공하는가"}
         N7 -- 아니오 --> NERR4[Payment FAILED<br/>좌석 해제·예약 미생성]
         N7 -- 예 --> N8[Payment PAID<br/>예약과 최초 참여자 RESERVED 등록]
-        N8 --> N9[현재 참여 인원에 partySize 합산]
+        N8 --> N9[PAID 참여 인원과 availableCapacity 재계산]
         N9 --> N10[모집 상태 OPEN]
         N10 --> N11{테이블별 확정 기준 충족?}
         N11 -- 아니오 --> N12[예약 RECRUITING]
@@ -46,6 +50,7 @@ flowchart TD
 
     subgraph JOIN[추가 참여]
         J1 --> J2[예약 상세·현재 참여 인원·남은 인원 조회]
+        J2 -.-> JCALC["availableCapacity = capacity - PAID 참여 인원 - 만료 전 READY 선점 인원"]
         J2 --> J3{추가 참여 조건 충족?}
         J3 -- 아니오 --> JERR1[추가 참여 차단]
         J3 -- 예 --> J4[partySize 입력]
@@ -55,27 +60,42 @@ flowchart TD
         J6 -- 예 --> JERR3[중복 참여 차단]
         J6 -- 아니오 --> J7[좌석 10분 임시 선점<br/>Payment READY·paymentId 생성]
         J7 --> J8[PortOne 예약금 결제]
-        J8 --> J9{서버 결제 검증 성공?}
+        J8 --> J9{"인증 사용자와 Payment member가 일치하고 서버 결제 검증이 성공하는가"}
         J9 -- 아니오 --> JERR4[Payment FAILED<br/>좌석 해제·참여자 미등록]
         J9 -- 예 --> J10[Payment PAID<br/>추가 참여자 RESERVED 등록]
-        J10 --> J11[현재 참여 인원에 partySize 합산]
+        J10 --> J11[PAID 참여 인원과 availableCapacity 재계산]
         J11 --> J12{테이블별 확정 기준 충족?}
         J12 -- 아니오 --> J13[RECRUITING 유지 또는 전환]
         J12 -- 예 --> J14[CONFIRMED 유지 또는 전환]
         J13 --> J15{테이블 정원 도달?}
         J14 --> J15
-        J15 -- 예 --> J16[모집 상태 CLOSED]
+        J15 -- 예 --> J16[예약 CONFIRMED·모집 CLOSED]
         J15 -- 아니오 --> J17[모집 상태 OPEN 유지]
     end
 
-    J3 -.-> JCOND["추가 참여 조건<br/>예약 RECRUITING 또는 CONFIRMED<br/>모집 OPEN<br/>시작 2시간 전 이전<br/>현재 참여 인원 < 정원"]
+    J3 -.-> JCOND["추가 참여 조건<br/>예약 RECRUITING 또는 CONFIRMED<br/>모집 OPEN<br/>시작 2시간 전 이전<br/>availableCapacity > 0"]
+
+    WEBHOOK["PortOne 웹훅: 서명 검증·결제 상태 멱등 반영"] -.-> N7
+    WEBHOOK -.-> J9
 
     N12 --> DEADLINE
     N13 --> CONFIRM_ACTION
     J17 --> CONFIRM_ACTION
 
-    CONFIRM_ACTION{예약 CONFIRMED인가?} -- 예 --> HOST_CLOSE{최초 예약자가 모집 마감?}
-    HOST_CLOSE -- 예 --> HC1[모집 상태 CLOSED<br/>다시 열기 불가]
+    N8 --> CHAT1[V2 예약당 ChatRoom 1개 생성]
+    CHAT1 --> CHAT2[결제 완료·미취소 유효 참여자만 접근]
+    CHAT2 --> CHAT3[STOMP 전송·구독 또는 cursor 메시지 조회]
+    CHAT3 --> CHAT4{예약이 CANCELLED 또는 CLOSED인가?}
+    CHAT4 -- 아니오 --> CHAT3
+    CHAT4 -- 예 --> CHAT5[신규 메시지 전송 종료·기존 메시지 조회 가능]
+    CHAT2 -.-> CHAT6[CANCELLED 참여자는 즉시 접근 종료]
+
+    CONFIRM_ACTION{예약 CONFIRMED인가?} -- 예 --> HOST_CLOSE{최초 예약자가 수동 마감을 요청했는가?}
+    HOST_CLOSE -- 예 --> HC_AUTH{최초 예약자인가?}
+    HC_AUTH -- 아니오 --> HCERR1[ACCESS_DENIED]
+    HC_AUTH -- 예 --> HC_OPEN{recruitmentStatus가 OPEN인가?}
+    HC_OPEN -- 아니오 --> HCERR2[RECRUITMENT_ALREADY_CLOSED]
+    HC_OPEN -- 예 --> HC1[모집 상태 CLOSED<br/>다시 열기 불가]
     HOST_CLOSE -- 아니오 --> DEADLINE[모집 계속]
     CONFIRM_ACTION -- 아니오 --> DEADLINE
 
@@ -94,7 +114,7 @@ flowchart TD
     J16 --> MEAL
     MEAL --> END_TIME[식사 종료 시간 경과]
     END_TIME --> CLOSED[예약 CLOSED]
-    CLOSED --> NOSHOW[사장님 참여자별 노쇼 처리·해제]
+    CLOSED --> NOSHOW[V2 OWNER 참여자별 노쇼 처리·해제·이력]
     NOSHOW --> SETTLEMENT[지급 예정 예약금 조회]
 ```
 
@@ -117,54 +137,53 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    C1[사용자 참여 취소 요청] --> C2{식당·시스템 귀책인가?}
-    C2 -- 예 --> CS1[예약 전체 CANCELLED]
-    CS1 --> CS2[참여자 전액 환불]
-    CS2 --> CS3[테이블·시간 복구]
-    CS3 --> CS4[노쇼율 미반영]
+    C1[V2 MEMBER 취소 요청] --> C2[본인 ReservationParticipant 확인]
+    C2 --> C3{서버 시간 기준 식사 시작 2시간 전인가?}
+    C3 -- 아니오 --> CERR1[CANCELLATION_DEADLINE_PASSED]
+    C3 -- 예 --> C4{최초 예약자인가?}
 
-    C2 -- 아니오 --> C3{식사 시작 2시간 전까지인가?}
-    C3 -- 예 --> C4{취소자가 최초 예약자인가?}
-    C4 -- 예 --> C5[예약 전체 CANCELLED]
-    C5 --> C6[나머지 참여자 전액 환불]
-    C6 --> C7[테이블·시간 복구]
+    C4 -- 예 --> C5[Reservation CANCELLED]
+    C5 --> C6[모든 유효 참여자 Payment 전액 Refund 요청]
+    C6 --> C7[예약 시작 전·다른 제약 없음이면 TimeSlot 복구]
+    C7 --> C8[ChatRoom 신규 메시지 전송 종료]
 
-    C4 -- 아니오 --> C8[취소자 전액 환불]
-    C8 --> C9[참여자 CANCELLED]
-    C9 --> C10[현재 참여 인원에서 partySize 차감]
-    C10 --> C11{확정 기준 이상인가?}
-    C11 -- 예 --> C12[CONFIRMED 유지]
-    C11 -- 아니오 --> C13{모집 상태 OPEN인가?}
-    C13 -- 예 --> C14[RECRUITING 전환 후 재모집]
-    C13 -- 아니오 --> C15[예약 전체 CANCELLED]
-    C15 --> C16[귀책 없는 참여자 전액 환불]
+    C4 -- 아니오 --> C9[본인 ReservationParticipant CANCELLED]
+    C9 --> C10[본인 Payment 전액 Refund 요청]
+    C10 --> C11[currentParticipantCount와 availableCapacity 재계산]
+    C11 --> C12{recruitmentStatus가 OPEN인가?}
+    C12 -- 예 --> C13{confirmationThreshold 미만인가?}
+    C13 -- 예 --> C14[Reservation RECRUITING]
+    C13 -- 아니오 --> C15[Reservation CONFIRMED 유지]
+    C12 -- 아니오 --> C16{confirmationThreshold 이상인가?}
+    C16 -- 예 --> C17[Reservation CONFIRMED + CLOSED 유지]
+    C16 -- 아니오 --> C18[Reservation 전체 CANCELLED]
+    C18 --> C19[남은 유효 참여자 Payment 전액 Refund 요청]
+    C19 --> C20[ChatRoom 신규 메시지 전송 종료]
+    C20 --> C21[조건 충족 시 TimeSlot 재사용 가능]
 
-    C3 -- 아니오 --> C17[취소자 예약금 미환불]
-    C17 --> C18[참여자 CANCELLED]
-    C18 --> C19[현재 참여 인원에서 partySize 차감]
-    C19 --> C20{확정 기준 이상인가?}
-    C20 -- 예 --> C21[예약 유지]
-    C20 -- 아니오 --> C22[예약 전체 CANCELLED]
-    C22 --> C23[귀책 없는 참여자 전액 환불]
-    C23 --> C24[모집 마감 이후 재모집하지 않음]
+    O1[V2 OWNER 식당 귀책 예약 취소 요청] --> O2[식당 소유권과 현재 상태 검증]
+    O2 --> O3[예약 CANCELLED]
+    O3 --> O4[참여자 전액 환불]
+    O4 --> O5[예약 시작 전·다른 제약 없음이면 TimeSlot 복구]
 ```
 
 ## 4. 노쇼 처리·해제 흐름
 
 ```mermaid
 flowchart TD
-    V1[식사 종료 후 사장님이 본인 식당 예약 조회] --> V2[예약 참여자 목록 조회]
+    V1[식사 종료 후 V2 OWNER가 본인 식당 예약 조회] --> V2[노쇼 처리 대상 참여자 조회]
     V2 --> V3{대상 참여자가 RESERVED인가?}
     V3 -- 아니오 --> VERR[상태 변경 차단]
     V3 -- 예 --> V4{처리 선택}
     V4 -- 노쇼 처리 --> V5[RESERVED → NO_SHOW]
     V5 --> V6[해당 사용자의 partySize 전체 적용]
-    V6 --> V7[예약금 미환불·지급 예정금 포함]
+    V6 --> V7[NoShowHistory에 처리 이력 저장]
     V4 -- 처리 안 함 --> V8[RESERVED 유지]
     V5 --> V9{잘못 처리했는가?}
     V9 -- 예 --> V10[NO_SHOW → RESERVED]
-    V10 --> V11[해제 이력 저장]
+    V10 --> V11[NoShowHistory에 해제 이력 저장]
     V9 -- 아니오 --> V12[노쇼 이력 유지]
+    V7 --> V13[결제·환불 이력을 기준으로 지급 예정 금액 조회]
 ```
 
 ## 5. 상태 관계
@@ -174,9 +193,9 @@ stateDiagram-v2
     [*] --> RECRUITING: PortOne 검증 성공 후 확정 기준 미달
     [*] --> CONFIRMED: PortOne 검증 성공·최초 partySize가 확정 기준 이상
     RECRUITING --> CONFIRMED: 현재 참여 인원 >= 확정 기준
-    CONFIRMED --> RECRUITING: 마감 전 취소 후 확정 기준 미달
+    CONFIRMED --> RECRUITING: 모집 OPEN인 추가 참여자 취소 후 확정 기준 미달
     RECRUITING --> CANCELLED: 모집 실패 또는 최초 예약자 취소
-    CONFIRMED --> CANCELLED: 취소로 식사 진행 불가 또는 식당·시스템 귀책
+    CONFIRMED --> CANCELLED: 수동 마감 CLOSED 후 취소로 기준 미달 또는 식당·시스템 귀책
     CONFIRMED --> CLOSED: 식사 종료 시간 경과
     CANCELLED --> [*]
     CLOSED --> [*]

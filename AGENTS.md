@@ -90,6 +90,8 @@ PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 A
 | 작업 | 기준 문서 |
 |---|---|
 | 프로젝트 정책·버전·역할 | `docs/PROJECT_CONTEXT.md` |
+| 실제 HTTP API 계약 | `docs/BOBFULL_API_SPEC_COMPLETE.md` |
+| 관계형 데이터 모델·정합성 제약 | `docs/ERD.md` |
 | AI 전체 절차 | `docs/AI_WORKFLOW.md` |
 | 담당자 AI 실행 | `docs/AI_IMPLEMENTATION_GUIDE.md` |
 | 담당자 AI PR 검토·리뷰 반영 | `docs/AI_REVIEW_GUIDE.md` |
@@ -99,7 +101,9 @@ PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 A
 | 도메인 영향 | `docs/DOMAIN_DEPENDENCIES.md` |
 | Issue 제목 | `docs/ISSUE_TITLE_RULES.md` |
 
-확정 정책은 `docs/PROJECT_CONTEXT.md`를 우선한다. 작업 방식은 각 책임 문서를 따른다. 충돌하면 임의로 선택하지 않고 중단한다.
+API 계약은 `docs/BOBFULL_API_SPEC_COMPLETE.md`, 프로젝트 정책·버전·역할은 `docs/PROJECT_CONTEXT.md`, 데이터 모델과 저장값·계산값 구분은 `docs/ERD.md`를 기준으로 한다. 세 문서가 충돌하면 임의로 선택하거나 덮어쓰지 않고 중단한다.
+
+API 변경은 API 명세와 `PROJECT_CONTEXT`, ERD, 영향 문서의 동기화 범위를 확인한다. 도메인 정책 변경은 API 명세·PROJECT_CONTEXT·ERD와 영향 문서를 함께 검토하고, 데이터 모델 변경은 ERD와 관련 API의 Request·Response·계산값·정합성 제약을 함께 검토한다.
 
 ## 6. 필수 경계
 
@@ -115,6 +119,8 @@ PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 A
 - 담당자 AI의 PR 검토는 독립적인 Human Approve를 대체하지 않는다.
 - 다른 팀원 AI 리뷰의 존재 여부를 작업 시작·수정·Merge 조건으로 사용하지 않는다.
 - AI는 Approve와 Merge를 수행하지 않는다.
+- API Response의 계산값을 근거 없이 DB 컬럼으로 중복 저장하지 않는다. 저장이 필요하면 갱신 책임·정합성·동시성 전략을 Human과 별도 결정한다.
+- `READY` Payment의 임시 좌석 선점·만료 정책을 바꾸거나, `Settlement`, `SeatHold`, `WebhookEvent` 엔티티를 추가하려면 Human 승인과 기준 문서 반영이 필요하다.
 
 ## 7. 파일 수정 안전 규칙
 

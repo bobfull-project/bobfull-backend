@@ -6,7 +6,7 @@
 
 예약·모집·참여·좌석·결제·취소·환불·노쇼·지급 예정 예약금이 서로 어떻게 연결되는지 확인하고, 한 영역의 변경이 다른 담당 영역과 문서·테스트에 누락되지 않도록 사용하는 변경 영향 기준이다.
 
-정책이 이 문서와 충돌하면 [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)의 확정 정책과 최신 팀 결정을 우선한다.
+정책이 이 문서와 충돌하면 [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md), [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md), [`ERD.md`](./ERD.md)의 순서로 확인한다. 이 세 문서가 충돌하면 임의로 선택하지 않고 Human 판단을 요청한다.
 
 ## 2. 도메인 연결 요약
 
@@ -37,6 +37,8 @@
 | 채팅 | 예약, 결제 완료 참여자 | 예약별 채팅방과 접근 권한 | 예약, 인증 | 김현승 |
 | 지급 예정 예약금 | 결제·환불·취소·노쇼 결과 | 사장님 조회용 예상 금액 | 사장님 권한, 관리자 조회 | 김현승 |
 
+구현 데이터 모델은 `Member`, `Restaurant`, `SharedTable`, `TimeSlot`, `Reservation`, `ReservationParticipant`, `Payment`, `Refund`, `ChatRoom`, `ChatMessage`로 연결한다. `NoShowHistory`는 V2 OWNER의 노쇼 처리·해제 이력을 보존하기 위해 `ReservationParticipant`와 OWNER 처리자를 연결한다. `Settlement`, `SeatHold`, `WebhookEvent`는 현재 확정 엔티티가 아니다.
+
 담당자는 단독 소유권을 뜻하지 않는다. 여러 도메인이 연결되는 Issue는 관련 담당자가 계약과 실패 결과를 함께 확인한다.
 
 ## 3. 핵심 공동 작업 경계
@@ -50,6 +52,7 @@
 → 좌석 10분 임시 선점
 → Payment READY와 paymentId 생성
 → PortOne 결제
+→ 결제 당사자와 Payment.memberId 확인
 → 서버 상태·금액·통화 검증
 → Payment PAID
 → 예약 생성
@@ -76,7 +79,7 @@
 → PortOne 결제·서버 검증
 → Payment PAID
 → 참여자 등록
-→ 현재 참여 인원 합산
+→ 현재 참여 인원·임시 선점 인원 재계산
 → 예약 상태와 모집 상태 재계산
 ```
 
@@ -98,6 +101,7 @@
 → 실패·만료 시 FAILED와 좌석 해제
 ```
 
+- 완료 검증 API는 인증된 결제 당사자만 호출하며 `Payment.memberId`와 인증 사용자 ID를 확인한다. PortOne 웹훅은 사용자 인증 대신 서명 검증과 멱등성으로 처리한다.
 - 완료 검증 API와 웹훅이 동시에 실행돼도 한 번만 반영한다.
 - 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.CANCELLED`를 일치시킨다.
 
@@ -107,7 +111,8 @@
 현재 참여 인원과 테이블별 확정 기준 비교
 → 기준 이상이면 CONFIRMED
 → 모집 상태 OPEN이면 잔여 정원까지 추가 참여
-→ 최초 예약자 수동 마감 또는 정원 도달 또는 시작 2시간 전
+→ 최초 예약자 수동 마감은 CONFIRMED + OPEN에서만 허용
+→ 정원 도달 또는 시작 2시간 전
 → 모집 상태 CLOSED
 ```
 
@@ -117,25 +122,45 @@
 - 김홍기: 테이블 정원·회차 시작 시각
 - 김현승: 모집 실패 환불 대상과 금액
 
-### 취소·환불
+- 수동 마감은 최초 예약자만 호출할 수 있고, `RECRUITING` 예약·이미 `CLOSED`인 모집·`CLOSED → OPEN` 변경은 허용하지 않는다.
+- 수동 마감 자체는 TimeSlot을 복구하지 않는다. Reservation 전체가 `CANCELLED`된 뒤에만 TimeSlot 재사용 가능 여부를 판단한다.
+
+### MEMBER 취소·환불
 
 ```text
-취소 시각·취소자 역할·모집 상태 확인
-→ 참여자 상태 CANCELLED
-→ 환불 또는 미환불
-→ 현재 참여 인원에서 partySize 차감
-→ 예약 상태 재계산
-→ 필요 시 예약 전체 취소
-→ 필요 시 테이블·회차 복구
-→ 지급 예정금 반영
+인증 MEMBER와 본인 ReservationParticipant 확인
+→ 서버 시간 기준 식사 시작 2시간 전인지 확인
+→ 최초 예약자 여부 분기
+→ 최초 예약자: Reservation CANCELLED·모든 유효 참여자 Payment 전액 환불·조건부 TimeSlot 복구
+→ 추가 참여자: 본인 ReservationParticipant CANCELLED·본인 Payment 전액 환불
+→ currentParticipantCount와 availableCapacity 재계산
+→ 모집 OPEN이면 confirmationThreshold 기준으로 RECRUITING 또는 CONFIRMED 계산
+→ 수동 마감 CLOSED면 기준 이상은 CONFIRMED + CLOSED 유지, 기준 미달은 전체 CANCELLED·남은 유효 참여자 전액 환불
+→ ChatRoom 신규 메시지 전송 규칙과 지급 예정금 반영
 ```
 
 필수 공동 검토:
 
-- 정용태: 취소 권한과 사장님 소유권
-- 김현승: 환불·미환불·지급 예정금
-- 배지현: 참여 인원·예약 상태·모집 상태·좌석 반영
-- 김홍기: 테이블·회차 복구
+- 정용태: 본인 참여 권한, OWNER 식당 소유권, NO_SHOW 이후 취소 차단
+- 김현승: Payment 전체 환불, Payment당 Refund 1건, 지급 예정금
+- 배지현: 최초·추가 참여자 분기, 참여 인원·예약 상태·모집 상태·채팅 종료 반영
+- 김홍기: `CANCELLED` 예약·시작 2시간 전·활성 예약 없음·OWNER 제한 없음 조건의 TimeSlot 복구
+
+- 식사 시작 2시간 이내에는 MEMBER 취소를 허용하지 않는다. 부분 취소·부분 환불·마감 이후 무환불 취소·취소 후 재모집은 이번 범위에 없다.
+- OWNER 또는 시스템 귀책 취소는 별도 OWNER 권한 또는 내부 처리로 예약 전체를 `CANCELLED`로 변경하고 유효 참여자 전액 환불을 요청한다. 참여자를 `NO_SHOW`로 처리하지 않는다.
+
+### TimeSlot 활성 예약 정합성
+
+```text
+최초 예약 결제 준비 또는 새 Reservation 생성
+→ 대상 TimeSlot 행 비관적 락 획득
+→ RECRUITING·CONFIRMED 활성 Reservation 존재 여부 조회
+→ 없을 때만 READY Payment 또는 새 Reservation 생성
+→ 트랜잭션 종료까지 TimeSlot 잠금 유지
+```
+
+- `reservation.time_slot_id` 단순 UNIQUE는 취소 이력 보존과 TimeSlot 재사용을 막으므로 사용하지 않는다. TimeSlot 1:N Reservation 관계에서 `CANCELLED` 이력은 유지한다.
+- TimeSlot 행 잠금과 활성 Reservation 조회가 정합성 경계다. 실제 구현 Issue에서 동일 TimeSlot 동시 최초 예약 생성의 성공 건수가 최대 1건인지 동시성 테스트로 검증한다.
 
 ### 노쇼와 예약 종료
 
@@ -149,9 +174,22 @@
 → 지급 예정 예약금과 노쇼율 반영
 ```
 
-- 방문 코드는 사용하지 않는다.
-- 정상 방문자는 별도 `VISITED` 상태로 변경하지 않는다.
 - 노쇼 처리와 해제는 참여자 사용자 단위이며 해당 사용자의 `partySize` 전체에 적용한다.
+- `NoShowHistory`에는 OWNER가 수행한 처리·해제와 처리 시각을 남긴다. 이는 V2 노쇼 API의 이력 조회를 위한 감사 기록이며, 별도의 방문·체크인 상태를 뜻하지 않는다.
+
+### 예약 참여자 채팅
+
+```text
+최초 예약 Payment PAID
+→ 예약당 ChatRoom 1개 생성
+→ 결제 완료·미취소 유효 참여자만 접근
+→ STOMP 전송·구독 또는 cursor 기반 과거 메시지 조회
+→ 예약 CANCELLED 또는 CLOSED 시 새 메시지 전송 종료
+→ 기존 ChatMessage는 조회 가능
+```
+
+- OWNER와 ADMIN은 채팅 참여자가 아니다. `CANCELLED` 참여자는 즉시 접근이 종료된다.
+- 채팅 메시지는 DB에 저장한다. Redis Pub/Sub와 Kafka는 현재 채팅 계약 범위에 없다.
 
 ## 4. 핵심 계산 계약
 
@@ -159,8 +197,11 @@
 현재 참여 인원
 = Σ 결제 완료 참여자.partySize
 
+임시 선점 인원
+= Σ 만료되지 않은 READY 결제.partySize
+
 남은 참여 가능 인원
-= 테이블 정원 - 현재 참여 인원
+= 테이블 정원 - 현재 참여 인원 - 임시 선점 인원
 
 결제 금액
 = partySize × 1인당 예약금
@@ -190,15 +231,15 @@
 
 - [ ] [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)의 확정 정책과 충돌하지 않는가
 - [ ] 영향을 받는 도메인과 담당자를 Issue에 적었는가
-- [ ] API Base URL `/api`, 공통 응답, `MEMBER` 역할 계약이 바뀌는가
+- [ ] API Base URL `/api/**`, Actuator `/actuator/**`, WebSocket `/ws`, 공통 응답, 역할 계약이 바뀌는가
 - [ ] `partySize`, 정원, 확정 기준과 모집 상태가 DB 모델에 반영되는가
 - [ ] 예약·참여자·결제·환불 상태 전이가 바뀌는가
 - [ ] 트랜잭션 실패 후 남는 데이터가 바뀌는가
 - [ ] 동시 요청 결과와 중복 방지 방식이 바뀌는가
 - [ ] 권한과 소유권 검증이 바뀌는가
 - [ ] 환불·지급 예정금 계산이 바뀌는가
-- [ ] PortOne 완료 검증·웹훅의 멱등성과 좌석 임시 선점 해제가 검증되는가
-- [ ] 채팅 접근자가 최초 예약자와 결제 완료 참여자로 제한되는가
+- [ ] PortOne 완료 검증의 결제 당사자 검증, 웹훅 서명·멱등성, 좌석 임시 선점 해제가 검증되는가
+- [ ] 채팅 접근자가 결제 완료·미취소 유효 참여자로 제한되고 CANCELLED/CLOSED 시 전송 규칙이 지켜지는가
 - [ ] 전체 플로우차트·API·ERD 중 실제 영향 문서만 수정했는가
 - [ ] 완료 조건과 테스트가 변경된 계약을 증명하는가
 - [ ] 폐기된 `1인 단위·2명 고정·VISITED` 정책이 남지 않았는가

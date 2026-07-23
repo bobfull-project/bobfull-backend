@@ -14,7 +14,7 @@
 /api
 ```
 
-> 아래 각 API의 `Path`는 Base URL을 포함한 전체 경로다(예: `/api/auth/login`).
+> 일반 서비스 API의 `Path`는 Base URL `/api`를 포함한 전체 경로다(예: `/api/auth/login`). Actuator는 `/actuator/**`, WebSocket 연결 Endpoint는 `/ws`를 사용하며 `/api` Base URL의 예외다.
 > 기능 단계는 `[V1]·[V2]·[V3]`로 구분하지만 URL에는 버전을 넣지 않는다.
 
 ## 0.2 인증 헤더
@@ -76,6 +76,19 @@ ParticipationStatus: RESERVED, NO_SHOW, CANCELLED
 PaymentStatus: READY, PAID, FAILED, CANCELLED
 RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ```
+
+## 0.8 예약 인원·확정 정책
+
+- `capacity`는 `2`, `4`, `6`, `8`만 허용한다.
+- 예약 생성(`CREATE`)의 `partySize`는 `1 <= partySize <= table.capacity`여야 한다.
+- 추가 참여(`JOIN`)의 `partySize`는 `1 <= partySize <= availableCapacity`여야 한다.
+- `currentParticipantCount`는 `PAID` 상태의 유효 참여자 `partySize` 합계다.
+- 임시 선점 인원은 만료되지 않은 `READY` 결제의 `partySize` 합계다.
+- `availableCapacity = capacity - currentParticipantCount - 임시 선점 인원`이다.
+- 예약 확정 기준은 정원 `2`면 `2명`, `4`면 `3명`, `6`이면 `5명`, `8`이면 `7명`이다.
+- 최초 결제 완료 시 예약은 `RECRUITING + OPEN`으로 시작한다. 확정 기준 도달 시 `CONFIRMED + OPEN`, 정원 도달 시 `CONFIRMED + CLOSED`가 된다.
+- 식사 시작 2시간 전에 모집은 `CLOSED`가 된다. 이때 확정 기준 미달이면 예약은 `CANCELLED`가 되고 전액 환불한다.
+- `CONFIRMED`는 모집 종료를 뜻하지 않는다.
 
 ---
 
@@ -535,6 +548,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ## 1. INFO
 
 - 설명: OWNER 권한
+- 생성 시 서버가 식당 `status`를 `ACTIVE`로 적용한다. 상태 변경 API는 이번 범위에 없다.
 - Method: `POST`
 - Path: `/api/owner/restaurants`
 - Auth: `OWNER`
@@ -563,7 +577,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `category` | String | Y | category 값 |
 | `description` | String | Y | description 값 |
 | `depositPerPerson` | Integer | Y | depositPerPerson 값 |
-| `status` | String | N | 식당 운영 상태(선택, 미지정 시 기본값 적용) |
 
 ## 3. Response
 
@@ -698,8 +711,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 {
   "name": "밥풀 한식당",
   "description": "수정된 식당 소개",
-  "depositPerPerson": 12000,
-  "status": "ACTIVE"
+  "depositPerPerson": 12000
 }
 ```
 
@@ -710,7 +722,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `name` | String | Y | name 값 |
 | `description` | String | Y | description 값 |
 | `depositPerPerson` | Integer | Y | depositPerPerson 값 |
-| `status` | String | N | 식당 운영 상태(선택) |
 
 ## 3. Response
 
@@ -883,6 +894,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ## 1. INFO
 
 - 설명: 정원 2·4·6·8명
+- 생성 시 서버가 합석 테이블 `status`를 `ACTIVE`로 적용한다. 상태 변경 API는 이번 범위에 없다.
 - Method: `POST`
 - Path: `/api/owner/restaurants/{restaurantId}/tables`
 - Auth: `OWNER`
@@ -911,7 +923,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `name` | String | Y | name 값 |
 | `capacity` | Integer | Y | capacity 값(2·4·6·8 중 하나) |
-| `status` | String | N | 합석 테이블 사용 상태(선택, 미지정 시 기본값 적용) |
 
 ## 3. Response
 
@@ -931,6 +942,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
+| `400` | `INVALID_TABLE_CAPACITY` | capacity가 `2`, `4`, `6`, `8` 중 하나가 아님 |
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
@@ -1053,8 +1065,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ```json
 {
   "name": "합석 테이블 A-1",
-  "capacity": 4,
-  "status": "ACTIVE"
+  "capacity": 4
 }
 ```
 
@@ -1064,7 +1075,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `name` | String | Y | name 값 |
 | `capacity` | Integer | Y | capacity 값(2·4·6·8 중 하나) |
-| `status` | String | N | 합석 테이블 사용 상태(선택) |
 
 ## 3. Response
 
@@ -1084,6 +1094,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
+| `400` | `INVALID_TABLE_CAPACITY` | capacity가 `2`, `4`, `6`, `8` 중 하나가 아님 |
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
@@ -1503,7 +1514,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
 | `dates` | Array&lt;LocalDate&gt; | Y | 회차를 생성할 날짜 목록 |
-| `capacity` | Integer | Y | 새로 생성할 합석 테이블 정원 |
+| `capacity` | Integer | Y | 새로 생성할 합석 테이블 정원(`2`, `4`, `6`, `8` 중 하나) |
 | `startTime` | LocalTime | Y | 첫 회차 시작 시간 |
 | `endTime` | LocalTime | Y | 회차 생성 종료 기준 시간 |
 | `intervalMinutes` | Integer | Y | 회차 시작 시간 간격(분) |
@@ -1528,7 +1539,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 시간 범위·간격·정원 검증 실패 |
+| `400` | `INVALID_TABLE_CAPACITY` | capacity가 `2`, `4`, `6`, `8` 중 하나가 아님 |
+| `400` | `INVALID_INPUT_VALUE` | 시간 범위·간격 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 본인 식당이 아님 |
 | `404` | `RESTAURANT_ID_NOT_FOUND` | 식당을 찾을 수 없음 |
@@ -1556,7 +1568,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `type` | String | Y | `CREATE` 또는 `JOIN` |
 | `targetId` | Long | Y | `CREATE`는 sessionId, `JOIN`은 reservationId |
-| `partySize` | Integer | Y | 본인을 포함한 신청 인원 |
+| `partySize` | Integer | Y | `CREATE`는 `1 <= partySize <= table.capacity`, `JOIN`은 `1 <= partySize <= availableCapacity` |
 
 요청 Body는 사용하지 않는다.
 
@@ -1570,7 +1582,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "message": "요청이 성공했습니다.",
   "data": {
     "available": true,
-    "remainingSeats": 4,
+    "availableCapacity": 4,
     "reason": null
   }
 }
@@ -1580,9 +1592,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
+| `400` | `INVALID_PARTY_SIZE` | partySize가 1 이상이 아니거나 CREATE의 테이블 정원을 초과함 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `404` | `RESOURCE_NOT_FOUND` | 대상 회차 또는 예약을 찾을 수 없음 |
+| `409` | `ACTIVE_RESERVATION_ALREADY_EXISTS` | CREATE 대상 TimeSlot에 `RECRUITING` 또는 `CONFIRMED` Reservation이 이미 존재함 |
+| `409` | `INSUFFICIENT_REMAINING_CAPACITY` | JOIN의 partySize가 availableCapacity를 초과함 |
 | `409` | `INVALID_STATE` | 현재 상태에서 예약 또는 참여가 불가능함 |
 
 ---
@@ -1616,7 +1630,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `type` | String | Y | `CREATE` 또는 `JOIN` |
 | `targetId` | Long | Y | `CREATE`는 sessionId, `JOIN`은 reservationId |
-| `partySize` | Integer | Y | 본인을 포함한 신청 인원 |
+| `partySize` | Integer | Y | `CREATE`는 `1 <= partySize <= table.capacity`, `JOIN`은 `1 <= partySize <= availableCapacity` |
 
 ## 3. Response
 
@@ -1642,9 +1656,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
+| `400` | `INVALID_PARTY_SIZE` | partySize가 1 이상이 아니거나 CREATE의 테이블 정원을 초과함 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `404` | `RESOURCE_NOT_FOUND` | 대상 회차 또는 예약을 찾을 수 없음 |
+| `409` | `ACTIVE_RESERVATION_ALREADY_EXISTS` | CREATE 대상 TimeSlot에 `RECRUITING` 또는 `CONFIRMED` Reservation이 이미 존재함 |
+| `409` | `INSUFFICIENT_REMAINING_CAPACITY` | JOIN의 partySize가 availableCapacity를 초과함 |
 | `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
 
 ---
@@ -1704,7 +1720,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 예약 상태·현재 참여 인원·남은 인원을 포함해 조회한다.
+- 설명: V1에서는 참여자 상세 목록 대신 예약 상태와 인원 집계만 조회한다.
 - Method: `GET`
 - Path: `/api/reservations/{reservationId}`
 - Auth: 필요
@@ -1732,8 +1748,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
     "reservationId": 1,
     "reservationStatus": "RECRUITING",
     "recruitmentStatus": "OPEN",
-    "currentParticipants": 3,
-    "remainingSeats": 5
+    "currentParticipantCount": 3,
+    "availableCapacity": 4,
+    "confirmationThreshold": 7
   }
 }
 ```
@@ -1881,14 +1898,14 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 6-8. 예약 참여자 목록 조회 `[V1]`
+## 6-8. 예약 참여자 목록 조회 `[V2]`
 
 ## 1. INFO
 
-- 설명: 예약 참여자(신청자 본인 포함) 목록을 조회한다. 개인정보 노출 범위는 구현 Issue에서 협의한다.
+- 설명: 해당 예약의 유효 참여자만 최소 참여자 목록을 조회한다. V1은 6-4의 집계 정보만 제공한다.
 - Method: `GET`
 - Path: `/api/reservations/{reservationId}/participations`
-- Auth: 필요
+- Auth: 유효 참여자
 - 담당자: 배지현
 
 ## 2. Request
@@ -1910,7 +1927,12 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "nickname": "밥풀러",
+        "partySize": 2
+      }
+    ],
     "page": 0,
     "size": 20,
     "totalElements": 0,
@@ -1924,7 +1946,10 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | Status | Code | 설명 |
 |---:|---|---|
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | 해당 예약의 유효 참여자가 아님 |
 | `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
+
+- `memberId`, 이메일, 전화번호, 결제·환불 정보, 노쇼 이력은 제공하지 않는다.
 
 ---
 
@@ -1932,7 +1957,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 최초 예약자가 모집 상태를 CLOSED로 변경한다.
+- 설명: 최초 예약자만 `CONFIRMED + OPEN` 예약의 모집 상태를 `CLOSED`로 수동 마감한다. `RECRUITING` 예약은 수동 마감할 수 없고, 마감한 모집은 다시 `OPEN`으로 변경할 수 없다.
 - Method: `PATCH`
 - Path: `/api/reservations/{reservationId}/recruitment`
 - Auth: 필요
@@ -1960,6 +1985,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `status` | String | Y | 변경할 모집 상태(`CLOSED`만 허용) |
 
+- 수동 마감 이후 추가 참여자가 허용 시간 내 취소하면 `currentParticipantCount`를 재계산한다. 확정 기준 이상이면 `CONFIRMED + CLOSED`를 유지한다. 기준 미달이면 Reservation 전체를 `CANCELLED`로 전환하고 남은 유효 참여자를 전액 환불하며, 모집을 다시 열지 않는다.
+- 전체 취소 시 ChatRoom 신규 메시지 전송은 종료된다. 현재 시간이 식사 시작 2시간 전보다 이전이고 다른 활성 Reservation이나 OWNER·시스템 사용 제한이 없을 때만 TimeSlot을 새 예약에 사용할 수 있다.
+
 ## 3. Response
 
 - Status: `200 OK`
@@ -1981,7 +2009,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---:|---|---|
 | `403` | `ACCESS_DENIED` | 최초 예약자가 아님 |
 | `404` | `RESERVATION_ID_NOT_FOUND` | 예약을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 모집 상태를 변경할 수 없음 |
+| `409` | `RECRUITMENT_CLOSE_NOT_ALLOWED` | Reservation이 `CONFIRMED`가 아니거나 recruitmentStatus가 `OPEN`이 아님 |
+| `409` | `RECRUITMENT_ALREADY_CLOSED` | recruitmentStatus가 이미 `CLOSED`임 |
 
 ---
 
@@ -1989,11 +2018,17 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 신청 인원 전체 취소
+- 설명: 인증된 MEMBER가 본인의 `ReservationParticipant` 한 건에 신청한 `partySize` 전체를 취소한다. 부분 취소는 지원하지 않는다.
 - Method: `POST`
 - Path: `/api/reservations/{reservationId}/participations/me/cancel`
 - Auth: 필요
 - 담당자: 배지현
+
+- 서버 시간 기준 식사 시작 2시간 전까지만 취소할 수 있다. 2시간 이내에는 `CANCELLATION_DEADLINE_PASSED`를 반환한다.
+- 대상 참여자가 최초 예약자면 예약 전체를 `CANCELLED`로 변경하고, 모든 유효 참여자의 Payment 전체 금액에 대해 환불을 요청한 뒤 TimeSlot을 새 예약 가능 상태로 복구한다. 기존 채팅방은 신규 메시지 전송을 종료하며 기존 메시지 조회는 유지한다.
+- 대상 참여자가 추가 참여자면 해당 `ReservationParticipant`만 `CANCELLED`로 변경하고 본인 Payment 전체 금액을 환불한다. `currentParticipantCount`와 `availableCapacity`를 다시 계산하며, 모집이 `OPEN`이고 확정 기준 미달이면 Reservation은 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다.
+- `NO_SHOW` 또는 이미 `CANCELLED`인 참여자는 MEMBER 취소 대상이 아니다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
+- 동일 Payment에는 Refund를 한 건만 생성한다. 기존 환불이 있으면 새 환불을 만들지 않고 `REFUND_ALREADY_REQUESTED`를 반환한다.
 
 ## 2. Request
 
@@ -2026,10 +2061,17 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "reservationId": 1
+    "reservationId": 1,
+    "participationId": 10,
+    "participationStatus": "CANCELLED",
+    "cancellationScope": "PARTICIPATION",
+    "refundStatus": "REQUESTED"
   }
 }
 ```
+
+- `cancellationScope`는 추가 참여자 취소 시 `PARTICIPATION`, 최초 예약자 취소 시 `RESERVATION`이다.
+- 최초 예약자 취소의 Response `refundStatus`는 최초 예약자 Payment의 환불 요청 상태다. 다른 유효 참여자 Payment의 환불도 같은 트랜잭션에서 요청한다.
 
 ## 4. Error
 
@@ -2037,8 +2079,13 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `CANCELLATION_NOT_ALLOWED` | 본인 참여가 아니거나 `NO_SHOW` 상태 등 MEMBER 취소가 허용되지 않음 |
 | `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
+| `404` | `PARTICIPATION_NOT_FOUND` | 본인 ReservationParticipant를 찾을 수 없음 |
+| `409` | `CANCELLATION_DEADLINE_PASSED` | 서버 시간 기준 식사 시작 2시간 이내임 |
+| `409` | `PARTICIPATION_ALREADY_CANCELLED` | 대상 참여자가 이미 `CANCELLED` 상태임 |
+| `409` | `RESERVATION_ALREADY_CANCELLED` | 대상 Reservation이 이미 `CANCELLED` 상태임 |
+| `409` | `REFUND_ALREADY_REQUESTED` | 대상 Payment에 대한 Refund가 이미 존재함 |
 
 ---
 
@@ -2195,11 +2242,13 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 참여자 전액 환불
+- 설명: OWNER가 본인 식당 사유로 예약 전체를 취소하고 유효 참여자 전액 환불을 요청한다. MEMBER 취소 API와 권한·처리 범위가 다르다.
 - Method: `POST`
 - Path: `/api/owner/reservations/{reservationId}/cancel`
 - Auth: `OWNER`
 - 담당자: 배지현
+
+- 예약은 `CANCELLED`가 되며 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot은 예약 시작 전이며 다른 제약이 없는 경우만 새 예약 가능 상태로 복구한다.
 
 ## 2. Request
 
@@ -2255,7 +2304,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: PortOne 결제 결과를 서버에서 검증하고 결제 완료를 확정한다.
+- 설명: 인증된 결제 당사자가 PortOne 결제 결과를 서버에서 검증하고 결제 완료를 확정한다. `Payment.memberId`와 인증 사용자 ID가 일치해야 한다.
 - Method: `POST`
 - Path: `/api/payments/{paymentId}/complete`
 - Auth: 필요
@@ -2288,7 +2337,10 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `404` | `PAYMENT_ID_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `PAYMENT_ACCESS_DENIED` | Payment.memberId와 인증 사용자 ID가 다름 |
+| `404` | `PAYMENT_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
+| `409` | `PAYMENT_ALREADY_COMPLETED` | 이미 완료 처리된 결제 |
 | `409` | `PAYMENT_VERIFICATION_FAILED` | 결제 검증 실패 |
 
 ---
@@ -2327,7 +2379,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | Status | Code | 설명 |
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 웹훅 서명 또는 요청값 검증 실패 |
-| `404` | `PAYMENT_ID_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
+| `404` | `PAYMENT_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
 | `409` | `INVALID_STATE` | 결제 상태·금액·통화 검증 실패 |
 
 ---
@@ -2421,7 +2473,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | Status | Code | 설명 |
 |---:|---|---|
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `PAYMENT_ID_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
+| `404` | `PAYMENT_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
 
 ---
 
@@ -2466,7 +2518,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없음 |
-| `404` | `PAYMENT_ID_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
+| `404` | `PAYMENT_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
 | `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
 
 ---
@@ -3814,9 +3866,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 예약 참여자 전용 채팅 메시지를 페이징 조회한다.
+- 설명: 유효 참여자가 예약 단위로 저장된 과거 메시지를 커서 기반 조회한다.
 - Method: `GET`
-- Path: `/api/chat-rooms/{chatRoomId}/messages`
+- Path: `/api/chat/rooms/{reservationId}/messages`
 - Auth: 필요
 - 담당자: 김현승
 
@@ -3826,7 +3878,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `chatRoomId` | Long | Y | chatRoomId 식별자 |
+| `reservationId` | Long | Y | reservationId 식별자 |
 
 ### Query Parameters
 
@@ -3856,13 +3908,17 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---:|---|---|
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 해당 예약의 결제 완료 참여자가 아님 |
-| `404` | `CHAT_ROOM_ID_NOT_FOUND` | chatRoomId에 해당하는 대상을 찾을 수 없음 |
+| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
 
 ---
 
-- 채팅 메시지 송수신은 V2에서 STOMP/WebSocket으로 구현한다.
-- 사장님과 관리자는 예약 채팅에 참여하지 않는다.
-- STOMP 경로와 메시지 보관 기간은 구현 Issue에서 확정한다.
+- 최초 예약 결제 완료 시 예약당 채팅방 1개를 생성한다. 별도 채팅방 생성 API는 없다.
+- 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료된다. OWNER와 ADMIN은 참여하지 않는다.
+- 예약이 `CANCELLED` 또는 `CLOSED`가 되면 신규 메시지 전송은 종료하지만 기존 메시지는 조회할 수 있다.
+- 메시지는 DB에 저장한다.
+- WebSocket 연결 Endpoint는 `/ws`다.
+- STOMP 전송 경로는 `/pub/chat/rooms/{reservationId}/messages`, 구독 경로는 `/sub/chat/rooms/{reservationId}`다.
+- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
 
 ---
 
@@ -3921,12 +3977,12 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ### 취소 후 예약 상태 재계산
 
 - 담당자: 배지현
-- 구현 정책: CONFIRMED·RECRUITING
+- 구현 정책: 추가 참여자 취소 후 `recruitmentStatus=OPEN`이면 현재 참여 인원이 확정 기준 미달일 때만 `RECRUITING`, 기준 이상일 때 `CONFIRMED`를 유지한다. `recruitmentStatus=CLOSED`인 `CONFIRMED` 예약은 기준 이상이면 `CONFIRMED + CLOSED`를 유지하고, 기준 미달이면 예약 전체를 `CANCELLED`로 전환해 유효 참여자를 전액 환불한다. CLOSED 모집은 다시 OPEN하지 않으며 취소 좌석을 재모집하지 않는다.
 
 ### 예약 전체 취소 시 회차 복구
 
 - 담당자: 배지현
-- 구현 정책: 회차 예약 가능 처리
+- 구현 정책: 최초 예약자 취소·모집 실패·수동 마감 이후 기준 미달 취소·OWNER 또는 시스템 귀책 취소는 기존 Reservation이 `CANCELLED`이고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 Reservation 또는 OWNER·시스템 사용 제한이 없을 때만 회차를 새 예약 가능 상태로 복구한다.
 
 ## 결제
 
@@ -3945,7 +4001,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ### 사용자 취소 환불 처리
 
 - 담당자: 김현승
-- 구현 정책: 취소 시점에 따라 판단
+- 구현 정책: 서버 시간 기준 식사 시작 2시간 전까지만 MEMBER 본인 참여 전체 취소를 허용하고 Payment 전체 금액을 환불한다. 부분 환불과 마감 이후 MEMBER 무환불 취소는 범위에 없다.
 
 ### 모집 실패 전액 환불
 
@@ -4027,16 +4083,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 구현 정책: 처리·해제
 
 ## 배포·인프라
-
-### Redis 실행 환경 구성
-
-- 담당자: 김홍기
-- 구현 정책: 애플리케이션 연결
-
-### Kafka 실행 환경 구성
-
-- 담당자: 김홍기
-- 구현 정책: 애플리케이션 연결
 
 ### 개발·운영 설정 분리
 
@@ -4286,7 +4332,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 예약·참여 | V1 | 내 예약 목록 조회 | `GET` | `/api/members/me/reservations` | 배지현 |
 | 예약·참여 | V1 | 내 예약 상세 조회 | `GET` | `/api/members/me/reservations/{reservationId}` | 배지현 |
 | 예약·참여 | V1 | 내 참여 정보 조회 | `GET` | `/api/reservations/{reservationId}/participations/me` | 배지현 |
-| 예약·참여 | V1 | 예약 참여자 목록 조회 | `GET` | `/api/reservations/{reservationId}/participations` | 배지현 |
+| 예약·참여 | V2 | 예약 참여자 목록 조회 | `GET` | `/api/reservations/{reservationId}/participations` | 배지현 |
 | 예약·참여 | V1 | 모집 상태 변경 | `PATCH` | `/api/reservations/{reservationId}/recruitment` | 배지현 |
 | 예약·참여 | V2 | 내 예약 참여 취소 | `POST` | `/api/reservations/{reservationId}/participations/me/cancel` | 배지현 |
 | 예약·참여 | V1 | 식당별 예약 목록 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/reservations` | 배지현 |
@@ -4324,7 +4370,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 관리자 | V2 | 식당별 예약 성사율 조회 | `GET` | `/api/admin/statistics/restaurants` | 정용태 |
 | 관리자 | V2 | 사용자별 노쇼율 조회 | `GET` | `/api/admin/statistics/members/no-show-rates` | 정용태 |
 | 예약 참여자 채팅 | V2 | 예약 채팅방 조회 | `GET` | `/api/reservations/{reservationId}/chat-room` | 김현승 |
-| 예약 참여자 채팅 | V2 | 채팅 메시지 목록 조회 | `GET` | `/api/chat-rooms/{chatRoomId}/messages` | 김현승 |
+| 예약 참여자 채팅 | V2 | 채팅 메시지 목록 조회 | `GET` | `/api/chat/rooms/{reservationId}/messages` | 김현승 |
 
 ---
 
@@ -4336,7 +4382,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 통합 예약 결제 준비 API의 좌석 임시 선점 저장소와 만료 처리 방식
 - 결제 완료 검증과 웹훅 동시 실행에 대한 락·트랜잭션·멱등성 구현
 - 도메인별 타인 리소스 접근 거부 에러 코드 이름
-- 채팅 STOMP 경로, 메시지 보관 기간과 종료 후 조회 정책
 - 상세 DTO 필드와 ERD 컬럼
 - `PATCH /api/owner/dining-sessions/{sessionId}/status`(합석 회차 상태 변경): 요약표에만 존재하고 상세 명세가 없었다. 0.7 공통 상태 목록에 회차(Session) 자체의 상태 enum이 정의돼 있지 않아, 현재 파일만으로는 합석 회차 수정(5-5)과 별개의 독립 기능인지 확정할 수 없다. 독립 기능이라면 SessionStatus 값 정의와 Request/Response/Error 명세를 추가해야 한다.
 - (해결됨) tableId 기준 여러 날짜·시간 회차 일괄 생성 API: 재검토 결과 대상 리소스(기존 테이블 vs 신규 테이블)와 Request 구조(capacity·intervalMinutes 유무)가 5-7(합석 테이블·회차 일괄 등록)과 달라 별도 기능으로 확정했다. 5-2 "기존 테이블 합석 회차 일괄 등록"(`POST /api/owner/tables/{tableId}/dining-sessions/bulk`)으로 제목·Path를 복구했다.
