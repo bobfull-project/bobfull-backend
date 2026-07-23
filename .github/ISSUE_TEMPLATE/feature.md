@@ -9,13 +9,14 @@ assignees: ""
 <!--
 Issue 제목은 docs/ISSUE_TITLE_RULES.md를 따릅니다.
 상태 흐름은 AI가 관리합니다.
-DRAFT → HUMAN_ANSWER_REQUIRED → AI_FINALIZED | HOLD
-Human은 이해도 질문의 답변만 작성합니다.
+DRAFT → HUMAN_ANSWER_REQUIRED → AI_FINALIZED | HOLD → HUMAN_APPROVED
+Human은 이해도 질문에 답하고, AI_FINALIZED 계약을 확인한 뒤 같은 구현 명령을 다시 입력합니다.
+구현 AI가 해당 명령을 Human 승인 신호로 해석해 승인 기록을 남깁니다.
 -->
 
 ## 상태·검토 수준
 
-- 상태: `DRAFT | HUMAN_ANSWER_REQUIRED | AI_FINALIZED | HOLD`
+- 상태: `DRAFT | HUMAN_ANSWER_REQUIRED | AI_FINALIZED | HOLD | HUMAN_APPROVED`
 - 검토: `기본 | 강화`
 
 ## 문제와 목적
@@ -112,3 +113,19 @@ Human은 이해도 질문의 답변만 작성합니다.
 - 최종 완료 조건:
 - 최종 검증 계획:
 - 판정: `AI_FINALIZED | HOLD`
+
+## 구현 승인 기록
+
+<!--
+AI_FINALIZED 상태에서 Human이 최종 계약을 읽고 `Issue #번호 구현하라`를 다시 입력하면
+구현 AI가 아래 기록을 작성하고 상태를 HUMAN_APPROVED로 변경한 뒤 같은 실행에서 구현을 시작합니다.
+Human이 이 항목을 직접 작성할 필요는 없습니다.
+-->
+
+- 승인 주체: `명령을 입력한 Human 담당자`
+- 승인 신호: `Issue #번호 구현하라`
+- 기록 주체: `구현 AI`
+- 승인 대상: `위 AI 최종 Issue 검증에 기록된 최종 계약`
+- 승인 시각:
+- 승인 상태: `HUMAN_APPROVED`
+- 비고:
