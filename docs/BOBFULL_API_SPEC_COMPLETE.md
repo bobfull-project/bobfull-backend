@@ -142,14 +142,13 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-
 # 2. 회원·인증 API
 
 ## 2-1. 일반 사용자 회원가입 `[V1]`
 
 ## 1. INFO
 
-- 설명: 이메일·닉네임 중복 검증
+- 설명: 이메일 중복 검증, 이름 중복 허용
 - Method: `POST`
 - Path: `/api/auth/signup/users`
 - Auth: 불필요
@@ -163,7 +162,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 {
   "email": "user@example.com",
   "password": "Password123!",
-  "nickname": "밥친구",
+  "name": "홍길동",
   "phoneNumber": "01012345678"
 }
 ```
@@ -174,7 +173,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `email` | String | Y | email 값 |
 | `password` | String | Y | password 값 |
-| `nickname` | String | Y | nickname 값 |
+| `name` | String | Y | nickname 값 |
 | `phoneNumber` | String | Y | phoneNumber 값 |
 
 ## 3. Response
@@ -188,7 +187,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "data": {
     "memberId": 1,
     "email": "user@example.com",
-    "nickname": "밥친구",
+    "name": "홍길동",
     "role": "MEMBER"
   }
 }
@@ -220,7 +219,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 {
   "email": "owner@example.com",
   "password": "Password123!",
-  "nickname": "식당사장",
+  "name": "김사장",
   "phoneNumber": "01012345678",
   "businessNumber": "1234567890"
 }
@@ -232,7 +231,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `email` | String | Y | email 값 |
 | `password` | String | Y | password 값 |
-| `nickname` | String | Y | nickname 값 |
+| `name` | String | Y | nickname 값 |
 | `phoneNumber` | String | Y | phoneNumber 값 |
 | `businessNumber` | String | Y | businessNumber 값 |
 
@@ -247,7 +246,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "data": {
     "memberId": 1,
     "email": "owner@example.com",
-    "nickname": "식당사장",
+    "name": "김사장",
     "role": "OWNER"
   }
 }
@@ -313,8 +312,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 2-4. 내 정보 조회 `[V1]`
-
 ## 1. INFO
 
 - 설명: 로그인 사용자 기준
@@ -349,11 +346,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 2-5. 내 정보 수정 `[V2]`
+## 2-4. 내 정보 수정 `[V1]`
 
 ## 1. INFO
 
-- 설명: 닉네임 중복 검증
+- 설명: 이름 중복 검증
 - Method: `PATCH`
 - Path: `/api/members/me`
 - Auth: 필요
@@ -365,7 +362,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ```json
 {
-  "nickname": "새닉네임",
+  "name": "새이름",
   "phoneNumber": "01098765432"
 }
 ```
@@ -374,7 +371,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `nickname` | String | Y | nickname 값 |
+| `name` | String | Y | nickname 값 |
 | `phoneNumber` | String | Y | phoneNumber 값 |
 
 ## 3. Response
@@ -400,7 +397,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 2-6. 로그아웃 `[V2]`
+## 2-5. 로그아웃 `[V2]`
 
 ## 1. INFO
 
@@ -441,7 +438,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 2-7. 토큰 재발급 `[V2]`
+## 2-6. 토큰 재발급 `[V2]`
 
 ## 1. INFO
 
@@ -490,11 +487,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 2-8. 회원 탈퇴 `[V2]`
+## 2-7. 회원 탈퇴 `[V1]`
 
 ## 1. INFO
 
-- 설명: 예약 진행 중 탈퇴 제한 검토
+- 설명: 소프트 딜리트 처리, 진행 중 예약이 있으면 탈퇴 제한
 - Method: `DELETE`
 - Path: `/api/members/me`
 - Auth: 필요
@@ -525,7 +522,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 
 ---
-
 
 # 3. 식당 관리 API
 
@@ -562,6 +558,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `category` | String | Y | category 값 |
 | `description` | String | Y | description 값 |
 | `depositPerPerson` | Integer | Y | depositPerPerson 값 |
+| `status` | String | N | 식당 운영 상태 |
 
 ## 3. Response
 
@@ -696,7 +693,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 {
   "name": "밥풀 한식당",
   "description": "수정된 식당 소개",
-  "depositPerPerson": 12000
+  "depositPerPerson": 12000,
+  "status": "ACTIVE"
 }
 ```
 
@@ -733,15 +731,15 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 3-5. 사용자용 식당 목록 조회 `[V1]`
+## 3-5. 사용자용 식당 목록·검색 `[V1]`
 
 ## 1. INFO
 
-- 설명: 운영 중인 식당만 조회
+- 설명: 운영 중인 식당을 목록 조회하며 검색어·지역·카테고리·날짜·시간 조건으로 예약 가능한 식당을 동적 검색한다.
 - Method: `GET`
 - Path: `/api/restaurants`
 - Auth: 불필요
-- 담당자: 정용태
+- 담당자: 정용태·김홍기
 
 ## 2. Request
 
@@ -749,13 +747,18 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `keyword` | String | N | keyword 조건 |
-| `category` | String | N | category 조건 |
-| `page` | Integer | N | page 조건 |
-| `size` | Integer | N | size 조건 |
-| `sort` | String | N | sort 조건 |
+| `keyword` | String | N | 식당명·메뉴 검색어 |
+| `region` | String | N | 지역 필터 |
+| `category` | String | N | 음식 카테고리 필터 |
+| `date` | LocalDate | N | 예약 희망 날짜 |
+| `time` | LocalTime | N | 예약 희망 시간 |
+| `page` | Integer | N | 페이지 번호 |
+| `size` | Integer | N | 페이지 크기 |
+| `sort` | String | N | 정렬 기준 |
 
-요청 Body는 사용하지 않는다.
+- 검색 조건이 없으면 운영 중인 식당 전체 목록을 조회한다.
+- 날짜·시간 조건이 있으면 해당 조건에 예약 가능한 합석 회차가 존재하는 식당만 조회한다.
+- 요청 Body는 사용하지 않는다.
 
 ## 3. Response
 
@@ -823,69 +826,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 3-7. 식당 운영 상태 변경 `[V2]`
+## 3-7. 식당 삭제 `[V1]`
 
 ## 1. INFO
 
-- 설명: ACTIVE·INACTIVE
-- Method: `PATCH`
-- Path: `/api/owner/restaurants/{restaurantId}/status`
-- Auth: `OWNER`
-- 담당자: 정용태
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `restaurantId` | Long | Y | restaurantId 식별자 |
-
-### Body
-
-```json
-{
-  "status": "INACTIVE"
-}
-```
-
-### Request Fields
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `status` | String | Y | status 값 |
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "restaurantId": 1
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
-| `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-## 3-8. 식당 삭제 `[V2]`
-
-## 1. INFO
-
-- 설명: 실제 삭제보다 비활성화 권장
+- 설명: 소프트 딜리트 처리
 - Method: `DELETE`
 - Path: `/api/owner/restaurants/{restaurantId}`
 - Auth: `OWNER`
@@ -924,64 +869,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
 
 ---
+# 4. 합석 테이블 API
 
-
-# 4. 식당 검색 API
-
-## 4-1. 식당 동적 검색 `[V1]`
-
-## 1. INFO
-
-- 설명: QueryDSL 적용
-- Method: `GET`
-- Path: `/api/restaurants/search`
-- Auth: 불필요
-- 담당자: 김홍기
-
-## 2. Request
-
-### Query Parameters
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `keyword` | String | N | keyword 조건 |
-| `category` | String | N | category 조건 |
-| `date` | LocalDate | N | date 조건 |
-| `time` | LocalTime | N | time 조건 |
-| `page` | Integer | N | page 조건 |
-| `size` | Integer | N | size 조건 |
-| `sort` | String | N | sort 조건 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "content": [],
-    "page": 0,
-    "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
-  }
-}
-```
-
-## 4. Error
-
-- 별도 도메인 오류 없음
-
----
-
-
-# 5. 합석 테이블 API
-
-## 5-1. 합석 테이블 등록 `[V1]`
+## 4-1. 합석 테이블 등록 `[V1]`
 
 ## 1. INFO
 
@@ -1014,6 +904,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `name` | String | Y | name 값 |
 | `capacity` | Integer | Y | capacity 값 |
+| `status` | String | N | 합석 테이블 사용 상태 |
 
 ## 3. Response
 
@@ -1040,7 +931,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 5-2. 합석 테이블 목록 조회 `[V1]`
+## 4-2. 합석 테이블 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -1088,7 +979,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 5-3. 합석 테이블 상세 조회 `[V1]`
+## 4-3. 합석 테이블 상세 조회 `[V1]`
 
 ## 1. INFO
 
@@ -1132,7 +1023,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 5-4. 합석 테이블 수정 `[V1]`
+## 4-4. 합석 테이블 수정 `[V1]`
 
 ## 1. INFO
 
@@ -1155,7 +1046,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ```json
 {
   "name": "합석 테이블 A-1",
-  "capacity": 4
+  "capacity": 4,
+  "status": "ACTIVE"
 }
 ```
 
@@ -1191,69 +1083,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 5-5. 합석 테이블 상태 변경 `[V2]`
+## 4-5. 합석 테이블 삭제 `[V1]`
 
 ## 1. INFO
 
-- 설명: 사용·미사용 상태
-- Method: `PATCH`
-- Path: `/api/owner/tables/{tableId}/status`
-- Auth: `OWNER`
-- 담당자: 김홍기
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `tableId` | Long | Y | tableId 식별자 |
-
-### Body
-
-```json
-{
-  "status": "INACTIVE"
-}
-```
-
-### Request Fields
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `status` | String | Y | status 값 |
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "tableId": 1
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
-| `404` | `TABLE_ID_NOT_FOUND` | tableId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-## 5-6. 합석 테이블 삭제 `[V2]`
-
-## 1. INFO
-
-- 설명: 연결된 회차 존재 시 제한
+- 설명: 소프트 딜리트 처리, 연결된 회차가 있으면 삭제 제한
 - Method: `DELETE`
 - Path: `/api/owner/tables/{tableId}`
 - Auth: `OWNER`
@@ -1293,10 +1127,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-
-# 6. 합석 회차 API
-
-## 6-1. 합석 회차 등록 `[V1]`
+# 4. 합석 회차 API
 
 ## 1. INFO
 
@@ -1355,7 +1186,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 6-2. 사장님용 회차 목록 조회 `[V1]`
+## 4-6. 사장님용 회차 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -1409,51 +1240,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 6-3. 사장님용 회차 상세 조회 `[V1]`
-
-## 1. INFO
-
-- 설명: 본인 식당 권한 검증
-- Method: `GET`
-- Path: `/api/owner/dining-sessions/{sessionId}`
-- Auth: `OWNER`
-- 담당자: 김홍기
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `sessionId` | Long | Y | sessionId 식별자 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "sessionId": 1
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
-| `404` | `SESSION_ID_NOT_FOUND` | sessionId에 해당하는 대상을 찾을 수 없음 |
-
----
-
-## 6-4. 사용자용 예약 가능 회차 조회 `[V1]`
+## 4-7. 사용자용 예약 가능 회차 조회 `[V1]`
 
 ## 1. INFO
 
@@ -1503,7 +1290,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 6-5. 합석 회차 수정 `[V2]`
+## 4-8. 합석 회차 수정 `[V1]`
 
 ## 1. INFO
 
@@ -1562,11 +1349,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 6-6. 합석 회차 삭제 `[V2]`
+## 4-9. 합석 회차 삭제 `[V1]`
 
 ## 1. INFO
 
-- 설명: 예약 존재 시 삭제 제한
+- 설명: 소프트 딜리트 처리, 예약이 존재하면 삭제 제한
 - Method: `DELETE`
 - Path: `/api/owner/dining-sessions/{sessionId}`
 - Auth: `OWNER`
@@ -1606,13 +1393,78 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 6-7. 합석 회차 일괄 등록 `[V2]`
+## 4-10. 합석 테이블·회차 일괄 등록 `[V1]`
+
+## 1. INFO
+
+- 설명: 식당에 새 합석 테이블을 생성하면서 지정한 날짜와 시간 범위에 맞춰 회차를 일괄 생성한다.
+- Method: `POST`
+- Path: `/api/owner/restaurants/{restaurantId}/tables/dining-sessions`
+- Auth: `OWNER`
+- 담당자: 김홍기
+
+## 2. Request
+
+### Path Variables
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `restaurantId` | Long | Y | 합석 테이블과 회차를 등록할 식당 식별자 |
+
+### Body
+
+```json
+{
+  "dates": ["2026-07-25", "2026-07-26"],
+  "capacity": 4,
+  "startTime": "11:00:00",
+  "endTime": "15:00:00",
+  "intervalMinutes": 30
+}
+```
+
+### Request Fields
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `dates` | Array&lt;LocalDate&gt; | Y | 회차를 생성할 날짜 목록 |
+| `capacity` | Integer | Y | 새로 생성할 합석 테이블 정원 |
+| `startTime` | LocalTime | Y | 첫 회차 시작 시간 |
+| `endTime` | LocalTime | Y | 회차 생성 종료 기준 시간 |
+| `intervalMinutes` | Integer | Y | 회차 시작 시간 간격(분) |
+
+## 3. Response
+
+- Status: `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "tableId": 10,
+    "capacity": 4,
+    "createdSessionCount": 16
+  }
+}
+```
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `400` | `INVALID_INPUT_VALUE` | 시간 범위·간격·정원 검증 실패 |
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | 본인 식당이 아님 |
+| `404` | `RESTAURANT_ID_NOT_FOUND` | 식당을 찾을 수 없음 |
+| `409` | `DUPLICATE_DINING_SESSION` | 동일 시간대 회차가 중복됨 |
+
+---
 
 ## 1. INFO
 
 - 설명: 여러 날짜·시간 생성
 - Method: `POST`
-- Path: `/api/owner/tables/{tableId}/dining-sessions/batch`
 - Auth: `OWNER`
 - 담당자: 김홍기
 
@@ -1670,84 +1522,27 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 6-8. 합석 회차 상태 변경 `[V2]`
+# 4. 예약 가능 여부 API
+
+## 4-11. 예약 가능 여부 확인 `[V1]`
 
 ## 1. INFO
 
-- 설명: 예약 가능 여부 변경
-- Method: `PATCH`
-- Path: `/api/owner/dining-sessions/{sessionId}/status`
-- Auth: `OWNER`
-- 담당자: 김홍기
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `sessionId` | Long | Y | sessionId 식별자 |
-
-### Body
-
-```json
-{
-  "status": "INACTIVE"
-}
-```
-
-### Request Fields
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `status` | String | Y | status 값 |
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "sessionId": 1
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
-| `404` | `SESSION_ID_NOT_FOUND` | sessionId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-
-# 7. 예약 생성 API
-
-## 7-1. 최초 예약 가능 여부 확인 `[V1]`
-
-## 1. INFO
-
-- 설명: 회차 선점 여부와 신청 가능 인원 확인
+- 설명: 최초 예약 생성과 기존 예약 추가 참여 가능 여부를 하나의 API에서 확인한다.
 - Method: `GET`
-- Path: `/api/dining-sessions/{sessionId}/reservation-availability`
+- Path: `/api/reservations/availability`
 - Auth: 필요
 - 담당자: 배지현
 
 ## 2. Request
 
-### Path Variables
+### Query Parameters
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `sessionId` | Long | Y | sessionId 식별자 |
+| `type` | String | Y | `CREATE` 또는 `JOIN` |
+| `targetId` | Long | Y | `CREATE`는 sessionId, `JOIN`은 reservationId |
+| `partySize` | Integer | Y | 본인을 포함한 신청 인원 |
 
 요청 Body는 사용하지 않는다.
 
@@ -1760,9 +1555,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "sessionId": 1,
     "available": true,
-    "remainingSeats": 8
+    "remainingSeats": 4,
+    "reason": null
   }
 }
 ```
@@ -1771,35 +1566,34 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
+| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `SESSION_ID_NOT_FOUND` | sessionId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
+| `404` | `RESOURCE_NOT_FOUND` | 대상 회차 또는 예약을 찾을 수 없음 |
+| `409` | `INVALID_STATE` | 현재 상태에서 예약 또는 참여가 불가능함 |
 
 ---
 
-## 7-2. 최초 예약 결제 준비 `[V1]`
+# 4. 예약 결제 준비 API
+
+## 4-12. 예약 결제 준비 `[V1]`
 
 ## 1. INFO
 
-- 설명: 본인 포함 N명 신청, 좌석 10분 임시 선점, PortOne 결제용 `paymentId` 발급
+- 설명: 최초 예약 생성과 기존 예약 추가 참여의 결제 준비를 하나의 API에서 처리한다. 좌석을 10분간 임시 선점하고 PortOne 결제용 `paymentId`를 발급한다.
 - Method: `POST`
-- Path: `/api/dining-sessions/{sessionId}/reservations/prepare`
+- Path: `/api/reservations/prepare`
 - Auth: 필요
 - 담당자: 배지현
 - 공동 검토: 김현승(결제), 김홍기(회차·좌석), 정용태(인증)
 
 ## 2. Request
 
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `sessionId` | Long | Y | sessionId 식별자 |
-
 ### Body
 
 ```json
 {
+  "type": "CREATE",
+  "targetId": 10,
   "partySize": 3
 }
 ```
@@ -1808,6 +1602,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
+| `type` | String | Y | `CREATE` 또는 `JOIN` |
+| `targetId` | Long | Y | `CREATE`는 sessionId, `JOIN`은 reservationId |
 | `partySize` | Integer | Y | 본인을 포함한 신청 인원 |
 
 ## 3. Response
@@ -1827,7 +1623,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 }
 ```
 
-- 결제 성공 전에는 최종 예약과 참여자를 생성하지 않는다.
+- 결제 성공 전에는 예약 또는 참여자를 생성하지 않는다.
 - 결제 실패 또는 10분 만료 시 임시 선점을 해제한다.
 
 ## 4. Error
@@ -1836,126 +1632,14 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `SESSION_ID_NOT_FOUND` | sessionId에 해당하는 대상을 찾을 수 없음 |
+| `404` | `RESOURCE_NOT_FOUND` | 대상 회차 또는 예약을 찾을 수 없음 |
 | `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
 
 ---
 
-# 8. 예약 참여 API
+# 4. 모집 예약 검색 API
 
-## 8-1. 추가 참여 가능 여부 확인 `[V1]`
-
-## 1. INFO
-
-- 설명: 모집 상태와 남은 참여 가능 인원 확인
-- Method: `GET`
-- Path: `/api/reservations/{reservationId}/join-availability`
-- Auth: 필요
-- 담당자: 배지현
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `reservationId` | Long | Y | reservationId 식별자 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "reservationId": 1,
-    "available": true,
-    "remainingSeats": 2
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-## 8-2. 예약 추가 참여 결제 준비 `[V1]`
-
-## 1. INFO
-
-- 설명: N명 단위 추가 참여, 좌석 10분 임시 선점, PortOne 결제용 `paymentId` 발급
-- Method: `POST`
-- Path: `/api/reservations/{reservationId}/participations/prepare`
-- Auth: 필요
-- 담당자: 배지현
-- 공동 검토: 김현승(결제), 김홍기(회차·좌석), 정용태(인증)
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `reservationId` | Long | Y | reservationId 식별자 |
-
-### Body
-
-```json
-{
-  "partySize": 2
-}
-```
-
-### Request Fields
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `partySize` | Integer | Y | 본인을 포함한 추가 참여 인원 |
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "paymentId": "PAY-20260725-0002",
-    "paymentStatus": "READY",
-    "amount": 20000,
-    "expiresAt": "2026-07-25T17:10:00+09:00"
-  }
-}
-```
-
-- 결제 성공 전에는 참여자를 등록하지 않는다.
-- 결제 실패 또는 10분 만료 시 임시 선점을 해제한다.
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-# 9. 모집 예약 검색 API
-
-## 9-1. 참여 가능한 예약 검색 `[V1]`
+## 4-13. 참여 가능한 예약 검색 `[V1]`
 
 ## 1. INFO
 
@@ -2009,9 +1693,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ---
 
 
-# 10. 예약 조회 API
+# 4. 예약 조회 API
 
-## 10-1. 예약 상세 조회 `[V1]`
+## 4-14. 예약 상세 조회 `[V1]`
 
 ## 1. INFO
 
@@ -2055,7 +1739,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 10-2. 내 예약 목록 조회 `[V1]`
+## 4-15. 내 예약 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -2104,8 +1788,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 10-3. 내 예약 상세 조회 `[V1]`
-
 ## 1. INFO
 
 - 설명: 본인 참여 정보 포함
@@ -2148,8 +1830,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 10-4. 내 참여 정보 조회 `[V1]`
-
 ## 1. INFO
 
 - 설명: partySize·참여 상태
@@ -2191,8 +1871,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
 
 ---
-
-## 10-5. 예약 참여자 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -2240,125 +1918,23 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 10-6. 예약 상태 변경 이력 조회 `[V2]`
+## 10-3. 모집 상태 변경 `[V1]`
 
 ## 1. INFO
 
-- 설명: 변경 전후 상태·사유
-- Method: `GET`
-- Path: `/api/reservations/{reservationId}/histories`
-- Auth: 필요
-- 담당자: 배지현
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `reservationId` | Long | Y | reservationId 식별자 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "content": [],
-    "page": 0,
-    "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-
-# 11. 모집 관리 API
-
-## 11-1. 추가 모집 수동 마감 `[V1]`
-
-## 1. INFO
-
-- 설명: 최초 예약자·CONFIRMED만
-- Method: `POST`
-- Path: `/api/reservations/{reservationId}/recruitment/close`
-- Auth: 필요
-- 담당자: 배지현
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `reservationId` | Long | Y | reservationId 식별자 |
-
-### Body
-
-```json
-{}
-```
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "reservationId": 1
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-## 11-2. 모집 상태 조회 `[V1]`
-
-## 1. INFO
-
-- 설명: OPEN·CLOSED
-- Method: `GET`
+- 설명: 최초 예약자가 모집 상태를 CLOSED로 변경한다.
+- Method: `PATCH`
 - Path: `/api/reservations/{reservationId}/recruitment`
 - Auth: 필요
 - 담당자: 배지현
 
 ## 2. Request
 
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `reservationId` | Long | Y | reservationId 식별자 |
-
-요청 Body는 사용하지 않는다.
+```json
+{
+  "status": "CLOSED"
+}
+```
 
 ## 3. Response
 
@@ -2369,7 +1945,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "reservationId": 1
+    "reservationId": 1,
+    "recruitmentStatus": "CLOSED"
   }
 }
 ```
@@ -2378,59 +1955,13 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
+| `403` | `ACCESS_DENIED` | 최초 예약자가 아님 |
+| `404` | `RESERVATION_ID_NOT_FOUND` | 예약을 찾을 수 없음 |
+| `409` | `INVALID_STATE` | 모집 상태를 변경할 수 없음 |
 
 ---
 
-
-# 12. 예약 취소 API
-
-## 12-1. 취소 예상 결과 조회 `[V2]`
-
-## 1. INFO
-
-- 설명: 예상 환불금·예약 영향
-- Method: `GET`
-- Path: `/api/reservations/{reservationId}/participations/me/cancellation-preview`
-- Auth: 필요
-- 담당자: 배지현
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `reservationId` | Long | Y | reservationId 식별자 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "reservationId": 1
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
-
----
-
-## 12-2. 내 예약 참여 취소 `[V2]`
+## 4-16. 내 예약 참여 취소 `[V2]`
 
 ## 1. INFO
 
@@ -2487,10 +2018,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
+# 4. 사장님 예약 관리 API
 
-# 13. 사장님 예약 관리 API
-
-## 13-1. 식당별 예약 목록 조회 `[V1]`
+## 4-17. 식당별 예약 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -2548,7 +2078,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 13-2. 사장님용 예약 상세 조회 `[V1]`
+## 4-18. 사장님용 예약 상세 조회 `[V1]`
 
 ## 1. INFO
 
@@ -2593,7 +2123,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 13-3. 예약 참여자 목록 조회 `[V1]`
+## 4-19. 예약 참여자 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -2642,7 +2172,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 13-4. 식당 귀책 예약 취소 `[V2]`
+## 4-20. 식당 귀책 예약 취소 `[V2]`
 
 ## 1. INFO
 
@@ -2700,85 +2230,21 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 13-5. 시간대별 예약 현황 조회 `[V2]`
+## 13-1. 결제 완료 검증 `[V1]`
 
 ## 1. INFO
 
-- 설명: 회차·예약 상태 확인
-- Method: `GET`
-- Path: `/api/owner/restaurants/{restaurantId}/reservation-calendar`
-- Auth: `OWNER`
-- 담당자: 배지현
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `restaurantId` | Long | Y | restaurantId 식별자 |
-
-### Query Parameters
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `startDate` | LocalDate | N | startDate 조건 |
-| `endDate` | LocalDate | N | endDate 조건 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "content": [],
-    "page": 0,
-    "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
-| `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-
-# 14. 결제 API
-
-## 14-1. 결제 완료 검증 `[V1]`
-
-## 1. INFO
-
-- 설명: 프론트 결제창 종료 후 서버가 PortOne 결제 상태·금액·통화를 재조회해 검증한다. 검증 성공 시 예약 또는 참여자를 확정하고 결제를 `PAID`로 변경한다.
+- 설명: PortOne 결제 결과를 서버에서 검증하고 결제 완료를 확정한다.
 - Method: `POST`
 - Path: `/api/payments/{paymentId}/complete`
 - Auth: 필요
 - 담당자: 김현승
-- 공동 검토: 배지현(예약·참여·좌석)
 
 ## 2. Request
 
-### Path Variables
-
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `paymentId` | String | Y | 고객사가 생성한 PortOne 결제 식별자 |
-
-요청 Body는 사용하지 않는다.
+| `paymentId` | String | Y | 결제 식별자 |
 
 ## 3. Response
 
@@ -2790,10 +2256,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "message": "요청이 성공했습니다.",
   "data": {
     "paymentId": "PAY-20260725-0001",
-    "status": "PAID",
-    "amount": 30000,
-    "reservationId": 101,
-    "participationId": 501
+    "paymentStatus": "PAID"
   }
 }
 ```
@@ -2802,14 +2265,12 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `PAYMENT_ID_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 결제 상태·금액·통화 검증 실패 또는 이미 처리된 요청 |
+| `404` | `PAYMENT_NOT_FOUND` | 결제를 찾을 수 없음 |
+| `409` | `PAYMENT_VERIFICATION_FAILED` | 결제 검증 실패 |
 
 ---
 
-## 14-2. PortOne 결제 웹훅 `[V1]`
+## 4-21. PortOne 결제 웹훅 `[V1]`
 
 ## 1. INFO
 
@@ -2848,7 +2309,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 14-3. 내 결제 목록 조회 `[V1]`
+## 4-22. 내 결제 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -2896,11 +2357,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 14-4. 결제 상세 조회 `[V1]`
+## 4-23. 결제 상세 조회 `[V1]`
 
 ## 1. INFO
 
-- 설명: 결제 당사자만 조회
+- 설명: 상태를 포함한  결제 당사자만 조회
 - Method: `GET`
 - Path: `/api/payments/{paymentId}`
 - Auth: 필요
@@ -2942,51 +2403,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 14-5. 결제 상태 조회 `[V2]`
-
-## 1. INFO
-
-- 설명: 결제 준비·완료·실패·취소 상태 확인
-- Method: `GET`
-- Path: `/api/payments/{paymentId}/status`
-- Auth: 필요
-- 담당자: 김현승
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `paymentId` | String | Y | PortOne 결제 식별자 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "paymentId": "PAY-20260725-0001",
-    "status": "PAID"
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `PAYMENT_ID_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
-
----
-
-## 14-6. 결제 실패 재검증 `[V3]`
+## 4-24. 결제 실패 재검증 `[V3]`
 
 ## 1. INFO
 
@@ -3032,9 +2449,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-# 15. 환불 API
+# 4. 환불 API
 
-## 15-1. 내 환불 목록 조회 `[V1]`
+## 4-25. 내 환불 목록 조회 `[V1]`
 
 ## 1. INFO
 
@@ -3083,11 +2500,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 15-2. 환불 상세 조회 `[V1]`
+## 4-26. 환불 상세 조회 `[V1]`
 
 ## 1. INFO
 
-- 설명: 대상 사용자만 조회
+- 설명: 상태를 포함한  대상 사용자만 조회
 - Method: `GET`
 - Path: `/api/refunds/{refundId}`
 - Auth: 필요
@@ -3112,7 +2529,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "refundId": 1
+    "refundId": 1,
+    "refundStatus": "COMPLETED"
   }
 }
 ```
@@ -3127,51 +2545,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 15-3. 환불 상태 조회 `[V2]`
-
-## 1. INFO
-
-- 설명: 처리 중·완료·실패
-- Method: `GET`
-- Path: `/api/refunds/{refundId}/status`
-- Auth: 필요
-- 담당자: 김현승
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `refundId` | Long | Y | refundId 식별자 |
-
-요청 Body는 사용하지 않는다.
-
-## 3. Response
-
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "refundId": 1
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `404` | `REFUND_ID_NOT_FOUND` | refundId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
-
----
-
-## 15-4. 실패 환불 목록 조회 `[V3]`
+## 4-27. 실패 환불 목록 조회 `[V3]`
 
 ## 1. INFO
 
@@ -3213,7 +2587,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 15-5. 실패 환불 재처리 `[V3]`
+## 4-28. 실패 환불 재처리 `[V3]`
 
 ## 1. INFO
 
@@ -3264,9 +2638,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ---
 
 
-# 16. 노쇼 API
+# 4. 노쇼 API
 
-## 16-1. 노쇼 처리 대상 참여자 조회 `[V2]`
+## 4-29. 노쇼 처리 대상 참여자 조회 `[V2]`
 
 ## 1. INFO
 
@@ -3315,7 +2689,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 16-2. 참여자 노쇼 처리 `[V2]`
+## 4-30. 참여자 노쇼 처리 `[V2]`
 
 ## 1. INFO
 
@@ -3376,7 +2750,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 16-3. 노쇼 처리 해제 `[V2]`
+## 4-31. 노쇼 처리 해제 `[V2]`
 
 ## 1. INFO
 
@@ -3424,7 +2798,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 16-4. 예약별 노쇼 이력 조회 `[V2]`
+## 4-32. 예약별 노쇼 이력 조회 `[V2]`
 
 ## 1. INFO
 
@@ -3473,7 +2847,73 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 16-5. 식당 노쇼 현황 조회 `[V2]`
+## 4-33. 식당 노쇼 고객 조회 `[V2]`
+
+## 1. INFO
+
+- 설명: 해당 식당에서 노쇼 처리된 고객 목록을 기간 조건과 함께 조회한다.
+- Method: `GET`
+- Path: `/api/owner/restaurants/{restaurantId}/no-shows`
+- Auth: `OWNER`
+- 담당자: 정용태
+
+## 2. Request
+
+### Path Variables
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `restaurantId` | Long | Y | restaurantId 식별자 |
+
+### Query Parameters
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `startDate` | LocalDate | N | 노쇼 기간 시작일 |
+| `endDate` | LocalDate | N | 노쇼 기간 종료일 |
+| `page` | Integer | N | 페이지 번호 |
+| `size` | Integer | N | 페이지 크기 |
+
+## 3. Response
+
+- Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "content": [
+      {
+        "memberId": 15,
+        "name": "김○○",
+        "noShowCount": 2,
+        "latestNoShowAt": "2026-07-25T18:00:00+09:00",
+        "reservationId": 101,
+        "participationId": 501,
+        "partySize": 2
+      }
+    ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}
+```
+
+- 본인 식당에서 노쇼 처리된 고객만 조회한다.
+- 이름은 마스킹하고 이메일·전화번호는 제공하지 않는다.
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | 본인 식당이 아님 |
+| `404` | `RESTAURANT_ID_NOT_FOUND` | 식당을 찾을 수 없음 |
+
+---
 
 ## 1. INFO
 
@@ -3532,9 +2972,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ---
 
 
-# 17. 정산 API
+# 4. 정산 API
 
-## 17-1. 지급 예정 금액 조회 `[V1]`
+## 4-34. 지급 예정 금액 조회 `[V1]`
 
 ## 1. INFO
 
@@ -3587,7 +3027,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 17-2. 예약별 지급 예정 내역 조회 `[V1]`
+## 4-35. 예약별 지급 예정 내역 조회 `[V1]`
 
 ## 1. INFO
 
@@ -3641,7 +3081,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 17-3. 예약별 지급 예정 상세 조회 `[V1]`
+## 4-36. 예약별 지급 예정 상세 조회 `[V1]`
 
 ## 1. INFO
 
@@ -3686,7 +3126,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 17-4. 기간별 결제·환불 요약 조회 `[V2]`
+## 4-37. 기간별 결제·환불 요약 조회 `[V2]`
 
 ## 1. INFO
 
@@ -3738,7 +3178,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 17-5. 정산 데이터 재집계 `[V3]`
+## 4-38. 정산 데이터 재집계 `[V3]`
 
 ## 1. INFO
 
@@ -3791,9 +3231,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 ---
 
 
-# 18. 관리자 API
+# 4. 관리자 API
 
-## 18-1. 회원 목록 조회 `[V2]`
+## 4-39. 회원 목록 조회 `[V2]`
 
 ## 1. INFO
 
@@ -3843,7 +3283,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-2. 회원 상세 조회 `[V2]`
+## 4-40. 회원 상세 조회 `[V2]`
 
 ## 1. INFO
 
@@ -3887,7 +3327,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-3. 식당 목록 조회 `[V2]`
+## 4-41. 식당 목록 조회 `[V2]`
 
 ## 1. INFO
 
@@ -3937,7 +3377,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-4. 식당 상세 조회 `[V2]`
+## 4-42. 식당 상세 조회 `[V2]`
 
 ## 1. INFO
 
@@ -3981,7 +3421,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-5. 전체 예약 현황 조회 `[V2]`
+## 4-43. 전체 예약 현황 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4033,7 +3473,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-6. 전체 결제 현황 조회 `[V2]`
+## 4-44. 전체 결제 현황 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4083,7 +3523,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-7. 전체 환불 현황 조회 `[V2]`
+## 4-45. 전체 환불 현황 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4133,7 +3573,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-8. 전체 노쇼 현황 조회 `[V2]`
+## 4-46. 전체 노쇼 현황 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4184,7 +3624,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-9. 전체 운영 지표 조회 `[V2]`
+## 4-47. 전체 운영 지표 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4223,7 +3663,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-10. 식당별 예약 성사율 조회 `[V2]`
+## 4-48. 식당별 예약 성사율 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4268,7 +3708,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 18-11. 사용자별 노쇼율 조회 `[V2]`
+## 4-49. 사용자별 노쇼율 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4315,9 +3755,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-# 19. 예약 참여자 채팅 API
+# 4. 예약 참여자 채팅 API
 
-## 19-1. 예약 채팅방 조회 `[V2]`
+## 4-50. 예약 채팅방 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4362,7 +3802,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ---
 
-## 19-2. 채팅 메시지 목록 조회 `[V2]`
+## 4-51. 채팅 메시지 목록 조회 `[V2]`
 
 ## 1. INFO
 
@@ -4416,7 +3856,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 사장님과 관리자는 예약 채팅에 참여하지 않는다.
 - STOMP 경로와 메시지 보관 기간은 구현 Issue에서 확정한다.
 
-# 20. V2 내부 구현 정책
+# 4. V2 내부 구현 정책
 
 ## 공통
 
@@ -4609,7 +4049,21 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 구현 정책: 배포 실패 대응
 
 
-# 21. V3 내부 구현·고도화 정책
+## 소프트 딜리트 정책
+
+### 회원 탈퇴
+
+- 회원 데이터는 실제 삭제하지 않고 삭제 상태 또는 삭제 시각을 기록한다.
+- 진행 중 예약이 있으면 탈퇴를 제한한다.
+
+### 식당·합석 테이블·합석 회차 삭제
+
+- 예약·결제·노쇼 이력을 보존하기 위해 실제 삭제하지 않는다.
+- 일반 조회에서는 삭제된 데이터를 제외한다.
+- 연결된 예약이나 회차가 있으면 삭제 가능 여부를 검증한다.
+
+
+# 4. V3 내부 구현·고도화 정책
 
 ## 회원·인증
 
@@ -4774,9 +4228,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 담당자: 김홍기
 - 구현 정책: ACM 인증서
 
-# 22. API 목록 요약
+# 4. API 목록 요약
 
-- 실제 HTTP API 수: **87개**
+- 실제 HTTP API 수: **73개**
 - API가 아닌 기능은 V2·V3 내부 구현 정책으로 별도 정리했다.
 
 | 기능 분류 | 버전 | 기능명 | Method | Path | 담당자 |
@@ -4786,7 +4240,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 회원·인증 | V1 | 일반 사용자 회원가입 | `POST` | `/api/auth/signup/users` | 정용태 |
 | 회원·인증 | V1 | 사장님 회원가입 | `POST` | `/api/auth/signup/owners` | 정용태 |
 | 회원·인증 | V1 | 로그인 | `POST` | `/api/auth/login` | 정용태 |
-| 회원·인증 | V1 | 내 정보 조회 | `GET` | `/api/members/me` | 정용태 |
 | 회원·인증 | V2 | 내 정보 수정 | `PATCH` | `/api/members/me` | 정용태 |
 | 회원·인증 | V2 | 로그아웃 | `POST` | `/api/auth/logout` | 정용태 |
 | 회원·인증 | V2 | 토큰 재발급 | `POST` | `/api/auth/reissue` | 정용태 |
@@ -4797,43 +4250,29 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 식당 관리 | V1 | 식당 정보 수정 | `PATCH` | `/api/owner/restaurants/{restaurantId}` | 정용태 |
 | 식당 관리 | V1 | 사용자용 식당 목록 조회 | `GET` | `/api/restaurants` | 정용태 |
 | 식당 관리 | V1 | 사용자용 식당 상세 조회 | `GET` | `/api/restaurants/{restaurantId}` | 정용태 |
-| 식당 관리 | V2 | 식당 운영 상태 변경 | `PATCH` | `/api/owner/restaurants/{restaurantId}/status` | 정용태 |
 | 식당 관리 | V2 | 식당 삭제 | `DELETE` | `/api/owner/restaurants/{restaurantId}` | 정용태 |
 | 식당 검색 | V1 | 식당 동적 검색 | `GET` | `/api/restaurants/search` | 김홍기 |
 | 합석 테이블 | V1 | 합석 테이블 등록 | `POST` | `/api/owner/restaurants/{restaurantId}/tables` | 김홍기 |
 | 합석 테이블 | V1 | 합석 테이블 목록 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/tables` | 김홍기 |
 | 합석 테이블 | V1 | 합석 테이블 상세 조회 | `GET` | `/api/owner/tables/{tableId}` | 김홍기 |
 | 합석 테이블 | V1 | 합석 테이블 수정 | `PATCH` | `/api/owner/tables/{tableId}` | 김홍기 |
-| 합석 테이블 | V2 | 합석 테이블 상태 변경 | `PATCH` | `/api/owner/tables/{tableId}/status` | 김홍기 |
 | 합석 테이블 | V2 | 합석 테이블 삭제 | `DELETE` | `/api/owner/tables/{tableId}` | 김홍기 |
-| 합석 회차 | V1 | 합석 회차 등록 | `POST` | `/api/owner/tables/{tableId}/dining-sessions` | 김홍기 |
 | 합석 회차 | V1 | 사장님용 회차 목록 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/dining-sessions` | 김홍기 |
-| 합석 회차 | V1 | 사장님용 회차 상세 조회 | `GET` | `/api/owner/dining-sessions/{sessionId}` | 김홍기 |
+| 합석 회차 | V2 | 합석 테이블·회차 일괄 등록 | `POST` | `/api/owner/restaurants/{restaurantId}/tables/dining-sessions` | 김홍기 |
 | 합석 회차 | V1 | 사용자용 예약 가능 회차 조회 | `GET` | `/api/restaurants/{restaurantId}/dining-sessions` | 김홍기 |
 | 합석 회차 | V2 | 합석 회차 수정 | `PATCH` | `/api/owner/dining-sessions/{sessionId}` | 김홍기 |
 | 합석 회차 | V2 | 합석 회차 삭제 | `DELETE` | `/api/owner/dining-sessions/{sessionId}` | 김홍기 |
-| 합석 회차 | V2 | 합석 회차 일괄 등록 | `POST` | `/api/owner/tables/{tableId}/dining-sessions/batch` | 김홍기 |
 | 합석 회차 | V2 | 합석 회차 상태 변경 | `PATCH` | `/api/owner/dining-sessions/{sessionId}/status` | 김홍기 |
-| 예약 생성 | V1 | 최초 예약 가능 여부 확인 | `GET` | `/api/dining-sessions/{sessionId}/reservation-availability` | 배지현 |
-| 예약 생성 | V1 | 최초 예약 결제 준비 | `POST` | `/api/dining-sessions/{sessionId}/reservations/prepare` | 배지현 |
-| 예약 참여 | V1 | 추가 참여 가능 여부 확인 | `GET` | `/api/reservations/{reservationId}/join-availability` | 배지현 |
-| 예약 참여 | V1 | 예약 추가 참여 결제 준비 | `POST` | `/api/reservations/{reservationId}/participations/prepare` | 배지현 |
 | 모집 예약 검색 | V1 | 참여 가능한 예약 검색 | `GET` | `/api/reservations/search` | 김홍기 |
+| 예약 가능 여부 | V1 | 예약 가능 여부 확인 | `GET` | `/api/reservations/availability` | 배지현 |
+| 예약 결제 준비 | V1 | 예약 결제 준비 | `POST` | `/api/reservations/prepare` | 배지현 |
 | 예약 조회 | V1 | 예약 상세 조회 | `GET` | `/api/reservations/{reservationId}` | 배지현 |
 | 예약 조회 | V1 | 내 예약 목록 조회 | `GET` | `/api/members/me/reservations` | 배지현 |
-| 예약 조회 | V1 | 내 예약 상세 조회 | `GET` | `/api/members/me/reservations/{reservationId}` | 배지현 |
-| 예약 조회 | V1 | 내 참여 정보 조회 | `GET` | `/api/reservations/{reservationId}/participations/me` | 배지현 |
-| 예약 조회 | V1 | 예약 참여자 목록 조회 | `GET` | `/api/reservations/{reservationId}/participations` | 배지현 |
-| 예약 조회 | V2 | 예약 상태 변경 이력 조회 | `GET` | `/api/reservations/{reservationId}/histories` | 배지현 |
-| 모집 관리 | V1 | 추가 모집 수동 마감 | `POST` | `/api/reservations/{reservationId}/recruitment/close` | 배지현 |
-| 모집 관리 | V1 | 모집 상태 조회 | `GET` | `/api/reservations/{reservationId}/recruitment` | 배지현 |
-| 예약 취소 | V2 | 취소 예상 결과 조회 | `GET` | `/api/reservations/{reservationId}/participations/me/cancellation-preview` | 배지현 |
-| 예약 취소 | V2 | 내 예약 참여 취소 | `POST` | `/api/reservations/{reservationId}/participations/me/cancel` | 배지현 |
+| 모집 관리 | V1 | 모집 상태 변경 | `PATCH` | `/api/reservations/{reservationId}/recruitment` | 배지현 |
 | 사장님 예약 관리 | V1 | 식당별 예약 목록 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/reservations` | 배지현 |
 | 사장님 예약 관리 | V1 | 사장님용 예약 상세 조회 | `GET` | `/api/owner/reservations/{reservationId}` | 배지현 |
 | 사장님 예약 관리 | V1 | 예약 참여자 목록 조회 | `GET` | `/api/owner/reservations/{reservationId}/participations` | 배지현 |
 | 사장님 예약 관리 | V2 | 식당 귀책 예약 취소 | `POST` | `/api/owner/reservations/{reservationId}/cancel` | 배지현 |
-| 사장님 예약 관리 | V2 | 시간대별 예약 현황 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/reservation-calendar` | 배지현 |
 | 결제 | V1 | 결제 완료 검증 | `POST` | `/api/payments/{paymentId}/complete` | 김현승 |
 | 결제 | V1 | PortOne 결제 웹훅 | `POST` | `/api/webhooks/portone` | 김현승 |
 | 결제 | V1 | 내 결제 목록 조회 | `GET` | `/api/members/me/payments` | 김현승 |
@@ -4849,7 +4288,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 노쇼 | V2 | 참여자 노쇼 처리 | `POST` | `/api/owner/reservations/{reservationId}/participations/{participationId}/no-show` | 정용태 |
 | 노쇼 | V2 | 노쇼 처리 해제 | `DELETE` | `/api/owner/reservations/{reservationId}/participations/{participationId}/no-show` | 정용태 |
 | 노쇼 | V2 | 예약별 노쇼 이력 조회 | `GET` | `/api/owner/reservations/{reservationId}/no-show-histories` | 정용태 |
-| 노쇼 | V2 | 식당 노쇼 현황 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/no-shows` | 정용태 |
+| 노쇼 | V2 | 식당 노쇼 고객 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/no-shows` | 정용태 |
 | 정산 | V1 | 지급 예정 금액 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/settlements/expected` | 김현승 |
 | 정산 | V1 | 예약별 지급 예정 내역 조회 | `GET` | `/api/owner/restaurants/{restaurantId}/settlements/reservations` | 김현승 |
 | 정산 | V1 | 예약별 지급 예정 상세 조회 | `GET` | `/api/owner/settlements/reservations/{reservationId}` | 김현승 |
@@ -4869,12 +4308,12 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 예약 참여자 채팅 | V2 | 예약 채팅방 조회 | `GET` | `/api/reservations/{reservationId}/chat-room` | 김현승 |
 | 예약 참여자 채팅 | V2 | 채팅 메시지 목록 조회 | `GET` | `/api/chat-rooms/{chatRoomId}/messages` | 김현승 |
 
-# 23. 구현 Issue에서 결정할 사항
+# 4. 구현 Issue에서 결정할 사항
 
 아래 항목은 현재 확정 정책과 충돌하지 않으며, 실제 구현 시 세부 계약을 정한다.
 
 - PortOne 공식 SDK·API 버전에 따른 웹훅 Payload와 서명 검증 코드
-- 좌석 임시 선점 저장소와 만료 처리 방식
+- 통합 예약 결제 준비 API의 좌석 임시 선점 저장소와 만료 처리 방식
 - 결제 완료 검증과 웹훅 동시 실행에 대한 락·트랜잭션·멱등성 구현
 - 도메인별 타인 리소스 접근 거부 에러 코드 이름
 - 채팅 STOMP 경로, 메시지 보관 기간과 종료 후 조회 정책
