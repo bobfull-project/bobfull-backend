@@ -32,15 +32,16 @@ flowchart TD
         N3 -- 아니오 --> NERR2[중복 예약 생성 차단]
         N3 -- 예 --> N4{식사 시작 2시간 전보다 이전?}
         N4 -- 아니오 --> NERR3[모집 마감으로 생성 차단]
-        N4 -- 예 --> N5[partySize × 1인당 예약금 결제]
-        N5 --> N6{결제 성공?}
-        N6 -- 아니오 --> NERR4[FAILED<br/>예약·참여자·인원 미반영]
-        N6 -- 예 --> N7[예약과 최초 참여자 RESERVED 등록]
-        N7 --> N8[현재 참여 인원에 partySize 합산]
-        N8 --> N9[모집 상태 OPEN]
-        N9 --> N10{테이블별 확정 기준 충족?}
-        N10 -- 아니오 --> N11[예약 RECRUITING]
-        N10 -- 예 --> N12[예약 CONFIRMED]
+        N4 -- 예 --> N5[좌석 10분 임시 선점<br/>Payment READY·paymentId 생성]
+        N5 --> N6[PortOne 예약금 결제]
+        N6 --> N7{서버 결제 상태·금액·통화 검증 성공?}
+        N7 -- 아니오 --> NERR4[Payment FAILED<br/>좌석 해제·예약 미생성]
+        N7 -- 예 --> N8[Payment PAID<br/>예약과 최초 참여자 RESERVED 등록]
+        N8 --> N9[현재 참여 인원에 partySize 합산]
+        N9 --> N10[모집 상태 OPEN]
+        N10 --> N11{테이블별 확정 기준 충족?}
+        N11 -- 아니오 --> N12[예약 RECRUITING]
+        N11 -- 예 --> N13[예약 CONFIRMED]
     end
 
     subgraph JOIN[추가 참여]
@@ -52,25 +53,26 @@ flowchart TD
         J5 -- 아니오 --> JERR2[인원 검증 실패]
         J5 -- 예 --> J6{동일 사용자 중복 참여?}
         J6 -- 예 --> JERR3[중복 참여 차단]
-        J6 -- 아니오 --> J7[partySize × 1인당 예약금 결제]
-        J7 --> J8{결제 성공?}
-        J8 -- 아니오 --> JERR4[FAILED<br/>참여자·인원 미반영]
-        J8 -- 예 --> J9[추가 참여자 RESERVED 등록]
-        J9 --> J10[현재 참여 인원에 partySize 합산]
-        J10 --> J11{테이블별 확정 기준 충족?}
-        J11 -- 아니오 --> J12[RECRUITING 유지 또는 전환]
-        J11 -- 예 --> J13[CONFIRMED 유지 또는 전환]
-        J12 --> J14{테이블 정원 도달?}
-        J13 --> J14
-        J14 -- 예 --> J15[모집 상태 CLOSED]
-        J14 -- 아니오 --> J16[모집 상태 OPEN 유지]
+        J6 -- 아니오 --> J7[좌석 10분 임시 선점<br/>Payment READY·paymentId 생성]
+        J7 --> J8[PortOne 예약금 결제]
+        J8 --> J9{서버 결제 검증 성공?}
+        J9 -- 아니오 --> JERR4[Payment FAILED<br/>좌석 해제·참여자 미등록]
+        J9 -- 예 --> J10[Payment PAID<br/>추가 참여자 RESERVED 등록]
+        J10 --> J11[현재 참여 인원에 partySize 합산]
+        J11 --> J12{테이블별 확정 기준 충족?}
+        J12 -- 아니오 --> J13[RECRUITING 유지 또는 전환]
+        J12 -- 예 --> J14[CONFIRMED 유지 또는 전환]
+        J13 --> J15{테이블 정원 도달?}
+        J14 --> J15
+        J15 -- 예 --> J16[모집 상태 CLOSED]
+        J15 -- 아니오 --> J17[모집 상태 OPEN 유지]
     end
 
     J3 -.-> JCOND["추가 참여 조건<br/>예약 RECRUITING 또는 CONFIRMED<br/>모집 OPEN<br/>시작 2시간 전 이전<br/>현재 참여 인원 < 정원"]
 
-    N11 --> DEADLINE
-    N12 --> CONFIRM_ACTION
-    J16 --> CONFIRM_ACTION
+    N12 --> DEADLINE
+    N13 --> CONFIRM_ACTION
+    J17 --> CONFIRM_ACTION
 
     CONFIRM_ACTION{예약 CONFIRMED인가?} -- 예 --> HOST_CLOSE{최초 예약자가 모집 마감?}
     HOST_CLOSE -- 예 --> HC1[모집 상태 CLOSED<br/>다시 열기 불가]
@@ -89,7 +91,7 @@ flowchart TD
 
     D7 --> MEAL[식사 진행]
     HC1 --> MEAL
-    J15 --> MEAL
+    J16 --> MEAL
     MEAL --> END_TIME[식사 종료 시간 경과]
     END_TIME --> CLOSED[예약 CLOSED]
     CLOSED --> NOSHOW[사장님 참여자별 노쇼 처리·해제]
@@ -169,8 +171,8 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> RECRUITING: 최초 결제 성공 후 확정 기준 미달
-    [*] --> CONFIRMED: 최초 partySize가 확정 기준 이상
+    [*] --> RECRUITING: PortOne 검증 성공 후 확정 기준 미달
+    [*] --> CONFIRMED: PortOne 검증 성공·최초 partySize가 확정 기준 이상
     RECRUITING --> CONFIRMED: 현재 참여 인원 >= 확정 기준
     CONFIRMED --> RECRUITING: 마감 전 취소 후 확정 기준 미달
     RECRUITING --> CANCELLED: 모집 실패 또는 최초 예약자 취소
@@ -191,9 +193,19 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> RESERVED: 결제 성공
+    [*] --> RESERVED: PortOne 검증 성공
     RESERVED --> CANCELLED: 사용자 참여 취소
     RESERVED --> NO_SHOW: 사장님 노쇼 처리
     NO_SHOW --> RESERVED: 사장님 노쇼 해제
+    CANCELLED --> [*]
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> READY: 결제 준비·좌석 10분 임시 선점
+    READY --> PAID: PortOne 상태·금액·통화 검증 성공
+    READY --> FAILED: 결제 실패 또는 10분 만료
+    PAID --> CANCELLED: 환불 COMPLETED
+    FAILED --> [*]
     CANCELLED --> [*]
 ```
