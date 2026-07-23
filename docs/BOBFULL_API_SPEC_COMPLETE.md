@@ -1,4 +1,4 @@
-# 밥풀 API Specification — 전체 반영본 (정합성 수정본)
+# 밥풀 API Specification — 전체 반영본 
 
 이 문서는 기능 목록에 기재된 **모든 실제 HTTP API**와 API가 아닌 **V2·V3 내부 구현 정책**을 반영한다.
 
