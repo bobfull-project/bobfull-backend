@@ -1,6 +1,7 @@
 package com.bobfull.common.security;
 
-import com.bobfull.common.exception.ErrorCode;
+import com.bobfull.common.exception.BaseErrorCode;
+import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.response.ApiResponse;
 import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +27,7 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
             HttpServletResponse response,
             AuthenticationException authException
     ) throws IOException {
-        ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
+        BaseErrorCode errorCode = CommonErrorCode.UNAUTHORIZED;
         response.setStatus(errorCode.getHttpStatus().value());
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.fail(errorCode)));

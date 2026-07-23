@@ -19,7 +19,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
-        ErrorCode errorCode = e.getErrorCode();
+        BaseErrorCode errorCode = e.getErrorCode();
         return ResponseEntity.status(errorCode.getHttpStatus())
                 .body(ApiResponse.fail(errorCode));
     }
@@ -28,14 +28,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException e
     ) {
-        return ResponseEntity.status(ErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
-                .body(ApiResponse.fail(ErrorCode.INVALID_INPUT_VALUE));
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getHttpStatus())
+                .body(ApiResponse.fail(CommonErrorCode.INVALID_INPUT_VALUE));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
         log.error("처리되지 않은 예외가 발생했습니다.", e);
-        return ResponseEntity.status(ErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
-                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR));
+        return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
+                .body(ApiResponse.fail(CommonErrorCode.INTERNAL_SERVER_ERROR));
     }
 }

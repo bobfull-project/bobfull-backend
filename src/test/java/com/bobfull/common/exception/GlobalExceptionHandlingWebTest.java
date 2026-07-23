@@ -97,6 +97,17 @@ class GlobalExceptionHandlingWebTest {
     }
 
     @Test
+    void 새로운_도메인_ErrorCode를_추가해도_GlobalExceptionHandler_수정없이_공통_실패_응답을_반환한다() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(get("/api/errors/domain"));
+
+        // then
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.code", is("SAMPLE_DOMAIN_CONFLICT")));
+    }
+
+    @Test
     void 정상_요청은_공통_성공_응답으로_감싸서_반환한다() throws Exception {
         // when
         ResultActions result = mockMvc.perform(get("/api/public/hello"));
@@ -106,5 +117,15 @@ class GlobalExceptionHandlingWebTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data", is("public-ok")))
                 .andExpect(jsonPath("$.code").doesNotExist());
+    }
+
+    @Test
+    void 시각_응답은_Asia_Seoul_오프셋을_포함한_ISO_8601로_직렬화된다() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(get("/api/time/hello"));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.createdAt", is("2026-07-23T09:00:00+09:00")));
     }
 }

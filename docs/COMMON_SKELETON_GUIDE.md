@@ -17,22 +17,47 @@ public ApiResponse<ReservationResponse> getReservation(@PathVariable Long id) {
 - 성공: `ApiResponse.success(data)`
 - 실패는 직접 만들지 않는다. `CustomException`을 던지면 `GlobalExceptionHandler`가 자동으로 `ApiResponse.fail(errorCode)` 응답을 만든다.
 
-## 2. 공통 예외 — `common.exception.ErrorCode`, `CustomException`
+## 2. 공통 예외 — `common.exception.BaseErrorCode`, `CommonErrorCode`, `CustomException`
 
-새 에러 코드가 필요하면 `common.exception.ErrorCode`에 상수를 추가한다.
-
-```java
-RESTAURANT_NOT_FOUND(HttpStatus.NOT_FOUND, "식당을 찾을 수 없습니다."),
-```
-
-Service·Domain에서는 아래처럼 던진다. `GlobalExceptionHandler`는 수정하지 않는다.
+에러 코드는 하나의 거대한 Enum에 누적하지 않는다. 새 도메인은 `BaseErrorCode`를 구현하는
+**별도 Enum**을 추가한다(`MemberErrorCode`가 예시).
 
 ```java
-throw new CustomException(ErrorCode.RESTAURANT_NOT_FOUND);
+public enum RestaurantErrorCode implements BaseErrorCode {
+
+    RESTAURANT_NOT_FOUND(HttpStatus.NOT_FOUND, "식당을 찾을 수 없습니다.");
+
+    private final HttpStatus httpStatus;
+    private final String message;
+
+    RestaurantErrorCode(HttpStatus httpStatus, String message) {
+        this.httpStatus = httpStatus;
+        this.message = message;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() { return httpStatus; }
+
+    @Override
+    public String getCode() { return name(); }
+
+    @Override
+    public String getMessage() { return message; }
+}
 ```
+
+Service·Domain에서는 아래처럼 던진다. `GlobalExceptionHandler`는 `BaseErrorCode` 인터페이스만
+참조하므로 새 Enum을 추가해도 수정할 필요가 없다.
+
+```java
+throw new CustomException(RestaurantErrorCode.RESTAURANT_NOT_FOUND);
+```
+
+도메인에 속하지 않는 공통 에러(`INVALID_INPUT_VALUE`, `UNAUTHORIZED`, `ACCESS_DENIED`,
+`INTERNAL_SERVER_ERROR`)만 `CommonErrorCode`에 있다. 도메인 전용 에러는 여기에 추가하지 않는다.
 
 Bean Validation 실패(`@Valid`)와 처리되지 않은 예외는 `GlobalExceptionHandler`가 각각
-`INVALID_INPUT_VALUE`, `INTERNAL_SERVER_ERROR`로 자동 처리한다.
+`CommonErrorCode.INVALID_INPUT_VALUE`, `CommonErrorCode.INTERNAL_SERVER_ERROR`로 자동 처리한다.
 
 ## 3. 인증 회원 — `common.security.AuthMember`, `MemberRole`
 
@@ -54,7 +79,23 @@ public ApiResponse<ReservationResponse> create(
 
 ## 4. 시간 정책 — `common.config.ClockConfig`, `JpaAuditingConfig`, `common.entity.BaseTimeEntity`
 
-- DB에는 UTC(`Instant`)로 저장하고, API 응답은 `application.yml`의 `spring.jackson.time-zone: Asia/Seoul` 설정으로 자동 변환된다.
+- DB·Entity에는 절대 시점을 UTC(`Instant`)로 저장한다.
+- **`Instant`를 Response DTO에 그대로 담아 반환하지 않는다.** `spring.jackson.time-zone` 설정만으로는
+  `Instant`가 자동으로 `Asia/Seoul`로 바뀌지 않고 항상 UTC(`Z`)로 직렬화된다(직접 확인됨).
+  API로 시각을 응답해야 하면 Response DTO에서 `Asia/Seoul` 기준 `OffsetDateTime`으로 명시적으로
+  변환한다.
+
+```java
+public record ReservationResponse(Long id, OffsetDateTime createdAt) {
+    public static ReservationResponse from(Reservation reservation) {
+        return new ReservationResponse(
+                reservation.getId(),
+                reservation.getCreatedAt().atZone(ZoneId.of("Asia/Seoul")).toOffsetDateTime()
+        );
+    }
+}
+```
+
 - 현재 시각이 필요하면 시스템 시각을 직접 호출하지 않고 주입된 `Clock`을 사용한다.
 
 ```java

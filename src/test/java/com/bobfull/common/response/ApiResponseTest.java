@@ -2,7 +2,8 @@ package com.bobfull.common.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.bobfull.common.exception.ErrorCode;
+import com.bobfull.common.exception.BaseErrorCode;
+import com.bobfull.common.exception.MemberErrorCode;
 import org.junit.jupiter.api.Test;
 
 class ApiResponseTest {
@@ -24,7 +25,7 @@ class ApiResponseTest {
     @Test
     void 실패_응답을_생성하면_success가_false이고_에러코드를_포함한다() {
         // given
-        ErrorCode errorCode = ErrorCode.MEMBER_NOT_FOUND;
+        BaseErrorCode errorCode = MemberErrorCode.MEMBER_NOT_FOUND;
 
         // when
         ApiResponse<Void> response = ApiResponse.fail(errorCode);

@@ -1,6 +1,6 @@
 package com.bobfull.common.response;
 
-import com.bobfull.common.exception.ErrorCode;
+import com.bobfull.common.exception.BaseErrorCode;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
@@ -26,8 +26,8 @@ public class ApiResponse<T> {
         return new ApiResponse<>(true, "요청이 성공했습니다.", data, null);
     }
 
-    public static ApiResponse<Void> fail(ErrorCode errorCode) {
-        return new ApiResponse<>(false, errorCode.getMessage(), null, errorCode.name());
+    public static ApiResponse<Void> fail(BaseErrorCode errorCode) {
+        return new ApiResponse<>(false, errorCode.getMessage(), null, errorCode.getCode());
     }
 
     public boolean isSuccess() {
