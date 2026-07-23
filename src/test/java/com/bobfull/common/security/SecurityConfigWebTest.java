@@ -16,6 +16,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 /**
  * SecurityConfig의 공개/인증 필요 API 구분, 인증 회원 전달, 역할 기반 접근 제어를 검증한다.
@@ -29,16 +30,20 @@ class SecurityConfigWebTest {
 
     @Test
     void 공개_API는_인증_없이_접근할_수_있다() throws Exception {
-        // given & when & then
-        mockMvc.perform(get("/api/public/hello"))
-                .andExpect(status().isOk());
+        // when
+        ResultActions result = mockMvc.perform(get("/api/public/hello"));
+
+        // then
+        result.andExpect(status().isOk());
     }
 
     @Test
     void 인증_필요_API에_인증_없이_접근하면_401_공통_실패_응답을_반환한다() throws Exception {
-        // given & when & then
-        mockMvc.perform(get("/api/protected/hello"))
-                .andExpect(status().isUnauthorized())
+        // when
+        ResultActions result = mockMvc.perform(get("/api/protected/hello"));
+
+        // then
+        result.andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
     }
@@ -50,9 +55,11 @@ class SecurityConfigWebTest {
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 authMember, null, List.of(new SimpleGrantedAuthority("ROLE_MEMBER")));
 
-        // when & then
-        mockMvc.perform(get("/api/protected/hello").with(authentication(authentication)))
-                .andExpect(status().isOk())
+        // when
+        ResultActions result = mockMvc.perform(get("/api/protected/hello").with(authentication(authentication)));
+
+        // then
+        result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id", is(1)))
                 .andExpect(jsonPath("$.data.role", is("MEMBER")));
     }
@@ -64,9 +71,11 @@ class SecurityConfigWebTest {
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 authMember, null, List.of(new SimpleGrantedAuthority("ROLE_MEMBER")));
 
-        // when & then
-        mockMvc.perform(get("/api/owner/hello").with(authentication(authentication)))
-                .andExpect(status().isForbidden())
+        // when
+        ResultActions result = mockMvc.perform(get("/api/owner/hello").with(authentication(authentication)));
+
+        // then
+        result.andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is("ACCESS_DENIED")));
     }
@@ -78,8 +87,10 @@ class SecurityConfigWebTest {
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 authMember, null, List.of(new SimpleGrantedAuthority("ROLE_OWNER")));
 
-        // when & then
-        mockMvc.perform(get("/api/owner/hello").with(authentication(authentication)))
-                .andExpect(status().isOk());
+        // when
+        ResultActions result = mockMvc.perform(get("/api/owner/hello").with(authentication(authentication)));
+
+        // then
+        result.andExpect(status().isOk());
     }
 }
