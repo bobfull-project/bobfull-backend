@@ -19,6 +19,7 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 | 작업 | 확인할 대상 |
 |---|---|
 | 프로젝트 확정 정책·버전 범위·역할 | `docs/PROJECT_CONTEXT.md` |
+| Issue 제목 버전·유형 규칙 | `docs/ISSUE_TITLE_RULES.md` |
 | Git 브랜치·커밋·PR·Merge | `docs/GITHUB_RULES.md` |
 | Java·Spring 구현 | `docs/CODE_CONVENTION.md` |
 | 테스트 작성·실행·증거 | `docs/TEST_CONVENTION.md` |
@@ -27,13 +28,14 @@ AI는 반복 구현 비용을 줄이고, Human은 설계·흐름·성능·검증
 | AI 협업 절차 | `docs/AI_WORKFLOW.md` |
 | 구현 AI 실행·검증·이해도 질문 | `docs/AI_IMPLEMENTATION_GUIDE.md` |
 | 기능 구현 | 대상 Issue, 관련 코드와 테스트 |
-| Issue 작성 | `.github/ISSUE_TEMPLATE/feature.md` |
+| Issue 작성 | `docs/ISSUE_TITLE_RULES.md`, `.github/ISSUE_TEMPLATE/feature.md` |
 | PR 작성 | `.github/pull_request_template.md` |
 | PR 검토 | `docs/AI_REVIEW_GUIDE.md` |
 
 문서별 책임은 다음처럼 구분한다.
 
 - 확정 정책과 v1·v2·v3 범위는 `docs/PROJECT_CONTEXT.md`가 정한다.
+- Issue 제목의 버전과 유형은 `docs/ISSUE_TITLE_RULES.md`가 정한다.
 - AI가 어디까지 작업할 수 있는지는 `docs/AI_WORKFLOW.md`와 `docs/AI_IMPLEMENTATION_GUIDE.md`가 정한다.
 - Java·Spring 코드 작성 방식은 `docs/CODE_CONVENTION.md`가 정한다.
 - 테스트 코드 작성 방식과 증거 기준은 `docs/TEST_CONVENTION.md`가 정한다.

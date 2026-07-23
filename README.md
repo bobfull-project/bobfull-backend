@@ -41,6 +41,7 @@
 | 문서 | 역할 |
 |---|---|
 | [`docs/PROJECT_CONTEXT.md`](./docs/PROJECT_CONTEXT.md) | 확정 정책·버전·역할 |
+| [`docs/ISSUE_TITLE_RULES.md`](./docs/ISSUE_TITLE_RULES.md) | Issue 버전·유형 제목 규칙 |
 | [`AGENTS.md`](./AGENTS.md) | AI 작업 진입점 |
 | [`docs/bobfull_full_flowchart_mermaid.md`](./docs/bobfull_full_flowchart_mermaid.md) | 전체 업무 흐름 |
 | [`docs/DOMAIN_DEPENDENCIES.md`](./docs/DOMAIN_DEPENDENCIES.md) | 도메인 변경 영향 |
