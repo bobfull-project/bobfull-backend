@@ -1,6 +1,6 @@
 ---
 name: 기능 구현
-about: 구현 전 요구사항·범위·완료 조건을 확정합니다.
+about: 구현 전 요구사항·범위·완료 조건을 정리합니다.
 title: "[v1][feat] "
 labels: ""
 assignees: ""
@@ -8,28 +8,29 @@ assignees: ""
 
 <!--
 Issue 제목은 docs/ISSUE_TITLE_RULES.md를 따릅니다.
-상태 흐름: DRAFT → HUMAN_ANSWER_REQUIRED → READY_CANDIDATE → READY
-충돌이나 미결정 사항이 남으면 HOLD로 표시합니다.
+상태 흐름은 AI가 관리합니다.
+DRAFT → HUMAN_ANSWER_REQUIRED → AI_FINALIZED | HOLD
+Human은 이해도 질문의 답변만 작성합니다.
 -->
 
 ## 상태·검토 수준
 
-- 상태: `DRAFT | HUMAN_ANSWER_REQUIRED | READY_CANDIDATE | READY | HOLD`
+- 상태: `DRAFT | HUMAN_ANSWER_REQUIRED | AI_FINALIZED | HOLD`
 - 검토: `기본 | 강화`
 
 ## 문제와 목적
 
-- 
+-
 
 ## 구현 계약
 
 ### 구현 범위
 
-- [ ]
+-
 
 ### 제외 범위
 
-- 
+-
 
 ### 핵심 정책·데이터
 
@@ -52,7 +53,7 @@ Issue 제목은 docs/ISSUE_TITLE_RULES.md를 따릅니다.
 
 ### 실패·경계 흐름
 
-- 
+-
 
 ## 핵심 선택과 근거
 
@@ -62,19 +63,19 @@ Issue 제목은 docs/ISSUE_TITLE_RULES.md를 따릅니다.
 
 ## 완료 조건
 
-- [ ]
+-
 
 ## 검증 계획
 
 ### 자동 테스트
 
-- [ ] 정상 시나리오
-- [ ] 실패·경계 시나리오
-- [ ] 필요 시 권한·Rollback·동시성 시나리오
+- 정상 시나리오:
+- 실패·경계 시나리오:
+- 필요 시 권한·Rollback·동시성 시나리오:
 
 ### 직접 검증
 
-- 
+-
 
 ## 관련 작업
 
@@ -84,16 +85,17 @@ Issue 제목은 docs/ISSUE_TITLE_RULES.md를 따릅니다.
 
 ## 미결정 사항
 
-- [ ] 없음
-- 
+- 없음 또는 남은 항목:
 
-## Human 착수 검토
+## Human 이해도
 
-<!-- 구현 AI가 실제 계약에 필요한 질문만 작성합니다. 담당자가 직접 답합니다. -->
+<!-- 구현 AI가 실제 계약에 필요한 질문만 작성하고 담당자가 답합니다. -->
 
 ### Q1. 구체적인 질문
 
 **담당자 답변:**
+
+**AI 답변 검토:** `일치 | 보완 필요`
 
 **AI 보완 설명:**
 
@@ -101,25 +103,12 @@ Issue 제목은 docs/ISSUE_TITLE_RULES.md를 따릅니다.
 
 ## AI 최종 Issue 검증
 
-<!-- Human 답변 후 구현 AI가 작성합니다. -->
+<!-- Human 답변 후 구현 AI가 작성하고 Issue 전체 계약을 최종 수정합니다. -->
 
-- 답변 반영 결과:
+- Human 답변 반영 결과:
 - 문서·코드 충돌:
 - 남은 미결정 사항:
-- 최종 구현 범위 변경:
+- 최종 구현 범위:
+- 최종 완료 조건:
 - 최종 검증 계획:
-- 판정: `READY_CANDIDATE | HOLD`
-
-## READY 승인
-
-<!-- Human이 최종 계약을 확인한 뒤 직접 체크합니다. -->
-
-- [ ] 구현 범위와 제외 범위가 확정되었다.
-- [ ] 정상·실패·경계 흐름이 확정되었다.
-- [ ] 완료 조건과 검증 방법이 확정되었다.
-- [ ] 필요한 API·DB·관련 담당자 협의가 완료되었다.
-- [ ] 핵심 미결정 사항이 남아 있지 않다.
-- [ ] AI 최종 Issue 검증 결과를 확인했다.
-- [ ] 담당자가 구현 시작을 승인한다.
-
-승인자:
+- 판정: `AI_FINALIZED | HOLD`
