@@ -1595,7 +1595,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `400` | `INVALID_PARTY_SIZE` | partySize가 1 이상이 아니거나 CREATE의 테이블 정원을 초과함 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `404` | `RESOURCE_NOT_FOUND` | 대상 회차 또는 예약을 찾을 수 없음 |
-| `409` | `ACTIVE_RESERVATION_ALREADY_EXISTS` | CREATE 대상 TimeSlot에 `RECRUITING` 또는 `CONFIRMED` Reservation이 이미 존재함 |
+| `409` | `ACTIVE_RESERVATION_ALREADY_EXISTS` | CREATE 대상 TimeSlot에 `RECRUITING` 또는 `CONFIRMED` Reservation, 또는 만료되지 않은 CREATE READY Payment가 이미 존재함 |
 | `409` | `INSUFFICIENT_REMAINING_CAPACITY` | JOIN의 partySize가 availableCapacity를 초과함 |
 | `409` | `INVALID_STATE` | 현재 상태에서 예약 또는 참여가 불가능함 |
 
@@ -1651,6 +1651,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 - 결제 성공 전에는 예약 또는 참여자를 생성하지 않는다.
 - 결제 실패 또는 10분 만료 시 임시 선점을 해제한다.
+- `CREATE`는 대상 TimeSlot을 잠근 뒤 활성 Reservation과 만료되지 않은 CREATE READY Payment를 차례로 확인한다. 둘 다 없을 때만 CREATE READY를 생성하며, 유효한 CREATE READY는 TimeSlot당 최대 1건이다.
+- 유효한 CREATE READY가 있으면 `409 ACTIVE_RESERVATION_ALREADY_EXISTS`를 반환한다. 만료 또는 `FAILED` 처리 후에는 새 CREATE 요청을 허용한다. `JOIN`은 기존 Reservation의 `availableCapacity`를 기준으로 별도 처리한다.
 
 ## 4. Error
 
@@ -1659,7 +1661,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `400` | `INVALID_PARTY_SIZE` | partySize가 1 이상이 아니거나 CREATE의 테이블 정원을 초과함 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `404` | `RESOURCE_NOT_FOUND` | 대상 회차 또는 예약을 찾을 수 없음 |
-| `409` | `ACTIVE_RESERVATION_ALREADY_EXISTS` | CREATE 대상 TimeSlot에 `RECRUITING` 또는 `CONFIRMED` Reservation이 이미 존재함 |
+| `409` | `ACTIVE_RESERVATION_ALREADY_EXISTS` | CREATE 대상 TimeSlot에 `RECRUITING` 또는 `CONFIRMED` Reservation, 또는 만료되지 않은 CREATE READY Payment가 이미 존재함 |
 | `409` | `INSUFFICIENT_REMAINING_CAPACITY` | JOIN의 partySize가 availableCapacity를 초과함 |
 | `409` | `INVALID_STATE` | 현재 상태에서 요청을 처리할 수 없음 |
 

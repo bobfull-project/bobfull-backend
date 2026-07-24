@@ -121,7 +121,9 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 
 - TimeSlot은 취소 이력을 포함해 여러 Reservation을 연결할 수 있지만, `RECRUITING` 또는 `CONFIRMED` 활성 Reservation은 동시에 최대 1건이다.
 - `reservation.time_slot_id` 단순 UNIQUE는 사용하지 않는다. 새 최초 예약 또는 READY Payment 생성은 대상 TimeSlot 행을 비관적 락으로 조회하고, 활성 Reservation 존재 여부를 확인한 뒤 트랜잭션 종료까지 잠금을 유지한다.
-- 실제 구현 Issue에서는 동일 TimeSlot에 대한 동시 최초 예약 생성 시 활성 Reservation 성공이 최대 1건인지 검증한다. 기존 활성 예약이 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS`를 반환한다.
+- `CREATE` 결제 준비는 활성 Reservation뿐 아니라 동일 TimeSlot의 만료되지 않은 `paymentPurpose=CREATE`, `paymentStatus=READY` Payment도 확인한다. 둘 다 없을 때만 새 CREATE READY를 생성하며, 유효한 CREATE READY는 TimeSlot당 최대 1건이다.
+- 유효한 CREATE READY가 있으면 `409 ACTIVE_RESERVATION_ALREADY_EXISTS`로 거절한다. 해당 Payment가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE 요청을 허용한다. 기존 Reservation에 대한 `JOIN READY`는 `availableCapacity`를 기준으로 별도 처리한다.
+- 실제 구현 Issue에서는 동일 TimeSlot에 대한 동시 최초 예약 생성 시 활성 Reservation 또는 유효한 CREATE READY의 성공이 최대 1건인지 검증한다.
 
 ## 6. 노쇼·지급 예정 금액
 

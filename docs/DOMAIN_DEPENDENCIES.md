@@ -155,12 +155,13 @@
 최초 예약 결제 준비 또는 새 Reservation 생성
 → 대상 TimeSlot 행 비관적 락 획득
 → RECRUITING·CONFIRMED 활성 Reservation 존재 여부 조회
-→ 없을 때만 READY Payment 또는 새 Reservation 생성
+→ CREATE면 만료되지 않은 CREATE READY Payment 존재 여부 조회
+→ 활성 Reservation과 유효 CREATE READY가 모두 없을 때만 CREATE READY 또는 새 Reservation 생성
 → 트랜잭션 종료까지 TimeSlot 잠금 유지
 ```
 
 - `reservation.time_slot_id` 단순 UNIQUE는 취소 이력 보존과 TimeSlot 재사용을 막으므로 사용하지 않는다. TimeSlot 1:N Reservation 관계에서 `CANCELLED` 이력은 유지한다.
-- TimeSlot 행 잠금과 활성 Reservation 조회가 정합성 경계다. 실제 구현 Issue에서 동일 TimeSlot 동시 최초 예약 생성의 성공 건수가 최대 1건인지 동시성 테스트로 검증한다.
+- CREATE의 정합성 경계는 TimeSlot 행 잠금, 활성 Reservation 조회, 유효 CREATE READY 조회다. 유효 CREATE READY는 만료되지 않은 `paymentPurpose=CREATE`, `paymentStatus=READY` Payment이며 TimeSlot당 최대 1건이다. 실제 구현 Issue에서 동일 TimeSlot 동시 CREATE 요청의 활성 Reservation 또는 유효 CREATE READY 성공 건수가 최대 1건인지 동시성 테스트로 검증한다. JOIN READY는 `availableCapacity`를 기준으로 별도 처리한다.
 
 ### 노쇼와 예약 종료
 
