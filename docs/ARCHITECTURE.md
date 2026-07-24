@@ -103,7 +103,7 @@ temporaryHoldCount = 만료되지 않은 READY 결제의 partySize 합계
 availableCapacity = capacity - currentParticipantCount - temporaryHoldCount
 ```
 
-동일 TimeSlot의 새 최초 예약 또는 READY Payment 생성은 TimeSlot 행을 잠그고 활성 예약을 확인하는 정합성 경계가 된다. 구체적인 락 구현과 트랜잭션 세부사항은 별도 구현 Issue에서 확정한다.
+`CREATE` 결제 준비의 정합성 경계는 TimeSlot 행 잠금, 활성 Reservation 확인, 만료되지 않은 CREATE READY Payment 확인 순서다. 활성 Reservation과 유효한 CREATE READY가 모두 없을 때만 새 CREATE READY를 만들며, 유효한 CREATE READY는 TimeSlot당 최대 1건이다. 기존 CREATE READY가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE를 허용한다. `JOIN READY`는 이 단일성 규칙이 아니라 기존 Reservation의 `availableCapacity`를 기준으로 처리한다. 구체적인 락 구현과 트랜잭션 세부사항은 별도 구현 Issue에서 확정한다.
 
 ## 6. 취소·환불·노쇼
 
