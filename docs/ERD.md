@@ -278,7 +278,7 @@ erDiagram
 | `paid_at` | TIMESTAMP | Y |  | PAID 전환 시각 |
 | `created_at`, `updated_at` | TIMESTAMP | N |  | 생성·수정 시각 |
 
-`payment_id`는 외부 식별자 중복을 막고 결제 완료 API·웹훅 멱등 처리의 기준이 된다. `CREATE`는 READY 생성 시 `reservation_id`, `reservation_participant_id`가 NULL이고, PAID 전환 후 생성된 예약·최초 참여자와 연결한다. `JOIN`은 기존 예약을 참조할 수 있다.
+`payment_id`는 외부 식별자 중복을 막고 결제 완료 API·웹훅 멱등 처리의 기준이 된다. `CREATE`는 READY 생성 시 `reservation_id`, `reservation_participant_id`가 NULL이고, PAID 전환 후 생성된 예약·최초 참여자와 연결한다. 동일 `time_slot_id`에는 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 최대 1건만 허용한다. CREATE READY가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE READY를 생성할 수 있다. `JOIN`은 기존 예약을 참조하며 `availableCapacity`를 기준으로 별도 처리한다.
 
 ### 4.8 `refund`
 
@@ -356,6 +356,7 @@ erDiagram
 | `restaurant.owner_member_id` | 소유자는 OWNER여야 함 | FK + 애플리케이션 역할 검증 |
 | `time_slot` | 동일 테이블·동일 시작 시각 회차 중복 금지 | `(shared_table_id, start_at)` UNIQUE |
 | 활성 `reservation.time_slot_id` | 회차당 활성 합석 예약 1건 | DB 단순 UNIQUE로 보장하지 않는다. TimeSlot 행 비관적 락과 `RECRUITING`·`CONFIRMED` Reservation 조회를 같은 트랜잭션에서 수행; `CANCELLED` 이력은 유지 |
+| 유효 CREATE READY Payment | 회차당 최초 예약 결제 준비 1건 | TimeSlot 행 잠금 뒤 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 조회; 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS` |
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
 | `chat_room.reservation_id` | 예약당 채팅방 1개 | DB UNIQUE |
 | `payment.payment_id` | PortOne 외부 결제 식별자 중복 금지 | PK/UNIQUE + 상태 전이 멱등 처리 |
@@ -366,9 +367,9 @@ erDiagram
 | CREATE partySize | 테이블 정원 이하 | 동적 규칙이므로 트랜잭션 내 애플리케이션 검증 |
 | JOIN partySize | availableCapacity 이하 | 동적 규칙이므로 임시 선점·PAID 합계 조회와 트랜잭션 검증 |
 
-정원 초과 방지는 단순 CHECK로 보장할 수 없다. 같은 회차의 `PAID` 참여 인원과 만료 전 `READY` 결제 인원을 트랜잭션 안에서 다시 검증해야 한다. MySQL 부분 UNIQUE 인덱스를 전제하지 않으므로, TimeSlot의 활성 Reservation 최대 1건도 `reservation.time_slot_id` 단순 UNIQUE가 아니라 TimeSlot 행 비관적 락과 활성 Reservation 조회로 보장한다.
+정원 초과 방지는 단순 CHECK로 보장할 수 없다. 같은 회차의 `PAID` 참여 인원과 만료 전 `READY` 결제 인원을 트랜잭션 안에서 다시 검증해야 한다. MySQL 부분 UNIQUE 인덱스를 전제하지 않으므로, TimeSlot의 활성 Reservation 최대 1건과 유효 CREATE READY 최대 1건은 DB 단순 UNIQUE가 아니라 TimeSlot 행 비관적 락, 활성 Reservation 조회, 유효 CREATE READY 조회로 보장한다.
 
-동일 TimeSlot에 동시에 여러 최초 예약을 생성하는 구현 테스트에서 활성 Reservation 생성 성공은 최대 1건이어야 한다. 나머지 요청은 `ACTIVE_RESERVATION_ALREADY_EXISTS`를 반환한다. READY Payment 생성·`availableCapacity` 계산도 같은 TimeSlot 잠금 경계에서 수행한다.
+동일 TimeSlot에 동시에 여러 CREATE 요청을 보내는 구현 테스트에서 활성 Reservation 또는 유효 CREATE READY의 성공은 최대 1건이어야 한다. 나머지 요청은 `ACTIVE_RESERVATION_ALREADY_EXISTS`를 반환한다. JOIN READY 생성과 `availableCapacity` 계산도 같은 TimeSlot 잠금 경계에서 수행한다.
 
 ## 7. 저장값과 계산값 구분
 
@@ -403,10 +404,11 @@ erDiagram
 ### 예약 결제 준비와 활성 예약 확인
 
 1. 대상 `time_slot` 행을 비관적 락으로 조회하고 트랜잭션 종료까지 잠금을 유지한다.
-2. `RECRUITING` 또는 `CONFIRMED` Reservation 존재 여부를 확인한다. CREATE의 활성 Reservation이 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS`로 거절하고, JOIN과 READY Payment 생성의 `availableCapacity` 계산도 같은 잠금 경계에서 수행한다.
-3. `shared_table.capacity`와 만료 전 READY·PAID 데이터를 사용해 `availableCapacity`를 계산하고 CREATE `partySize`를 검증한다.
-4. `payment`에 Member, TimeSlot, `party_size`, 금액, 통화, `payment_purpose=CREATE`, `payment_status=READY`, `expires_at`을 저장한다.
-5. 이 시점에는 `reservation_id`, `reservation_participant_id`가 NULL이다. 만료 시 READY 결제는 좌석 집계에서 제외하고 `FAILED`로 처리한다.
+2. `RECRUITING` 또는 `CONFIRMED` Reservation 존재 여부를 확인한다. CREATE의 활성 Reservation이 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS`로 거절한다.
+3. CREATE면 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment 존재 여부를 확인한다. 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS`로 거절한다. JOIN의 READY Payment 생성과 `availableCapacity` 계산은 같은 잠금 경계에서 별도 처리한다.
+4. `shared_table.capacity`와 만료 전 READY·PAID 데이터를 사용해 `availableCapacity`를 계산하고 CREATE `partySize`를 검증한다.
+5. `payment`에 Member, TimeSlot, `party_size`, 금액, 통화, `payment_purpose=CREATE`, `payment_status=READY`, `expires_at`을 저장한다.
+6. 이 시점에는 `reservation_id`, `reservation_participant_id`가 NULL이다. 만료 시 READY 결제는 좌석 집계에서 제외하고 `FAILED`로 처리한다.
 
 ### 최초 예약 결제 완료
 

@@ -92,6 +92,8 @@ PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 A
 | 프로젝트 정책·버전·역할 | `docs/PROJECT_CONTEXT.md` |
 | 실제 HTTP API 계약 | `docs/BOBFULL_API_SPEC_COMPLETE.md` |
 | 관계형 데이터 모델·정합성 제약 | `docs/ERD.md` |
+| 논리 구성 요소·책임 경계 | `docs/ARCHITECTURE.md` |
+| 중요한 기술·구조 결정 기록 | `docs/adr/README.md` |
 | AI 전체 절차 | `docs/AI_WORKFLOW.md` |
 | 담당자 AI 실행 | `docs/AI_IMPLEMENTATION_GUIDE.md` |
 | 담당자 AI PR 검토·리뷰 반영 | `docs/AI_REVIEW_GUIDE.md` |
