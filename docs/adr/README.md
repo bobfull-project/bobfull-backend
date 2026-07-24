@@ -65,7 +65,7 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 
 ## 6. 현재 범위
 
-이 디렉터리는 운영 기준과 템플릿만 제공한다. 현재 확정되지 않은 배포·AWS·Redis·Kafka·구체적인 락·트랜잭션 방식에 대한 개별 ADR은 생성하지 않는다.
+이 디렉터리는 운영 기준과 템플릿만 제공한다. 현재 확정되지 않은 배포·AWS·Redis·구체적인 락·트랜잭션 방식에 대한 개별 ADR은 생성하지 않는다. Kafka는 V3 확정 기술이며, 동기 트랜잭션 경계와 트랜잭션 완료 후 비동기 후속 처리 원칙은 [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md)와 [API 명세](../BOBFULL_API_SPEC_COMPLETE.md)를 따른다. 토픽·파티션·재시도·DLQ·전달 보장 등 구체 도입 구조가 결정되면 별도 ADR을 작성한다.
 
 ## 7. 현재 ADR
 
