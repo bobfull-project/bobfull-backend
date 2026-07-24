@@ -216,7 +216,7 @@ erDiagram
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
 ### 4.4 `time_slot`
-
+정
 목적: 합석 테이블별 예약 가능 회차다. API의 `diningSession`에 대응한다.
 
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
