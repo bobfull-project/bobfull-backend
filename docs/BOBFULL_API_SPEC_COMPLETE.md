@@ -752,7 +752,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 운영 중인 식당을 목록 조회하며 검색어·지역·카테고리·날짜·시간 조건으로 예약 가능한 식당을 동적 검색한다.
+- 설명: 운영 중인 식당을 목록 조회하며 검색어·카테고리·날짜·시간 조건으로 예약 가능한 식당을 동적 검색한다. 서비스 대상 지역이 제주로 한정되어 별도 지역 필터는 사용하지 않는다.
 - Method: `GET`
 - Path: `/api/restaurants`
 - Auth: 불필요
@@ -765,7 +765,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
 | `keyword` | String | N | 식당명·메뉴 검색어 |
-| `region` | String | N | 지역 필터 |
 | `category` | String | N | 음식 카테고리 필터 |
 | `date` | LocalDate | N | 예약 희망 날짜 |
 | `time` | LocalTime | N | 예약 희망 시간 |
@@ -2765,7 +2764,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 신청 인원 전체 처리
+- 설명: 신청 인원 전체 처리. 노쇼는 사유 없이 방문하지 않은 상태이므로 처리 사유를 저장하지 않는다.
 - Method: `POST`
 - Path: `/api/owner/reservations/{reservationId}/participations/{participationId}/no-show`
 - Auth: `OWNER`
@@ -2780,19 +2779,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `reservationId` | Long | Y | reservationId 식별자 |
 | `participationId` | Long | Y | participationId 식별자 |
 
-### Body
-
-```json
-{
-  "reason": "예약 시간까지 방문하지 않음"
-}
-```
-
-### Request Fields
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `reason` | String | Y | reason 값 |
+요청 Body는 사용하지 않는다.
 
 ## 3. Response
 
