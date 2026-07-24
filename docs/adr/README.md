@@ -66,3 +66,10 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 ## 6. 현재 범위
 
 이 디렉터리는 운영 기준과 템플릿만 제공한다. 현재 확정되지 않은 배포·AWS·Redis·Kafka·구체적인 락·트랜잭션 방식에 대한 개별 ADR은 생성하지 않는다.
+
+## 7. 현재 ADR
+
+- [ADR 0001: 예약 좌석 정합성과 임시 선점 전략](./0001-reservation-seat-consistency.md)
+- [ADR 0002: 결제 완료 API와 PortOne 웹훅의 멱등성 경계](./0002-payment-completion-idempotency.md)
+- [ADR 0003: UTC Instant 저장과 Clock 주입 시간 전략](./0003-utc-instant-and-clock.md)
+- [ADR 0004: Java 17 프로젝트 기준](./0004-use-java-17.md)
