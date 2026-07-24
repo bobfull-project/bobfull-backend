@@ -37,6 +37,7 @@ erDiagram
         varchar password_hash
         varchar nickname
         varchar phone_number
+        varchar business_number
         varchar role
         timestamp deleted_at
         timestamp created_at
@@ -176,6 +177,7 @@ erDiagram
 | `password_hash` | VARCHAR | N |  | 비밀번호 해시 |
 | `nickname` | VARCHAR | N |  | 참여자 목록·채팅 표시 이름 |
 | `phone_number` | VARCHAR | N |  | 회원 정보 |
+| `business_number` | VARCHAR | Y |  | OWNER 회원가입 시 저장하는 사업자등록번호. MEMBER는 NULL |
 | `role` | VARCHAR | N | 앱 Enum: `MEMBER`, `OWNER`, `ADMIN` | 역할 |
 | `deleted_at` | TIMESTAMP | Y |  | 회원 탈퇴 처리 방식은 보류 |
 | `created_at`, `updated_at` | TIMESTAMP | N |  | 생성·수정 시각 |
