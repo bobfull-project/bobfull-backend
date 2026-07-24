@@ -911,7 +911,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ```json
 {
-  "name": "합석 테이블 A",
   "capacity": 8
 }
 ```
@@ -920,7 +919,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `name` | String | Y | name 값 |
 | `capacity` | Integer | Y | capacity 값(2·4·6·8 중 하나) |
 
 ## 3. Response
@@ -1063,7 +1061,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ```json
 {
-  "name": "합석 테이블 A-1",
   "capacity": 4
 }
 ```
@@ -1072,7 +1069,6 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `name` | String | Y | name 값 |
 | `capacity` | Integer | Y | capacity 값(2·4·6·8 중 하나) |
 
 ## 3. Response

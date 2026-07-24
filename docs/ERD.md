@@ -37,7 +37,7 @@ erDiagram
         varchar(255) password_hash "비밀번호 해시"
         varchar(50) name "참여자 목록·채팅 표시 이름"
         varchar(20) phone_number "회원 정보"
-        varchar(20) business_number "OWNER 사업자등록번호. MEMBER는 NULL"
+        varchar(20) business_number UK "OWNER 사업자등록번호. MEMBER는 NULL"
         varchar(20) role "MEMBER, OWNER, ADMIN"
         datetime deleted_at "회원 탈퇴 처리 방식은 보류"
         datetime created_at "생성 시각"
@@ -125,7 +125,7 @@ erDiagram
         bigint no_show_history_id PK "이력 식별자"
         bigint reservation_participant_id FK "처리 대상"
         bigint processed_by_member_id FK "처리 OWNER"
-        varchar(20) action "노쇼 처리 또는 해제 구분"
+        boolean is_marked "TRUE=노쇼 처리, FALSE=노쇼 해제"
         datetime processed_at "처리 시각"
     }
     CHAT_ROOM {
@@ -177,7 +177,7 @@ erDiagram
 | `password_hash`            | VARCHAR(255) | N |  | 비밀번호 해시 |
 | `name`                     | VARCHAR(50) | N |  | 참여자 목록·채팅 표시 이름 |
 | `phone_number`             | VARCHAR(20) | N |  | 회원 정보 |
-| `business_number`          | VARCHAR(20) | Y |  | OWNER 회원가입 시 저장하는 사업자등록번호. MEMBER는 NULL |
+| `business_number`          | VARCHAR(20) | Y | UNIQUE | OWNER 회원가입 시 저장하는 사업자등록번호. MEMBER는 NULL. NULL은 중복 허용, 값이 있으면 중복 금지 |
 | `role`                     | VARCHAR(20) | N | 앱 Enum: `MEMBER`, `OWNER`, `ADMIN` | 역할 |
 | `deleted_at`               | DATETIME | Y |  | 회원 탈퇴 처리 방식은 보류 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -216,7 +216,7 @@ erDiagram
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
 ### 4.4 `time_slot`
-정
+
 목적: 합석 테이블별 예약 가능 회차다. API의 `diningSession`에 대응한다.
 
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
@@ -307,7 +307,7 @@ erDiagram
 | `no_show_history_id` | BIGINT | N | PK | 이력 식별자 |
 | `reservation_participant_id` | BIGINT | N | FK → `reservation_participant.reservation_participant_id` | 처리 대상 |
 | `processed_by_member_id` | BIGINT | N | FK → `member.member_id` | 처리 OWNER |
-| `action` | VARCHAR(20) | N |  | 노쇼 처리 또는 해제 이력 구분 |
+| `is_marked` | BOOLEAN | N |  | `TRUE`=노쇼 처리, `FALSE`=노쇼 해제 |
 | `processed_at` | DATETIME | N |  | 처리 시각 |
 
 노쇼는 사유 없이 방문하지 않은 상태를 기록하는 것이므로 처리 사유를 저장하지 않는다.
@@ -401,7 +401,7 @@ erDiagram
 | 결제 상태 | `READY`, `PAID`, `FAILED`, `CANCELLED` | `payment.payment_status` |
 | 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status` |
 
-`no_show_history.action`은 상태 Enum이 아니라 처리·해제 이력을 식별하는 값이다. 구체적 저장값은 구현 단계에서 API 이력 표현과 함께 정한다.
+`no_show_history.is_marked`는 상태 Enum이 아니라 처리·해제 이력을 구분하는 boolean 값이다. `TRUE`는 노쇼 처리, `FALSE`는 노쇼 해제를 뜻한다.
 
 ## 9. 주요 트랜잭션과 ERD 연결
 
