@@ -93,25 +93,14 @@ sequenceDiagram
     end
 ```
 
-`PaymentStatus.READY`는 별도 좌석 선점 엔티티 없이 10분 임시 선점을 표현한다. 결제 성공 전에는 `Reservation` 또는 `ReservationParticipant`를 생성하지 않는다.
-
-남은 참여 가능 인원은 저장값이 아니라 다음 원천 데이터로 계산한다.
-
-```text
-currentParticipantCount = PAID 상태 유효 참여자의 partySize 합계
-temporaryHoldCount = 만료되지 않은 READY 결제의 partySize 합계
-availableCapacity = capacity - currentParticipantCount - temporaryHoldCount
-```
-
-`CREATE` 결제 준비의 정합성 경계는 TimeSlot 행 잠금, 활성 Reservation 확인, 만료되지 않은 CREATE READY Payment 확인 순서다. 활성 Reservation과 유효한 CREATE READY가 모두 없을 때만 새 CREATE READY를 만들며, 유효한 CREATE READY는 TimeSlot당 최대 1건이다. 기존 CREATE READY가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE를 허용한다. `JOIN READY`는 이 단일성 규칙이 아니라 기존 Reservation의 `availableCapacity`를 기준으로 처리한다. 구체적인 락 구현과 트랜잭션 세부사항은 별도 구현 Issue에서 확정한다.
+`PaymentStatus.READY`는 별도 좌석 선점 엔티티 없이 임시 선점을 표현하며, 결제 성공 전에는 `Reservation` 또는 `ReservationParticipant`를 생성하지 않는다. 임시 선점 기간, 참여 인원·잔여 정원 계산, `CREATE` 결제 준비의 정합성 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md), [API 명세](./BOBFULL_API_SPEC_COMPLETE.md), [ERD](./ERD.md)를 따른다.
 
 ## 6. 취소·환불·노쇼
 
-- MEMBER 취소는 식사 시작 2시간 전까지 본인 참여 전체 단위로만 가능하다. 최초 예약자 취소는 예약 전체 취소와 유효 참여자 전액 환불로 이어지고, 추가 참여자 취소는 본인 참여와 본인 Payment 전체 환불을 처리한다.
-- 모집 마감·수동 마감 이후 확정 기준 미달 또는 OWNER·시스템 귀책으로 진행할 수 없는 예약은 전체 취소와 전액 환불 대상이다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.CANCELLED`를 함께 반영한다.
+- MEMBER·OWNER 취소와 환불은 예약·참여·결제 상태를 함께 반영하는 경계다.
 - OWNER는 식사 종료 후 `RESERVED` 참여자를 노쇼 처리·해제하며, `NoShowHistory`에 처리 이력을 남긴다. 노쇼는 취소나 환불을 대신하지 않는다.
 
-예약 상태·모집 상태 전이와 TimeSlot 재사용 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)를, 환불과 노쇼의 데이터 관계는 [ERD](./ERD.md)를 따른다.
+취소 가능 시점, 전체·참여자 단위 환불, 상태 전이와 TimeSlot 재사용 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를, 환불·노쇼 데이터 관계는 [ERD](./ERD.md)를 따른다.
 
 ## 7. 채팅
 

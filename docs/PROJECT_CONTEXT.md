@@ -184,3 +184,6 @@ Redis와 Kafka는 현재 확정 기능·ERD 선행 계약에 포함하지 않는
 ## 11. 관련 문서
 
 - API 명세: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md)
+- 데이터 모델: [`ERD.md`](./ERD.md)
+- 논리 책임 경계: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- 도메인 변경 영향: [`DOMAIN_DEPENDENCIES.md`](./DOMAIN_DEPENDENCIES.md)
