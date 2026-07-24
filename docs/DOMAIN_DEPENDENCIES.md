@@ -43,6 +43,8 @@
 
 ## 3. 핵심 공동 작업 경계
 
+아래 흐름은 공동 검토가 필요한 도메인 연결을 나타낸다. 상태 전이, 결제·환불, 좌석 정합성의 상세 정책은 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md), [프로젝트 컨텍스트](./PROJECT_CONTEXT.md), [ERD](./ERD.md)를 따른다.
+
 ### 예약 생성
 
 ```text
@@ -101,9 +103,8 @@
 → 실패·만료 시 FAILED와 좌석 해제
 ```
 
-- 완료 검증 API는 인증된 결제 당사자만 호출하며 `Payment.memberId`와 인증 사용자 ID를 확인한다. PortOne 웹훅은 사용자 인증 대신 서명 검증과 멱등성으로 처리한다.
-- 완료 검증 API와 웹훅이 동시에 실행돼도 한 번만 반영한다.
-- 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.CANCELLED`를 일치시킨다.
+- 결제 완료 API와 웹훅이 동시에 실행돼도 예약·참여·결제 결과는 한 번만 반영한다. 상세 검증 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
+- 환불 완료 상태와 결제 취소 상태는 함께 반영한다. 상세 상태 관계는 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [ERD](./ERD.md)를 따른다.
 
 ### 예약 확정과 모집 마감
 
@@ -122,8 +123,7 @@
 - 김홍기: 테이블 정원·회차 시작 시각
 - 김현승: 모집 실패 환불 대상과 금액
 
-- 수동 마감은 최초 예약자만 호출할 수 있고, `RECRUITING` 예약·이미 `CLOSED`인 모집·`CLOSED → OPEN` 변경은 허용하지 않는다.
-- 수동 마감 자체는 TimeSlot을 복구하지 않는다. Reservation 전체가 `CANCELLED`된 뒤에만 TimeSlot 재사용 가능 여부를 판단한다.
+- 모집 마감 자체는 TimeSlot을 재사용 가능 상태로 바꾸지 않으며, Reservation 전체가 취소된 뒤에만 재사용 여부를 판단한다. 상세 상태·시간 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
 
 ### MEMBER 취소·환불
 
@@ -146,8 +146,7 @@
 - 배지현: 최초·추가 참여자 분기, 참여 인원·예약 상태·모집 상태·채팅 종료 반영
 - 김홍기: `CANCELLED` 예약·시작 2시간 전·활성 예약 없음·OWNER 제한 없음 조건의 TimeSlot 복구
 
-- 식사 시작 2시간 이내에는 MEMBER 취소를 허용하지 않는다. 부분 취소·부분 환불·마감 이후 무환불 취소·취소 후 재모집은 이번 범위에 없다.
-- OWNER 또는 시스템 귀책 취소는 별도 OWNER 권한 또는 내부 처리로 예약 전체를 `CANCELLED`로 변경하고 유효 참여자 전액 환불을 요청한다. 참여자를 `NO_SHOW`로 처리하지 않는다.
+- MEMBER 취소는 허용 시점 안에서만 처리하며, 취소 후 재모집은 지원하지 않는다. 상세 시점·참여자 분기·환불 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
 
 ### TimeSlot 활성 예약 정합성
 
@@ -160,8 +159,7 @@
 → 트랜잭션 종료까지 TimeSlot 잠금 유지
 ```
 
-- `reservation.time_slot_id` 단순 UNIQUE는 취소 이력 보존과 TimeSlot 재사용을 막으므로 사용하지 않는다. TimeSlot 1:N Reservation 관계에서 `CANCELLED` 이력은 유지한다.
-- CREATE의 정합성 경계는 TimeSlot 행 잠금, 활성 Reservation 조회, 유효 CREATE READY 조회다. 유효 CREATE READY는 만료되지 않은 `paymentPurpose=CREATE`, `paymentStatus=READY` Payment이며 TimeSlot당 최대 1건이다. 실제 구현 Issue에서 동일 TimeSlot 동시 CREATE 요청의 활성 Reservation 또는 유효 CREATE READY 성공 건수가 최대 1건인지 동시성 테스트로 검증한다. JOIN READY는 `availableCapacity`를 기준으로 별도 처리한다.
+- 활성 Reservation 또는 유효한 CREATE READY는 같은 TimeSlot에서 동시에 하나만 성공해야 한다. 상세 잠금·만료·JOIN 처리 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [ERD](./ERD.md)를 따른다.
 
 ### 노쇼와 예약 종료
 
@@ -175,8 +173,7 @@
 → 지급 예정 예약금과 노쇼율 반영
 ```
 
-- 노쇼 처리와 해제는 참여자 사용자 단위이며 해당 사용자의 `partySize` 전체에 적용한다.
-- `NoShowHistory`에는 OWNER가 수행한 처리·해제와 처리 시각을 남긴다. 이는 V2 노쇼 API의 이력 조회를 위한 감사 기록이며, 별도의 방문·체크인 상태를 뜻하지 않는다.
+- OWNER의 노쇼 처리·해제는 참여자 단위로 수행하고 처리 이력을 남긴다. 상세 허용 상태와 저장 관계는 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md), [API 명세](./BOBFULL_API_SPEC_COMPLETE.md), [ERD](./ERD.md)를 따른다.
 
 ### 예약 참여자 채팅
 
@@ -189,8 +186,7 @@
 → 기존 ChatMessage는 조회 가능
 ```
 
-- OWNER와 ADMIN은 채팅 참여자가 아니다. `CANCELLED` 참여자는 즉시 접근이 종료된다.
-- 채팅 메시지는 DB에 저장한다. Redis Pub/Sub와 Kafka는 현재 채팅 계약 범위에 없다.
+- 결제 완료 후 취소되지 않은 참여자만 채팅에 접근하며, 취소된 참여자는 즉시 접근이 종료된다. 상세 접근·전송 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
 
 ## 4. 핵심 계산 계약
 
