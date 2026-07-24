@@ -12,6 +12,7 @@
 
 ## 1. 기본 원칙
 
+- Java 코드 스타일은 [NAVER CAMPUS HACKDAY Java 코딩 컨벤션](https://naver.github.io/hackday-conventions-java/)을 기본 기준으로 사용하며, 충돌 시 이 문서의 프로젝트별 규칙을 우선한다.
 - 기능 단위로 패키지를 나눈다.
 - 각 기능 내부는 역할에 따라 `controller`, `service`, `repository`, `dto`, `entity`로 구분한다.
 - Controller는 요청과 응답만 담당한다.
