@@ -38,7 +38,7 @@ Issue #번호 구현하라
 다음 상태는 검토 중단 사유가 아니다.
 
 - PR이 Draft 또는 구현 중임
-- Issue 계약·승인 기록이 미완료임
+- Issue 댓글의 최종 계약 기록 또는 상태 Label이 미완료임
 - 테스트·build가 실패함
 - 테스트·직접 검증·CI가 미실행임
 - `FAIL`, `HOLD`, `NOT_RUN`이 존재함
@@ -247,13 +247,15 @@ PR 본문의 `담당자 AI 검토·수정 기록`에 다음을 작성한다.
 다음이 충족돼야 담당자 AI가 `status:final-human-review`를 적용하고 Human 최종 리뷰를 요청할 수 있다.
 
 - 담당자 Human 답변과 AI 검토 완료
-- Human 리뷰의 최신 Head 재확인 상태 확인
 - 필수 테스트·build·직접 검증 결과 확인
 - 최신 Head 기준 담당자 AI 검토 완료
 - 해결되지 않은 BLOCKER 없음
 - 남은 Human 결정 필요 사항 명시
 
-GitHub Rules의 Approve 조건과 Merge 결정은 Human이 담당한다.
+`status:final-human-review`는 Human 리뷰를 기다리는 상태이므로 Human 리뷰의 최신 Head 재확인은
+이 Label을 적용하는 선행 조건이 아니라 Ready 전환과 Merge 전 확인 조건이다.
+
+GitHub Rules의 Human 리뷰·Approve 조건과 Merge 결정은 Human이 담당한다.
 
 ## 12. 금지 사항
 
