@@ -61,25 +61,29 @@ Human이 Issue 또는 PR에 답변하거나 리뷰를 작성한 뒤에도 같은
 
 ## 4. `Issue #번호 구현하라` 상태별 동작
 
-| 현재 상태 | 담당자 AI 동작 |
+현재 실행 상태는 Human 답변이 포함된 Issue 본문이 아니라 GitHub Label로 기록한다.
+
+| Label | 의미 |
 |---|---|
-| Issue에 Human 답변이 없음 | Issue·문서·코드를 분석하고 질문을 작성한 뒤 `HUMAN_ANSWER_REQUIRED`로 남기고 중단 |
-| Issue Human 답변이 작성됨 | 답변을 검증하고 `AI 보완 설명`을 추가한 뒤 최종 Issue 계약으로 재작성하고 `AI_FINALIZED`로 남긴 후 중단 |
-| Issue가 `AI_FINALIZED`이고 같은 명령을 다시 받음 | 명령을 Human 승인 신호로 해석 → Issue에 승인 기록 작성 → `HUMAN_APPROVED`로 변경 → 같은 실행에서 구현·테스트·Diff 검토·Commit·Push·Draft PR 생성 |
+| `status:human-answer-required` | Human 답변 누락·불명확, 문서 충돌, 정책 결정 또는 범위 변경으로 구현을 중단한 상태 |
+| `status:in-progress` | Human 답변 검토와 계약 확인을 마치고 구현·검증·PR 갱신을 진행하는 상태 |
+| `status:final-human-review` | 최신 Head의 구현·검증·AI 검토를 마쳐 Human 최종 리뷰를 기다리는 상태 |
+
+Issue 본문은 목적·범위·완료 조건·Human 질문과 답변을 보존한다.
+AI 답변 검토·보완 설명·최종 계약·구현 착수와 완료 기록은 별도 Issue 댓글에 남긴다.
+
+| 현재 조건 | 담당자 AI 동작 |
+|---|---|
+| 필수 Human 답변이 없음 | Issue·문서·코드를 분석하고 질문을 댓글로 기록한 뒤 `status:human-answer-required`를 적용하고 중단 |
+| Human 답변이 모두 있음 | 답변을 문서·코드와 대조하고, 질문별 검토·보완 설명·최종 계약·구현 진행 또는 중단 판정을 대화창과 Issue 댓글에 기록 |
+| 답변·계약에 충돌이나 미결정 사항이 없음 | 같은 `Issue #번호 구현하라` 실행에서 `status:in-progress`를 적용하고 구현·테스트·Diff 검토·Commit·Push·Draft PR 갱신 진행 |
+| 정책·API·DB 재결정, 답변 불명확, 보안·권한·상태 계약 불명확, 범위 변경이 필요함 | `status:human-answer-required`를 적용하고 Human 질문을 댓글에 기록한 뒤 중단 |
 | 연결된 PR이 존재함 | 최신 Head·실제 Diff·테스트 증거·담당자 Human 답변·Human 리뷰·모든 PR 리뷰와 댓글을 확인하고 범위 안 지적을 수정·재검증·Push |
-| 정책·API·DB 재결정이 필요한 항목이 있음 | 임의 수정하지 않고 Human 판단 요청 |
-| 담당자 AI 검토·수정·재검증 완료 | `FINAL_HUMAN_REVIEW` 상태로 보고하고 중단 |
+| 담당자 AI 검토·수정·재검증 완료 | `status:final-human-review`를 적용하고 Human 최종 리뷰가 필요한 사항을 Issue 댓글과 PR에 기록 |
 
-`AI_FINALIZED` 이후의 같은 명령은 Human 승인 신호다. 담당자 AI는 Human에게 별도 승인 체크나 GitHub 입력을 요구하지 않고 Issue에 다음을 기록한다.
-
-- 승인 주체: 명령을 입력한 Human 담당자
-- 승인 신호: `Issue #번호 구현하라`
-- 기록 주체: 담당자 AI
-- 승인 대상: 현재 AI 최종 Issue 계약
-- 승인 시각
-- 승인 상태: `HUMAN_APPROVED`
-
-승인 이후 최종 계약이 변경되면 기존 승인은 무효다. 담당자 AI는 구현을 중단하고 상태를 `AI_FINALIZED` 또는 `HOLD`로 되돌린 뒤 새 Human 승인 명령을 기다린다.
+Human이 답변을 작성한 뒤 `Issue #번호 구현하라`를 입력하는 것은 답변 검토와,
+충돌이 없을 때 같은 실행의 구현 진행을 요청하는 신호다. 별도의 `AI_FINALIZED → HUMAN_APPROVED`
+명령 왕복은 사용하지 않는다. Ready 전환, Approve와 Merge는 계속 Human 책임이다.
 
 ## 5. PR Human 입력과 담당자 AI 검토
 
@@ -140,7 +144,7 @@ API 변경은 API 명세와 `PROJECT_CONTEXT`, ERD, 영향 문서의 동기화 �
 - AI 보완 내용은 반드시 `AI 보완 설명`으로 구분한다.
 - Issue 범위 밖 기능과 불필요한 리팩터링을 추가하지 않는다.
 - 정책·API·DB·상태·권한·트랜잭션을 임의로 결정하지 않는다.
-- `HUMAN_APPROVED` 기록이 없는 Issue를 구현하지 않는다.
+- 필수 Human 답변 검토·최종 계약 확인·`status:in-progress` 기록 없이 구현하지 않는다.
 - 실행하지 않은 테스트를 `PASS`로 기록하지 않는다.
 - 전체 build가 실패하면 완료로 표현하지 않는다.
 - 비밀정보와 실제 개인정보를 입력·Commit·PR에 포함하지 않는다.

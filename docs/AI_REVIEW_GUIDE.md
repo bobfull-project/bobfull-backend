@@ -9,7 +9,7 @@
 담당자 AI의 검토는 다음을 수행한다.
 
 - 최신 Head의 실제 Diff 자체 검토
-- Issue 계약·승인 기록·PR 설명 정합성 확인
+- Issue 댓글의 최종 계약·현재 상태 Label·PR 설명 정합성 확인
 - 테스트·build·직접 검증 증거 확인
 - 담당자 Human 이해도 답변 검증과 `AI 보완 설명` 작성
 - Human 리뷰 확인
@@ -56,8 +56,8 @@ Issue #번호 구현하라
 가능한 범위에서 다음을 확인한다.
 
 - 최종 Issue 계약
-- 담당자 AI가 Issue에 남긴 `HUMAN_APPROVED` 기록
-- 승인 이후 계약 변경 여부
+- 담당자 AI가 Issue 댓글에 남긴 최종 계약과 `status:in-progress` 기록
+- 최종 계약 이후 변경 여부
 - PR 본문
 - 최신 실제 Diff
 - 관련 코드와 테스트
@@ -74,8 +74,8 @@ Issue #번호 구현하라
 ### 기본 검토
 
 - Issue 범위·제외 범위·완료 조건
-- Issue 최종 계약과 구현 승인 기록의 연결
-- 승인 이후 계약 변경 여부
+- Issue 댓글의 최종 계약과 `status:in-progress` 기록의 연결
+- 최종 계약 이후 변경 여부
 - 요청부터 응답·저장까지 실제 코드 흐름
 - 입력 검증과 예외 처리
 - 코드와 PR 설명의 일치
@@ -244,7 +244,7 @@ PR 본문의 `담당자 AI 검토·수정 기록`에 다음을 작성한다.
 
 ## 11. Merge 전 경계
 
-다음이 충족돼야 담당자 AI가 `FINAL_HUMAN_REVIEW`로 보고할 수 있다.
+다음이 충족돼야 담당자 AI가 `status:final-human-review`를 적용하고 Human 최종 리뷰를 요청할 수 있다.
 
 - 담당자 Human 답변과 AI 검토 완료
 - Human 리뷰의 최신 Head 재확인 상태 확인

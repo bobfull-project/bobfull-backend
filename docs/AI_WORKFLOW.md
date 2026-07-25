@@ -18,15 +18,14 @@ Issue #번호 구현하라
 1. 담당자 AI 최초 온보딩
 2. 담당자 AI가 Issue·문서·코드 분석과 Human 질문 작성
 3. 담당자 Human이 Issue의 Human 이해도 답변 작성
-4. 담당자 AI가 답변 검증·AI 보완 설명·최종 Issue 재작성
-5. Human이 AI_FINALIZED Issue를 읽고 다시 `Issue #번호 구현하라` 입력
-6. 담당자 AI가 명령을 Human 승인 신호로 기록하고 Issue를 HUMAN_APPROVED로 변경
-7. 같은 실행에서 구현·테스트·Commit·Push·Draft PR 생성
-8. PR 담당자 Human이 PR 본문의 Human 이해도 답변 작성
-9. Human 리뷰어가 PR 본문의 Human 리뷰 작성
-10. 담당자 AI가 최신 Head 자체 검토·Human 답변 보완·등록된 리뷰와 댓글 판단
-11. 범위 안 지적 수정·재검증·Push·PR 기록 갱신
-12. Human이 최신 코드·테스트·리뷰 결과 확인 후 Approve와 Merge
+4. 담당자 AI가 답변 검증·보완 설명·최종 계약을 대화창과 Issue 댓글에 기록
+5. 충돌이 없으면 같은 `Issue #번호 구현하라` 실행에서 구현·테스트·Commit·Push·Draft PR 생성 또는 갱신
+6. PR 담당자 Human이 PR 본문의 Human 이해도 답변 작성
+7. Human 리뷰어가 PR 본문의 Human 리뷰 작성
+8. 담당자 AI가 최신 Head 자체 검토·Human 답변 보완·등록된 리뷰와 댓글 판단
+9. 범위 안 지적 수정·재검증·Push·PR 기록 갱신
+10. 담당자 AI가 `status:final-human-review`를 기록
+11. Human이 최신 코드·테스트·리뷰 결과 확인 후 Approve와 Merge
 ```
 
 Human 답변, Human 리뷰와 외부 리뷰·댓글의 작성 순서는 고정하지 않는다. 담당자 AI는 명령을 받을 때마다 현재 GitHub 상태를 읽고 누적된 입력을 함께 처리한다.
@@ -47,49 +46,35 @@ Human 답변, Human 리뷰와 외부 리뷰·댓글의 작성 순서는 고정�
 - 완료 조건과 검증 계획
 - 문서·Issue·코드 충돌
 
-Human 결정이 필요하면 Issue의 `Human 이해도`에 구체적인 질문을 작성하고 상태를 `HUMAN_ANSWER_REQUIRED`로 남긴 뒤 구현하지 않는다.
+Human 결정이 필요하면 Issue 댓글에 구체적인 질문을 작성하고
+`status:human-answer-required`를 적용한 뒤 구현하지 않는다. Issue 본문의 Human 답변은 수정하지 않는다.
 
 ### 3.2 Human 답변
 
 담당자 Human은 Issue 질문에 직접 답한다. 담당자 AI가 답변 원문을 대신 작성하지 않는다.
 
-### 3.3 담당자 AI 검증과 최종 Issue 재작성
+### 3.3 담당자 AI 검증·최종 계약 기록과 자동 진행
 
-같은 명령을 다시 받으면 담당자 AI는 Human 답변을 문서·코드와 대조한다.
+Human이 답변을 작성한 뒤 같은 명령을 다시 받으면 담당자 AI는 Human 답변을 문서·코드와 대조한다.
 
-- 정확하면 `AI 보완 설명`으로 필요한 맥락을 추가한다.
-- 부족하거나 잘못됐으면 `보완 필요`와 근거를 남긴다.
-- 답변을 반영해 범위·정책·흐름·완료 조건·검증 계획을 최종 계약으로 재작성한다.
-- 충돌이나 미결정 사항이 남으면 `HOLD`로 중단한다.
-- 구현 가능한 계약이면 `AI_FINALIZED`로 남긴다.
+- 질문별 `일치 | 보완 필요`과 근거를 대화창과 별도 Issue 댓글에 기록한다.
+- Human 답변 원문과 Issue 본문 전체를 수정하거나 재작성하지 않는다.
+- 답변을 반영한 최종 계약에는 범위·정책·흐름·완료 조건·검증 계획·구현 진행 또는 중단 판정을 포함한다.
+- 충돌이나 미결정 사항이 남으면 `status:human-answer-required`를 적용하고 중단한다.
+- 필수 답변이 모두 있고 충돌·미결정 사항이 없으면 `status:in-progress`를 적용한 같은 실행에서 구현을 계속한다.
 
-### 3.4 Human 구현 승인과 담당자 AI 기록
+Issue 본문은 목적·범위·완료 조건·Human 질문과 답변을 보존하고, AI 검토·최종 계약·구현 기록은 댓글에 남긴다.
+실행 상태는 다음 GitHub Label로 관리한다.
 
-Human은 `AI_FINALIZED` Issue를 읽는다.
-
-- 수정이 필요하면 수정 요청을 남긴다.
-- 문제가 없으면 다시 `Issue #번호 구현하라`라고 입력한다.
-
-이 명령은 Human의 구현 승인 신호다. 담당자 AI는 구현 시작 전에 Issue에 다음을 기록한다.
-
-```markdown
-## 구현 승인 기록
-
-- 승인 주체: 명령을 입력한 Human 담당자
-- 승인 신호: `Issue #번호 구현하라`
-- 기록 주체: 담당자 AI
-- 승인 대상: AI 최종 Issue 검증에 기록된 최종 계약
-- 승인 시각: 실제 명령 확인 시각
-- 승인 상태: `HUMAN_APPROVED`
+```text
+status:human-answer-required
+status:in-progress
+status:final-human-review
 ```
-
-담당자 AI가 승인 기록을 작성하므로 Human이 GitHub에 별도 승인 체크나 문장을 작성할 필요는 없다. 기록 후 같은 실행에서 구현을 계속한다.
-
-승인 이후 구현 범위·정책·API·DB·상태·권한·트랜잭션·완료 조건이 변경되면 기존 승인은 무효다. 담당자 AI는 상태를 `AI_FINALIZED` 또는 `HOLD`로 되돌리고 새로운 Human 승인 명령을 기다린다.
 
 ## 4. 구현과 Draft PR
 
-Issue가 `HUMAN_APPROVED` 상태가 되면 담당자 AI는 같은 실행에서 다음을 수행한다.
+답변 검토와 계약 확인을 마쳐 `status:in-progress`가 적용되면 담당자 AI는 같은 실행에서 다음을 수행한다.
 
 ```text
 기능 브랜치 확인 또는 생성
@@ -104,7 +89,7 @@ Issue가 `HUMAN_APPROVED` 상태가 되면 담당자 AI는 같은 실행에서 �
 
 필수 원칙:
 
-- 승인 기록이 연결된 최종 Issue 계약 범위만 구현한다.
+- Issue 댓글에 기록된 최종 계약 범위만 구현한다.
 - 실행하지 않은 테스트를 `PASS`로 기록하지 않는다.
 - build 실패를 성공으로 표현하지 않는다.
 - 정책·API·DB 재결정이 필요하면 중단한다.
@@ -154,8 +139,8 @@ Human 리뷰 원문은 담당자 AI가 대신 작성하거나 덮어쓰지 않�
 
 검토 대상:
 
-- 최종 Issue 계약과 `HUMAN_APPROVED` 기록
-- 승인 이후 계약 변경 여부
+- Issue 댓글의 최종 계약과 현재 상태 Label
+- 최종 계약 이후 변경 여부
 - PR 설명과 실제 Diff
 - 요청부터 응답·저장까지 코드 흐름
 - 입력 검증·예외 처리
@@ -219,7 +204,8 @@ PR에 등록된 리뷰·댓글은 작성 주체와 관계없이 참고 입력이
 
 ## 9. 최종 Human 확인과 Merge
 
-담당자 AI가 `FINAL_HUMAN_REVIEW`로 보고하면 Human이 실제 코드, 테스트·CI, Human 입력과 리뷰 반영 결과를 확인한다.
+담당자 AI가 `status:final-human-review`를 적용하고 Issue 댓글과 PR에 최종 검토 결과를 기록하면,
+Human이 실제 코드, 테스트·CI, Human 입력과 리뷰 반영 결과를 확인한다.
 
 다음을 충족하지 않으면 Merge 준비 완료로 판단하지 않는다.
 
