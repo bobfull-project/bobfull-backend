@@ -50,8 +50,10 @@ AI 상태 흐름, 승인·Merge 조건의 판단 근거로 사용하지 않는�
 ## 3. 같은 Issue 재처리
 
 같은 Issue에 다시 `Issue #번호 구현하라`를 입력하면 담당자 AI는 최초 온보딩을 형식적으로 반복하지 않는다.
-실제 GitHub Issue, 연결된 PR, 최신 Head, Human 답변, 리뷰·댓글, 테스트·build·CI 결과,
-현재 브랜치와 작업 트리, 승인 이후 계약 변경 여부를 다시 확인한 뒤 현재 단계의 다음 작업부터 재개한다.
+실제 GitHub Issue, Human 답변, Issue 댓글의 최종 계약, 현재 `status:*` Label,
+현재 브랜치와 작업 트리, 계약 변경 여부를 다시 확인한 뒤 Issue 단계의 다음 작업부터 재개한다.
+연결 PR이 있으면 Issue 명령으로 Diff·리뷰·댓글을 검토하거나 수정하지 않고
+`PR #번호 검토하라`가 필요하다고 보고한다.
 
 Issue 또는 계약이 크게 변경되어 필요한 기준 문서가 달라진 경우에만 onboarding Skill 기준으로 문서를 다시 선택한다.
 
@@ -79,10 +81,9 @@ AI 답변 검토·보완 설명·최종 계약·구현 착수와 완료 기록�
 |---|---|
 | 필수 Human 답변이 없음 | Issue·문서·코드를 분석하고 최초 Human 질문을 Issue 본문에 기록한 뒤 `status:human-answer-required`를 적용하고 중단 |
 | Human 답변이 모두 있음 | 답변을 문서·코드와 대조하고, 질문별 검토·보완 설명·최종 계약·구현 진행 또는 중단 판정을 대화창과 Issue 댓글에 기록 |
-| 답변·계약에 충돌이나 미결정 사항이 없음 | 같은 `Issue #번호 구현하라` 실행에서 `status:in-progress`를 적용하고 구현·테스트·Diff 검토·Commit·Push·Draft PR 갱신 진행 |
+| 답변·계약에 충돌이나 미결정 사항이 없음 | 같은 `Issue #번호 구현하라` 실행에서 `status:in-progress`를 적용하고 구현·테스트·Diff 검토·Commit·Push·Draft PR 생성 또는 최초 갱신 진행 |
 | 정책·API·DB 재결정, 답변 불명확, 보안·권한·상태 계약 불명확, 범위 변경이 필요함 | `status:human-answer-required`를 적용하고 구현 중 새로 발생한 추가 Human 질문을 댓글에 기록한 뒤 중단 |
-| 연결된 PR이 존재함 | 최신 Head·실제 Diff·테스트 증거·담당자 Human 답변·Human 리뷰·모든 PR 리뷰와 댓글을 확인하고 범위 안 지적을 수정·재검증·Push |
-| 담당자 AI 검토·수정·재검증 완료 | `status:final-human-review`를 적용하고 Human 최종 리뷰가 필요한 사항을 Issue 댓글과 PR에 기록 |
+| 연결된 PR이 존재함 | Issue 명령에서는 PR 검토·수정·Push를 수행하지 않고 `PR #번호 검토하라`가 필요하다고 보고 |
 
 Human이 답변을 작성한 뒤 `Issue #번호 구현하라`를 입력하는 것은 답변 검토와,
 충돌이 없을 때 같은 실행의 구현 진행을 요청하는 신호다. 별도의 `AI_FINALIZED → HUMAN_APPROVED`
@@ -96,9 +97,13 @@ Human이 답변을 작성한 뒤 `Issue #번호 구현하라`를 입력하는 �
 PR #번호 검토하라
 ```
 
-담당자 AI는 PR 번호로 연결된 Issue, Issue 댓글의 최종 계약, 현재 `status:*` Label,
+담당자 AI는 PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약, 현재 `status:*` Label,
 최신 Head, PR 답변·리뷰·댓글과 로컬 상태를 확인한다. PR 답변 또는 Human 리뷰 작성 후
 `Issue #번호 구현하라`를 다시 입력하도록 요구하지 않는다.
+
+PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 수정을 시작할 때만 연결된 모든 Issue에서
+기존 `status:*` Label을 제거하고 `status:in-progress` 하나를 적용한다. 수정·검증·Push·최신 Head
+자체 검토가 끝나면 연결된 모든 Issue에서 `status:final-human-review` 하나만 적용한다.
 
 ## 6. PR Human 입력과 담당자 AI 검토
 

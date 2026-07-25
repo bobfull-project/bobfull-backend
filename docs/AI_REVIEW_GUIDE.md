@@ -25,7 +25,7 @@
 PR #번호 검토하라
 ```
 
-담당자 AI는 PR 번호로 연결된 Issue, Issue 댓글의 최종 계약, 현재 `status:*` Label과 PR 상태를 읽고 PR 검토·리뷰 반영 단계부터 재개한다.
+담당자 AI는 PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약, 현재 `status:*` Label과 PR 상태를 읽고 PR 검토·리뷰 반영 단계부터 재개한다.
 PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 입력하도록 요구하지 않는다.
 실제 상태는 GitHub `status:*` Label 하나로만 관리하며, 상태 전환 전 기존 `status:*` Label을 모두 제거하고 새 Label 하나만 적용한다.
 
@@ -35,7 +35,7 @@ PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 
 
 1. 최신 Head Commit SHA
 2. 최신 Head의 실제 Diff
-3. 해당 PR의 Issue 또는 작업 범위
+3. 해당 PR의 연결된 모든 Issue 또는 작업 범위
 
 다음 상태는 검토 중단 사유가 아니다.
 
@@ -57,8 +57,8 @@ PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 
 
 가능한 범위에서 다음을 확인한다.
 
-- 최종 Issue 계약
-- 담당자 AI가 Issue 댓글에 남긴 최종 계약과 `status:in-progress` 기록
+- 연결된 모든 Issue의 최종 계약
+- 담당자 AI가 각 Issue 댓글에 남긴 최종 계약과 `status:in-progress` 기록
 - 최종 계약 이후 변경 여부
 - PR 본문
 - 최신 실제 Diff
@@ -75,8 +75,8 @@ PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 
 
 ### 기본 검토
 
-- Issue 범위·제외 범위·완료 조건
-- Issue 댓글의 최종 계약과 `status:in-progress` 기록의 연결
+- 연결된 모든 Issue의 범위·제외 범위·완료 조건
+- 각 Issue 댓글의 최종 계약과 `status:in-progress` 기록의 연결
 - 최종 계약 이후 변경 여부
 - 요청부터 응답·저장까지 실제 코드 흐름
 - 입력 검증과 예외 처리
@@ -158,9 +158,12 @@ PR에 등록된 모든 리뷰·댓글은 선택적 참고 입력이다. 특정 �
 
 처리:
 
+- 실제 파일 수정 시작 전 연결된 모든 Issue의 기존 `status:*` Label을 제거하고 `status:in-progress` 하나 적용
 - 수정
 - 영향받는 테스트·build·직접 검증 재실행
 - PR 기록 갱신
+
+PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 수정·검증·Push·최신 Head 자체 검토가 끝나면 연결된 모든 Issue의 기존 `status:*` Label을 제거하고 `status:final-human-review` 하나만 적용한다.
 
 ### 설명 또는 확인 요청
 
@@ -246,7 +249,7 @@ PR 본문의 `담당자 AI 검토·수정 기록`에 다음을 작성한다.
 
 ## 11. Merge 전 경계
 
-다음이 충족돼야 담당자 AI가 `status:final-human-review`를 적용하고 Human 최종 리뷰를 요청할 수 있다.
+다음이 충족돼야 담당자 AI가 연결된 모든 Issue에 `status:final-human-review`를 적용하고 Human 최종 리뷰를 요청할 수 있다.
 
 - 담당자 Human 답변과 AI 검토 완료
 - 필수 테스트·build·직접 검증 결과 확인

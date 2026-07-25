@@ -8,7 +8,7 @@ AI 환경별 최초 1회 Skill을 등록한 뒤, 팀원은 Issue 단계에서 �
 Issue #번호 구현하라
 ```
 
-담당자 AI는 현재 Issue·연결된 PR·최신 Head·리뷰와 댓글을 읽고 다음 단계부터 재개한다. 담당자 Human은 이해도 답변과 정책 판단을 담당하고, Human 리뷰어는 실제 Diff를 검토하며, Approve와 Merge는 Human이 수행한다.
+담당자 AI는 Issue 단계에서 현재 Issue·Human 답변·Issue 댓글·현재 Label을 읽고 다음 단계부터 재개한다. 연결 PR의 Head·Diff·리뷰와 댓글은 PR 단계에서만 읽는다. 담당자 Human은 이해도 답변과 정책 판단을 담당하고, Human 리뷰어는 실제 Diff를 검토하며, Approve와 Merge는 Human이 수행한다.
 
 PR 단계의 검토·리뷰 반영에는 다음 명령을 사용한다.
 
@@ -139,7 +139,7 @@ Human 리뷰 원문은 담당자 AI가 대신 작성하거나 덮어쓰지 않�
 ## 6. 담당자 AI PR 검토
 
 연결된 PR이 존재하면 `PR #번호 검토하라` 명령으로 담당자 AI가 현재 Head를 검토한다.
-PR 번호로 연결된 Issue, Issue 댓글의 최종 계약과 현재 `status:*` Label을 먼저 확인한다.
+PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약과 현재 `status:*` Label을 먼저 확인한다.
 
 ### 최소 검토 기준
 
@@ -179,6 +179,10 @@ PR에 등록된 리뷰·댓글은 작성 주체와 관계없이 참고 입력이
 
 담당자 AI는 각 의견을 실제 Issue 계약과 코드로 검증한다.
 
+PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 수정을 시작할 때만 연결된 모든 Issue에서
+기존 `status:*` Label을 제거하고 `status:in-progress` 하나를 적용한다. 수정·검증·Push·최신 Head
+자체 검토가 끝나면 연결된 모든 Issue에서 `status:final-human-review` 하나만 적용한다.
+
 ### 자동 반영 가능한 항목
 
 - Issue 계약 안의 명확한 기능 오류
@@ -216,7 +220,7 @@ PR에 등록된 리뷰·댓글은 작성 주체와 관계없이 참고 입력이
 
 ## 9. 최종 Human 확인과 Merge
 
-담당자 AI가 `status:final-human-review`를 적용하고 Issue 댓글과 PR에 최종 검토 결과를 기록하면,
+담당자 AI가 연결된 모든 Issue에 `status:final-human-review`를 적용하고 Issue 댓글과 PR에 최종 검토 결과를 기록하면,
 Human이 실제 코드, 테스트·CI, Human 입력과 리뷰 반영 결과를 확인한다.
 
 다음을 충족하지 않으면 Merge 준비 완료로 판단하지 않는다.
