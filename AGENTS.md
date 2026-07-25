@@ -4,18 +4,17 @@
 
 담당자 AI는 Issue 정리·구현·검증·PR 자체 검토·리뷰 반영을 수행한다. Human은 이해도 답변, Human 리뷰, 정책 판단, Approve와 최종 Merge를 책임진다.
 
-## 1. AI 환경별 최초 1회 Skill 등록
+## 1. 기본 Skill 적용 방식
 
-각 팀원은 자신이 사용하는 Codex·Claude Code·AI 에이전트 환경에
-[`skills/bobfull-onboarding/SKILL.md`](./skills/bobfull-onboarding/SKILL.md)를 최초 1회 등록한다.
+저장소에 접근할 수 있는 담당자 AI의 기본 경로는
+[`skills/bobfull-onboarding/SKILL.md`](./skills/bobfull-onboarding/SKILL.md)를 직접 읽고 적용하는 방식이다.
 
-- 저장소에 Skill 원본 파일이 있다는 사실만으로 해당 AI 환경에 자동 등록·적용됐다고 간주하지 않는다.
-- Skill 등록은 환경별 최초 1회 작업이며, Issue마다 팀원이 반복하지 않는다.
-- 등록 여부를 확인할 수 없거나 해당 환경이 Skill 자동 적용을 지원하지 않을 때만 다음 대체 명령을 사용한다.
+- Skill 등록·자동 매칭 기능을 지원하는 AI 환경에서는 선택적으로 등록할 수 있다.
+- 그러나 등록 여부는 BobFull 작업의 시작 조건이 아니며, 팀원이 별도 온보딩 명령을 먼저 실행할 필요도 없다.
+- 새 Issue를 처음 처리할 때 담당자 AI가 이 파일의 지시에 따라 Skill을 직접 읽고 적용한다.
 
 ```text
-skills/bobfull-onboarding/SKILL.md를 읽고
-Issue #번호를 대상으로 BobFull 온보딩을 수행하라.
+Issue #번호 구현하라
 ```
 
 ## 2. Issue 단계 실행 명령과 새 Issue 최초 처리
@@ -31,7 +30,7 @@ Issue #번호 구현하라
 ```text
 AGENTS.md 확인
 → 대상 Issue·연결 PR과 현재 상태 확인
-→ skills/bobfull-onboarding/SKILL.md 적용
+→ skills/bobfull-onboarding/SKILL.md 직접 읽기·적용
 → 대상 Issue에 직접 필요한 기준 문서만 선택
 → 관련 코드·테스트·브랜치 상태 확인
 → 문서·Issue·코드 충돌 확인
@@ -49,13 +48,13 @@ AI 상태 흐름, 승인·Merge 조건의 판단 근거로 사용하지 않는�
 
 ## 3. 같은 Issue 재처리
 
-같은 Issue에 다시 `Issue #번호 구현하라`를 입력하면 담당자 AI는 최초 온보딩을 형식적으로 반복하지 않는다.
+같은 Issue에 다시 `Issue #번호 구현하라`를 입력하면 담당자 AI는 Skill을 형식적으로 다시 읽지 않는다.
 실제 GitHub Issue, Human 답변, Issue 댓글의 최종 계약, 현재 `status:*` Label,
 현재 브랜치와 작업 트리, 계약 변경 여부를 다시 확인한 뒤 Issue 단계의 다음 작업부터 재개한다.
 연결 PR이 있으면 Issue 명령으로 Diff·리뷰·댓글을 검토하거나 수정하지 않고
 `PR #번호 검토하라`가 필요하다고 보고한다.
 
-Issue 또는 계약이 크게 변경되어 필요한 기준 문서가 달라진 경우에만 onboarding Skill 기준으로 문서를 다시 선택한다.
+Issue 또는 계약이 크게 변경되어 필요한 기준 문서가 달라진 경우에만 Skill을 다시 확인해 문서를 재선택한다.
 
 Human이 Issue 본문에 답변을 작성한 뒤에는 같은 명령을 다시 입력한다.
 PR의 Human 답변 또는 리뷰를 작성한 뒤에는 `PR #번호 검토하라`를 사용한다.

@@ -2,7 +2,7 @@
 
 ## 1. 목적
 
-AI 환경별 최초 1회 Skill을 등록한 뒤, 팀원은 Issue 단계에서 긴 프롬프트 대신 다음 명령으로 작업을 시작한다.
+팀원은 별도 Skill 등록이나 온보딩 명령 없이 Issue 단계에서 다음 명령으로 작업을 시작한다.
 
 ```text
 Issue #번호 구현하라
@@ -21,17 +21,18 @@ PR #번호 검토하라
 ## 2. 전체 흐름
 
 ```text
-1. AI 환경별 Skill 최초 1회 등록
-2. 담당자 AI가 Issue·문서·코드 분석과 Human 질문 작성
-3. 담당자 Human이 Issue의 Human 이해도 답변 작성
-4. 담당자 AI가 답변 검증·보완 설명·최종 계약을 대화창과 Issue 댓글에 기록
-5. 충돌이 없으면 같은 `Issue #번호 구현하라` 실행에서 구현·테스트·Commit·Push·Draft PR 생성 또는 갱신
-6. PR 담당자 Human이 PR 본문의 Human 이해도 답변 작성
-7. Human 리뷰어가 PR 본문의 Human 리뷰 작성
-8. `PR #번호 검토하라`로 담당자 AI가 최신 Head 자체 검토·Human 답변 보완·등록된 리뷰와 댓글 판단
-9. 범위 안 지적 수정·재검증·Push·PR 기록 갱신
-10. 담당자 AI가 `status:final-human-review`를 기록
-11. Human이 최신 코드·테스트·리뷰 결과 확인 후 Approve와 Merge
+1. 사용자가 `Issue #번호 구현하라` 입력
+2. 담당자 AI가 AGENTS.md·Issue·현재 상태를 확인하고 SKILL.md를 직접 읽기·적용
+3. 담당자 AI가 필요한 문서·코드 분석과 Human 질문 작성
+4. 담당자 Human이 Issue의 Human 이해도 답변 작성
+5. 담당자 AI가 답변 검증·보완 설명·최종 계약을 대화창과 Issue 댓글에 기록
+6. 충돌이 없으면 같은 실행에서 구현·테스트·Commit·Push·Draft PR 생성 또는 갱신
+7. PR 담당자 Human이 PR 본문의 Human 이해도 답변 작성
+8. Human 리뷰어가 PR 본문의 Human 리뷰 작성
+9. `PR #번호 검토하라`로 담당자 AI가 최신 Head 자체 검토·Human 답변 보완·등록된 리뷰와 댓글 판단
+10. 범위 안 지적 수정·재검증·Push·PR 기록 갱신
+11. 담당자 AI가 `status:final-human-review`를 기록
+12. Human이 최신 코드·테스트·리뷰 결과 확인 후 Approve와 Merge
 ```
 
 Human 답변, Human 리뷰와 외부 리뷰·댓글의 작성 순서는 고정하지 않는다. 담당자 AI는 명령을 받을 때마다 현재 GitHub 상태를 읽고 누적된 입력을 함께 처리한다.

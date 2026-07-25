@@ -2,7 +2,8 @@
 
 ## 1. 실행 명령
 
-Skill 등록은 AI 환경별 최초 1회이며, 새 Issue 최초 처리 때마다 담당자 AI가 Skill을 적용해 필요한 문서를 선택한다.
+Skill 등록·자동 매칭을 지원하는 환경에서는 선택적으로 등록할 수 있다. 그러나 등록 여부는 작업 시작 조건이 아니다.
+새 Issue 최초 처리 때 담당자 AI는 `AGENTS.md` 지시에 따라 저장소의 `skills/bobfull-onboarding/SKILL.md`를 직접 읽고 적용해 필요한 문서를 선택한다.
 Issue 단계에는 다음 명령을 사용한다.
 
 ```text
@@ -24,10 +25,11 @@ Issue #번호 구현하라
 동작:
 
 1. 확정 문서·Issue·코드·테스트를 분석한다.
-2. 충돌과 미결정 사항을 확인한다.
-3. 최초 구현에 필요한 질문을 Issue 본문의 `Human 이해도`에 작성한다.
-4. `status:human-answer-required`를 적용한다.
-5. 구현하지 않고 중단한다.
+2. 새 Issue 최초 처리라면 `skills/bobfull-onboarding/SKILL.md`를 직접 읽고 필요한 기준 문서를 선택한다.
+3. 충돌과 미결정 사항을 확인한다.
+4. 최초 구현에 필요한 질문을 Issue 본문의 `Human 이해도`에 작성한다.
+5. `status:human-answer-required`를 적용한다.
+6. 구현하지 않고 중단한다.
 
 ### B. Human 답변 검증·최종 계약 기록과 자동 구현 진행
 
