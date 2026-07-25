@@ -18,7 +18,7 @@ skills/bobfull-onboarding/SKILL.md를 읽고
 Issue #번호를 대상으로 BobFull 온보딩을 수행하라.
 ```
 
-## 2. 담당자 AI 실행 명령과 새 Issue 최초 처리
+## 2. Issue 단계 실행 명령과 새 Issue 최초 처리
 
 팀원은 새 Issue와 기존 Issue 모두 다음 명령만 사용한다.
 
@@ -55,13 +55,16 @@ AI 상태 흐름, 승인·Merge 조건의 판단 근거로 사용하지 않는�
 
 Issue 또는 계약이 크게 변경되어 필요한 기준 문서가 달라진 경우에만 onboarding Skill 기준으로 문서를 다시 선택한다.
 
-Human이 Issue 또는 PR에 답변하거나 리뷰를 작성한 뒤에도 같은 명령을 다시 입력한다.
+Human이 Issue 본문에 답변을 작성한 뒤에는 같은 명령을 다시 입력한다.
+PR의 Human 답변 또는 리뷰를 작성한 뒤에는 `PR #번호 검토하라`를 사용한다.
 
 별도의 다른 팀원 AI 리뷰는 워크플로우 단계나 완료 조건으로 사용하지 않는다. PR에 리뷰·댓글이 등록되면 작성 주체와 관계없이 담당자 AI가 실제 코드 근거를 확인해 반영 여부를 판단한다.
 
 ## 4. `Issue #번호 구현하라` 상태별 동작
 
 현재 실행 상태는 Human 답변이 포함된 Issue 본문이 아니라 GitHub Label로 기록한다.
+실제 상태의 유일한 기준은 `status:*` Label이며, Issue 본문의 상태 문자열은 현재 실행 상태로 사용하지 않는다.
+상태를 바꿀 때는 기존 `status:*` Label을 모두 제거한 뒤 새 상태 Label 하나만 적용한다.
 
 | Label | 의미 |
 |---|---|
@@ -74,10 +77,10 @@ AI 답변 검토·보완 설명·최종 계약·구현 착수와 완료 기록�
 
 | 현재 조건 | 담당자 AI 동작 |
 |---|---|
-| 필수 Human 답변이 없음 | Issue·문서·코드를 분석하고 질문을 댓글로 기록한 뒤 `status:human-answer-required`를 적용하고 중단 |
+| 필수 Human 답변이 없음 | Issue·문서·코드를 분석하고 최초 Human 질문을 Issue 본문에 기록한 뒤 `status:human-answer-required`를 적용하고 중단 |
 | Human 답변이 모두 있음 | 답변을 문서·코드와 대조하고, 질문별 검토·보완 설명·최종 계약·구현 진행 또는 중단 판정을 대화창과 Issue 댓글에 기록 |
 | 답변·계약에 충돌이나 미결정 사항이 없음 | 같은 `Issue #번호 구현하라` 실행에서 `status:in-progress`를 적용하고 구현·테스트·Diff 검토·Commit·Push·Draft PR 갱신 진행 |
-| 정책·API·DB 재결정, 답변 불명확, 보안·권한·상태 계약 불명확, 범위 변경이 필요함 | `status:human-answer-required`를 적용하고 Human 질문을 댓글에 기록한 뒤 중단 |
+| 정책·API·DB 재결정, 답변 불명확, 보안·권한·상태 계약 불명확, 범위 변경이 필요함 | `status:human-answer-required`를 적용하고 구현 중 새로 발생한 추가 Human 질문을 댓글에 기록한 뒤 중단 |
 | 연결된 PR이 존재함 | 최신 Head·실제 Diff·테스트 증거·담당자 Human 답변·Human 리뷰·모든 PR 리뷰와 댓글을 확인하고 범위 안 지적을 수정·재검증·Push |
 | 담당자 AI 검토·수정·재검증 완료 | `status:final-human-review`를 적용하고 Human 최종 리뷰가 필요한 사항을 Issue 댓글과 PR에 기록 |
 
@@ -85,7 +88,19 @@ Human이 답변을 작성한 뒤 `Issue #번호 구현하라`를 입력하는 �
 충돌이 없을 때 같은 실행의 구현 진행을 요청하는 신호다. 별도의 `AI_FINALIZED → HUMAN_APPROVED`
 명령 왕복은 사용하지 않는다. Ready 전환, Approve와 Merge는 계속 Human 책임이다.
 
-## 5. PR Human 입력과 담당자 AI 검토
+## 5. PR 단계 실행 명령
+
+연결된 PR의 검토·리뷰 반영은 다음 명령으로 시작한다.
+
+```text
+PR #번호 검토하라
+```
+
+담당자 AI는 PR 번호로 연결된 Issue, Issue 댓글의 최종 계약, 현재 `status:*` Label,
+최신 Head, PR 답변·리뷰·댓글과 로컬 상태를 확인한다. PR 답변 또는 Human 리뷰 작성 후
+`Issue #번호 구현하라`를 다시 입력하도록 요구하지 않는다.
+
+## 6. PR Human 입력과 담당자 AI 검토
 
 PR 담당자는 PR 본문의 `Human 이해도` 질문에 직접 답한다.
 
@@ -115,7 +130,7 @@ PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 A
 - 정책·API·DB·권한·트랜잭션 재결정: Human 판단 요청
 - 근거 없음·범위 밖 제안: 반영하지 않고 이유 기록
 
-## 6. 문서 라우팅
+## 7. 문서 라우팅
 
 | 작업 | 기준 문서 |
 |---|---|
@@ -137,7 +152,7 @@ API 계약은 `docs/BOBFULL_API_SPEC_COMPLETE.md`, 프로젝트 정책·버전·
 
 API 변경은 API 명세와 `PROJECT_CONTEXT`, ERD, 영향 문서의 동기화 범위를 확인한다. 도메인 정책 변경은 API 명세·PROJECT_CONTEXT·ERD와 영향 문서를 함께 검토하고, 데이터 모델 변경은 ERD와 관련 API의 Request·Response·계산값·정합성 제약을 함께 검토한다.
 
-## 7. 필수 경계
+## 8. 필수 경계
 
 - 한 번에 하나의 Issue만 처리한다.
 - AI가 Human 답변이나 Human 리뷰를 대신 작성한 것처럼 표시하지 않는다.
@@ -145,6 +160,7 @@ API 변경은 API 명세와 `PROJECT_CONTEXT`, ERD, 영향 문서의 동기화 �
 - Issue 범위 밖 기능과 불필요한 리팩터링을 추가하지 않는다.
 - 정책·API·DB·상태·권한·트랜잭션을 임의로 결정하지 않는다.
 - 필수 Human 답변 검토·최종 계약 확인·`status:in-progress` 기록 없이 구현하지 않는다.
+- 상태 변경 전 기존 `status:*` Label을 제거하고 새 상태 Label 하나만 적용한다.
 - 실행하지 않은 테스트를 `PASS`로 기록하지 않는다.
 - 전체 build가 실패하면 완료로 표현하지 않는다.
 - 비밀정보와 실제 개인정보를 입력·Commit·PR에 포함하지 않는다.
@@ -154,14 +170,14 @@ API 변경은 API 명세와 `PROJECT_CONTEXT`, ERD, 영향 문서의 동기화 �
 - API Response의 계산값을 근거 없이 DB 컬럼으로 중복 저장하지 않는다. 저장이 필요하면 갱신 책임·정합성·동시성 전략을 Human과 별도 결정한다.
 - `READY` Payment의 임시 좌석 선점·만료 정책을 바꾸거나, `Settlement`, `SeatHold`, `WebhookEvent` 엔티티를 추가하려면 Human 승인과 기준 문서 반영이 필요하다.
 
-## 8. 파일 수정 안전 규칙
+## 9. 파일 수정 안전 규칙
 
 - 기존 문서 수정 요청은 별도 `SUMMARY`, `UPDATED`, `FINAL` 파일을 만들지 않고 기존 파일을 직접 수정한다.
 - 사용자의 사전 승인 없이 임시 폴더, 압축·Base64 파일, trigger 파일, 일회성 GitHub Actions Workflow를 저장소에 추가하지 않는다.
 - 완료 보고 전 대상 파일을 다시 읽고, PR 최종 변경 목록에 요청하지 않은 파일이 없는지 확인한다.
 - 도구 제한으로 정상 수정이 불가능하면 임의 우회하지 말고 작업을 중단하여 사용자에게 보고한다.
 
-## 9. 즉시 중단 조건
+## 10. 즉시 중단 조건
 
 - 확정 문서·Issue·코드가 충돌함
 - Human 답변이 모호하거나 핵심 미결정 사항이 남음
