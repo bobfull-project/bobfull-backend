@@ -2,22 +2,15 @@
 
 - Closes #
 - 검토 수준: `기본 | 강화`
-- 상태: `HUMAN_ANSWER_REQUIRED | AI_REVIEWED | FIXED | FINAL_HUMAN_REVIEW`
 
 <!--
+PR 단계 명령은 `PR #번호 검토하라`입니다.
+담당자 AI는 PR 번호로 연결된 모든 Issue의 최종 계약과 현재 `status:*` Label을 확인합니다.
+실제 실행 상태의 유일한 기준은 연결된 Issue의 `status:*` Label이며, PR 본문의 상태 문자열은 사용하지 않습니다.
 담당자 AI는 최신 Head SHA, 실제 Diff와 작업 범위를 확인할 수 있으면 현재 PR 상태와 관계없이 검토합니다.
 테스트 실패·미실행, HOLD·NOT_RUN과 Human 답변 미작성은 검토 중단 사유가 아니라 현재 위험으로 기록합니다.
-AI_REVIEWED는 담당자 AI가 현재 Head를 검토했다는 뜻이며 구현 완료나 Merge 가능을 의미하지 않습니다.
 PR에 등록된 다른 리뷰·댓글은 작성 주체와 관계없이 참고 입력이며 필수 단계가 아닙니다.
 -->
-
-## 구현 승인 기록
-
-<!-- 연결된 Issue에서 구현 AI가 작성한 HUMAN_APPROVED 기록을 옮겨 적거나 링크합니다. -->
-
-- Issue 승인 상태: `HUMAN_APPROVED | 미확인 | 없음`
-- 승인 기록 위치:
-- 승인 이후 Issue 계약 변경 여부: `없음 | 있음 | 확인 필요`
 
 ## 변경 목적
 
@@ -62,6 +55,7 @@ PR에 등록된 다른 리뷰·댓글은 작성 주체와 관계없이 참고 �
 담당자 AI가 답변을 실제 코드와 대조해 AI 답변 검토와 AI 보완 설명을 작성합니다.
 Human 답변 원문은 담당자 AI가 대신 작성하거나 덮어쓰지 않습니다.
 답변 작성 전에도 담당자 AI의 코드 검토는 가능하지만, 답변 확인은 Merge 전 필요합니다.
+Ready 전환, Approve와 Merge는 Human 책임입니다.
 -->
 
 ### Q1. 구체적인 질문
