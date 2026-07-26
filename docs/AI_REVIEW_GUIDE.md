@@ -81,6 +81,7 @@ PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 
 - 요청부터 응답·저장까지 실제 코드 흐름
 - 입력 검증과 예외 처리
 - 코드와 PR 설명의 일치
+- PR 본문의 변경 범위·변경 파일·검증 기록이 최신 실제 Diff와 실행 결과에 일치하는지
 - 테스트와 완료 조건의 연결
 - 실제 실행 결과와 미검증 범위
 - 범위 밖 변경과 불필요한 복잡성
@@ -256,6 +257,8 @@ PR 본문의 `담당자 AI 검토·수정 기록`에 다음을 작성한다.
 - 최신 Head 기준 담당자 AI 검토 완료
 - 해결되지 않은 BLOCKER 없음
 - 남은 Human 결정 필요 사항 명시
+- `DOMAIN_DEPENDENCIES.md` §5 정책 변경 영향표에 해당하는 변경은 §6의 관련 체크 항목을 구현·PR 검토에서 확인
+- 기존 최종 계약 안에서 수정 가능한 미해결 항목은 `status:in-progress`에서 수정·재검증하고, 새로운 Human 결정이 필요한 경우에만 `status:human-answer-required`로 전환
 
 `status:final-human-review`는 Human 리뷰를 기다리는 상태이므로 Human 리뷰의 최신 Head 재확인은
 이 Label을 적용하는 선행 조건이 아니라 Ready 전환과 Merge 전 확인 조건이다.
