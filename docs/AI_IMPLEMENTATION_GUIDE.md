@@ -84,7 +84,7 @@ Issue #번호 구현하라
 
 13. 최신 Head 검토와 필수 검증이 끝나면 `status:final-human-review`를 적용하고 Human 최종 리뷰 사항을 Issue 댓글과 PR에 기록한다.
 
-Draft PR 본문은 실제 연결 Issue·최종 계약·최신 Diff·테스트·build·직접 검증 결과로 작성한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다. `Human 리뷰`와 `담당자 AI 검토·수정 기록`은 삭제하거나 축약하지 않으며, PR 제목은 Issue의 범위·유형 형식이 아니라 `GITHUB_RULES`의 Conventional Commit 형식을 따른다.
+Draft PR 본문은 실제 연결 Issue·최종 계약·최신 Diff·테스트·build·직접 검증 결과로 작성한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다. `Human Review Checklist`와 `담당자 AI 검토·수정 기록`은 삭제하거나 축약하지 않으며, PR 제목은 Issue의 범위·유형 형식이 아니라 `GITHUB_RULES`의 Conventional Commit 형식을 따른다.
 
 ### 새 Issue 초안·생성
 

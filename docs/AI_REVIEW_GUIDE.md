@@ -66,7 +66,7 @@ PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 
 - 테스트·build·직접 검증·CI 증거
 - 미검증 범위와 남은 위험
 - 담당자 Human 이해도 답변
-- Human 리뷰
+- PR 댓글의 Human 리뷰 의견
 - PR의 Review·Conversation 댓글·inline comment
 
 리뷰·댓글의 작성자가 Human인지 AI인지에 따라 우선순위를 자동으로 정하지 않는다. 실제 코드·계약·테스트 근거로 판단한다.
