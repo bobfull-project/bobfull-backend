@@ -51,6 +51,11 @@ Human 답변, Human 리뷰와 외부 리뷰·댓글의 작성 순서는 고정�
 
 담당자 AI의 PR 검토는 구현 품질을 보완하는 절차이며 독립적인 Human Approve나 Merge 판단을 대체하지 않는다.
 
+## 관련 기록 문서
+
+- [AI Human 검토 기록](AI_휴먼_검토_기록.md): Human이 AI 제안의 누락·위험을 발견하고 계약을 수정한 근거를 기록한다.
+- [트러블슈팅 기록](troubleshooting/README.md): 기술 문제의 원인, 후보 해결안, 검증 상태를 기록한다.
+
 ### 2.1 새 Issue 초안·승인·생성
 
 초안 단계는 중복 확인·범위와 유형 판단·Issue 템플릿 전체 초안 제시까지이며 GitHub를 변경하지 않는다. Human이 명시 승인하면 생성 직전에 범위·중복·승인된 제목과 본문을 재확인한 뒤 실제 Issue를 생성하고 결과를 보고한다. 범위 판단은 `ISSUE_TITLE_RULES`, 담당자 AI의 체크리스트는 `AI_IMPLEMENTATION_GUIDE`를 따른다.
