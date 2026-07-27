@@ -18,7 +18,7 @@
 - 최초 예약자는 본인 예약의 모집 상태를 `CLOSED`로 변경한다.
 - V2에서 서버 시간 기준 식사 시작 2시간 전까지 본인 참여 전체를 취소한다. 부분 `partySize` 취소와 2시간 이내 MEMBER 취소는 지원하지 않는다.
 - 결제 완료 검증은 해당 Payment를 생성한 당사자만 호출한다. `Payment.memberId`와 인증 사용자 ID가 일치해야 한다.
-- V1은 참여자 상세 목록 대신 예약 집계 정보만 조회한다. V2에서는 해당 예약의 유효 참여자만 `nickname`, `partySize` 목록을 조회한다.
+- V1은 참여자 상세 목록 대신 예약 집계 정보만 조회한다. V2에서는 해당 예약의 유효 참여자만 `name`, `partySize` 목록을 조회한다.
 
 ### OWNER
 
@@ -32,6 +32,7 @@
 
 - V2에서 회원·식당·예약·결제·환불·노쇼 현황 및 운영 지표를 조회한다.
 - V3에서 실패 결제·환불과 정산 데이터를 재처리하거나 재집계한다.
+- 별도 ADMIN 회원가입 API는 두지 않는다. 초기 ADMIN 계정은 일반 회원가입 후 운영자가 DB에서 `role=ADMIN`으로 수동 변경한다.
 
 ## 3. 테이블·인원 정책
 
@@ -137,8 +138,8 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - 예약이 `CANCELLED` 또는 `CLOSED`면 새 메시지 전송을 종료하고, 기존 메시지는 조회할 수 있다.
 - 메시지는 DB에 저장하며 과거 메시지는 cursor 기반으로 조회한다.
 - WebSocket 연결 Endpoint는 `/ws`다.
-- STOMP 전송 경로는 `/pub/chat/rooms/{reservationId}/messages`, 구독 경로는 `/sub/chat/rooms/{reservationId}`다.
-- HTTP 조회 경로는 `GET /api/chat/rooms/{reservationId}/messages`다.
+- STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
+- HTTP 조회 경로는 `GET /api/chat/rooms/{chatRoomId}/messages`다.
 - 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
 
 ## 8. 버전 범위

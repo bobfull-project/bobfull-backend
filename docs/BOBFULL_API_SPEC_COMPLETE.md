@@ -161,7 +161,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 이메일 중복 검증, 이름 중복 허용
+- 설명: 이메일·전화번호 중복 검증, 이름 중복 허용
 - Method: `POST`
 - Path: `/api/auth/signup/users`
 - Auth: 불필요
@@ -186,7 +186,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `email` | String | Y | email 값 |
 | `password` | String | Y | password 값 |
-| `name` | String | Y | nickname 값 |
+| `name` | String | Y | name 값 |
 | `phoneNumber` | String | Y | phoneNumber 값 |
 
 ## 3. Response
@@ -211,6 +211,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | Status | Code | 설명 |
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
+| `409` | `DUPLICATE_EMAIL` | 이미 사용 중인 email |
+| `409` | `DUPLICATE_PHONE_NUMBER` | 이미 사용 중인 phoneNumber |
 
 ---
 
@@ -218,7 +220,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: OWNER 권한 부여
+- 설명: 이메일·전화번호·사업자등록번호 중복 검증 후 OWNER 권한 부여
 - Method: `POST`
 - Path: `/api/auth/signup/owners`
 - Auth: 불필요
@@ -244,7 +246,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `email` | String | Y | email 값 |
 | `password` | String | Y | password 값 |
-| `name` | String | Y | nickname 값 |
+| `name` | String | Y | name 값 |
 | `phoneNumber` | String | Y | phoneNumber 값 |
 | `businessNumber` | String | Y | businessNumber 값 |
 
@@ -270,6 +272,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | Status | Code | 설명 |
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
+| `409` | `DUPLICATE_EMAIL` | 이미 사용 중인 email |
+| `409` | `DUPLICATE_PHONE_NUMBER` | 이미 사용 중인 phoneNumber |
+| `409` | `DUPLICATE_BUSINESS_NUMBER` | 이미 사용 중인 businessNumber |
 
 ---
 
@@ -350,7 +355,27 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
     "memberId": 1,
     "email": "user@example.com",
     "name": "홍길동",
+    "phoneNumber": "01012345678",
     "role": "MEMBER"
+  }
+}
+```
+
+- OWNER 본인이 조회하는 경우 `businessNumber`를 추가로 반환한다. 일반 MEMBER 응답에는 `businessNumber`를 포함하지 않는다.
+
+OWNER 응답 예시:
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "memberId": 2,
+    "email": "owner@example.com",
+    "name": "김사장",
+    "phoneNumber": "01012345678",
+    "role": "OWNER",
+    "businessNumber": "1234567890"
   }
 }
 ```
@@ -367,7 +392,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 이름 중복 검증
+- 설명: 전화번호 중복 검증
 - Method: `PATCH`
 - Path: `/api/members/me`
 - Auth: 필요
@@ -388,7 +413,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `name` | String | Y | nickname 값 |
+| `name` | String | Y | name 값 |
 | `phoneNumber` | String | Y | phoneNumber 값 |
 
 ## 3. Response
@@ -411,6 +436,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `409` | `DUPLICATE_PHONE_NUMBER` | 이미 사용 중인 phoneNumber. 본인 기존 phoneNumber는 중복으로 보지 않음 |
 
 ---
 
@@ -538,6 +564,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | Status | Code | 설명 |
 |---:|---|---|
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `409` | `MEMBER_HAS_ACTIVE_RESERVATION` | 진행 중 예약이 있어 탈퇴할 수 없음 |
 
 ---
 
@@ -564,6 +591,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "address": "서울특별시 강남구 테헤란로 123",
   "category": "KOREAN",
   "description": "합석 예약이 가능한 식당입니다.",
+  "keyword": "흑돼지,혼밥",
   "depositPerPerson": 10000
 }
 ```
@@ -576,6 +604,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `address` | String | Y | address 값 |
 | `category` | String | Y | category 값 |
 | `description` | String | Y | description 값 |
+| `keyword` | String | Y | 사장님이 직접 입력하는 식당 키워드 |
 | `depositPerPerson` | Integer | Y | depositPerPerson 값 |
 
 ## 3. Response
@@ -587,7 +616,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "result": true
+    "restaurantId": 1
   }
 }
 ```
@@ -625,11 +654,20 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "restaurantId": 1,
+        "name": "밥풀식당",
+        "address": "제주시 애월읍 1",
+        "category": "한식",
+        "depositPerPerson": 10000,
+        "status": "ACTIVE"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -672,7 +710,14 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1
+    "restaurantId": 1,
+    "name": "밥풀식당",
+    "address": "제주시 애월읍 1",
+    "category": "한식",
+    "description": "합석 예약이 가능한 식당입니다.",
+    "keyword": "흑돼지,혼밥",
+    "depositPerPerson": 10000,
+    "status": "ACTIVE"
   }
 }
 ```
@@ -711,6 +756,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 {
   "name": "밥풀 한식당",
   "description": "수정된 식당 소개",
+  "keyword": "한식,혼밥",
   "depositPerPerson": 12000
 }
 ```
@@ -721,6 +767,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---|---|---:|---|
 | `name` | String | Y | name 값 |
 | `description` | String | Y | description 값 |
+| `keyword` | String | Y | 사장님이 직접 입력하는 식당 키워드 |
 | `depositPerPerson` | Integer | Y | depositPerPerson 값 |
 
 ## 3. Response
@@ -785,11 +832,20 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "restaurantId": 1,
+        "name": "밥풀식당",
+        "address": "제주시 애월읍 1",
+        "category": "한식",
+        "keyword": "흑돼지,혼밥",
+        "depositPerPerson": 10000
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -829,7 +885,13 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1
+    "restaurantId": 1,
+    "name": "밥풀식당",
+    "address": "제주시 애월읍 1",
+    "category": "한식",
+    "description": "합석 예약이 가능한 식당입니다.",
+    "keyword": "흑돼지,혼밥",
+    "depositPerPerson": 10000
   }
 }
 ```
@@ -883,6 +945,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
 | `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
+| `409` | `RESTAURANT_DELETE_NOT_ALLOWED` | 연결된 테이블·회차·예약이 있어 삭제할 수 없음 |
 
 ---
 
@@ -930,7 +993,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1
+    "tableId": 1
   }
 }
 ```
@@ -976,11 +1039,18 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "tableId": 1,
+        "restaurantId": 1,
+        "capacity": 4,
+        "status": "ACTIVE"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -1024,7 +1094,10 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "tableId": 1
+    "tableId": 1,
+    "restaurantId": 1,
+    "capacity": 4,
+    "status": "ACTIVE"
   }
 }
 ```
@@ -1138,6 +1211,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
 | `404` | `TABLE_ID_NOT_FOUND` | tableId에 해당하는 대상을 찾을 수 없음 |
+| `409` | `TABLE_HAS_DINING_SESSION` | 연결된 회차가 있어 삭제할 수 없음 |
 
 ---
 
@@ -1186,7 +1260,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "tableId": 1
+    "sessionId": 1
   }
 }
 ```
@@ -1303,11 +1377,19 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "sessionId": 1,
+        "tableId": 1,
+        "capacity": 4,
+        "startAt": "2026-07-25T18:00:00+09:00",
+        "endAt": "2026-07-25T20:00:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -1358,7 +1440,17 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1
+    "restaurantId": 1,
+    "content": [
+      {
+        "sessionId": 1,
+        "tableId": 1,
+        "capacity": 4,
+        "startAt": "2026-07-25T18:00:00+09:00",
+        "endAt": "2026-07-25T20:00:00+09:00",
+        "availableCapacity": 4
+      }
+    ]
   }
 }
 ```
@@ -1471,6 +1563,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
 | `404` | `SESSION_ID_NOT_FOUND` | sessionId에 해당하는 대상을 찾을 수 없음 |
+| `409` | `SESSION_HAS_RESERVATION` | 연결된 예약이 있어 삭제할 수 없음 |
 
 ---
 
@@ -1698,11 +1791,27 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "reservationId": 1,
+        "restaurantId": 1,
+        "restaurantName": "밥풀식당",
+        "sessionId": 1,
+        "tableId": 1,
+        "capacity": 4,
+        "startAt": "2026-07-25T18:00:00+09:00",
+        "endAt": "2026-07-25T20:00:00+09:00",
+        "reservationStatus": "RECRUITING",
+        "recruitmentStatus": "OPEN",
+        "currentParticipantCount": 2,
+        "availableCapacity": 2,
+        "confirmationThreshold": 3
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -1743,10 +1852,17 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "message": "요청이 성공했습니다.",
   "data": {
     "reservationId": 1,
+    "restaurantId": 1,
+    "restaurantName": "밥풀식당",
+    "sessionId": 1,
+    "tableId": 1,
+    "capacity": 4,
+    "startAt": "2026-07-25T18:00:00+09:00",
+    "endAt": "2026-07-25T20:00:00+09:00",
     "reservationStatus": "RECRUITING",
     "recruitmentStatus": "OPEN",
     "currentParticipantCount": 3,
-    "availableCapacity": 4,
+    "availableCapacity": 1,
     "confirmationThreshold": 7
   }
 }
@@ -1777,7 +1893,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `status` | String | N | status 조건 |
+| `reservationStatus` | String | N | ReservationStatus 조건(`RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED`) |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -1792,11 +1908,26 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "reservationId": 1,
+        "restaurantId": 1,
+        "restaurantName": "밥풀식당",
+        "sessionId": 1,
+        "startAt": "2026-07-25T18:00:00+09:00",
+        "endAt": "2026-07-25T20:00:00+09:00",
+        "reservationStatus": "RECRUITING",
+        "recruitmentStatus": "OPEN",
+        "participationId": 10,
+        "partySize": 2,
+        "participationStatus": "RESERVED",
+        "paymentStatus": "PAID"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -1838,7 +1969,19 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "reservationId": 1
+    "reservationId": 1,
+    "restaurantId": 1,
+    "restaurantName": "밥풀식당",
+    "sessionId": 1,
+    "startAt": "2026-07-25T18:00:00+09:00",
+    "endAt": "2026-07-25T20:00:00+09:00",
+    "reservationStatus": "RECRUITING",
+    "recruitmentStatus": "OPEN",
+    "participationId": 10,
+    "partySize": 2,
+    "participationStatus": "RESERVED",
+    "paymentId": "PAY-20260725-0001",
+    "paymentStatus": "PAID"
   }
 }
 ```
@@ -1881,7 +2024,11 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "reservationId": 1
+    "reservationId": 1,
+    "participationId": 10,
+    "partySize": 2,
+    "participationStatus": "RESERVED",
+    "isCreator": false
   }
 }
 ```
@@ -1926,14 +2073,14 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "data": {
     "content": [
       {
-        "nickname": "밥풀러",
+        "name": "밥풀러",
         "partySize": 2
       }
     ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -2026,6 +2173,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 대상 참여자가 추가 참여자면 해당 `ReservationParticipant`만 `CANCELLED`로 변경하고 본인 Payment 전체 금액을 환불한다. `currentParticipantCount`와 `availableCapacity`를 다시 계산하며, 모집이 `OPEN`이고 확정 기준 미달이면 Reservation은 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다.
 - `NO_SHOW` 또는 이미 `CANCELLED`인 참여자는 MEMBER 취소 대상이 아니다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
 - 동일 Payment에는 Refund를 한 건만 생성한다. 기존 환불이 있으면 새 환불을 만들지 않고 `REFUND_ALREADY_REQUESTED`를 반환한다.
+- 최초 예약자 취소로 예약 전체가 취소되는 경우 요청 사유는 각 유효 참여자의 `cancelReason`에 동일하게 기록한다. Reservation에는 별도 취소 사유 컬럼을 두지 않는다.
 
 ## 2. Request
 
@@ -2109,7 +2257,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
 | `date` | LocalDate | N | date 조건 |
-| `reservationStatus` | String | N | reservationStatus 조건 |
+| `reservationStatus` | String | N | ReservationStatus 조건(`RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED`) |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -2124,11 +2272,25 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "reservationId": 1,
+        "sessionId": 1,
+        "tableId": 1,
+        "capacity": 4,
+        "startAt": "2026-07-25T18:00:00+09:00",
+        "endAt": "2026-07-25T20:00:00+09:00",
+        "reservationStatus": "RECRUITING",
+        "recruitmentStatus": "OPEN",
+        "currentParticipantCount": 2,
+        "availableCapacity": 2,
+        "confirmationThreshold": 3
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -2172,7 +2334,18 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "reservationId": 1
+    "reservationId": 1,
+    "restaurantId": 1,
+    "sessionId": 1,
+    "tableId": 1,
+    "capacity": 4,
+    "startAt": "2026-07-25T18:00:00+09:00",
+    "endAt": "2026-07-25T20:00:00+09:00",
+    "reservationStatus": "RECRUITING",
+    "recruitmentStatus": "OPEN",
+    "currentParticipantCount": 2,
+    "availableCapacity": 2,
+    "confirmationThreshold": 3
   }
 }
 ```
@@ -2216,11 +2389,19 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "participationId": 10,
+        "memberId": 15,
+        "name": "홍길동",
+        "partySize": 2,
+        "participationStatus": "RESERVED"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -2246,6 +2427,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 담당자: 배지현
 
 - 예약은 `CANCELLED`가 되며 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot은 예약 시작 전이며 다른 제약이 없는 경우만 새 예약 가능 상태로 복구한다.
+- 전체 취소 사유는 각 유효 참여자의 `cancelReason`에 동일하게 기록한다. Reservation에는 별도 취소 사유 컬럼을 두지 않는다.
 
 ## 2. Request
 
@@ -2325,7 +2507,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "message": "요청이 성공했습니다.",
   "data": {
     "paymentId": "PAY-20260725-0001",
-    "paymentStatus": "PAID"
+    "paymentStatus": "PAID",
+    "reservationId": 1,
+    "participationId": 10
   }
 }
 ```
@@ -2397,7 +2581,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `status` | String | N | `READY`, `PAID`, `FAILED`, `CANCELLED` |
+| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `CANCELLED`) |
 | `page` | Integer | N | 페이지 번호 |
 | `size` | Integer | N | 페이지 크기 |
 
@@ -2412,11 +2596,23 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "paymentId": "PAY-20260725-0001",
+        "reservationId": 1,
+        "participationId": 10,
+        "paymentPurpose": "CREATE",
+        "partySize": 2,
+        "amount": 30000,
+        "currency": "KRW",
+        "paymentStatus": "PAID",
+        "paidAt": "2026-07-25T17:30:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -2459,8 +2655,15 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "message": "요청이 성공했습니다.",
   "data": {
     "paymentId": "PAY-20260725-0001",
-    "status": "PAID",
-    "amount": 30000
+    "reservationId": 1,
+    "participationId": 10,
+    "paymentPurpose": "CREATE",
+    "partySize": 2,
+    "paymentStatus": "PAID",
+    "amount": 30000,
+    "currency": "KRW",
+    "expiresAt": "2026-07-25T17:40:00+09:00",
+    "paidAt": "2026-07-25T17:30:00+09:00"
   }
 }
 ```
@@ -2538,7 +2741,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `status` | String | N | status 조건 |
+| `refundStatus` | String | N | RefundStatus 조건(`REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED`) |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -2553,11 +2756,21 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "refundId": 1,
+        "paymentId": "PAY-20260725-0001",
+        "reservationId": 1,
+        "amount": 30000,
+        "refundStatus": "COMPLETED",
+        "requestedAt": "2026-07-25T19:00:00+09:00",
+        "completedAt": "2026-07-25T19:05:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -2600,7 +2813,12 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "message": "요청이 성공했습니다.",
   "data": {
     "refundId": 1,
-    "refundStatus": "COMPLETED"
+    "paymentId": "PAY-20260725-0001",
+    "reservationId": 1,
+    "amount": 30000,
+    "refundStatus": "COMPLETED",
+    "requestedAt": "2026-07-25T19:00:00+09:00",
+    "completedAt": "2026-07-25T19:05:00+09:00"
   }
 }
 ```
@@ -2637,11 +2855,21 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "refundId": 1,
+        "paymentId": "PAY-20260725-0001",
+        "memberId": 15,
+        "reservationId": 1,
+        "amount": 30000,
+        "refundStatus": "FAILED",
+        "requestedAt": "2026-07-25T19:00:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -2736,11 +2964,19 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "participationId": 501,
+        "memberId": 15,
+        "name": "김○○",
+        "partySize": 2,
+        "participationStatus": "RESERVED"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -2882,11 +3118,22 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "noShowHistoryId": 1,
+        "participationId": 501,
+        "memberId": 15,
+        "name": "김○○",
+        "partySize": 2,
+        "isMarked": true,
+        "processedByMemberId": 3,
+        "processedAt": "2026-07-25T21:00:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -3189,7 +3436,14 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1
+    "restaurantId": 1,
+    "startDate": "2026-07-01",
+    "endDate": "2026-07-31",
+    "totalPaidAmount": 500000,
+    "totalRefundedAmount": 80000,
+    "expectedSettlementAmount": 420000,
+    "reservationCount": 20,
+    "refundCount": 3
   }
 }
 ```
@@ -3275,7 +3529,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
 | `keyword` | String | N | keyword 조건 |
-| `status` | String | N | status 조건 |
+| `role` | String | N | MemberRole 조건(`MEMBER`, `OWNER`, `ADMIN`) |
+| `deleted` | Boolean | N | 탈퇴 여부 조건. `true`는 `deletedAt`이 있는 회원, `false`는 활성 회원 |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -3290,11 +3545,21 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "memberId": 1,
+        "email": "user@example.com",
+        "name": "홍길동",
+        "role": "MEMBER",
+        "noShowCount": 1,
+        "createdAt": "2026-07-21T10:00:00+09:00",
+        "deletedAt": null
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -3337,7 +3602,14 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "memberId": 1
+    "memberId": 1,
+    "email": "user@example.com",
+    "name": "홍길동",
+    "phoneNumber": "01012345678",
+    "role": "MEMBER",
+    "noShowCount": 1,
+    "createdAt": "2026-07-21T10:00:00+09:00",
+    "deletedAt": null
   }
 }
 ```
@@ -3369,7 +3641,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
 | `keyword` | String | N | keyword 조건 |
-| `status` | String | N | status 조건 |
+| `restaurantStatus` | String | N | RestaurantStatus 조건(현재 `ACTIVE`) |
+| `deleted` | Boolean | N | 삭제 여부 조건. `true`는 `deletedAt`이 있는 식당, `false`는 활성 식당 |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -3384,11 +3657,21 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "restaurantId": 1,
+        "ownerMemberId": 3,
+        "ownerName": "사장님",
+        "name": "밥풀식당",
+        "category": "한식",
+        "status": "ACTIVE",
+        "createdAt": "2026-07-21T10:00:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -3431,7 +3714,18 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1
+    "restaurantId": 1,
+    "ownerMemberId": 3,
+    "ownerName": "사장님",
+    "name": "밥풀식당",
+    "address": "제주시 애월읍 1",
+    "category": "한식",
+    "description": "합석 예약이 가능한 식당입니다.",
+    "keyword": "흑돼지,혼밥",
+    "depositPerPerson": 10000,
+    "status": "ACTIVE",
+    "createdAt": "2026-07-21T10:00:00+09:00",
+    "deletedAt": null
   }
 }
 ```
@@ -3462,7 +3756,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `status` | String | N | status 조건 |
+| `reservationStatus` | String | N | ReservationStatus 조건(`RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED`) |
 | `startDate` | LocalDate | N | startDate 조건 |
 | `endDate` | LocalDate | N | endDate 조건 |
 | `page` | Integer | N | page 조건 |
@@ -3479,11 +3773,23 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "reservationId": 1,
+        "restaurantId": 1,
+        "restaurantName": "밥풀식당",
+        "creatorMemberId": 15,
+        "startAt": "2026-07-25T18:00:00+09:00",
+        "reservationStatus": "CONFIRMED",
+        "recruitmentStatus": "OPEN",
+        "currentParticipantCount": 3,
+        "capacity": 4
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -3513,7 +3819,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `status` | String | N | status 조건 |
+| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `CANCELLED`) |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -3528,11 +3834,21 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "paymentId": "PAY-20260725-0001",
+        "memberId": 15,
+        "reservationId": 1,
+        "amount": 30000,
+        "currency": "KRW",
+        "paymentStatus": "PAID",
+        "paidAt": "2026-07-25T17:30:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -3562,7 +3878,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `status` | String | N | status 조건 |
+| `refundStatus` | String | N | RefundStatus 조건(`REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED`) |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -3577,11 +3893,22 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "refundId": 1,
+        "paymentId": "PAY-20260725-0001",
+        "memberId": 15,
+        "reservationId": 1,
+        "amount": 30000,
+        "refundStatus": "COMPLETED",
+        "requestedAt": "2026-07-25T19:00:00+09:00",
+        "completedAt": "2026-07-25T19:05:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -3611,8 +3938,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `memberId` | String | N | memberId 조건 |
-| `restaurantId` | String | N | restaurantId 조건 |
+| `memberId` | Long | N | memberId 조건 |
+| `restaurantId` | Long | N | restaurantId 조건 |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -3627,11 +3954,23 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
+    "content": [
+      {
+        "noShowHistoryId": 1,
+        "memberId": 15,
+        "memberName": "김○○",
+        "restaurantId": 1,
+        "restaurantName": "밥풀식당",
+        "reservationId": 101,
+        "participationId": 501,
+        "partySize": 2,
+        "processedAt": "2026-07-25T21:00:00+09:00"
+      }
+    ],
     "page": 0,
     "size": 20,
-    "totalElements": 0,
-    "totalPages": 0
+    "totalElements": 1,
+    "totalPages": 1
   }
 }
 ```
@@ -3851,9 +4190,9 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: 유효 참여자가 예약 단위로 저장된 과거 메시지를 커서 기반 조회한다.
+- 설명: 유효 참여자가 채팅방 단위로 저장된 과거 메시지를 커서 기반 조회한다.
 - Method: `GET`
-- Path: `/api/chat/rooms/{reservationId}/messages`
+- Path: `/api/chat/rooms/{chatRoomId}/messages`
 - Auth: 필요
 - 담당자: 김현승
 
@@ -3863,7 +4202,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `reservationId` | Long | Y | reservationId 식별자 |
+| `chatRoomId` | Long | Y | chatRoomId 식별자 |
 
 ### Query Parameters
 
@@ -3881,8 +4220,16 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "content": [],
-    "nextCursor": null
+    "content": [
+      {
+        "messageId": 1001,
+        "senderMemberId": 15,
+        "senderName": "밥풀러",
+        "content": "곧 도착합니다.",
+        "sentAt": "2026-07-25T17:50:00+09:00"
+      }
+    ],
+    "nextCursor": 1001
   }
 }
 ```
@@ -3893,7 +4240,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 |---:|---|---|
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 해당 예약의 결제 완료 참여자가 아님 |
-| `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
+| `404` | `CHAT_ROOM_ID_NOT_FOUND` | chatRoomId에 해당하는 대상을 찾을 수 없음 |
 
 ---
 
@@ -3902,7 +4249,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 예약이 `CANCELLED` 또는 `CLOSED`가 되면 신규 메시지 전송은 종료하지만 기존 메시지는 조회할 수 있다.
 - 메시지는 DB에 저장한다.
 - WebSocket 연결 Endpoint는 `/ws`다.
-- STOMP 전송 경로는 `/pub/chat/rooms/{reservationId}/messages`, 구독 경로는 `/sub/chat/rooms/{reservationId}`다.
+- STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
 - 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
 
 ---
@@ -4095,12 +4442,14 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 - 회원 데이터는 실제 삭제하지 않고 삭제 상태 또는 삭제 시각을 기록한다.
 - 진행 중 예약이 있으면 탈퇴를 제한한다.
+- 탈퇴 후에도 동일 `email`, `phoneNumber`, `businessNumber` 재사용은 허용하지 않는다. 고유 식별자 값은 변경하지 않고 보존한다.
 
 ### 식당·합석 테이블·합석 회차 삭제
 
 - 예약·결제·노쇼 이력을 보존하기 위해 실제 삭제하지 않는다.
 - 일반 조회에서는 삭제된 데이터를 제외한다.
 - 연결된 예약이나 회차가 있으면 삭제 가능 여부를 검증한다.
+- 합석 회차는 삭제된 이력을 보존하되, 같은 테이블·같은 시작 시각의 신규 회차를 다시 생성할 수 있다. 중복 검증은 `deletedAt`이 없는 활성 회차를 기준으로 한다.
 
 ---
 
@@ -4360,7 +4709,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 | 관리자 | V2 | 식당별 예약 성사율 조회 | `GET` | `/api/admin/statistics/restaurants` | 정용태 |
 | 관리자 | V2 | 사용자별 노쇼율 조회 | `GET` | `/api/admin/statistics/members/no-show-rates` | 정용태 |
 | 예약 참여자 채팅 | V2 | 예약 채팅방 조회 | `GET` | `/api/reservations/{reservationId}/chat-room` | 김현승 |
-| 예약 참여자 채팅 | V2 | 채팅 메시지 목록 조회 | `GET` | `/api/chat/rooms/{reservationId}/messages` | 김현승 |
+| 예약 참여자 채팅 | V2 | 채팅 메시지 목록 조회 | `GET` | `/api/chat/rooms/{chatRoomId}/messages` | 김현승 |
 
 ---
 
@@ -4372,7 +4721,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 - 통합 예약 결제 준비 API의 좌석 임시 선점 저장소와 만료 처리 방식
 - 결제 완료 검증과 웹훅 동시 실행에 대한 락·트랜잭션·멱등성 구현
 - 도메인별 타인 리소스 접근 거부 에러 코드 이름
-- 상세 DTO 필드와 ERD 컬럼
+- DTO 클래스명·패키지 구조와 내부 매핑 방식
 - `PATCH /api/owner/dining-sessions/{sessionId}/status`(합석 회차 상태 변경): 요약표에만 존재하고 상세 명세가 없었다. 0.7 공통 상태 목록에 회차(Session) 자체의 상태 enum이 정의돼 있지 않아, 현재 파일만으로는 합석 회차 수정(5-5)과 별개의 독립 기능인지 확정할 수 없다. 독립 기능이라면 SessionStatus 값 정의와 Request/Response/Error 명세를 추가해야 한다.
 - (해결됨) tableId 기준 여러 날짜·시간 회차 일괄 생성 API: 재검토 결과 대상 리소스(기존 테이블 vs 신규 테이블)와 Request 구조(capacity·intervalMinutes 유무)가 5-7(합석 테이블·회차 일괄 등록)과 달라 별도 기능으로 확정했다. 5-2 "기존 테이블 합석 회차 일괄 등록"(`POST /api/owner/tables/{tableId}/dining-sessions/bulk`)으로 제목·Path를 복구했다.
 - (해결됨) 로그인 Access/Refresh Token 계약: 사용자 확인 결과 "V1 로그인은 Access Token만 반환하고, Refresh Token 발급·재발급·로그아웃은 V2에서 제공"(A안)으로 확정했다. 2-3 로그인 Response는 accessToken만 포함하며, 2-6 로그아웃·2-7 토큰 재발급은 `[V2]`로 유지한다.

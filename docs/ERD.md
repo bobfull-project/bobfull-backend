@@ -36,10 +36,10 @@ erDiagram
         varchar(255) email UK "로그인 식별자"
         varchar(255) password_hash "비밀번호 해시"
         varchar(50) name "참여자 목록·채팅 표시 이름"
-        varchar(20) phone_number "회원 정보"
+        varchar(20) phone_number UK "회원 전화번호"
         varchar(20) business_number UK "OWNER 사업자등록번호. MEMBER는 NULL"
         varchar(20) role "MEMBER, OWNER, ADMIN"
-        datetime deleted_at "회원 탈퇴 처리 방식은 보류"
+        datetime deleted_at "회원 소프트 삭제 시각"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
     }
@@ -50,7 +50,7 @@ erDiagram
         varchar(255) address "식당 주소"
         varchar(50) category "음식 카테고리"
         varchar(1000) description "식당 소개"
-        varchar(100) keyword "식당 키워드"
+        varchar(100) keyword "사장님 입력 식당 키워드"
         integer deposit_per_person "1인당 예약금"
         varchar(20) status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
         datetime deleted_at "소프트 삭제 시각"
@@ -176,11 +176,13 @@ erDiagram
 | `email`                    | VARCHAR(255) | N | UNIQUE | 로그인 식별자 |
 | `password_hash`            | VARCHAR(255) | N |  | 비밀번호 해시 |
 | `name`                     | VARCHAR(50) | N |  | 참여자 목록·채팅 표시 이름 |
-| `phone_number`             | VARCHAR(20) | N |  | 회원 정보 |
+| `phone_number`             | VARCHAR(20) | N | UNIQUE | 회원 전화번호 |
 | `business_number`          | VARCHAR(20) | Y | UNIQUE | OWNER 회원가입 시 저장하는 사업자등록번호. MEMBER는 NULL. NULL은 중복 허용, 값이 있으면 중복 금지 |
 | `role`                     | VARCHAR(20) | N | 앱 Enum: `MEMBER`, `OWNER`, `ADMIN` | 역할 |
-| `deleted_at`               | DATETIME | Y |  | 회원 탈퇴 처리 방식은 보류 |
+| `deleted_at`               | DATETIME | Y |  | 회원 소프트 삭제 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
+
+회원 탈퇴 후에도 동일 `email`, `phone_number`, `business_number` 재사용은 허용하지 않는다. 탈퇴 회원의 고유 식별자 값은 변경하지 않고 보존하며, DB UNIQUE 제약도 유지한다.
 
 ### 4.2 `restaurant`
 
@@ -194,7 +196,7 @@ erDiagram
 | `address` | VARCHAR(255) | N |  | 식당 주소 |
 | `category` | VARCHAR(50) | N |  | 음식 카테고리 |
 | `description` | VARCHAR(1000) | N |  | 식당 소개 |
-| `keyword` | VARCHAR(100) | N |  | 식당 키워드 |
+| `keyword` | VARCHAR(100) | N |  | 사장님이 직접 입력하는 식당 키워드 |
 | `deposit_per_person` | DECIMAL | N |  | 1인당 예약금 |
 | `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
@@ -227,7 +229,7 @@ erDiagram
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
-동일 테이블의 동일 날짜·시작 시간 중복은 `(shared_table_id, start_at)` 유니크 제약 후보다.
+동일 테이블의 동일 날짜·시작 시간 중복은 `deleted_at IS NULL`인 활성 회차끼리만 금지한다. 삭제된 회차 이력은 보존하지만, 같은 테이블·같은 시작 시각의 신규 회차를 다시 생성할 수 있다.
 
 ### 4.5 `reservation`
 
@@ -260,6 +262,7 @@ erDiagram
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
 `(reservation_id, member_id)`는 유니크다. 최초 참여자는 `reservation.creator_member_id`와 같은 회원으로 판별한다. 부분 인원 변경·부분 취소·부분 노쇼는 모델 범위에 없다. MEMBER 취소는 서버 시간 기준 식사 시작 2시간 전의 `RESERVED → CANCELLED` 전체 참여 단위 전이만 허용한다.
+예약 전체 취소 사유도 각 유효 `reservation_participant.cancel_reason`에 동일하게 기록한다. `reservation`에는 별도 취소 사유 컬럼을 두지 않는다.
 
 ### 4.7 `payment`
 
@@ -357,8 +360,10 @@ erDiagram
 | 대상 | 제약 | DB·애플리케이션 책임 |
 |---|---|---|
 | `member.email` | 이메일 중복 금지 | DB UNIQUE |
+| `member.phone_number` | 전화번호 중복 금지 | DB UNIQUE |
+| `member.business_number` | 사업자등록번호 중복 금지 | DB UNIQUE. MEMBER의 NULL은 중복 허용, 값이 있으면 중복 금지 |
 | `restaurant.owner_member_id` | 소유자는 OWNER여야 함 | FK + 애플리케이션 역할 검증 |
-| `time_slot` | 동일 테이블·동일 시작 시각 회차 중복 금지 | `(shared_table_id, start_at)` UNIQUE |
+| 활성 `time_slot` | 동일 테이블·동일 시작 시각 활성 회차 중복 금지 | `deleted_at IS NULL`인 회차만 중복 금지. 삭제된 회차와 같은 시작 시각은 재생성 가능. MySQL에서 DB 강제까지 적용하려면 활성 여부 generated column 기반 UNIQUE를 검토하고, 최소 구현은 SharedTable 행 잠금 후 활성 TimeSlot 조회로 검증 |
 | 활성 `reservation.time_slot_id` | 회차당 활성 합석 예약 1건 | DB 단순 UNIQUE로 보장하지 않는다. TimeSlot 행 비관적 락과 `RECRUITING`·`CONFIRMED` Reservation 조회를 같은 트랜잭션에서 수행; `CANCELLED` 이력은 유지 |
 | 유효 CREATE READY Payment | 회차당 최초 예약 결제 준비 1건 | TimeSlot 행 잠금 뒤 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 조회; 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS` |
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
@@ -384,6 +389,12 @@ erDiagram
 | `availableCapacity` | 계산값 | `shared_table.capacity - currentParticipantCount - temporaryHeldCount` |
 | `confirmationThreshold` | 계산값 | 정원 `2→2`, `4→3`, `6→5`, `8→7` |
 | `payableAmount` | 계산값 | 식당 또는 예약의 `PAID` 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
+| `expectedSettlementAmount`, `expectedAmount` | 계산값 | 결제 완료 금액 합계에서 환불 완료 금액 합계를 차감 |
+| `totalPaidAmount`, `totalRefundedAmount` | 계산값 | 기간·식당·예약 조건에 맞는 Payment·Refund 금액 합계 |
+| `noShowCount` | 계산값 | 회원의 `participation_status=NO_SHOW` 참여 건수 |
+| `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |
+| `reservationConfirmationRate`, `confirmationRate` | 계산값 | 전체 예약 수 대비 확정 예약 수 비율 |
+| `totalReservationCount`, `confirmedReservationCount`, `reservationCount`, `refundCount` | 계산값 | 조건에 맞는 예약·환불 건수 집계 |
 | `party_size`, `amount`, `expires_at`, 상태값 | 저장값 | 결제·참여 이력과 임시 선점·환불·정산 조회의 원천 데이터 |
 
 위 집계값은 API 응답에 포함되더라도 중복 컬럼으로 저장하지 않는다. 성능·동시성 문제로 별도 저장이 필요해지면 갱신 책임과 정합성 전략을 별도 결정해야 한다.
@@ -443,10 +454,10 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 
 | 대상 | 후보 | API·조회 근거 |
 |---|---|---|
-| `member` | `UNIQUE(email)` | 로그인·이메일 중복 검증 |
+| `member` | `UNIQUE(email)`, `UNIQUE(phone_number)`, `UNIQUE(business_number)` | 로그인·이메일·전화번호·사업자등록번호 중복 검증 |
 | `restaurant` | `(owner_member_id)` | 내 식당 목록·소유권 확인 |
 | `shared_table` | `(restaurant_id)` | 식당별 테이블 조회 |
-| `time_slot` | `UNIQUE(shared_table_id, start_at)` | 회차 중복 방지·테이블별 회차 조회 |
+| `time_slot` | `(shared_table_id, start_at, deleted_at)` + 활성 회차 중복 검증 | 회차 조회·활성 중복 방지. 삭제 후 같은 시간 재생성을 허용하므로 단순 `UNIQUE(shared_table_id, start_at)`는 사용하지 않음 |
 | `reservation` | `(time_slot_id, reservation_status)`, `(reservation_status, recruitment_status)` | 활성 Reservation 조회·모집 예약 검색; `time_slot_id` 단순 UNIQUE 미사용 |
 | `reservation_participant` | `UNIQUE(reservation_id, member_id)`, `(member_id)` | 중복 참여 방지·내 예약 조회 |
 | `payment` | `UNIQUE(payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)` | 결제 조회·임시 선점 계산·만료 처리 |
@@ -459,8 +470,8 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 
 | 대상 | 처리 방향 | 근거·보류 |
 |---|---|---|
-| 회원 | 탈퇴 상태 또는 시각 기록 방향 | API 내부 정책은 소프트 삭제를 언급하나 개인정보 익명화는 보류 |
-| 식당·테이블·회차 | `deleted_at` 기반 소프트 삭제 방향 | 예약·결제·노쇼 이력 보존 |
+| 회원 | `deleted_at` 기반 소프트 삭제 | 탈퇴 후에도 `email`, `phone_number`, `business_number` 재사용 불가. 고유 식별자 값 보존 |
+| 식당·테이블·회차 | `deleted_at` 기반 소프트 삭제 방향 | 예약·결제·노쇼 이력 보존. 회차는 삭제 후 같은 테이블·시작 시각으로 신규 생성 가능 |
 | 예약·참여자 | 물리 삭제하지 않고 상태 보존 | 취소·노쇼·정산·권한 이력 필요 |
 | 결제·환불 | 물리 삭제하지 않음 | PortOne 검증·환불·지급 예정 조회·감사 필요 |
 | 채팅 메시지 | 물리 삭제 정책 미확정 | 보관 기간과 CLOSED 후 조회 기간은 Human 결정 필요 |
