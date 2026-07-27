@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +34,36 @@ public class TestApiController {
     @GetMapping("/api/owner/hello")
     public ApiResponse<String> ownerHello() {
         return ApiResponse.success("owner-ok");
+    }
+
+    @GetMapping("/api/admin/hello")
+    public ApiResponse<String> adminHello() {
+        return ApiResponse.success("admin-ok");
+    }
+
+    @PostMapping("/api/auth/sample")
+    public ApiResponse<String> authSample() {
+        return ApiResponse.success("auth-ok");
+    }
+
+    @GetMapping("/api/restaurants")
+    public ApiResponse<String> restaurantsHello() {
+        return ApiResponse.success("restaurants-ok");
+    }
+
+    @GetMapping("/api/restaurants/{restaurantId}")
+    public ApiResponse<String> restaurantDetailHello(@PathVariable Long restaurantId) {
+        return ApiResponse.success("restaurant-detail-ok");
+    }
+
+    @GetMapping("/api/restaurants/{restaurantId}/dining-sessions")
+    public ApiResponse<String> diningSessionsHello(@PathVariable Long restaurantId) {
+        return ApiResponse.success("dining-sessions-ok");
+    }
+
+    @GetMapping("/api/reservations/search")
+    public ApiResponse<String> reservationsSearchHello() {
+        return ApiResponse.success("reservations-search-ok");
     }
 
     @GetMapping("/api/errors/custom")
