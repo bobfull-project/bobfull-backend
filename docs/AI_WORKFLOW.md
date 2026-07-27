@@ -8,6 +8,15 @@
 Issue #번호 구현하라
 ```
 
+새 작업이 필요하면 구현 Issue를 만들기 전에 다음 명령으로 초안을 검토한다.
+
+```text
+새 Issue 초안 작성하라
+이 초안으로 Issue 생성하라
+```
+
+첫 명령은 GitHub를 변경하지 않는다. Human이 초안을 확인하고 두 번째 명령으로 명시 승인한 경우에만 실제 Issue를 생성한다.
+
 담당자 AI는 Issue 단계에서 현재 Issue·Human 답변·Issue 댓글·현재 Label을 읽고 다음 단계부터 재개한다. 연결 PR의 Head·Diff·리뷰와 댓글은 PR 단계에서만 읽는다. 담당자 Human은 이해도 답변과 정책 판단을 담당하고, Human 리뷰어는 실제 Diff를 검토하며, Approve와 Merge는 Human이 수행한다.
 
 PR 단계의 검토·리뷰 반영에는 다음 명령을 사용한다.
@@ -21,23 +30,32 @@ PR #번호 검토하라
 ## 2. 전체 흐름
 
 ```text
-1. 사용자가 `Issue #번호 구현하라` 입력
-2. 담당자 AI가 AGENTS.md·Issue·현재 상태를 확인하고 SKILL.md를 직접 읽기·적용
-3. 담당자 AI가 필요한 문서·코드 분석과 Human 질문 작성
-4. 담당자 Human이 Issue의 Human 이해도 답변 작성
-5. 담당자 AI가 답변 검증·보완 설명·최종 계약을 대화창과 Issue 댓글에 기록
-6. 충돌이 없으면 같은 실행에서 구현·테스트·Commit·Push·Draft PR 생성 또는 갱신
-7. PR 담당자 Human이 PR 본문의 Human 이해도 답변 작성
-8. Human 리뷰어가 PR 본문의 Human 리뷰 작성
-9. `PR #번호 검토하라`로 담당자 AI가 최신 Head 자체 검토·Human 답변 보완·등록된 리뷰와 댓글 판단
-10. 범위 안 지적 수정·재검증·Push·PR 기록 갱신
-11. 담당자 AI가 `status:final-human-review`를 기록
-12. Human이 최신 코드·테스트·리뷰 결과 확인 후 Approve와 Merge
+새 작업 필요
+→ `새 Issue 초안 작성하라`
+→ 중복·확정 범위·제목 규칙 확인
+→ 버전 판단 근거와 Issue 템플릿 전체 초안 제시
+→ Human 검토
+→ `이 초안으로 Issue 생성하라`
+→ `Issue #번호 구현하라`
+→ 구현·검증·Diff 자체 검토
+→ 최신 PR 템플릿 직접 확인
+→ 템플릿 전체 구조로 develop 대상 Draft PR 생성
+→ PR 담당자 Human의 이해도 답변·Human 리뷰
+→ `PR #번호 검토하라`
+→ 담당자 AI 검토·범위 안 수정·재검증
+→ `status:final-human-review`
+→ Human Approve와 Merge
 ```
 
 Human 답변, Human 리뷰와 외부 리뷰·댓글의 작성 순서는 고정하지 않는다. 담당자 AI는 명령을 받을 때마다 현재 GitHub 상태를 읽고 누적된 입력을 함께 처리한다.
 
 담당자 AI의 PR 검토는 구현 품질을 보완하는 절차이며 독립적인 Human Approve나 Merge 판단을 대체하지 않는다.
+
+### 2.1 새 Issue 초안·승인·생성
+
+담당자 AI는 초안 작성 때 실제 GitHub Issue와 확정 문서에서 동일·유사 작업을 검색하고, `PROJECT_CONTEXT`와 관련 기존 기능·Issue·마일스톤으로 범위를 판단한다. 제목은 `ISSUE_TITLE_RULES`를 따르며, `.github/ISSUE_TEMPLATE/feature.md`의 모든 섹션과 순서를 유지한다. 해당하지 않는 항목도 삭제하지 않고 `해당 없음`과 근거를 작성한다. Human 이해도 질문 수는 `AI_IMPLEMENTATION_GUIDE` 기준을 따르고 ADR 필요 여부와 근거를 포함한다.
+
+초안은 대화창에만 제시한다. Human의 명시 승인이 없으면 Issue를 생성·수정하지 않는다. 생성 직전 승인된 제목·본문, 범위와 중복 여부를 재확인하고, 생성 후 번호·제목·범위 판단 근거·담당자·마일스톤·Label·URL을 보고한다. `.github/ISSUE_TEMPLATE/config.yml`의 `blank_issues_enabled: false`는 웹 UI에서 템플릿 사용을 유도하는 최소 가드레일일 뿐 CLI·API·자동화 도구의 본문 형식까지 강제하지 않는다.
 
 ## 3. Issue 단계
 
@@ -107,6 +125,9 @@ status:final-human-review
 - 정책·API·DB 재결정이 필요하면 중단한다.
 - PR에는 실제 변경·실행 결과·미검증 위험만 기록한다.
 - PR 템플릿에 담당자 Human 이해도와 Human 리뷰 양식을 포함한다.
+- Draft PR 생성 전 최신 `.github/pull_request_template.md`를 직접 읽고 섹션 이름과 순서를 그대로 유지한다.
+- 실제 연결 Issue, 최종 계약, 최신 Diff, 테스트·build·직접 검증 결과를 근거로 PR 본문을 작성한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다.
+- `Human 리뷰`와 `담당자 AI 검토·수정 기록`을 삭제하거나 축약하지 않는다. Ready 전환, Approve와 Merge는 Human 책임이다.
 
 ## 5. PR Human 입력
 

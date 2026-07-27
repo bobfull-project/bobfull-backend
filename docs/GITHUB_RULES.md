@@ -132,3 +132,25 @@ asdfasdf
 - 서로 관련 없는 여러 도메인의 변경을 하나의 PR에 포함하지 않는다.
 - PR 범위가 지나치게 커지면 기능을 분리하여 별도의 PR로 작성한다.
 - 리뷰 코멘트에는 수정 요청 이유나 대안을 함께 작성한다.
+
+## 4. Issue·PR 생성 규칙
+
+### Issue 생성
+
+- 새 Issue 제목은 `docs/ISSUE_TITLE_RULES.md`의 범위·유형 규칙을 따른다.
+- `blank_issues_enabled: false`는 GitHub 웹 UI에서 빈 Issue 생성을 막아 템플릿 사용을 유도하는 최소 가드레일이다. CLI·API·자동화 도구의 제목·본문 형식까지 검증하거나 완전히 강제하지는 않는다.
+- AI는 `새 Issue 초안 작성하라`로 `.github/ISSUE_TEMPLATE/feature.md` 전체 구조의 초안을 먼저 제시하며, Human이 `이 초안으로 Issue 생성하라`고 승인한 경우에만 생성한다.
+
+### Draft PR 생성
+
+- 웹 UI에서는 자동으로 채워진 템플릿의 전체 섹션을 확인하고, 연결 Issue·실제 변경·검증 결과·Human 영역을 누락 없이 작성한 뒤 생성한다.
+- `gh` CLI는 기본 자동 채움에 의존하지 않고 저장소 템플릿을 명시적인 시작 본문으로 사용한다.
+
+```text
+gh pr create --draft --base develop --template .github/pull_request_template.md
+```
+
+- `--fill`, `--fill-first`, `--fill-verbose`, `--body`, `--body-file`을 사용하더라도 최종 본문을 최신 `.github/pull_request_template.md`와 대조해 전체 섹션과 순서를 보존한다.
+- GitHub API, Connector, Codex 등 AI·자동화 도구도 템플릿을 직접 읽고 동일한 섹션·순서의 본문을 명시적으로 전달한다. 도구의 자동 채움 여부는 규칙 준수 근거가 아니다.
+- 기존 PR에 템플릿 일부 또는 전체가 누락되면 새 PR을 만들지 않고 최신 템플릿 구조로 본문을 복구한다. 기존 작성자의 유효한 설명과 Human 원문은 적절한 섹션으로 보존하며, 추정으로 검증 결과나 Human 답변·리뷰를 채우지 않는다.
+- 템플릿 복구만으로 구현 완료나 Merge 가능으로 판단하지 않는다. 늦어도 Ready 전환·Human Approve 요청 전에는 구조를 복구한다.
