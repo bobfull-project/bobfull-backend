@@ -121,17 +121,9 @@ Human 이해도 질문은 신입 백엔드 기술면접 기본 개념 수준으�
 
 담당자 AI는 Human 답변 원문을 대신 작성하거나 덮어쓰지 않는다.
 
-PR 작성자가 아닌 Human 리뷰어는 PR 템플릿의 `Human 리뷰`에 다음을 작성한다.
+PR 작성자가 아닌 Human 리뷰어는 PR 본문 마지막의 PR별 `Human Review Checklist`를 참고하거나 복사해 PR 댓글로 체크 여부와 의견을 직접 작성한다. 리뷰어와 리뷰 시각은 GitHub 댓글 메타데이터를 사용하며, 체크리스트 댓글에 기준 Head SHA를 기록하거나 추정하지 않는다.
 
-- 리뷰어
-- 기준 Head SHA
-- 리뷰 시각
-- 수정 후 재확인 상태
-- 내가 이해한 구현 흐름
-- 이해되지 않거나 추가 설명이 필요한 부분
-- 문제로 보이거나 다시 확인할 부분
-
-새 Commit으로 Head가 바뀌면 기존 Human 리뷰의 재확인 상태는 `필요`로 본다.
+새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리한다. 담당자 AI는 `PR #번호 검토하라`를 받을 때마다 최신 Diff를 다시 검토한다.
 
 PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 AI는 작성 주체와 관계없이 다음처럼 처리한다.
 
