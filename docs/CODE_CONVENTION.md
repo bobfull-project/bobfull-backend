@@ -398,11 +398,13 @@ INTERNAL_SERVER_ERROR
 
 ```java
 .requestMatchers("/api/auth/**").permitAll()
-.requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+.requestMatchers(HttpMethod.GET, "/api/restaurants", "/api/restaurants/{restaurantId}").permitAll()
 .requestMatchers("/api/owner/**").hasRole("OWNER")
 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 .anyRequest().authenticated()
 ```
+
+공개 경로는 넓은 패턴 대신 API 명세에 실제로 존재하는 인증 불필요 Method·Path만 명시적으로 나열한다.
 
 ---
 
