@@ -15,7 +15,11 @@
 
 ```text
 Issue #번호 구현하라
+새 Issue 초안 작성하라
+이 초안으로 Issue 생성하라
 ```
+
+`새 Issue 초안 작성하라`는 GitHub를 변경하지 않고 대화창에 초안을 제시하는 명령이며, Human이 `이 초안으로 Issue 생성하라`를 명시한 경우에만 실제 Issue를 생성한다. 상세 절차는 `docs/AI_WORKFLOW.md`, 담당자 AI 실행 규칙은 `docs/AI_IMPLEMENTATION_GUIDE.md`를 따른다.
 
 ## 2. Issue 단계 실행 명령과 새 Issue 최초 처리
 

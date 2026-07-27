@@ -10,6 +10,15 @@ Issue 단계에는 다음 명령을 사용한다.
 Issue #번호 구현하라
 ```
 
+새 작업의 Issue 생성에는 다음 명령을 사용한다.
+
+```text
+새 Issue 초안 작성하라
+이 초안으로 Issue 생성하라
+```
+
+초안 작성은 GitHub 변경 없이 대화창에서만 수행하며, Human이 승인 명령을 명시한 뒤에만 실제 Issue를 생성한다.
+
 담당자 AI는 Issue 명령을 받을 때마다 GitHub Issue, Human 답변, Issue 댓글의 최종 계약,
 현재 `status:*` Label, 현재 브랜치와 작업 트리를 다시 읽고 Issue 단계의 다음 작업부터 재개한다.
 연결 PR의 최신 Head·Diff·리뷰·댓글 검토와 수정은 `PR #번호 검토하라`에서만 수행한다.
@@ -56,10 +65,22 @@ Issue #번호 구현하라
 5. 코드·테스트·필요 문서를 구현한다.
 6. 테스트와 직접 검증을 실제로 실행한다.
 7. 전체 실제 Diff를 자체 검토한다.
-8. PR에 담당자 Human 이해도 질문과 Human 리뷰 양식을 포함한다.
+8. 최신 `.github/pull_request_template.md`를 직접 읽고, 섹션 이름과 순서를 유지한 본문에 담당자 Human 이해도 질문과 Human 리뷰 양식을 포함한다.
 9. Issue 관련 변경만 Commit·Push한다.
 10. develop 대상 Draft PR을 생성한다.
 11. 최신 Head 검토와 필수 검증이 끝나면 `status:final-human-review`를 적용하고 Human 최종 리뷰 사항을 Issue 댓글과 PR에 기록한다.
+
+Draft PR 본문은 실제 연결 Issue·최종 계약·최신 Diff·테스트·build·직접 검증 결과로 작성한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다. `Human 리뷰`와 `담당자 AI 검토·수정 기록`은 삭제하거나 축약하지 않으며, PR 제목은 Issue의 범위·유형 형식이 아니라 `GITHUB_RULES`의 Conventional Commit 형식을 따른다.
+
+### 새 Issue 초안·생성
+
+초안·생성의 전체 생명주기와 승인 경계는 `AI_WORKFLOW`, 범위·유형 판단 근거는 `ISSUE_TITLE_RULES`를 따른다. 담당자 AI는 다음 실행 체크리스트만 수행한다.
+
+1. 실제 GitHub Issue와 확정 문서에서 동일·유사 작업을 검색한다.
+2. 판단 근거와 `.github/ISSUE_TEMPLATE/feature.md` 전체 구조로 초안을 작성한다. 해당 없는 항목은 `해당 없음`과 근거를 기록하고, Human 이해도 질문 수와 ADR 판단을 포함한다.
+3. 초안 단계에서는 GitHub를 변경하지 않고 대화창에만 제시한다.
+4. Human의 명시 승인 뒤 생성 직전 범위·중복·승인된 제목·본문을 재확인하고, 생성 뒤 번호·제목·범위 판단 근거·담당자·마일스톤·Label·URL을 보고한다.
+
 
 구현 중 계약이 변경되거나 새로운 정책 결정이 필요해지면 구현을 중단하고
 `status:human-answer-required`를 적용한 뒤 구현 중 새로 발생한 추가 Human 질문만 댓글에 기록한다.
