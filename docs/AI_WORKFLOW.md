@@ -128,10 +128,10 @@ status:final-human-review
 - build 실패를 성공으로 표현하지 않는다.
 - 정책·API·DB 재결정이 필요하면 중단한다.
 - PR에는 실제 변경·실행 결과·미검증 위험만 기록한다.
-- PR 템플릿에 담당자 Human 이해도와 Human 리뷰 양식을 포함한다.
+- PR 템플릿에 담당자 Human 이해도와 PR별 Human Review Checklist의 빈 구조를 포함한다.
 - Draft PR 생성 전 최신 `.github/pull_request_template.md`를 직접 읽고 섹션 이름과 순서를 그대로 유지한다.
 - 실제 연결 Issue, 최종 계약, 최신 Diff, 테스트·build·직접 검증 결과를 근거로 PR 본문을 작성한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다.
-- `Human 리뷰`와 `담당자 AI 검토·수정 기록`을 삭제하거나 축약하지 않는다. Ready 전환, Approve와 Merge는 Human 책임이다.
+- `담당자 AI 검토·수정 기록`과 PR 본문 마지막의 Human Review Checklist를 삭제하거나 축약하지 않는다. Ready 전환, Approve와 Merge는 Human 책임이다.
 
 ## 5. PR Human 입력
 
@@ -146,21 +146,13 @@ Draft PR 생성 후 PR 담당자는 실제 Diff와 테스트 결과를 읽고 PR
 
 담당자 AI는 Human 답변 원문을 수정하거나 대신 작성하지 않는다. 답변이 아직 없어도 코드 검토는 진행할 수 있지만, Merge 전에는 답변과 AI 검토가 필요하다.
 
-### 5.2 Human 리뷰
+### 5.2 Human Review Checklist와 댓글
 
-PR 작성자가 아닌 Human 리뷰어는 실제 Diff와 테스트 결과를 읽고 PR 본문의 `Human 리뷰` 양식에 다음을 작성한다.
+Draft PR 생성 시 담당자 AI는 PR 본문 마지막에 연결 Issue의 최종 결정·완료 조건, 최신 실제 Diff, 추가·수정 테스트, 실제 테스트 결과와 PR 범위를 근거로 PR별 `Human Review Checklist`를 작성한다. 구현 확인과 테스트 확인을 분리하고, 실제 확인 가능한 동작 또는 검증을 한 항목씩 작성한다.
 
-- 리뷰어
-- 기준 Head SHA
-- 리뷰 시각
-- 수정 후 재확인: `필요 | 완료 | 해당 없음`
-- 내가 이해한 구현 흐름
-- 이해되지 않거나 추가 설명이 필요한 부분
-- 문제로 보이거나 다시 확인할 부분
+PR 작성자가 아닌 Human 리뷰어는 PR 본문을 수정하지 않고 체크리스트를 참고하거나 복사해 PR 댓글에 체크 여부와 의견을 직접 작성한다. 댓글의 리뷰어와 리뷰 시각은 GitHub 메타데이터를 사용하며, 기준 Head SHA는 기록하거나 추정하지 않는다. 새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리한다.
 
-리뷰어가 여러 명이면 양식을 리뷰어별로 복사한다. 새 Commit으로 Head가 변경되면 이전 Head 기준 리뷰는 재확인이 필요한 것으로 본다.
-
-Human 리뷰 원문은 담당자 AI가 대신 작성하거나 덮어쓰지 않는다.
+Human 리뷰 원문은 담당자 AI가 대신 작성하거나 덮어쓰지 않는다. 담당자 AI는 `PR #번호 검토하라` 명령마다 최신 Diff를 기준으로 댓글 의견을 다시 대조한다.
 
 ## 6. 담당자 AI PR 검토
 
@@ -186,10 +178,10 @@ PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약과 현재
 - 테스트·build·직접 검증·CI 증거
 - 미검증 범위와 남은 위험
 - 담당자 Human 답변과 AI 보완 필요 사항
-- Human 리뷰의 기준 Head와 확인 사항
+- PR 댓글의 Human 리뷰 의견과 최신 Diff의 대조
 - PR에 등록된 모든 리뷰·댓글
 
-테스트 실패·미실행, `FAIL`·`HOLD`·`NOT_RUN`, Human 답변 미작성과 Human 리뷰 재확인 필요는 검토 중단 사유가 아니다. 현재 상태와 위험으로 기록한다.
+테스트 실패·미실행, `FAIL`·`HOLD`·`NOT_RUN`, Human 답변 미작성과 Human 리뷰 댓글 미작성은 검토 중단 사유가 아니다. 현재 상태와 위험으로 기록한다.
 
 담당자 AI 검토 결과는 다음 중 하나로 기록한다.
 
@@ -239,7 +231,7 @@ PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 �
 - 영향받은 테스트·build·직접 검증·CI 확인
 - 새 결함과 PR 설명 불일치 확인
 - 담당자 Human 답변과 AI 기준 답변 재대조
-- Human 리뷰 기준 Head와 재확인 상태 확인
+- PR 댓글의 Human 리뷰 의견과 최신 Diff의 대조
 - 남은 리뷰·댓글 확인
 
 해결되지 않은 항목과 미검증 위험을 최신 상태로 다시 기록한다.
@@ -252,7 +244,7 @@ Human이 실제 코드, 테스트·CI, Human 입력과 리뷰 반영 결과를 �
 다음을 충족하지 않으면 Merge 준비 완료로 판단하지 않는다.
 
 - 담당자 Human 이해도 답변과 담당자 AI 보완 확인
-- Human 리뷰어의 최신 Head 재확인 상태 확인
+- PR 댓글의 Human 리뷰 의견과 최신 Diff의 대조 완료
 - 필수 테스트·build·직접 검증 결과 확인
 - 최신 Head 기준 담당자 AI 검토 완료
 - 해결되지 않은 BLOCKER 없음
