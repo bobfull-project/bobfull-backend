@@ -153,4 +153,4 @@ gh pr create --draft --base develop --template .github/pull_request_template.md
 - `--fill`, `--fill-first`, `--fill-verbose`, `--body`, `--body-file`을 사용하더라도 최종 본문을 최신 `.github/pull_request_template.md`와 대조해 전체 섹션과 순서를 보존한다.
 - GitHub API, Connector, Codex 등 AI·자동화 도구도 템플릿을 직접 읽고 동일한 섹션·순서의 본문을 명시적으로 전달한다. 도구의 자동 채움 여부는 규칙 준수 근거가 아니다.
 - 기존 PR에 템플릿 일부 또는 전체가 누락되면 새 PR을 만들지 않고 최신 템플릿 구조로 본문을 복구한다. 기존 작성자의 유효한 설명과 Human 원문은 적절한 섹션으로 보존하며, 추정으로 검증 결과나 Human 답변·리뷰를 채우지 않는다.
-- 템플릿 복구만으로 구현 완료나 Merge 가능으로 판단하지 않는다. 늦어도 Ready 전환·Human Approve 요청 전에는 구조를 복구한다.
+- 템플릿 복구만으로 구현 완료나 Merge 가능으로 판단하지 않는다. 최소한 `PR #번호 검토하라` 실행 전, 늦어도 Ready 전환·Human Approve 요청 전에는 구조를 복구한다.
