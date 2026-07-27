@@ -51,11 +51,6 @@ public class TestApiController {
         return ApiResponse.success("restaurants-ok");
     }
 
-    @GetMapping("/api/restaurants/{restaurantId}")
-    public ApiResponse<String> restaurantDetailHello(@PathVariable Long restaurantId) {
-        return ApiResponse.success("restaurant-detail-ok");
-    }
-
     @GetMapping("/api/restaurants/{restaurantId}/dining-sessions")
     public ApiResponse<String> diningSessionsHello(@PathVariable Long restaurantId) {
         return ApiResponse.success("dining-sessions-ok");
