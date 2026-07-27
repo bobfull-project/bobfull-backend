@@ -19,7 +19,7 @@ Issue #번호 구현하라
 이 초안으로 Issue 생성하라
 ```
 
-`새 Issue 초안 작성하라`는 GitHub를 변경하지 않고 Issue 템플릿 전체 구조의 초안을 대화창에 제시하는 명령이다. Human이 승인한 뒤 `이 초안으로 Issue 생성하라`를 명시해야만 실제 Issue를 생성한다. 생성된 Issue의 구현은 기존 `Issue #번호 구현하라` 명령으로 진행한다.
+`새 Issue 초안 작성하라`는 GitHub를 변경하지 않고 대화창에 초안을 제시하는 명령이며, Human이 `이 초안으로 Issue 생성하라`를 명시한 경우에만 실제 Issue를 생성한다. 상세 절차는 `docs/AI_WORKFLOW.md`, 담당자 AI 실행 규칙은 `docs/AI_IMPLEMENTATION_GUIDE.md`를 따른다.
 
 ## 2. Issue 단계 실행 명령과 새 Issue 최초 처리
 
@@ -28,8 +28,6 @@ Issue #번호 구현하라
 ```text
 Issue #번호 구현하라
 ```
-
-새 작업을 Issue로 만들 때는 먼저 `새 Issue 초안 작성하라`를 사용하고, Human이 승인한 초안에만 `이 초안으로 Issue 생성하라`를 사용한다. 초안·생성 단계의 상세 절차는 `docs/AI_WORKFLOW.md`, 담당자 AI의 실행 규칙은 `docs/AI_IMPLEMENTATION_GUIDE.md`를 따른다.
 
 담당자 AI가 새로운 Issue를 처음 처리하면 다음 순서로 동작한다.
 

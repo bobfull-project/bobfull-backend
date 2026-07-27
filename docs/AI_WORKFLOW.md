@@ -53,9 +53,9 @@ Human 답변, Human 리뷰와 외부 리뷰·댓글의 작성 순서는 고정�
 
 ### 2.1 새 Issue 초안·승인·생성
 
-담당자 AI는 초안 작성 때 실제 GitHub Issue와 확정 문서에서 동일·유사 작업을 검색하고, `PROJECT_CONTEXT`와 관련 기존 기능·Issue·마일스톤으로 범위를 판단한다. 제목은 `ISSUE_TITLE_RULES`를 따르며, `.github/ISSUE_TEMPLATE/feature.md`의 모든 섹션과 순서를 유지한다. 해당하지 않는 항목도 삭제하지 않고 `해당 없음`과 근거를 작성한다. Human 이해도 질문 수는 `AI_IMPLEMENTATION_GUIDE` 기준을 따르고 ADR 필요 여부와 근거를 포함한다.
+초안 단계는 중복 확인·범위와 유형 판단·Issue 템플릿 전체 초안 제시까지이며 GitHub를 변경하지 않는다. Human이 명시 승인하면 생성 직전에 범위·중복·승인된 제목과 본문을 재확인한 뒤 실제 Issue를 생성하고 결과를 보고한다. 범위 판단은 `ISSUE_TITLE_RULES`, 담당자 AI의 체크리스트는 `AI_IMPLEMENTATION_GUIDE`를 따른다.
 
-초안은 대화창에만 제시한다. Human의 명시 승인이 없으면 Issue를 생성·수정하지 않는다. 생성 직전 승인된 제목·본문, 범위와 중복 여부를 재확인하고, 생성 후 번호·제목·범위 판단 근거·담당자·마일스톤·Label·URL을 보고한다. `.github/ISSUE_TEMPLATE/config.yml`의 `blank_issues_enabled: false`는 웹 UI에서 템플릿 사용을 유도하는 최소 가드레일일 뿐 CLI·API·자동화 도구의 본문 형식까지 강제하지 않는다.
+`.github/ISSUE_TEMPLATE/config.yml`의 `blank_issues_enabled: false`는 웹 UI에서 템플릿 사용을 유도하는 최소 가드레일일 뿐 CLI·API·자동화 도구의 본문 형식까지 강제하지 않는다.
 
 ## 3. Issue 단계
 
