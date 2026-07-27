@@ -1,6 +1,5 @@
 package com.bobfull;
 
-import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.repository.SharedTableRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,9 +16,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
                 + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
 })
 class BobfullBackendApplicationTests {
-
-	@MockitoBean
-	private RestaurantRepository restaurantRepository;
 
 	@MockitoBean
 	private SharedTableRepository sharedTableRepository;

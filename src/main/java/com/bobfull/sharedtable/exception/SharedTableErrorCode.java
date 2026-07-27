@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 public enum SharedTableErrorCode implements BaseErrorCode {
 
     INVALID_TABLE_CAPACITY(HttpStatus.BAD_REQUEST, "합석 테이블 정원은 2, 4, 6, 8 중 하나여야 합니다."),
+    RESTAURANT_ID_NOT_FOUND(HttpStatus.NOT_FOUND, "식당을 찾을 수 없습니다."),
     TABLE_ID_NOT_FOUND(HttpStatus.NOT_FOUND, "합석 테이블을 찾을 수 없습니다."),
     TABLE_HAS_DINING_SESSION(HttpStatus.CONFLICT, "연결된 회차가 있어 삭제할 수 없습니다.");
 

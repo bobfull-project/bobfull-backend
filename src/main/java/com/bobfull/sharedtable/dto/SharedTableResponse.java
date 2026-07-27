@@ -12,7 +12,7 @@ public record SharedTableResponse(
     public static SharedTableResponse from(SharedTable sharedTable) {
         return new SharedTableResponse(
                 sharedTable.getId(),
-                sharedTable.getRestaurant().getId(),
+                sharedTable.getRestaurantId(),
                 sharedTable.getCapacity(),
                 sharedTable.getStatus().name()
         );

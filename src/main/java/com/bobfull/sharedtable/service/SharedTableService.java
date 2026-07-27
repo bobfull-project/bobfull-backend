@@ -1,9 +1,6 @@
 package com.bobfull.sharedtable.service;
 
-import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
-import com.bobfull.restaurant.entity.Restaurant;
-import com.bobfull.restaurant.service.TemporaryRestaurantOwnershipService;
 import com.bobfull.sharedtable.dto.SharedTableCreateRequest;
 import com.bobfull.sharedtable.dto.SharedTableIdResponse;
 import com.bobfull.sharedtable.dto.SharedTableListResponse;
@@ -42,9 +39,9 @@ public class SharedTableService {
     @Transactional
     public SharedTableIdResponse create(Long ownerMemberId, Long restaurantId, SharedTableCreateRequest request) {
         validateCapacity(request.capacity());
-        Restaurant restaurant = restaurantOwnershipService.getOwnedRestaurant(restaurantId, ownerMemberId);
+        restaurantOwnershipService.validateOwnedRestaurant(restaurantId, ownerMemberId);
 
-        SharedTable sharedTable = SharedTable.create(restaurant, request.capacity());
+        SharedTable sharedTable = SharedTable.create(restaurantId, request.capacity());
         SharedTable savedSharedTable = sharedTableRepository.save(sharedTable);
 
         return new SharedTableIdResponse(savedSharedTable.getId());
@@ -52,10 +49,10 @@ public class SharedTableService {
 
     @Transactional(readOnly = true)
     public SharedTableListResponse getTables(Long ownerMemberId, Long restaurantId, Pageable pageable) {
-        restaurantOwnershipService.getOwnedRestaurant(restaurantId, ownerMemberId);
+        restaurantOwnershipService.validateOwnedRestaurant(restaurantId, ownerMemberId);
 
         Page<SharedTable> sharedTables =
-                sharedTableRepository.findAllByRestaurant_IdAndDeletedAtIsNull(restaurantId, pageable);
+                sharedTableRepository.findAllByRestaurantIdAndDeletedAtIsNull(restaurantId, pageable);
 
         return SharedTableListResponse.from(sharedTables);
     }
@@ -91,10 +88,7 @@ public class SharedTableService {
         SharedTable sharedTable = sharedTableRepository.findByIdAndDeletedAtIsNull(tableId)
                 .orElseThrow(() -> new CustomException(SharedTableErrorCode.TABLE_ID_NOT_FOUND));
 
-        Long restaurantOwnerMemberId = sharedTable.getRestaurant().getOwnerMemberId();
-        if (!restaurantOwnerMemberId.equals(ownerMemberId)) {
-            throw new CustomException(CommonErrorCode.ACCESS_DENIED);
-        }
+        restaurantOwnershipService.validateOwnedRestaurant(sharedTable.getRestaurantId(), ownerMemberId);
 
         return sharedTable;
     }

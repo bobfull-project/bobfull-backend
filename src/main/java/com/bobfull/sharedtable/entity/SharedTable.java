@@ -1,17 +1,13 @@
 package com.bobfull.sharedtable.entity;
 
 import com.bobfull.common.entity.BaseTimeEntity;
-import com.bobfull.restaurant.entity.Restaurant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
@@ -27,9 +23,8 @@ public class SharedTable extends BaseTimeEntity {
     @Column(name = "shared_table_id")
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "restaurant_id", nullable = false)
-    private Restaurant restaurant;
+    @Column(name = "restaurant_id", nullable = false)
+    private Long restaurantId;
 
     @Column(nullable = false)
     private int capacity;
@@ -44,14 +39,14 @@ public class SharedTable extends BaseTimeEntity {
     protected SharedTable() {
     }
 
-    private SharedTable(Restaurant restaurant, int capacity) {
-        this.restaurant = restaurant;
+    private SharedTable(Long restaurantId, int capacity) {
+        this.restaurantId = restaurantId;
         this.capacity = capacity;
         this.status = SharedTableStatus.ACTIVE;
     }
 
-    public static SharedTable create(Restaurant restaurant, int capacity) {
-        return new SharedTable(restaurant, capacity);
+    public static SharedTable create(Long restaurantId, int capacity) {
+        return new SharedTable(restaurantId, capacity);
     }
 
     public void updateCapacity(int capacity) {
@@ -66,8 +61,8 @@ public class SharedTable extends BaseTimeEntity {
         return id;
     }
 
-    public Restaurant getRestaurant() {
-        return restaurant;
+    public Long getRestaurantId() {
+        return restaurantId;
     }
 
     public int getCapacity() {

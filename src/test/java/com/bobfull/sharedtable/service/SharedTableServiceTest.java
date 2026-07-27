@@ -3,14 +3,13 @@ package com.bobfull.sharedtable.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
-import com.bobfull.restaurant.entity.Restaurant;
-import com.bobfull.restaurant.service.TemporaryRestaurantOwnershipService;
 import com.bobfull.sharedtable.dto.SharedTableCreateRequest;
 import com.bobfull.sharedtable.dto.SharedTableIdResponse;
 import com.bobfull.sharedtable.dto.SharedTableListResponse;
@@ -61,9 +60,6 @@ class SharedTableServiceTest {
     @Test
     void 허용된_정원이면_본인_식당에_합석_테이블을_등록한다() {
         // given
-        Restaurant restaurant = restaurant(1L, 10L);
-        when(restaurantOwnershipService.getOwnedRestaurant(10L, 1L))
-                .thenReturn(restaurant);
         when(sharedTableRepository.save(any(SharedTable.class)))
                 .thenAnswer(invocation -> {
                     SharedTable sharedTable = invocation.getArgument(0);
@@ -91,19 +87,16 @@ class SharedTableServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(SharedTableErrorCode.INVALID_TABLE_CAPACITY);
-        verify(restaurantOwnershipService, never()).getOwnedRestaurant(any(), any());
+        verify(restaurantOwnershipService, never()).validateOwnedRestaurant(any(), any());
     }
 
     @Test
     void 본인_식당의_삭제되지_않은_테이블_목록을_페이지로_반환한다() {
         // given
-        Restaurant restaurant = restaurant(1L, 10L);
-        SharedTable sharedTable = sharedTable(100L, restaurant, 4);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
         PageRequest pageable = PageRequest.of(0, 20);
 
-        when(restaurantOwnershipService.getOwnedRestaurant(10L, 1L))
-                .thenReturn(restaurant);
-        when(sharedTableRepository.findAllByRestaurant_IdAndDeletedAtIsNull(10L, pageable))
+        when(sharedTableRepository.findAllByRestaurantIdAndDeletedAtIsNull(10L, pageable))
                 .thenReturn(new PageImpl<>(List.of(sharedTable), pageable, 1));
 
         // when
@@ -119,8 +112,7 @@ class SharedTableServiceTest {
     @Test
     void 본인_테이블이면_상세를_반환한다() {
         // given
-        Restaurant restaurant = restaurant(1L, 10L);
-        SharedTable sharedTable = sharedTable(100L, restaurant, 8);
+        SharedTable sharedTable = sharedTable(100L, 10L, 8);
         when(sharedTableRepository.findByIdAndDeletedAtIsNull(100L))
                 .thenReturn(Optional.of(sharedTable));
 
@@ -137,10 +129,12 @@ class SharedTableServiceTest {
     @Test
     void 타인_식당의_테이블이면_ACCESS_DENIED를_반환한다() {
         // given
-        Restaurant restaurant = restaurant(2L, 10L);
-        SharedTable sharedTable = sharedTable(100L, restaurant, 4);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
         when(sharedTableRepository.findByIdAndDeletedAtIsNull(100L))
                 .thenReturn(Optional.of(sharedTable));
+        doThrow(new CustomException(CommonErrorCode.ACCESS_DENIED))
+                .when(restaurantOwnershipService)
+                .validateOwnedRestaurant(10L, 1L);
 
         // when
         Throwable result = catchThrowable(() -> sharedTableService.getTable(1L, 100L));
@@ -167,8 +161,7 @@ class SharedTableServiceTest {
     @Test
     void 수정시_허용된_정원이면_테이블_정원을_변경한다() {
         // given
-        Restaurant restaurant = restaurant(1L, 10L);
-        SharedTable sharedTable = sharedTable(100L, restaurant, 2);
+        SharedTable sharedTable = sharedTable(100L, 10L, 2);
         when(sharedTableRepository.findByIdAndDeletedAtIsNull(100L))
                 .thenReturn(Optional.of(sharedTable));
 
@@ -187,8 +180,7 @@ class SharedTableServiceTest {
     @Test
     void 삭제시_테이블에_deletedAt을_기록한다() {
         // given
-        Restaurant restaurant = restaurant(1L, 10L);
-        SharedTable sharedTable = sharedTable(100L, restaurant, 4);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
         when(sharedTableRepository.findByIdAndDeletedAtIsNull(100L))
                 .thenReturn(Optional.of(sharedTable));
 
@@ -200,14 +192,8 @@ class SharedTableServiceTest {
         assertThat(sharedTable.getDeletedAt()).isEqualTo(FIXED_CLOCK.instant());
     }
 
-    private Restaurant restaurant(Long ownerMemberId, Long restaurantId) {
-        Restaurant restaurant = Restaurant.createTemporary(ownerMemberId);
-        ReflectionTestUtils.setField(restaurant, "id", restaurantId);
-        return restaurant;
-    }
-
-    private SharedTable sharedTable(Long tableId, Restaurant restaurant, int capacity) {
-        SharedTable sharedTable = SharedTable.create(restaurant, capacity);
+    private SharedTable sharedTable(Long tableId, Long restaurantId, int capacity) {
+        SharedTable sharedTable = SharedTable.create(restaurantId, capacity);
         ReflectionTestUtils.setField(sharedTable, "id", tableId);
         return sharedTable;
     }

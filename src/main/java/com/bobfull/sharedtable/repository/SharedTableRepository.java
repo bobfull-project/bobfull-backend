@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SharedTableRepository extends JpaRepository<SharedTable, Long> {
 
-    Page<SharedTable> findAllByRestaurant_IdAndDeletedAtIsNull(Long restaurantId, Pageable pageable);
+    Page<SharedTable> findAllByRestaurantIdAndDeletedAtIsNull(Long restaurantId, Pageable pageable);
 
     Optional<SharedTable> findByIdAndDeletedAtIsNull(Long id);
 }
