@@ -30,19 +30,19 @@ public class Restaurant extends BaseTimeEntity {
     @Column(name = "owner_member_id", nullable = false)
     private Long ownerMemberId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String address;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50)
     private String category;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 1000)
     private String description;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String keyword;
 
     @Column(name = "deposit_per_person", nullable = false)
