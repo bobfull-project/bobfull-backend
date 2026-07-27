@@ -7,6 +7,7 @@ import com.bobfull.member.dto.MemberUpdateRequest;
 import com.bobfull.member.dto.MemberUpdateResponse;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +40,13 @@ public class MemberService {
         }
 
         member.updateProfile(request.name(), request.phoneNumber());
+
+        try {
+            memberRepository.saveAndFlush(member);
+        } catch (DataIntegrityViolationException e) {
+            throw new CustomException(MemberErrorCode.DUPLICATE_PHONE_NUMBER);
+        }
+
         return MemberUpdateResponse.success();
     }
 

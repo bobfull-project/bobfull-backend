@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * 인증 사용자 본인 정보 조회·수정을 검증한다.
@@ -90,5 +91,22 @@ class MemberServiceTest {
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(MemberErrorCode.DUPLICATE_PHONE_NUMBER);
         assertThat(member.getPhoneNumber()).isEqualTo("01011112222");
+    }
+
+    @Test
+    void 사전_검사_통과후_저장시점에_DB_제약을_위반하면_중복_전화번호_예외로_변환한다() {
+        // given
+        Member member = Member.createMember("user@example.com", "encoded-password", "홍길동", "01011112222");
+        MemberUpdateRequest request = new MemberUpdateRequest("새이름", "01099998888");
+        given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+        given(memberRepository.existsByPhoneNumber("01099998888")).willReturn(false);
+        given(memberRepository.saveAndFlush(member)).willThrow(new DataIntegrityViolationException("duplicate key"));
+
+        // when
+        Throwable result = catchThrowable(() -> memberService.updateMe(1L, request));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(MemberErrorCode.DUPLICATE_PHONE_NUMBER);
     }
 }
