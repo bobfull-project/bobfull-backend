@@ -2,22 +2,19 @@ package com.bobfull.reservation.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
-import com.bobfull.paymenttemp.dto.CreateReadyPaymentCommand;
-import com.bobfull.paymenttemp.entity.Payment;
-import com.bobfull.paymenttemp.entity.PaymentPurpose;
-import com.bobfull.paymenttemp.entity.PaymentStatus;
-import com.bobfull.paymenttemp.repository.PaymentRepository;
-import com.bobfull.paymenttemp.service.PaymentService;
 import com.bobfull.reservation.dto.ReservationPrepareRequest;
 import com.bobfull.reservation.dto.ReservationPrepareResponse;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.port.CreateReadyPaymentCommand;
+import com.bobfull.reservation.port.PaymentPurpose;
+import com.bobfull.reservation.port.PaymentReadyCreator;
+import com.bobfull.reservation.port.ReadyPaymentResult;
+import com.bobfull.reservation.port.TimeSlotLockPort;
+import com.bobfull.reservation.port.TimeSlotLockResult;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
-import com.bobfull.timeslottemp.entity.TimeSlot;
-import com.bobfull.timeslottemp.repository.TableInfoProjection;
-import com.bobfull.timeslottemp.repository.TimeSlotRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -27,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 예약 결제 준비(#35)를 담당한다. 결제 성공 전에는 Reservation·ReservationParticipant를
- * 생성하지 않으며(ADR 0001), TimeSlot 행 잠금을 트랜잭션 종료까지 유지한 채 좌석 정합성을
- * 확인한 뒤 Payment 도메인의 READY 생성 인터페이스만 호출한다.
+ * 생성하지 않으며(ADR 0001), TimeSlot 잠금을 트랜잭션 종료까지 유지한 채 좌석 정합성을
+ * 확인한 뒤 Payment 도메인의 READY 생성 계약만 호출한다.
+ * TimeSlot(#33)·Payment(#91)의 실제 구현은 각 도메인이 소유하며, 이 서비스는
+ * {@link TimeSlotLockPort}·{@link PaymentReadyCreator} 계약에만 의존한다.
  */
 @Service
 public class ReservationService {
@@ -38,26 +37,23 @@ public class ReservationService {
     private static final List<ParticipationStatus> OCCUPYING_PARTICIPATION_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.NO_SHOW);
 
-    private final TimeSlotRepository timeSlotRepository;
+    private final TimeSlotLockPort timeSlotLockPort;
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
-    private final PaymentRepository paymentRepository;
-    private final PaymentService paymentService;
+    private final PaymentReadyCreator paymentReadyCreator;
     private final Clock clock;
 
     public ReservationService(
-            TimeSlotRepository timeSlotRepository,
+            TimeSlotLockPort timeSlotLockPort,
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            PaymentRepository paymentRepository,
-            PaymentService paymentService,
+            PaymentReadyCreator paymentReadyCreator,
             Clock clock
     ) {
-        this.timeSlotRepository = timeSlotRepository;
+        this.timeSlotLockPort = timeSlotLockPort;
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
-        this.paymentRepository = paymentRepository;
-        this.paymentService = paymentService;
+        this.paymentReadyCreator = paymentReadyCreator;
         this.clock = clock;
     }
 
@@ -70,24 +66,21 @@ public class ReservationService {
     }
 
     private ReservationPrepareResponse prepareCreate(Long memberId, Long timeSlotId, int partySize) {
-        TimeSlot timeSlot = lockTimeSlotOrThrow(timeSlotId);
-        TableInfoProjection tableInfo = findTableInfoOrThrow(timeSlot.getSharedTableId());
+        TimeSlotLockResult timeSlot = lockTimeSlotOrThrow(timeSlotId);
 
-        if (partySize > tableInfo.getCapacity()) {
+        if (partySize > timeSlot.capacity()) {
             throw new CustomException(ReservationErrorCode.INVALID_PARTY_SIZE);
         }
 
         boolean hasActiveReservation = reservationRepository
                 .existsByTimeSlotIdAndReservationStatusIn(timeSlotId, ACTIVE_RESERVATION_STATUSES);
-        boolean hasValidCreateReady = paymentRepository
-                .existsByTimeSlotIdAndPaymentPurposeAndPaymentStatusAndExpiresAtAfter(
-                        timeSlotId, PaymentPurpose.CREATE, PaymentStatus.READY, clock.instant());
+        boolean hasValidCreateReady = paymentReadyCreator.existsValidCreateReady(timeSlotId, clock.instant());
         if (hasActiveReservation || hasValidCreateReady) {
             throw new CustomException(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
         }
 
-        BigDecimal amount = tableInfo.getDepositPerPerson().multiply(BigDecimal.valueOf(partySize));
-        Payment payment = paymentService.createReadyPayment(new CreateReadyPaymentCommand(
+        BigDecimal amount = timeSlot.depositPerPerson().multiply(BigDecimal.valueOf(partySize));
+        ReadyPaymentResult payment = paymentReadyCreator.createReadyPayment(new CreateReadyPaymentCommand(
                 memberId, timeSlotId, null, PaymentPurpose.CREATE, partySize, amount));
 
         return ReservationPrepareResponse.from(payment);
@@ -105,44 +98,35 @@ public class ReservationService {
         }
 
         // 최초 예약과 동일하게 대상 회차를 잠가 동시 참여 요청의 좌석 계산을 직렬화한다.
-        TimeSlot timeSlot = lockTimeSlotOrThrow(reservation.getTimeSlotId());
-        TableInfoProjection tableInfo = findTableInfoOrThrow(timeSlot.getSharedTableId());
+        TimeSlotLockResult timeSlot = lockTimeSlotOrThrow(reservation.getTimeSlotId());
 
         Instant now = clock.instant();
         boolean alreadyParticipating = reservationParticipantRepository
                 .existsByReservationIdAndMemberIdAndParticipationStatus(
                         reservationId, memberId, ParticipationStatus.RESERVED);
-        boolean hasPendingJoinReady = paymentRepository
-                .existsByReservationIdAndMemberIdAndPaymentStatusAndExpiresAtAfter(
-                        reservationId, memberId, PaymentStatus.READY, now);
+        boolean hasPendingJoinReady = paymentReadyCreator.existsValidJoinReady(reservationId, memberId, now);
         if (alreadyParticipating || hasPendingJoinReady) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
         }
 
         int currentParticipantCount = reservationParticipantRepository
                 .sumPartySizeByReservationIdAndParticipationStatusIn(reservationId, OCCUPYING_PARTICIPATION_STATUSES);
-        int heldPartySize = paymentRepository
-                .sumPartySizeByReservationIdAndPaymentStatusAndExpiresAtAfter(reservationId, PaymentStatus.READY, now);
-        int availableCapacity = tableInfo.getCapacity() - currentParticipantCount - heldPartySize;
+        int heldPartySize = paymentReadyCreator.sumHeldPartySize(reservationId, now);
+        int availableCapacity = timeSlot.capacity() - currentParticipantCount - heldPartySize;
 
         if (partySize > availableCapacity) {
             throw new CustomException(ReservationErrorCode.INSUFFICIENT_REMAINING_CAPACITY);
         }
 
-        BigDecimal amount = tableInfo.getDepositPerPerson().multiply(BigDecimal.valueOf(partySize));
-        Payment payment = paymentService.createReadyPayment(new CreateReadyPaymentCommand(
-                memberId, timeSlot.getId(), reservationId, PaymentPurpose.JOIN, partySize, amount));
+        BigDecimal amount = timeSlot.depositPerPerson().multiply(BigDecimal.valueOf(partySize));
+        ReadyPaymentResult payment = paymentReadyCreator.createReadyPayment(new CreateReadyPaymentCommand(
+                memberId, timeSlot.timeSlotId(), reservationId, PaymentPurpose.JOIN, partySize, amount));
 
         return ReservationPrepareResponse.from(payment);
     }
 
-    private TimeSlot lockTimeSlotOrThrow(Long timeSlotId) {
-        return timeSlotRepository.findByIdForUpdate(timeSlotId)
-                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
-    }
-
-    private TableInfoProjection findTableInfoOrThrow(Long sharedTableId) {
-        return timeSlotRepository.findTableInfo(sharedTableId)
+    private TimeSlotLockResult lockTimeSlotOrThrow(Long timeSlotId) {
+        return timeSlotLockPort.lockForReservation(timeSlotId)
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
     }
 }

@@ -10,27 +10,22 @@ import static org.mockito.Mockito.when;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
-import com.bobfull.paymenttemp.dto.CreateReadyPaymentCommand;
-import com.bobfull.paymenttemp.entity.Payment;
-import com.bobfull.paymenttemp.entity.PaymentPurpose;
-import com.bobfull.paymenttemp.entity.PaymentStatus;
-import com.bobfull.paymenttemp.repository.PaymentRepository;
-import com.bobfull.paymenttemp.service.PaymentService;
 import com.bobfull.reservation.dto.ReservationPrepareRequest;
 import com.bobfull.reservation.dto.ReservationPrepareResponse;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.port.PaymentPurpose;
+import com.bobfull.reservation.port.PaymentReadyCreator;
+import com.bobfull.reservation.port.ReadyPaymentResult;
+import com.bobfull.reservation.port.TimeSlotLockPort;
+import com.bobfull.reservation.port.TimeSlotLockResult;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
-import com.bobfull.timeslottemp.entity.TimeSlot;
-import com.bobfull.timeslottemp.repository.TableInfoProjection;
-import com.bobfull.timeslottemp.repository.TimeSlotRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,11 +43,10 @@ class ReservationServiceTest {
     );
     private static final Long MEMBER_ID = 1L;
     private static final Long TIME_SLOT_ID = 10L;
-    private static final Long SHARED_TABLE_ID = 20L;
     private static final Long RESERVATION_ID = 30L;
 
     @Mock
-    private TimeSlotRepository timeSlotRepository;
+    private TimeSlotLockPort timeSlotLockPort;
 
     @Mock
     private ReservationRepository reservationRepository;
@@ -61,24 +55,17 @@ class ReservationServiceTest {
     private ReservationParticipantRepository reservationParticipantRepository;
 
     @Mock
-    private PaymentRepository paymentRepository;
-
-    @Mock
-    private PaymentService paymentService;
-
-    @Mock
-    private TableInfoProjection tableInfoProjection;
+    private PaymentReadyCreator paymentReadyCreator;
 
     private ReservationService reservationService;
 
     @BeforeEach
     void setUp() {
         reservationService = new ReservationService(
-                timeSlotRepository,
+                timeSlotLockPort,
                 reservationRepository,
                 reservationParticipantRepository,
-                paymentRepository,
-                paymentService,
+                paymentReadyCreator,
                 FIXED_CLOCK
         );
     }
@@ -86,24 +73,20 @@ class ReservationServiceTest {
     @Test
     void CREATE_자리가_있으면_READY_결제를_생성한다() {
         // given
-        TimeSlot timeSlot = timeSlot(TIME_SLOT_ID, SHARED_TABLE_ID);
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.of(timeSlot));
-        when(timeSlotRepository.findTableInfo(SHARED_TABLE_ID)).thenReturn(Optional.of(tableInfoProjection));
-        when(tableInfoProjection.getCapacity()).thenReturn(4);
-        when(tableInfoProjection.getDepositPerPerson()).thenReturn(BigDecimal.valueOf(10000));
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID))
+                .thenReturn(Optional.of(timeSlotLockResult(4, BigDecimal.valueOf(10000))));
         when(reservationRepository.existsByTimeSlotIdAndReservationStatusIn(any(), any())).thenReturn(false);
-        when(paymentRepository.existsByTimeSlotIdAndPaymentPurposeAndPaymentStatusAndExpiresAtAfter(
-                any(), any(), any(), any())).thenReturn(false);
+        when(paymentReadyCreator.existsValidCreateReady(any(), any())).thenReturn(false);
 
-        Payment readyPayment = readyPayment(PaymentPurpose.CREATE, TIME_SLOT_ID, null, 3, BigDecimal.valueOf(30000));
-        when(paymentService.createReadyPayment(any())).thenReturn(readyPayment);
+        ReadyPaymentResult readyPayment = readyPaymentResult(BigDecimal.valueOf(30000));
+        when(paymentReadyCreator.createReadyPayment(any())).thenReturn(readyPayment);
 
         // when
         ReservationPrepareResponse result = reservationService.prepare(
                 MEMBER_ID, new ReservationPrepareRequest(PaymentPurpose.CREATE, TIME_SLOT_ID, 3));
 
         // then
-        assertThat(result.paymentId()).isEqualTo(readyPayment.getId());
+        assertThat(result.paymentId()).isEqualTo(readyPayment.paymentId());
         assertThat(result.amount()).isEqualByComparingTo(BigDecimal.valueOf(30000));
         verify(reservationRepository, never()).save(any());
         verify(reservationParticipantRepository, never()).save(any());
@@ -112,10 +95,8 @@ class ReservationServiceTest {
     @Test
     void CREATE_partySize가_테이블_정원을_초과하면_INVALID_PARTY_SIZE를_반환하고_결제를_생성하지_않는다() {
         // given
-        TimeSlot timeSlot = timeSlot(TIME_SLOT_ID, SHARED_TABLE_ID);
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.of(timeSlot));
-        when(timeSlotRepository.findTableInfo(SHARED_TABLE_ID)).thenReturn(Optional.of(tableInfoProjection));
-        when(tableInfoProjection.getCapacity()).thenReturn(4);
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID))
+                .thenReturn(Optional.of(timeSlotLockResult(4, BigDecimal.valueOf(10000))));
 
         // when
         Throwable result = catchThrowable(() -> reservationService.prepare(
@@ -124,16 +105,14 @@ class ReservationServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_PARTY_SIZE);
-        verify(paymentService, never()).createReadyPayment(any());
+        verify(paymentReadyCreator, never()).createReadyPayment(any());
     }
 
     @Test
     void CREATE_활성_예약이_이미_있으면_ACTIVE_RESERVATION_ALREADY_EXISTS를_반환한다() {
         // given
-        TimeSlot timeSlot = timeSlot(TIME_SLOT_ID, SHARED_TABLE_ID);
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.of(timeSlot));
-        when(timeSlotRepository.findTableInfo(SHARED_TABLE_ID)).thenReturn(Optional.of(tableInfoProjection));
-        when(tableInfoProjection.getCapacity()).thenReturn(4);
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID))
+                .thenReturn(Optional.of(timeSlotLockResult(4, BigDecimal.valueOf(10000))));
         when(reservationRepository.existsByTimeSlotIdAndReservationStatusIn(any(), any())).thenReturn(true);
 
         // when
@@ -144,19 +123,16 @@ class ReservationServiceTest {
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode())
                 .isEqualTo(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
-        verify(paymentService, never()).createReadyPayment(any());
+        verify(paymentReadyCreator, never()).createReadyPayment(any());
     }
 
     @Test
     void CREATE_만료되지_않은_CREATE_READY가_이미_있으면_ACTIVE_RESERVATION_ALREADY_EXISTS를_반환한다() {
         // given
-        TimeSlot timeSlot = timeSlot(TIME_SLOT_ID, SHARED_TABLE_ID);
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.of(timeSlot));
-        when(timeSlotRepository.findTableInfo(SHARED_TABLE_ID)).thenReturn(Optional.of(tableInfoProjection));
-        when(tableInfoProjection.getCapacity()).thenReturn(4);
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID))
+                .thenReturn(Optional.of(timeSlotLockResult(4, BigDecimal.valueOf(10000))));
         when(reservationRepository.existsByTimeSlotIdAndReservationStatusIn(any(), any())).thenReturn(false);
-        when(paymentRepository.existsByTimeSlotIdAndPaymentPurposeAndPaymentStatusAndExpiresAtAfter(
-                any(), any(), any(), any())).thenReturn(true);
+        when(paymentReadyCreator.existsValidCreateReady(any(), any())).thenReturn(true);
 
         // when
         Throwable result = catchThrowable(() -> reservationService.prepare(
@@ -166,13 +142,13 @@ class ReservationServiceTest {
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode())
                 .isEqualTo(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
-        verify(paymentService, never()).createReadyPayment(any());
+        verify(paymentReadyCreator, never()).createReadyPayment(any());
     }
 
     @Test
     void CREATE_대상_회차가_없으면_RESOURCE_NOT_FOUND를_반환한다() {
         // given
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.empty());
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID)).thenReturn(Optional.empty());
 
         // when
         Throwable result = catchThrowable(() -> reservationService.prepare(
@@ -188,31 +164,25 @@ class ReservationServiceTest {
         // given
         Reservation reservation = reservation(RESERVATION_ID, TIME_SLOT_ID, 99L);
         when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
-
-        TimeSlot timeSlot = timeSlot(TIME_SLOT_ID, SHARED_TABLE_ID);
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.of(timeSlot));
-        when(timeSlotRepository.findTableInfo(SHARED_TABLE_ID)).thenReturn(Optional.of(tableInfoProjection));
-        when(tableInfoProjection.getCapacity()).thenReturn(4);
-        when(tableInfoProjection.getDepositPerPerson()).thenReturn(BigDecimal.valueOf(10000));
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID))
+                .thenReturn(Optional.of(timeSlotLockResult(4, BigDecimal.valueOf(10000))));
 
         when(reservationParticipantRepository.existsByReservationIdAndMemberIdAndParticipationStatus(
                 RESERVATION_ID, MEMBER_ID, ParticipationStatus.RESERVED)).thenReturn(false);
-        when(paymentRepository.existsByReservationIdAndMemberIdAndPaymentStatusAndExpiresAtAfter(
-                any(), any(), any(), any())).thenReturn(false);
+        when(paymentReadyCreator.existsValidJoinReady(any(), any(), any())).thenReturn(false);
         when(reservationParticipantRepository.sumPartySizeByReservationIdAndParticipationStatusIn(any(), any()))
                 .thenReturn(1);
-        when(paymentRepository.sumPartySizeByReservationIdAndPaymentStatusAndExpiresAtAfter(any(), any(), any()))
-                .thenReturn(0);
+        when(paymentReadyCreator.sumHeldPartySize(any(), any())).thenReturn(0);
 
-        Payment readyPayment = readyPayment(PaymentPurpose.JOIN, TIME_SLOT_ID, RESERVATION_ID, 2, BigDecimal.valueOf(20000));
-        when(paymentService.createReadyPayment(any())).thenReturn(readyPayment);
+        ReadyPaymentResult readyPayment = readyPaymentResult(BigDecimal.valueOf(20000));
+        when(paymentReadyCreator.createReadyPayment(any())).thenReturn(readyPayment);
 
         // when
         ReservationPrepareResponse result = reservationService.prepare(
                 MEMBER_ID, new ReservationPrepareRequest(PaymentPurpose.JOIN, RESERVATION_ID, 2));
 
         // then
-        assertThat(result.paymentId()).isEqualTo(readyPayment.getId());
+        assertThat(result.paymentId()).isEqualTo(readyPayment.paymentId());
         verify(reservationRepository, never()).save(any());
         verify(reservationParticipantRepository, never()).save(any());
     }
@@ -222,21 +192,16 @@ class ReservationServiceTest {
         // given
         Reservation reservation = reservation(RESERVATION_ID, TIME_SLOT_ID, 99L);
         when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
-
-        TimeSlot timeSlot = timeSlot(TIME_SLOT_ID, SHARED_TABLE_ID);
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.of(timeSlot));
-        when(timeSlotRepository.findTableInfo(SHARED_TABLE_ID)).thenReturn(Optional.of(tableInfoProjection));
-        when(tableInfoProjection.getCapacity()).thenReturn(4);
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID))
+                .thenReturn(Optional.of(timeSlotLockResult(4, BigDecimal.valueOf(10000))));
 
         when(reservationParticipantRepository.existsByReservationIdAndMemberIdAndParticipationStatus(
                 any(), any(), any())).thenReturn(false);
-        when(paymentRepository.existsByReservationIdAndMemberIdAndPaymentStatusAndExpiresAtAfter(
-                any(), any(), any(), any())).thenReturn(false);
+        when(paymentReadyCreator.existsValidJoinReady(any(), any(), any())).thenReturn(false);
         // 현재 참여 인원 3 + 임시 선점 1 = availableCapacity 0
         when(reservationParticipantRepository.sumPartySizeByReservationIdAndParticipationStatusIn(any(), any()))
                 .thenReturn(3);
-        when(paymentRepository.sumPartySizeByReservationIdAndPaymentStatusAndExpiresAtAfter(any(), any(), any()))
-                .thenReturn(1);
+        when(paymentReadyCreator.sumHeldPartySize(any(), any())).thenReturn(1);
 
         // when
         Throwable result = catchThrowable(() -> reservationService.prepare(
@@ -246,7 +211,7 @@ class ReservationServiceTest {
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode())
                 .isEqualTo(ReservationErrorCode.INSUFFICIENT_REMAINING_CAPACITY);
-        verify(paymentService, never()).createReadyPayment(any());
+        verify(paymentReadyCreator, never()).createReadyPayment(any());
     }
 
     @Test
@@ -254,10 +219,8 @@ class ReservationServiceTest {
         // given
         Reservation reservation = reservation(RESERVATION_ID, TIME_SLOT_ID, 99L);
         when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
-
-        TimeSlot timeSlot = timeSlot(TIME_SLOT_ID, SHARED_TABLE_ID);
-        when(timeSlotRepository.findByIdForUpdate(TIME_SLOT_ID)).thenReturn(Optional.of(timeSlot));
-        when(timeSlotRepository.findTableInfo(SHARED_TABLE_ID)).thenReturn(Optional.of(tableInfoProjection));
+        when(timeSlotLockPort.lockForReservation(TIME_SLOT_ID))
+                .thenReturn(Optional.of(timeSlotLockResult(4, BigDecimal.valueOf(10000))));
 
         when(reservationParticipantRepository.existsByReservationIdAndMemberIdAndParticipationStatus(
                 RESERVATION_ID, MEMBER_ID, ParticipationStatus.RESERVED)).thenReturn(true);
@@ -269,7 +232,7 @@ class ReservationServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
-        verify(paymentService, never()).createReadyPayment(any());
+        verify(paymentReadyCreator, never()).createReadyPayment(any());
     }
 
     @Test
@@ -285,8 +248,8 @@ class ReservationServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
-        verify(timeSlotRepository, never()).findByIdForUpdate(anyLong());
-        verify(paymentService, never()).createReadyPayment(any());
+        verify(timeSlotLockPort, never()).lockForReservation(anyLong());
+        verify(paymentReadyCreator, never()).createReadyPayment(any());
     }
 
     @Test
@@ -303,7 +266,7 @@ class ReservationServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
-        verify(paymentService, never()).createReadyPayment(any());
+        verify(paymentReadyCreator, never()).createReadyPayment(any());
     }
 
     @Test
@@ -320,30 +283,17 @@ class ReservationServiceTest {
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.RESOURCE_NOT_FOUND);
     }
 
-    private TimeSlot timeSlot(Long id, Long sharedTableId) {
-        TimeSlot timeSlot = TimeSlot.create(sharedTableId, Instant.parse("2026-07-27T09:00:00Z"),
-                Instant.parse("2026-07-27T11:00:00Z"));
-        ReflectionTestUtils.setField(timeSlot, "id", id);
-        return timeSlot;
-    }
-
     private Reservation reservation(Long id, Long timeSlotId, Long creatorMemberId) {
         Reservation reservation = Reservation.create(timeSlotId, creatorMemberId);
         ReflectionTestUtils.setField(reservation, "id", id);
         return reservation;
     }
 
-    private Payment readyPayment(PaymentPurpose purpose, Long timeSlotId, Long reservationId, int partySize, BigDecimal amount) {
-        return Payment.createReady(
-                "PAY-20260727-TEST0001",
-                MEMBER_ID,
-                timeSlotId,
-                reservationId,
-                purpose,
-                partySize,
-                amount,
-                "KRW",
-                FIXED_CLOCK.instant().plusSeconds(600)
-        );
+    private TimeSlotLockResult timeSlotLockResult(int capacity, BigDecimal depositPerPerson) {
+        return new TimeSlotLockResult(ReservationServiceTest.TIME_SLOT_ID, capacity, depositPerPerson);
+    }
+
+    private ReadyPaymentResult readyPaymentResult(BigDecimal amount) {
+        return new ReadyPaymentResult("PAY-20260727-TEST0001", "READY", amount, FIXED_CLOCK.instant().plusSeconds(600));
     }
 }
