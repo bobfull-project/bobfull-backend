@@ -112,6 +112,8 @@ PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 �
 
 PR 담당자는 PR 본문의 `Human 이해도` 질문에 직접 답한다.
 
+Human 이해도 질문은 신입 백엔드 기술면접 기본 개념 수준으로 작성하며, 강화 검토도 질문 난이도를 높이지 않는다. 질문 수·난이도·허용·금지·자기 검증·응답 처리의 상세 기준은 `docs/AI_REVIEW_GUIDE.md`를 따른다.
+
 담당자 AI는 Human 답변을 최신 코드와 대조하고 다음 항목만 작성한다.
 
 - `AI 답변 검토`: `일치 | 보완 필요 | 미작성`
@@ -150,6 +152,7 @@ PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 A
 | AI 전체 절차 | `docs/AI_WORKFLOW.md` |
 | 담당자 AI 실행 | `docs/AI_IMPLEMENTATION_GUIDE.md` |
 | 담당자 AI PR 검토·리뷰 반영 | `docs/AI_REVIEW_GUIDE.md` |
+| Human 이해도 질문 난이도·생성 | `docs/AI_REVIEW_GUIDE.md` |
 | 코드 작성 | `docs/CODE_CONVENTION.md` |
 | 테스트·증거 | `docs/TEST_CONVENTION.md` |
 | Git·PR·Merge | `docs/GITHUB_RULES.md` |

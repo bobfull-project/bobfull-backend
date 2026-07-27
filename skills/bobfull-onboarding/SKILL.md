@@ -39,6 +39,7 @@ description: BobFull 저장소에서 처음 작업하거나 새로운 Issue를 �
 - 데이터 모델: [ERD](../../docs/ERD.md)
 - 책임 경계: [ARCHITECTURE](../../docs/ARCHITECTURE.md), [DOMAIN_DEPENDENCIES](../../docs/DOMAIN_DEPENDENCIES.md)
 - 구현·리뷰 절차: [AI_WORKFLOW](../../docs/AI_WORKFLOW.md), [AI_IMPLEMENTATION_GUIDE](../../docs/AI_IMPLEMENTATION_GUIDE.md), [AI_REVIEW_GUIDE](../../docs/AI_REVIEW_GUIDE.md)
+- Human 이해도 질문 난이도·생성 기준: [AI_REVIEW_GUIDE](../../docs/AI_REVIEW_GUIDE.md)
 - Git·Issue·PR 규칙: [GITHUB_RULES](../../docs/GITHUB_RULES.md), [ISSUE_TITLE_RULES](../../docs/ISSUE_TITLE_RULES.md)
 - 공통 구현 기준: [CODE_CONVENTION](../../docs/CODE_CONVENTION.md), [COMMON_SKELETON_GUIDE](../../docs/COMMON_SKELETON_GUIDE.md), [TEST_CONVENTION](../../docs/TEST_CONVENTION.md)
 - 기술 결정: [ADR 목록](../../docs/adr/README.md)과 현재 작업에 관련된 개별 ADR
