@@ -9,7 +9,7 @@
 담당자 AI의 검토는 다음을 수행한다.
 
 - 최신 Head의 실제 Diff 자체 검토
-- Issue 계약·승인 기록·PR 설명 정합성 확인
+- Issue 댓글의 최종 계약·현재 상태 Label·PR 설명 정합성 확인
 - 테스트·build·직접 검증 증거 확인
 - 담당자 Human 이해도 답변 검증과 `AI 보완 설명` 작성
 - Human 리뷰 확인
@@ -19,13 +19,15 @@
 
 ## 2. 실행과 시작 조건
 
-연결된 PR이 존재하는 Issue에 다음 명령을 사용한다.
+연결된 PR의 검토·리뷰 반영에는 다음 명령을 사용한다.
 
 ```text
-Issue #번호 구현하라
+PR #번호 검토하라
 ```
 
-담당자 AI는 Issue와 PR 상태를 읽고 PR 검토·리뷰 반영 단계부터 재개한다.
+담당자 AI는 PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약, 현재 `status:*` Label과 PR 상태를 읽고 PR 검토·리뷰 반영 단계부터 재개한다.
+PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 입력하도록 요구하지 않는다.
+실제 상태는 GitHub `status:*` Label 하나로만 관리하며, 상태 전환 전 기존 `status:*` Label을 모두 제거하고 새 Label 하나만 적용한다.
 
 ### 최소 검토 조건
 
@@ -33,12 +35,12 @@ Issue #번호 구현하라
 
 1. 최신 Head Commit SHA
 2. 최신 Head의 실제 Diff
-3. 해당 PR의 Issue 또는 작업 범위
+3. 해당 PR의 연결된 모든 Issue 또는 작업 범위
 
 다음 상태는 검토 중단 사유가 아니다.
 
 - PR이 Draft 또는 구현 중임
-- Issue 계약·승인 기록이 미완료임
+- Issue 댓글의 최종 계약 기록 또는 상태 Label이 미완료임
 - 테스트·build가 실패함
 - 테스트·직접 검증·CI가 미실행임
 - `FAIL`, `HOLD`, `NOT_RUN`이 존재함
@@ -55,9 +57,9 @@ Issue #번호 구현하라
 
 가능한 범위에서 다음을 확인한다.
 
-- 최종 Issue 계약
-- 담당자 AI가 Issue에 남긴 `HUMAN_APPROVED` 기록
-- 승인 이후 계약 변경 여부
+- 연결된 모든 Issue의 최종 계약
+- 담당자 AI가 각 Issue 댓글에 남긴 최종 계약과 `status:in-progress` 기록
+- 최종 계약 이후 변경 여부
 - PR 본문
 - 최신 실제 Diff
 - 관련 코드와 테스트
@@ -73,12 +75,13 @@ Issue #번호 구현하라
 
 ### 기본 검토
 
-- Issue 범위·제외 범위·완료 조건
-- Issue 최종 계약과 구현 승인 기록의 연결
-- 승인 이후 계약 변경 여부
+- 연결된 모든 Issue의 범위·제외 범위·완료 조건
+- 각 Issue 댓글의 최종 계약과 `status:in-progress` 기록의 연결
+- 최종 계약 이후 변경 여부
 - 요청부터 응답·저장까지 실제 코드 흐름
 - 입력 검증과 예외 처리
 - 코드와 PR 설명의 일치
+- PR 본문의 변경 범위·변경 파일·검증 기록이 최신 실제 Diff와 실행 결과에 일치하는지
 - 테스트와 완료 조건의 연결
 - 실제 실행 결과와 미검증 범위
 - 범위 밖 변경과 불필요한 복잡성
@@ -156,9 +159,12 @@ PR에 등록된 모든 리뷰·댓글은 선택적 참고 입력이다. 특정 �
 
 처리:
 
+- 실제 파일 수정 시작 전 연결된 모든 Issue의 기존 `status:*` Label을 제거하고 `status:in-progress` 하나 적용
 - 수정
 - 영향받는 테스트·build·직접 검증 재실행
 - PR 기록 갱신
+
+PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 수정·검증·Push·최신 Head 자체 검토가 끝나면 연결된 모든 Issue의 기존 `status:*` Label을 제거하고 `status:final-human-review` 하나만 적용한다.
 
 ### 설명 또는 확인 요청
 
@@ -244,16 +250,20 @@ PR 본문의 `담당자 AI 검토·수정 기록`에 다음을 작성한다.
 
 ## 11. Merge 전 경계
 
-다음이 충족돼야 담당자 AI가 `FINAL_HUMAN_REVIEW`로 보고할 수 있다.
+다음이 충족돼야 담당자 AI가 연결된 모든 Issue에 `status:final-human-review`를 적용하고 Human 최종 리뷰를 요청할 수 있다.
 
 - 담당자 Human 답변과 AI 검토 완료
-- Human 리뷰의 최신 Head 재확인 상태 확인
 - 필수 테스트·build·직접 검증 결과 확인
 - 최신 Head 기준 담당자 AI 검토 완료
 - 해결되지 않은 BLOCKER 없음
 - 남은 Human 결정 필요 사항 명시
+- `DOMAIN_DEPENDENCIES.md` §5 정책 변경 영향표에 해당하는 변경은 §6의 관련 체크 항목을 구현·PR 검토에서 확인
+- 기존 최종 계약 안에서 수정 가능한 미해결 항목은 `status:in-progress`에서 수정·재검증하고, 새로운 Human 결정이 필요한 경우에만 `status:human-answer-required`로 전환
 
-GitHub Rules의 Approve 조건과 Merge 결정은 Human이 담당한다.
+`status:final-human-review`는 Human 리뷰를 기다리는 상태이므로 Human 리뷰의 최신 Head 재확인은
+이 Label을 적용하는 선행 조건이 아니라 Ready 전환과 Merge 전 확인 조건이다.
+
+GitHub Rules의 Human 리뷰·Approve 조건과 Merge 결정은 Human이 담당한다.
 
 ## 12. 금지 사항
 
