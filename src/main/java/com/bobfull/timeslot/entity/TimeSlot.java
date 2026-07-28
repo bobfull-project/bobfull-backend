@@ -7,13 +7,23 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import org.hibernate.annotations.GeneratedColumn;
 
 /**
  * 합석 테이블에서 예약 가능한 단일 회차다(docs/ERD.md 4.4).
  */
 @Entity
-@Table(name = "time_slot")
+@Table(
+        name = "time_slot",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_time_slot_active_start",
+                        columnNames = {"shared_table_id", "active_start_at"}
+                )
+        }
+)
 public class TimeSlot extends BaseTimeEntity {
 
     @Id
@@ -29,6 +39,10 @@ public class TimeSlot extends BaseTimeEntity {
 
     @Column(name = "end_at", nullable = false)
     private Instant endAt;
+
+    @GeneratedColumn("case when deleted_at is null then start_at else null end")
+    @Column(name = "active_start_at", insertable = false, updatable = false)
+    private Instant activeStartAt;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;

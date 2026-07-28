@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -41,6 +42,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -82,7 +84,7 @@ class TimeSlotServiceTest {
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
         given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNull(100L, seoulInstant("2026-08-01T11:00:00")))
                 .willReturn(false);
-        given(timeSlotRepository.save(any(TimeSlot.class))).willAnswer(invocation -> {
+        given(timeSlotRepository.saveAndFlush(any(TimeSlot.class))).willAnswer(invocation -> {
             TimeSlot timeSlot = invocation.getArgument(0);
             ReflectionTestUtils.setField(timeSlot, "id", 200L);
             return timeSlot;
@@ -93,7 +95,7 @@ class TimeSlotServiceTest {
 
         // then
         ArgumentCaptor<TimeSlot> captor = ArgumentCaptor.forClass(TimeSlot.class);
-        verify(timeSlotRepository).save(captor.capture());
+        verify(timeSlotRepository).saveAndFlush(captor.capture());
         assertThat(response.sessionId()).isEqualTo(200L);
         assertThat(captor.getValue().getSharedTableId()).isEqualTo(100L);
         assertThat(captor.getValue().getStartAt()).isEqualTo(Instant.parse("2026-08-01T02:00:00Z"));
@@ -116,7 +118,27 @@ class TimeSlotServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
-        verify(timeSlotRepository, never()).save(any());
+        verify(timeSlotRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void DB_활성_회차_중복_제약이_발생하면_409_예외로_변환한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNull(100L, seoulInstant("2026-08-01T11:00:00")))
+                .willReturn(false);
+        given(timeSlotRepository.saveAndFlush(any(TimeSlot.class)))
+                .willThrow(new DataIntegrityViolationException("duplicate active dining session"));
+
+        // when
+        Throwable result = catchThrowable(() -> timeSlotService().register(1L, 100L, request()));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
     }
 
     @Test
@@ -137,7 +159,7 @@ class TimeSlotServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
-        verify(timeSlotRepository, never()).save(any());
+        verify(timeSlotRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -160,7 +182,7 @@ class TimeSlotServiceTest {
 
         // then
         ArgumentCaptor<List<TimeSlot>> captor = ArgumentCaptor.forClass(List.class);
-        verify(timeSlotRepository).saveAll(captor.capture());
+        verify(timeSlotRepository).saveAllAndFlush(captor.capture());
         assertThat(response.tableId()).isEqualTo(100L);
         assertThat(response.createdSessionCount()).isEqualTo(2);
         assertThat(captor.getValue()).hasSize(2);
@@ -185,7 +207,7 @@ class TimeSlotServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
-        verify(timeSlotRepository, never()).saveAll(any());
+        verify(timeSlotRepository, never()).saveAllAndFlush(any());
     }
 
     @Test
@@ -212,7 +234,7 @@ class TimeSlotServiceTest {
 
         // then
         ArgumentCaptor<List<TimeSlot>> captor = ArgumentCaptor.forClass(List.class);
-        verify(timeSlotRepository).saveAll(captor.capture());
+        verify(timeSlotRepository).saveAllAndFlush(captor.capture());
         assertThat(response.tableId()).isEqualTo(100L);
         assertThat(response.capacity()).isEqualTo(4);
         assertThat(response.createdSessionCount()).isEqualTo(8);
@@ -313,8 +335,34 @@ class TimeSlotServiceTest {
 
         // then
         verify(timeSlotReservationValidator).validateChangeAllowed(200L);
+        verify(timeSlotRepository).flush();
         assertThat(timeSlot.getStartAt()).isEqualTo(seoulInstant("2026-08-01T12:00:00"));
         assertThat(timeSlot.getEndAt()).isEqualTo(seoulInstant("2026-08-01T14:00:00"));
+    }
+
+    @Test
+    void 회차_수정_중_DB_활성_회차_중복_제약이_발생하면_409_예외로_변환한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        TimeSlot timeSlot = timeSlot(200L, 100L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNullAndIdNot(
+                100L, seoulInstant("2026-08-01T12:00:00"), 200L)).willReturn(false);
+        willThrow(new DataIntegrityViolationException("duplicate active dining session"))
+                .given(timeSlotRepository).flush();
+
+        // when
+        Throwable result = catchThrowable(() -> timeSlotService().update(1L, 200L, new DiningSessionRequest(
+                LocalDateTime.of(2026, 8, 1, 12, 0),
+                LocalDateTime.of(2026, 8, 1, 14, 0)
+        )));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
     }
 
     @Test

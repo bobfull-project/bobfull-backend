@@ -71,6 +71,7 @@ erDiagram
         bigint shared_table_id FK "대상 테이블"
         datetime start_at "회차 시작 시각"
         datetime end_at "회차 종료 시각"
+        datetime active_start_at "활성 중복 방지용 생성 컬럼"
         datetime deleted_at "소프트 삭제 시각"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
@@ -227,10 +228,11 @@ erDiagram
 | `time_slot_id` | BIGINT | N | PK | 회차 식별자 |
 | `shared_table_id` | BIGINT | N | FK → `shared_table.shared_table_id`, INDEX | 대상 테이블 |
 | `start_at`, `end_at` | DATETIME | N | `end_at > start_at` | 회차 시작·종료 시각 |
+| `active_start_at` | DATETIME | Y | GENERATED, UNIQUE 후보 일부 | 활성 회차 중복 방지용 생성 컬럼. `deleted_at IS NULL`이면 `start_at`, 삭제된 회차는 NULL. API 입력·응답 값이 아니다 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
-동일 테이블의 동일 날짜·시작 시간 중복은 `deleted_at IS NULL`인 활성 회차끼리만 금지한다. 삭제된 회차 이력은 보존하지만, 같은 테이블·같은 시작 시각의 신규 회차를 다시 생성할 수 있다.
+동일 테이블의 동일 날짜·시작 시간 중복은 `deleted_at IS NULL`인 활성 회차끼리만 금지한다. 삭제된 회차 이력은 보존하지만, 같은 테이블·같은 시작 시각의 신규 회차를 다시 생성할 수 있다. DB 강제는 `active_start_at = CASE WHEN deleted_at IS NULL THEN start_at ELSE NULL END` 생성 컬럼과 `UNIQUE(shared_table_id, active_start_at)` 조합으로 적용한다.
 
 ### 4.5 `reservation`
 
@@ -365,7 +367,7 @@ erDiagram
 | `member.phone_number` | 전화번호 중복 금지 | DB UNIQUE |
 | `member.business_number` | 사업자등록번호 중복 금지 | DB UNIQUE. MEMBER의 NULL은 중복 허용, 값이 있으면 중복 금지 |
 | `restaurant.owner_member_id` | 소유자는 OWNER여야 함 | FK + 애플리케이션 역할 검증 |
-| 활성 `time_slot` | 동일 테이블·동일 시작 시각 활성 회차 중복 금지 | `deleted_at IS NULL`인 회차만 중복 금지. 삭제된 회차와 같은 시작 시각은 재생성 가능. MySQL에서 DB 강제까지 적용하려면 활성 여부 generated column 기반 UNIQUE를 검토하고, 최소 구현은 SharedTable 행 잠금 후 활성 TimeSlot 조회로 검증 |
+| 활성 `time_slot` | 동일 테이블·동일 시작 시각 활성 회차 중복 금지 | `deleted_at IS NULL`인 회차만 중복 금지. 삭제된 회차와 같은 시작 시각은 재생성 가능. `active_start_at` generated column + `UNIQUE(shared_table_id, active_start_at)`로 DB에서 활성 회차 중복을 강제 |
 | 활성 `reservation.time_slot_id` | 회차당 활성 합석 예약 1건 | DB 단순 UNIQUE로 보장하지 않는다. TimeSlot 행 비관적 락과 `RECRUITING`·`CONFIRMED` Reservation 조회를 같은 트랜잭션에서 수행; `CANCELLED` 이력은 유지 |
 | 유효 CREATE READY Payment | 회차당 최초 예약 결제 준비 1건 | TimeSlot 행 잠금 뒤 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 조회; 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS` |
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
@@ -460,7 +462,7 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | `member` | `UNIQUE(email)`, `UNIQUE(phone_number)`, `UNIQUE(business_number)` | 로그인·이메일·전화번호·사업자등록번호 중복 검증 |
 | `restaurant` | `(owner_member_id)` | 내 식당 목록·소유권 확인 |
 | `shared_table` | `(restaurant_id)` | 식당별 테이블 조회 |
-| `time_slot` | `(shared_table_id, start_at, deleted_at)` + 활성 회차 중복 검증 | 회차 조회·활성 중복 방지. 삭제 후 같은 시간 재생성을 허용하므로 단순 `UNIQUE(shared_table_id, start_at)`는 사용하지 않음 |
+| `time_slot` | `(shared_table_id, start_at, deleted_at)`, `UNIQUE(shared_table_id, active_start_at)` | 회차 조회·활성 중복 방지. 삭제 후 같은 시간 재생성을 허용하므로 단순 `UNIQUE(shared_table_id, start_at)`는 사용하지 않음 |
 | `reservation` | `(time_slot_id, reservation_status)`, `(reservation_status, recruitment_status)` | 활성 Reservation 조회·모집 예약 검색; `time_slot_id` 단순 UNIQUE 미사용 |
 | `reservation_participant` | `UNIQUE(reservation_id, member_id)`, `(member_id)` | 중복 참여 방지·내 예약 조회 |
 | `payment` | `UNIQUE(portone_payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)` | 외부 결제 식별자 조회·임시 선점 계산·만료 처리 |

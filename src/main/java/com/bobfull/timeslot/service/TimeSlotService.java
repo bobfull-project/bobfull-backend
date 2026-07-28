@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -78,7 +79,7 @@ public class TimeSlotService {
         TimeRange timeRange = toTimeRange(request.startAt(), request.endAt());
         validateActiveDuplicate(sharedTable.getId(), timeRange.startAt());
 
-        TimeSlot savedTimeSlot = timeSlotRepository.save(
+        TimeSlot savedTimeSlot = saveTimeSlotOrThrowDuplicate(
                 TimeSlot.create(sharedTable.getId(), timeRange.startAt(), timeRange.endAt()));
         return DiningSessionIdResponse.from(savedTimeSlot);
     }
@@ -98,7 +99,7 @@ public class TimeSlotService {
         List<TimeSlot> timeSlots = timeRanges.stream()
                 .map(timeRange -> TimeSlot.create(sharedTable.getId(), timeRange.startAt(), timeRange.endAt()))
                 .toList();
-        timeSlotRepository.saveAll(timeSlots);
+        saveAllTimeSlotsOrThrowDuplicate(timeSlots);
         return new DiningSessionBulkResponse(sharedTable.getId(), timeSlots.size());
     }
 
@@ -167,6 +168,7 @@ public class TimeSlotService {
         validateActiveDuplicateForUpdate(sharedTable.getId(), timeRange.startAt(), timeSlot.getId());
 
         timeSlot.update(timeRange.startAt(), timeRange.endAt());
+        flushTimeSlotOrThrowDuplicate();
         return DiningSessionIdResponse.from(timeSlot);
     }
 
@@ -199,7 +201,7 @@ public class TimeSlotService {
         List<TimeSlot> timeSlots = timeRanges.stream()
                 .map(timeRange -> TimeSlot.create(sharedTable.getId(), timeRange.startAt(), timeRange.endAt()))
                 .toList();
-        timeSlotRepository.saveAll(timeSlots);
+        saveAllTimeSlotsOrThrowDuplicate(timeSlots);
 
         return new DiningSessionTableBulkResponse(sharedTable.getId(), sharedTable.getCapacity(), timeSlots.size());
     }
@@ -302,6 +304,30 @@ public class TimeSlotService {
             if (!starts.add(timeRange.startAt())) {
                 throw new CustomException(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
             }
+        }
+    }
+
+    private TimeSlot saveTimeSlotOrThrowDuplicate(TimeSlot timeSlot) {
+        try {
+            return timeSlotRepository.saveAndFlush(timeSlot);
+        } catch (DataIntegrityViolationException exception) {
+            throw new CustomException(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
+        }
+    }
+
+    private void saveAllTimeSlotsOrThrowDuplicate(List<TimeSlot> timeSlots) {
+        try {
+            timeSlotRepository.saveAllAndFlush(timeSlots);
+        } catch (DataIntegrityViolationException exception) {
+            throw new CustomException(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
+        }
+    }
+
+    private void flushTimeSlotOrThrowDuplicate() {
+        try {
+            timeSlotRepository.flush();
+        } catch (DataIntegrityViolationException exception) {
+            throw new CustomException(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
         }
     }
 
