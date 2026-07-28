@@ -96,7 +96,8 @@ erDiagram
         datetime updated_at "수정 시각"
     }
     PAYMENT {
-        varchar(64) payment_id PK "PortOne 외부 결제 식별자"
+        bigint payment_id PK "Payment 내부 식별자"
+        varchar(64) portone_payment_id UK "PortOne 외부 결제 식별자"
         bigint member_id FK "결제 당사자"
         bigint time_slot_id FK "결제 준비 대상 회차"
         bigint reservation_id FK "CREATE의 READY 단계는 NULL 가능"
@@ -270,7 +271,8 @@ erDiagram
 
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
-| `payment_id` | VARCHAR(64) | N | PK, UNIQUE | PortOne 외부 결제 식별자 |
+| `payment_id` | BIGINT | N | PK, AUTO_INCREMENT | Payment 내부 식별자 |
+| `portone_payment_id` | VARCHAR(64) | N | UNIQUE | PortOne 결제 요청·조회·웹훅과 외부 API에 사용하는 식별자 |
 | `member_id` | BIGINT | N | FK → `member.member_id`, INDEX | 결제 당사자 |
 | `time_slot_id` | BIGINT | N | FK → `time_slot.time_slot_id`, INDEX | 결제 준비 대상 회차 |
 | `reservation_id` | BIGINT | Y | FK → `reservation.reservation_id`, INDEX | `CREATE`의 READY 단계에서는 NULL 가능 |
@@ -284,7 +286,7 @@ erDiagram
 | `paid_at` | DATETIME | Y |  | PAID 전환 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
-`payment_id`는 외부 식별자 중복을 막고 결제 완료 API·웹훅 멱등 처리의 기준이 된다. `CREATE`는 READY 생성 시 `reservation_id`, `reservation_participant_id`가 NULL이고, PAID 전환 후 생성된 예약·최초 참여자와 연결한다. 동일 `time_slot_id`에는 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 최대 1건만 허용한다. CREATE READY가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE READY를 생성할 수 있다. `JOIN`은 기존 예약을 참조하며 `availableCapacity`를 기준으로 별도 처리한다.
+`payment_id`는 DB 내부 PK이며 Java 필드 `id`에 매핑한다. `portone_payment_id`는 Java 필드 `paymentId`에 매핑하며, 외부 식별자 중복을 막고 결제 완료 API·웹훅 멱등 처리의 기준이 된다. `CREATE`는 READY 생성 시 `reservation_id`, `reservation_participant_id`가 NULL이고, PAID 전환 후 생성된 예약·최초 참여자와 연결한다. 동일 `time_slot_id`에는 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 최대 1건만 허용한다. CREATE READY가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE READY를 생성할 수 있다. `JOIN`은 기존 예약을 참조하며 `availableCapacity`를 기준으로 별도 처리한다.
 
 ### 4.8 `refund`
 
@@ -293,7 +295,7 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `refund_id` | BIGINT | N | PK | 환불 식별자 |
-| `payment_id` | VARCHAR(64) | N | FK → `payment.payment_id`, UNIQUE | 결제 전체 환불 대상 |
+| `payment_id` | BIGINT | N | FK → `payment.payment_id`, UNIQUE | Payment 내부 PK를 참조하는 결제 전체 환불 대상 |
 | `amount` | DECIMAL | N |  | 환불 금액 |
 | `refund_status` | VARCHAR(20) | N | 앱 Enum | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` |
 | `requested_at`, `completed_at` | DATETIME | Y |  | 요청·완료 시각 |
@@ -368,7 +370,8 @@ erDiagram
 | 유효 CREATE READY Payment | 회차당 최초 예약 결제 준비 1건 | TimeSlot 행 잠금 뒤 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 조회; 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS` |
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
 | `chat_room.reservation_id` | 예약당 채팅방 1개 | DB UNIQUE |
-| `payment.payment_id` | PortOne 외부 결제 식별자 중복 금지 | PK/UNIQUE + 상태 전이 멱등 처리 |
+| `payment.payment_id` | Payment 내부 식별자 | PK, AUTO_INCREMENT |
+| `payment.portone_payment_id` | PortOne 외부 결제 식별자 중복 금지 | DB UNIQUE + 상태 전이 멱등 처리 |
 | `payment.reservation_participant_id` | 참여자와 결제의 1:1 연결 | NULL 허용 UNIQUE |
 | `refund.payment_id` | 같은 결제의 중복 환불 요청 방지 | DB UNIQUE; 재시도는 상태 전이 |
 | `shared_table.capacity` | 허용 정원은 2·4·6·8 | DB CHECK 후보 + API 검증 |
@@ -460,7 +463,7 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | `time_slot` | `(shared_table_id, start_at, deleted_at)` + 활성 회차 중복 검증 | 회차 조회·활성 중복 방지. 삭제 후 같은 시간 재생성을 허용하므로 단순 `UNIQUE(shared_table_id, start_at)`는 사용하지 않음 |
 | `reservation` | `(time_slot_id, reservation_status)`, `(reservation_status, recruitment_status)` | 활성 Reservation 조회·모집 예약 검색; `time_slot_id` 단순 UNIQUE 미사용 |
 | `reservation_participant` | `UNIQUE(reservation_id, member_id)`, `(member_id)` | 중복 참여 방지·내 예약 조회 |
-| `payment` | `UNIQUE(payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)` | 결제 조회·임시 선점 계산·만료 처리 |
+| `payment` | `UNIQUE(portone_payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)` | 외부 결제 식별자 조회·임시 선점 계산·만료 처리 |
 | `refund` | `UNIQUE(payment_id)`, `(refund_status)` | 중복 환불 방지·실패 환불 조회 |
 | `chat_message` | `(chat_room_id, chat_message_id)` | messageId cursor 기반 과거 메시지 조회 |
 
