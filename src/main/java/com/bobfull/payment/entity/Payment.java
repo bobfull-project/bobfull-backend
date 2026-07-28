@@ -36,6 +36,12 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "time_slot_id", nullable = false)
     private Long timeSlotId;
 
+    @Column(name = "reservation_id")
+    private Long reservationId;
+
+    @Column(name = "reservation_participant_id", unique = true)
+    private Long reservationParticipantId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_purpose", nullable = false, length = 20)
     private PaymentPurpose purpose;
@@ -63,6 +69,7 @@ public class Payment extends BaseTimeEntity {
             String paymentId,
             Long memberId,
             Long timeSlotId,
+            Long reservationId,
             PaymentPurpose purpose,
             Integer partySize,
             BigDecimal amount,
@@ -71,6 +78,7 @@ public class Payment extends BaseTimeEntity {
         this.paymentId = paymentId;
         this.memberId = memberId;
         this.timeSlotId = timeSlotId;
+        this.reservationId = reservationId;
         this.purpose = purpose;
         this.partySize = partySize;
         this.amount = amount;
@@ -83,19 +91,21 @@ public class Payment extends BaseTimeEntity {
             String paymentId,
             Long memberId,
             Long timeSlotId,
+            Long reservationId,
             PaymentPurpose purpose,
             Integer partySize,
             BigDecimal amount,
             Instant expiresAt
     ) {
-        validateReadyCreation(paymentId, memberId, timeSlotId, purpose, partySize, amount, expiresAt);
-        return new Payment(paymentId, memberId, timeSlotId, purpose, partySize, amount, expiresAt);
+        validateReadyCreation(paymentId, memberId, timeSlotId, reservationId, purpose, partySize, amount, expiresAt);
+        return new Payment(paymentId, memberId, timeSlotId, reservationId, purpose, partySize, amount, expiresAt);
     }
 
     private static void validateReadyCreation(
             String paymentId,
             Long memberId,
             Long timeSlotId,
+            Long reservationId,
             PaymentPurpose purpose,
             Integer partySize,
             BigDecimal amount,
@@ -109,6 +119,12 @@ public class Payment extends BaseTimeEntity {
         }
         if (purpose == null || partySize == null || partySize <= 0) {
             throw new IllegalArgumentException("결제 목적과 partySize는 필수이며 partySize는 양수여야 합니다.");
+        }
+        if (purpose == PaymentPurpose.CREATE && reservationId != null) {
+            throw new IllegalArgumentException("CREATE 결제는 reservationId를 가질 수 없습니다.");
+        }
+        if (purpose == PaymentPurpose.JOIN && (reservationId == null || reservationId <= 0)) {
+            throw new IllegalArgumentException("JOIN 결제는 reservationId가 필요합니다.");
         }
         if (amount == null || amount.signum() <= 0) {
             throw new IllegalArgumentException("amount는 양수여야 합니다.");
@@ -132,6 +148,14 @@ public class Payment extends BaseTimeEntity {
 
     public Long getTimeSlotId() {
         return timeSlotId;
+    }
+
+    public Long getReservationId() {
+        return reservationId;
+    }
+
+    public Long getReservationParticipantId() {
+        return reservationParticipantId;
     }
 
     public PaymentPurpose getPurpose() {

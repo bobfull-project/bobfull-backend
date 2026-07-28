@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 public record CreateReadyPaymentCommand(
         Long memberId,
         Long timeSlotId,
+        Long reservationId,
         PaymentPurpose purpose,
         Integer partySize,
         BigDecimal amount

@@ -38,6 +38,7 @@ public class PaymentService implements ReadyPaymentCreator {
                 UUID.randomUUID().toString(),
                 command.memberId(),
                 command.timeSlotId(),
+                command.reservationId(),
                 command.purpose(),
                 command.partySize(),
                 command.amount(),

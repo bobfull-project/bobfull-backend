@@ -60,6 +60,7 @@ class PaymentServiceTest {
         Payment savedPayment = captor.getValue();
         assertThat(savedPayment.getMemberId()).isEqualTo(1L);
         assertThat(savedPayment.getTimeSlotId()).isEqualTo(10L);
+        assertThat(savedPayment.getReservationId()).isNull();
         assertThat(savedPayment.getPurpose()).isEqualTo(PaymentPurpose.CREATE);
         assertThat(savedPayment.getPartySize()).isEqualTo(2);
         assertThat(savedPayment.getAmount()).isEqualByComparingTo("30000");
@@ -78,6 +79,7 @@ class PaymentServiceTest {
                 "payment-id",
                 1L,
                 10L,
+                null,
                 PaymentPurpose.CREATE,
                 0,
                 BigDecimal.valueOf(30000),
@@ -88,11 +90,45 @@ class PaymentServiceTest {
                 "payment-id",
                 1L,
                 10L,
+                null,
                 PaymentPurpose.CREATE,
                 2,
                 BigDecimal.ZERO,
                 FIXED_NOW.plusSeconds(600)
         )).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> Payment.createReady(
+                "payment-id",
+                1L,
+                10L,
+                null,
+                PaymentPurpose.JOIN,
+                2,
+                BigDecimal.valueOf(30000),
+                FIXED_NOW.plusSeconds(600)
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void JOIN_READY_Payment을_생성하면_대상_Reservation을_저장한다() {
+        // given
+        given(paymentRepository.saveAndFlush(any(Payment.class))).willAnswer(invocation -> invocation.getArgument(0));
+        CreateReadyPaymentCommand command = new CreateReadyPaymentCommand(
+                1L,
+                10L,
+                20L,
+                PaymentPurpose.JOIN,
+                2,
+                BigDecimal.valueOf(30000)
+        );
+
+        // when
+        paymentService.createReadyPayment(command);
+
+        // then
+        ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        org.mockito.Mockito.verify(paymentRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getReservationId()).isEqualTo(20L);
     }
 
     @Test
@@ -113,6 +149,7 @@ class PaymentServiceTest {
         return new CreateReadyPaymentCommand(
                 1L,
                 10L,
+                null,
                 PaymentPurpose.CREATE,
                 2,
                 BigDecimal.valueOf(30000)
