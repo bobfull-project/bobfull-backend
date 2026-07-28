@@ -1,0 +1,390 @@
+package com.bobfull.timeslot.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import com.bobfull.common.exception.CommonErrorCode;
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.SharedTableErrorCode;
+import com.bobfull.common.exception.TimeSlotErrorCode;
+import com.bobfull.common.response.PageResponse;
+import com.bobfull.restaurant.entity.Restaurant;
+import com.bobfull.restaurant.repository.RestaurantRepository;
+import com.bobfull.sharedtable.entity.SharedTable;
+import com.bobfull.sharedtable.repository.SharedTableRepository;
+import com.bobfull.timeslot.dto.AvailableDiningSessionListResponse;
+import com.bobfull.timeslot.dto.DiningSessionBulkRequest;
+import com.bobfull.timeslot.dto.DiningSessionBulkResponse;
+import com.bobfull.timeslot.dto.DiningSessionIdResponse;
+import com.bobfull.timeslot.dto.DiningSessionRequest;
+import com.bobfull.timeslot.dto.DiningSessionResponse;
+import com.bobfull.timeslot.dto.DiningSessionTableBulkRequest;
+import com.bobfull.timeslot.dto.DiningSessionTableBulkResponse;
+import com.bobfull.timeslot.entity.TimeSlot;
+import com.bobfull.timeslot.repository.TimeSlotRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
+
+@ExtendWith(MockitoExtension.class)
+class TimeSlotServiceTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-07-29T00:00:00Z"), ZoneOffset.UTC);
+
+    @Mock
+    private TimeSlotRepository timeSlotRepository;
+
+    @Mock
+    private SharedTableRepository sharedTableRepository;
+
+    @Mock
+    private RestaurantRepository restaurantRepository;
+
+    @Mock
+    private TimeSlotReservationValidator timeSlotReservationValidator;
+
+    private TimeSlotService timeSlotService() {
+        return new TimeSlotService(
+                timeSlotRepository,
+                sharedTableRepository,
+                restaurantRepository,
+                timeSlotReservationValidator,
+                FIXED_CLOCK
+        );
+    }
+
+    @Test
+    void 회차를_등록하면_서울_로컬_시각을_UTC_Instant로_저장한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNull(100L, seoulInstant("2026-08-01T11:00:00")))
+                .willReturn(false);
+        given(timeSlotRepository.save(any(TimeSlot.class))).willAnswer(invocation -> {
+            TimeSlot timeSlot = invocation.getArgument(0);
+            ReflectionTestUtils.setField(timeSlot, "id", 200L);
+            return timeSlot;
+        });
+
+        // when
+        DiningSessionIdResponse response = timeSlotService().register(1L, 100L, request());
+
+        // then
+        ArgumentCaptor<TimeSlot> captor = ArgumentCaptor.forClass(TimeSlot.class);
+        verify(timeSlotRepository).save(captor.capture());
+        assertThat(response.sessionId()).isEqualTo(200L);
+        assertThat(captor.getValue().getSharedTableId()).isEqualTo(100L);
+        assertThat(captor.getValue().getStartAt()).isEqualTo(Instant.parse("2026-08-01T02:00:00Z"));
+        assertThat(captor.getValue().getEndAt()).isEqualTo(Instant.parse("2026-08-01T04:00:00Z"));
+    }
+
+    @Test
+    void 동일_테이블의_동일_시작_활성_회차가_있으면_409_예외가_발생한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNull(100L, seoulInstant("2026-08-01T11:00:00")))
+                .willReturn(true);
+
+        // when
+        Throwable result = catchThrowable(() -> timeSlotService().register(1L, 100L, request()));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
+        verify(timeSlotRepository, never()).save(any());
+    }
+
+    @Test
+    void 종료_시각이_시작_시각보다_늦지_않으면_400_예외가_발생한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        DiningSessionRequest request = new DiningSessionRequest(
+                LocalDateTime.of(2026, 8, 1, 11, 0),
+                LocalDateTime.of(2026, 8, 1, 11, 0)
+        );
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        // when
+        Throwable result = catchThrowable(() -> timeSlotService().register(1L, 100L, request));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
+        verify(timeSlotRepository, never()).save(any());
+    }
+
+    @Test
+    void 기존_테이블에_날짜별_회차를_일괄_등록한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        DiningSessionBulkRequest request = new DiningSessionBulkRequest(
+                List.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 2)),
+                LocalTime.of(11, 0),
+                LocalTime.of(13, 0)
+        );
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNull(eq(100L), any(Instant.class)))
+                .willReturn(false);
+
+        // when
+        DiningSessionBulkResponse response = timeSlotService().registerBulk(1L, 100L, request);
+
+        // then
+        ArgumentCaptor<List<TimeSlot>> captor = ArgumentCaptor.forClass(List.class);
+        verify(timeSlotRepository).saveAll(captor.capture());
+        assertThat(response.tableId()).isEqualTo(100L);
+        assertThat(response.createdSessionCount()).isEqualTo(2);
+        assertThat(captor.getValue()).hasSize(2);
+    }
+
+    @Test
+    void 기존_테이블_일괄_등록_요청에_같은_날짜가_중복되면_409_예외가_발생한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        DiningSessionBulkRequest request = new DiningSessionBulkRequest(
+                List.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 1)),
+                LocalTime.of(11, 0),
+                LocalTime.of(13, 0)
+        );
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        // when
+        Throwable result = catchThrowable(() -> timeSlotService().registerBulk(1L, 100L, request));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(TimeSlotErrorCode.DUPLICATE_DINING_SESSION);
+        verify(timeSlotRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void 새_합석_테이블과_intervalMinutes_기준_회차를_함께_일괄_등록한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        DiningSessionTableBulkRequest request = new DiningSessionTableBulkRequest(
+                List.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 2)),
+                4,
+                LocalTime.of(11, 0),
+                LocalTime.of(13, 0),
+                30
+        );
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(sharedTableRepository.save(any(SharedTable.class))).willAnswer(invocation -> {
+            SharedTable sharedTable = invocation.getArgument(0);
+            ReflectionTestUtils.setField(sharedTable, "id", 100L);
+            return sharedTable;
+        });
+
+        // when
+        DiningSessionTableBulkResponse response = timeSlotService()
+                .registerTableWithDiningSessions(1L, 10L, request);
+
+        // then
+        ArgumentCaptor<List<TimeSlot>> captor = ArgumentCaptor.forClass(List.class);
+        verify(timeSlotRepository).saveAll(captor.capture());
+        assertThat(response.tableId()).isEqualTo(100L);
+        assertThat(response.capacity()).isEqualTo(4);
+        assertThat(response.createdSessionCount()).isEqualTo(8);
+        assertThat(captor.getValue()).hasSize(8);
+    }
+
+    @Test
+    void intervalMinutes가_시간_범위를_정확히_나누지_못하면_400_예외가_발생한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        DiningSessionTableBulkRequest request = new DiningSessionTableBulkRequest(
+                List.of(LocalDate.of(2026, 8, 1)),
+                4,
+                LocalTime.of(11, 0),
+                LocalTime.of(12, 10),
+                30
+        );
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        // when
+        Throwable result = catchThrowable(() -> timeSlotService()
+                .registerTableWithDiningSessions(1L, 10L, request));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
+        verify(sharedTableRepository, never()).save(any());
+    }
+
+    @Test
+    void 본인_식당의_회차_목록을_테이블_capacity와_함께_조회한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        TimeSlot timeSlot = timeSlot(200L, 100L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        Pageable pageable = PageRequest.of(0, 20);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(sharedTableRepository.findAllByRestaurantIdAndDeletedAtIsNull(10L)).willReturn(List.of(sharedTable));
+        given(timeSlotRepository
+                .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
+                        anyCollection(), any(Instant.class), any(Instant.class), eq(pageable)))
+                .willReturn(new PageImpl<>(List.of(timeSlot), pageable, 1));
+
+        // when
+        PageResponse<DiningSessionResponse> response = timeSlotService()
+                .getOwnerDiningSessions(1L, 10L, LocalDate.of(2026, 8, 1), pageable);
+
+        // then
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).sessionId()).isEqualTo(200L);
+        assertThat(response.content().get(0).capacity()).isEqualTo(4);
+        assertThat(response.content().get(0).startAt().toString()).isEqualTo("2026-08-01T11:00+09:00");
+    }
+
+    @Test
+    void 사용자용_예약_가능_회차는_availableCapacity를_현재_capacity로_반환하고_partySize로_필터한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable smallTable = sharedTable(100L, 10L, 2);
+        SharedTable largeTable = sharedTable(101L, 10L, 4);
+        TimeSlot smallSlot = timeSlot(200L, 100L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        TimeSlot largeSlot = timeSlot(201L, 101L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(sharedTableRepository.findAllByRestaurantIdAndDeletedAtIsNull(10L))
+                .willReturn(List.of(smallTable, largeTable));
+        given(timeSlotRepository
+                .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
+                        anyCollection(), any(Instant.class), any(Instant.class)))
+                .willReturn(List.of(smallSlot, largeSlot));
+
+        // when
+        AvailableDiningSessionListResponse response = timeSlotService()
+                .getAvailableDiningSessions(10L, LocalDate.of(2026, 8, 1), 3);
+
+        // then
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).sessionId()).isEqualTo(201L);
+        assertThat(response.content().get(0).availableCapacity()).isEqualTo(4);
+    }
+
+    @Test
+    void 회차_수정은_소유권과_예약_경계와_활성_중복을_검증한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        TimeSlot timeSlot = timeSlot(200L, 100L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNullAndIdNot(
+                100L, seoulInstant("2026-08-01T12:00:00"), 200L)).willReturn(false);
+
+        // when
+        timeSlotService().update(1L, 200L, new DiningSessionRequest(
+                LocalDateTime.of(2026, 8, 1, 12, 0),
+                LocalDateTime.of(2026, 8, 1, 14, 0)
+        ));
+
+        // then
+        verify(timeSlotReservationValidator).validateChangeAllowed(200L);
+        assertThat(timeSlot.getStartAt()).isEqualTo(seoulInstant("2026-08-01T12:00:00"));
+        assertThat(timeSlot.getEndAt()).isEqualTo(seoulInstant("2026-08-01T14:00:00"));
+    }
+
+    @Test
+    void 회차_삭제는_소프트_딜리트하고_예약_경계를_검증한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        TimeSlot timeSlot = timeSlot(200L, 100L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        // when
+        timeSlotService().delete(1L, 200L);
+
+        // then
+        verify(timeSlotReservationValidator).validateDeletionAllowed(200L);
+        assertThat(timeSlot.getDeletedAt()).isEqualTo(FIXED_CLOCK.instant());
+    }
+
+    @Test
+    void 허용되지_않는_capacity로_새_테이블_회차_일괄_등록을_요청하면_400_예외가_발생한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        DiningSessionTableBulkRequest request = new DiningSessionTableBulkRequest(
+                List.of(LocalDate.of(2026, 8, 1)),
+                3,
+                LocalTime.of(11, 0),
+                LocalTime.of(13, 0),
+                30
+        );
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        // when
+        Throwable result = catchThrowable(() -> timeSlotService()
+                .registerTableWithDiningSessions(1L, 10L, request));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(SharedTableErrorCode.INVALID_TABLE_CAPACITY);
+        verify(sharedTableRepository, never()).save(any());
+    }
+
+    private Restaurant restaurantOwnedBy(Long ownerMemberId) {
+        Restaurant restaurant = Restaurant.create(
+                ownerMemberId, "밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000);
+        ReflectionTestUtils.setField(restaurant, "id", 10L);
+        return restaurant;
+    }
+
+    private SharedTable sharedTable(Long tableId, Long restaurantId, Integer capacity) {
+        SharedTable sharedTable = SharedTable.create(restaurantId, capacity);
+        ReflectionTestUtils.setField(sharedTable, "id", tableId);
+        return sharedTable;
+    }
+
+    private TimeSlot timeSlot(Long sessionId, Long tableId, String startAt, String endAt) {
+        TimeSlot timeSlot = TimeSlot.create(tableId, seoulInstant(startAt), seoulInstant(endAt));
+        ReflectionTestUtils.setField(timeSlot, "id", sessionId);
+        return timeSlot;
+    }
+
+    private DiningSessionRequest request() {
+        return new DiningSessionRequest(
+                LocalDateTime.of(2026, 8, 1, 11, 0),
+                LocalDateTime.of(2026, 8, 1, 13, 0)
+        );
+    }
+
+    private Instant seoulInstant(String localDateTime) {
+        return LocalDateTime.parse(localDateTime).atOffset(ZoneOffset.ofHours(9)).toInstant();
+    }
+}
