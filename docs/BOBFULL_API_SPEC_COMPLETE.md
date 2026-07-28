@@ -1280,7 +1280,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 이미 등록된 합석 테이블(`tableId`)을 대상으로 여러 날짜에 각각 동일한 시작·종료 시간의 회차 1건씩을 일괄 생성한다. 신규 테이블을 함께 생성하는 5-7(합석 테이블·회차 일괄 등록)과 달리 기존 테이블에만 적용되며, 정원(`capacity`)과 간격(`intervalMinutes`)을 입력받지 않는다.
+- 설명: 이미 등록된 합석 테이블(`tableId`)을 대상으로 여러 날짜의 시작·종료 시간 범위를 `intervalMinutes` 단위로 나누어 회차를 일괄 생성한다. 테이블 생성은 4-1 합석 테이블 등록 API에서 먼저 수행하고, 이 API는 기존 테이블의 예약 가능 시간 등록에만 사용한다.
 - Method: `POST`
 - Path: `/api/owner/tables/{tableId}/dining-sessions/bulk`
 - Auth: `OWNER`
@@ -1303,7 +1303,8 @@ OWNER 응답 예시:
     "2026-07-26"
   ],
   "startTime": "18:00:00",
-  "endTime": "20:00:00"
+  "endTime": "20:00:00",
+  "intervalMinutes": 30
 }
 ```
 
@@ -1312,8 +1313,9 @@ OWNER 응답 예시:
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
 | `dates` | Array&lt;LocalDate&gt; | Y | 회차를 생성할 날짜 목록 |
-| `startTime` | LocalTime | Y | 각 날짜의 회차 시작 시간 |
-| `endTime` | LocalTime | Y | 각 날짜의 회차 종료 시간 |
+| `startTime` | LocalTime | Y | 각 날짜의 첫 회차 시작 시간 |
+| `endTime` | LocalTime | Y | 각 날짜의 회차 생성 종료 기준 시간 |
+| `intervalMinutes` | Integer | Y | 회차 길이와 다음 회차 시작 간격(분). `startTime`~`endTime` 범위를 나누어 떨어지게 해야 함 |
 
 ## 3. Response
 
@@ -1325,7 +1327,7 @@ OWNER 응답 예시:
   "message": "요청이 성공했습니다.",
   "data": {
     "tableId": 1,
-    "createdSessionCount": 2
+    "createdSessionCount": 8
   }
 }
 ```
@@ -1564,75 +1566,6 @@ OWNER 응답 예시:
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
 | `404` | `SESSION_ID_NOT_FOUND` | sessionId에 해당하는 대상을 찾을 수 없음 |
 | `409` | `SESSION_HAS_RESERVATION` | 연결된 예약이 있어 삭제할 수 없음 |
-
----
-
-## 5-7. 합석 테이블·회차 일괄 등록 `[V1]`
-
-## 1. INFO
-
-- 설명: 식당에 새 합석 테이블을 생성하면서 지정한 날짜와 시간 범위에 맞춰 회차를 일괄 생성한다.
-- Method: `POST`
-- Path: `/api/owner/restaurants/{restaurantId}/tables/dining-sessions`
-- Auth: `OWNER`
-- 담당자: 김홍기
-
-## 2. Request
-
-### Path Variables
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `restaurantId` | Long | Y | 합석 테이블과 회차를 등록할 식당 식별자 |
-
-### Body
-
-```json
-{
-  "dates": ["2026-07-25", "2026-07-26"],
-  "capacity": 4,
-  "startTime": "11:00:00",
-  "endTime": "15:00:00",
-  "intervalMinutes": 30
-}
-```
-
-### Request Fields
-
-| 필드 | 타입 | 필수 | 설명 |
-|---|---|---:|---|
-| `dates` | Array&lt;LocalDate&gt; | Y | 회차를 생성할 날짜 목록 |
-| `capacity` | Integer | Y | 새로 생성할 합석 테이블 정원(`2`, `4`, `6`, `8` 중 하나) |
-| `startTime` | LocalTime | Y | 첫 회차 시작 시간 |
-| `endTime` | LocalTime | Y | 회차 생성 종료 기준 시간 |
-| `intervalMinutes` | Integer | Y | 회차 시작 시간 간격(분) |
-
-## 3. Response
-
-- Status: `201 Created`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "tableId": 10,
-    "capacity": 4,
-    "createdSessionCount": 16
-  }
-}
-```
-
-## 4. Error
-
-| Status | Code | 설명 |
-|---:|---|---|
-| `400` | `INVALID_TABLE_CAPACITY` | capacity가 `2`, `4`, `6`, `8` 중 하나가 아님 |
-| `400` | `INVALID_INPUT_VALUE` | 시간 범위·간격 검증 실패 |
-| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `403` | `ACCESS_DENIED` | 본인 식당이 아님 |
-| `404` | `RESTAURANT_ID_NOT_FOUND` | 식당을 찾을 수 없음 |
-| `409` | `DUPLICATE_DINING_SESSION` | 동일 시간대 회차가 중복됨 |
 
 ---
 
@@ -4627,11 +4560,11 @@ OWNER 응답 예시:
 
 # 15. API 목록 요약
 
-- 실제 HTTP API 수: **75개**
+- 실제 HTTP API 수: **74개**
 - API가 아닌 기능은 V2·V3 내부 구현 정책(13·14장)으로 별도 정리했다.
 - 상세 명세가 없거나 다른 API와 중복돼 이번 정리에서 제거한 항목: `GET /api/restaurants/search`(3-5와 중복), `GET /api/payments/{paymentId}/status`(7-4와 중복), `GET /api/refunds/{refundId}/status`(8-2와 중복).
 - 상세 명세도 요약표도 근거가 부족해 이번 집계에서 제외하고 16장 "결정 필요"로 넘긴 항목: `PATCH /api/owner/dining-sessions/{sessionId}/status`.
-- 재검토 결과 삭제하지 않고 복구한 항목: 기존 테이블 대상 합석 회차 일괄 등록(5-2, `POST /api/owner/tables/{tableId}/dining-sessions/bulk`). 신규 테이블을 생성하는 5-7과 대상 리소스(tableId vs restaurantId)와 Request 구조(capacity·intervalMinutes 유무)가 달라 별도 기능으로 확정하고 제목·Path를 복구했다.
+- 재검토 결과 제외한 항목: `POST /api/owner/restaurants/{restaurantId}/tables/dining-sessions`. 사장님 화면 흐름이 합석 테이블을 먼저 설정한 뒤 예약 가능 시간을 등록하는 구조이므로, 새 테이블 생성은 4-1 합석 테이블 등록 API로 처리하고 회차 일괄 생성은 5-2 기존 테이블 합석 회차 일괄 등록 API로 처리한다.
 
 | 기능 분류 | 버전 | 기능명 | Method | Path | 담당자 |
 |---|---|---|---|---|---|
@@ -4663,7 +4596,6 @@ OWNER 응답 예시:
 | 합석 회차 | V1 | 사용자용 예약 가능 회차 조회 | `GET` | `/api/restaurants/{restaurantId}/dining-sessions` | 김홍기 |
 | 합석 회차 | V1 | 합석 회차 수정 | `PATCH` | `/api/owner/dining-sessions/{sessionId}` | 김홍기 |
 | 합석 회차 | V1 | 합석 회차 삭제 | `DELETE` | `/api/owner/dining-sessions/{sessionId}` | 김홍기 |
-| 합석 회차 | V1 | 합석 테이블·회차 일괄 등록 | `POST` | `/api/owner/restaurants/{restaurantId}/tables/dining-sessions` | 김홍기 |
 | 예약·참여 | V1 | 예약 가능 여부 확인 | `GET` | `/api/reservations/availability` | 배지현 |
 | 예약·참여 | V1 | 예약 결제 준비 | `POST` | `/api/reservations/prepare` | 배지현 |
 | 예약·참여 | V1 | 참여 가능한 예약 검색 | `GET` | `/api/reservations/search` | 김홍기 |
@@ -4723,5 +4655,5 @@ OWNER 응답 예시:
 - 도메인별 타인 리소스 접근 거부 에러 코드 이름
 - DTO 클래스명·패키지 구조와 내부 매핑 방식
 - `PATCH /api/owner/dining-sessions/{sessionId}/status`(합석 회차 상태 변경): 요약표에만 존재하고 상세 명세가 없었다. 0.7 공통 상태 목록에 회차(Session) 자체의 상태 enum이 정의돼 있지 않아, 현재 파일만으로는 합석 회차 수정(5-5)과 별개의 독립 기능인지 확정할 수 없다. 독립 기능이라면 SessionStatus 값 정의와 Request/Response/Error 명세를 추가해야 한다.
-- (해결됨) tableId 기준 여러 날짜·시간 회차 일괄 생성 API: 재검토 결과 대상 리소스(기존 테이블 vs 신규 테이블)와 Request 구조(capacity·intervalMinutes 유무)가 5-7(합석 테이블·회차 일괄 등록)과 달라 별도 기능으로 확정했다. 5-2 "기존 테이블 합석 회차 일괄 등록"(`POST /api/owner/tables/{tableId}/dining-sessions/bulk`)으로 제목·Path를 복구했다.
+- (해결됨) tableId 기준 여러 날짜·시간 회차 일괄 생성 API: 사장님 화면 흐름은 합석 테이블 설정 후 예약 가능 시간을 등록하는 구조로 확정했다. 5-2 "기존 테이블 합석 회차 일괄 등록"(`POST /api/owner/tables/{tableId}/dining-sessions/bulk`)은 기존 테이블에 `intervalMinutes` 기준 회차를 여러 개 생성한다. 새 테이블 생성과 회차 생성을 한 번에 묶는 별도 API는 적용하지 않는다.
 - (해결됨) 로그인 Access/Refresh Token 계약: 사용자 확인 결과 "V1 로그인은 Access Token만 반환하고, Refresh Token 발급·재발급·로그아웃은 V2에서 제공"(A안)으로 확정했다. 2-3 로그인 Response는 accessToken만 포함하며, 2-6 로그아웃·2-7 토큰 재발급은 `[V2]`로 유지한다.

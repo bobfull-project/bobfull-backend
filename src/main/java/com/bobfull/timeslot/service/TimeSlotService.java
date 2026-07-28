@@ -17,8 +17,6 @@ import com.bobfull.timeslot.dto.DiningSessionBulkResponse;
 import com.bobfull.timeslot.dto.DiningSessionIdResponse;
 import com.bobfull.timeslot.dto.DiningSessionRequest;
 import com.bobfull.timeslot.dto.DiningSessionResponse;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkRequest;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkResponse;
 import com.bobfull.timeslot.entity.TimeSlot;
 import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.time.Clock;
@@ -49,7 +47,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class TimeSlotService {
 
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
-    private static final Set<Integer> ALLOWED_CAPACITIES = Set.of(2, 4, 6, 8);
 
     private final TimeSlotRepository timeSlotRepository;
     private final SharedTableRepository sharedTableRepository;
@@ -93,7 +90,8 @@ public class TimeSlotService {
         SharedTable sharedTable = findActiveTableOrThrow(tableId);
         validateRestaurantOwnership(sharedTable.getRestaurantId(), ownerMemberId);
 
-        List<TimeRange> timeRanges = toSingleDailyTimeRanges(request.dates(), request.startTime(), request.endTime());
+        List<TimeRange> timeRanges = toIntervalTimeRanges(
+                request.dates(), request.startTime(), request.endTime(), request.intervalMinutes());
         validateNoDuplicateStarts(sharedTable.getId(), timeRanges);
 
         List<TimeSlot> timeSlots = timeRanges.stream()
@@ -183,29 +181,6 @@ public class TimeSlotService {
         return DiningSessionIdResponse.from(timeSlot);
     }
 
-    @Transactional
-    public DiningSessionTableBulkResponse registerTableWithDiningSessions(
-            Long ownerMemberId,
-            Long restaurantId,
-            DiningSessionTableBulkRequest request
-    ) {
-        Restaurant restaurant = findActiveRestaurantOrThrow(restaurantId);
-        validateOwnership(restaurant, ownerMemberId);
-        validateCapacity(request.capacity());
-
-        List<TimeRange> timeRanges = toIntervalTimeRanges(
-                request.dates(), request.startTime(), request.endTime(), request.intervalMinutes());
-        validateNoDuplicateStartsInRequest(timeRanges);
-
-        SharedTable sharedTable = sharedTableRepository.save(SharedTable.create(restaurantId, request.capacity()));
-        List<TimeSlot> timeSlots = timeRanges.stream()
-                .map(timeRange -> TimeSlot.create(sharedTable.getId(), timeRange.startAt(), timeRange.endAt()))
-                .toList();
-        saveAllTimeSlotsOrThrowDuplicate(timeSlots);
-
-        return new DiningSessionTableBulkResponse(sharedTable.getId(), sharedTable.getCapacity(), timeSlots.size());
-    }
-
     private Page<TimeSlot> findOwnerTimeSlots(Collection<Long> tableIds, LocalDate date, Pageable pageable) {
         if (date == null) {
             return timeSlotRepository.findAllBySharedTableIdInAndDeletedAtIsNullOrderByStartAtAsc(tableIds, pageable);
@@ -264,12 +239,6 @@ public class TimeSlotService {
     private void validateOwnership(Restaurant restaurant, Long ownerMemberId) {
         if (!restaurant.isOwnedBy(ownerMemberId)) {
             throw new CustomException(CommonErrorCode.ACCESS_DENIED);
-        }
-    }
-
-    private void validateCapacity(Integer capacity) {
-        if (capacity == null || !ALLOWED_CAPACITIES.contains(capacity)) {
-            throw new CustomException(SharedTableErrorCode.INVALID_TABLE_CAPACITY);
         }
     }
 
@@ -336,16 +305,6 @@ public class TimeSlotService {
         Instant endInstant = endAt.atZone(SEOUL_ZONE).toInstant();
         validateTimeRange(startInstant, endInstant);
         return new TimeRange(startInstant, endInstant);
-    }
-
-    private List<TimeRange> toSingleDailyTimeRanges(List<LocalDate> dates, LocalTime startTime, LocalTime endTime) {
-        validateDailyTimeRange(startTime, endTime);
-        return dates.stream()
-                .map(date -> new TimeRange(
-                        toInstant(date, startTime),
-                        toInstant(date, endTime)
-                ))
-                .toList();
     }
 
     private List<TimeRange> toIntervalTimeRanges(

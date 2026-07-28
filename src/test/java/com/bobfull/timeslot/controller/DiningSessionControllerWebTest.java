@@ -26,8 +26,6 @@ import com.bobfull.timeslot.dto.DiningSessionBulkResponse;
 import com.bobfull.timeslot.dto.DiningSessionIdResponse;
 import com.bobfull.timeslot.dto.DiningSessionRequest;
 import com.bobfull.timeslot.dto.DiningSessionResponse;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkRequest;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkResponse;
 import com.bobfull.timeslot.service.TimeSlotService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -166,10 +164,11 @@ class DiningSessionControllerWebTest {
         DiningSessionBulkRequest request = new DiningSessionBulkRequest(
                 List.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 2)),
                 LocalTime.of(11, 0),
-                LocalTime.of(13, 0)
+                LocalTime.of(13, 0),
+                60
         );
         given(timeSlotService.registerBulk(eq(1L), eq(100L), any(DiningSessionBulkRequest.class)))
-                .willReturn(new DiningSessionBulkResponse(100L, 2));
+                .willReturn(new DiningSessionBulkResponse(100L, 4));
 
         // when
         ResultActions result = mockMvc.perform(post("/api/owner/tables/100/dining-sessions/bulk")
@@ -180,7 +179,7 @@ class DiningSessionControllerWebTest {
         // then
         result.andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.tableId", is(100)))
-                .andExpect(jsonPath("$.data.createdSessionCount", is(2)));
+                .andExpect(jsonPath("$.data.createdSessionCount", is(4)));
     }
 
     @Test
@@ -292,33 +291,6 @@ class DiningSessionControllerWebTest {
         // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.sessionId", is(200)));
-    }
-
-    @Test
-    void 새_합석_테이블과_회차를_함께_일괄_등록한다() throws Exception {
-        // given
-        DiningSessionTableBulkRequest request = new DiningSessionTableBulkRequest(
-                List.of(LocalDate.of(2026, 8, 1)),
-                4,
-                LocalTime.of(11, 0),
-                LocalTime.of(13, 0),
-                30
-        );
-        given(timeSlotService.registerTableWithDiningSessions(
-                eq(1L), eq(10L), any(DiningSessionTableBulkRequest.class)))
-                .willReturn(new DiningSessionTableBulkResponse(100L, 4, 4));
-
-        // when
-        ResultActions result = mockMvc.perform(post("/api/owner/restaurants/10/tables/dining-sessions")
-                .with(authentication(ownerAuthentication(1L)))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)));
-
-        // then
-        result.andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.tableId", is(100)))
-                .andExpect(jsonPath("$.data.capacity", is(4)))
-                .andExpect(jsonPath("$.data.createdSessionCount", is(4)));
     }
 
     private DiningSessionRequest request() {

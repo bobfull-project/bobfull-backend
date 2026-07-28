@@ -9,8 +9,6 @@ import com.bobfull.timeslot.dto.DiningSessionBulkResponse;
 import com.bobfull.timeslot.dto.DiningSessionIdResponse;
 import com.bobfull.timeslot.dto.DiningSessionRequest;
 import com.bobfull.timeslot.dto.DiningSessionResponse;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkRequest;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkResponse;
 import com.bobfull.timeslot.service.TimeSlotService;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -96,14 +94,4 @@ public class DiningSessionController {
         return ApiResponse.success(timeSlotService.delete(authMember.id(), sessionId));
     }
 
-    @PostMapping("/owner/restaurants/{restaurantId}/tables/dining-sessions")
-    public ResponseEntity<ApiResponse<DiningSessionTableBulkResponse>> registerTableWithDiningSessions(
-            @AuthenticationPrincipal AuthMember authMember,
-            @PathVariable Long restaurantId,
-            @Valid @RequestBody DiningSessionTableBulkRequest request
-    ) {
-        DiningSessionTableBulkResponse response = timeSlotService.registerTableWithDiningSessions(
-                authMember.id(), restaurantId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
-    }
 }

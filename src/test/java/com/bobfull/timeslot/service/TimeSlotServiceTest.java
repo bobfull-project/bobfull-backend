@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
-import com.bobfull.common.exception.SharedTableErrorCode;
 import com.bobfull.common.exception.TimeSlotErrorCode;
 import com.bobfull.common.response.PageResponse;
 import com.bobfull.restaurant.entity.Restaurant;
@@ -25,8 +24,6 @@ import com.bobfull.timeslot.dto.DiningSessionBulkResponse;
 import com.bobfull.timeslot.dto.DiningSessionIdResponse;
 import com.bobfull.timeslot.dto.DiningSessionRequest;
 import com.bobfull.timeslot.dto.DiningSessionResponse;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkRequest;
-import com.bobfull.timeslot.dto.DiningSessionTableBulkResponse;
 import com.bobfull.timeslot.entity.TimeSlot;
 import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.time.Clock;
@@ -163,14 +160,15 @@ class TimeSlotServiceTest {
     }
 
     @Test
-    void 기존_테이블에_날짜별_회차를_일괄_등록한다() {
+    void 기존_테이블에_intervalMinutes_기준_회차를_일괄_등록한다() {
         // given
         Restaurant restaurant = restaurantOwnedBy(1L);
         SharedTable sharedTable = sharedTable(100L, 10L, 4);
         DiningSessionBulkRequest request = new DiningSessionBulkRequest(
                 List.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 2)),
                 LocalTime.of(11, 0),
-                LocalTime.of(13, 0)
+                LocalTime.of(13, 0),
+                30
         );
         given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
@@ -184,8 +182,10 @@ class TimeSlotServiceTest {
         ArgumentCaptor<List<TimeSlot>> captor = ArgumentCaptor.forClass(List.class);
         verify(timeSlotRepository).saveAllAndFlush(captor.capture());
         assertThat(response.tableId()).isEqualTo(100L);
-        assertThat(response.createdSessionCount()).isEqualTo(2);
-        assertThat(captor.getValue()).hasSize(2);
+        assertThat(response.createdSessionCount()).isEqualTo(8);
+        assertThat(captor.getValue()).hasSize(8);
+        assertThat(captor.getValue().get(0).getStartAt()).isEqualTo(seoulInstant("2026-08-01T11:00:00"));
+        assertThat(captor.getValue().get(0).getEndAt()).isEqualTo(seoulInstant("2026-08-01T11:30:00"));
     }
 
     @Test
@@ -196,7 +196,8 @@ class TimeSlotServiceTest {
         DiningSessionBulkRequest request = new DiningSessionBulkRequest(
                 List.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 1)),
                 LocalTime.of(11, 0),
-                LocalTime.of(13, 0)
+                LocalTime.of(13, 0),
+                30
         );
         given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
@@ -211,57 +212,26 @@ class TimeSlotServiceTest {
     }
 
     @Test
-    void 새_합석_테이블과_intervalMinutes_기준_회차를_함께_일괄_등록한다() {
-        // given
-        Restaurant restaurant = restaurantOwnedBy(1L);
-        DiningSessionTableBulkRequest request = new DiningSessionTableBulkRequest(
-                List.of(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 2)),
-                4,
-                LocalTime.of(11, 0),
-                LocalTime.of(13, 0),
-                30
-        );
-        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
-        given(sharedTableRepository.save(any(SharedTable.class))).willAnswer(invocation -> {
-            SharedTable sharedTable = invocation.getArgument(0);
-            ReflectionTestUtils.setField(sharedTable, "id", 100L);
-            return sharedTable;
-        });
-
-        // when
-        DiningSessionTableBulkResponse response = timeSlotService()
-                .registerTableWithDiningSessions(1L, 10L, request);
-
-        // then
-        ArgumentCaptor<List<TimeSlot>> captor = ArgumentCaptor.forClass(List.class);
-        verify(timeSlotRepository).saveAllAndFlush(captor.capture());
-        assertThat(response.tableId()).isEqualTo(100L);
-        assertThat(response.capacity()).isEqualTo(4);
-        assertThat(response.createdSessionCount()).isEqualTo(8);
-        assertThat(captor.getValue()).hasSize(8);
-    }
-
-    @Test
     void intervalMinutes가_시간_범위를_정확히_나누지_못하면_400_예외가_발생한다() {
         // given
         Restaurant restaurant = restaurantOwnedBy(1L);
-        DiningSessionTableBulkRequest request = new DiningSessionTableBulkRequest(
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        DiningSessionBulkRequest request = new DiningSessionBulkRequest(
                 List.of(LocalDate.of(2026, 8, 1)),
-                4,
                 LocalTime.of(11, 0),
                 LocalTime.of(12, 10),
                 30
         );
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
 
         // when
-        Throwable result = catchThrowable(() -> timeSlotService()
-                .registerTableWithDiningSessions(1L, 10L, request));
+        Throwable result = catchThrowable(() -> timeSlotService().registerBulk(1L, 100L, request));
 
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
-        verify(sharedTableRepository, never()).save(any());
+        verify(timeSlotRepository, never()).saveAllAndFlush(any());
     }
 
     @Test
@@ -381,29 +351,6 @@ class TimeSlotServiceTest {
         // then
         verify(timeSlotReservationValidator).validateDeletionAllowed(200L);
         assertThat(timeSlot.getDeletedAt()).isEqualTo(FIXED_CLOCK.instant());
-    }
-
-    @Test
-    void 허용되지_않는_capacity로_새_테이블_회차_일괄_등록을_요청하면_400_예외가_발생한다() {
-        // given
-        Restaurant restaurant = restaurantOwnedBy(1L);
-        DiningSessionTableBulkRequest request = new DiningSessionTableBulkRequest(
-                List.of(LocalDate.of(2026, 8, 1)),
-                3,
-                LocalTime.of(11, 0),
-                LocalTime.of(13, 0),
-                30
-        );
-        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
-
-        // when
-        Throwable result = catchThrowable(() -> timeSlotService()
-                .registerTableWithDiningSessions(1L, 10L, request));
-
-        // then
-        assertThat(result).isInstanceOf(CustomException.class);
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(SharedTableErrorCode.INVALID_TABLE_CAPACITY);
-        verify(sharedTableRepository, never()).save(any());
     }
 
     private Restaurant restaurantOwnedBy(Long ownerMemberId) {
