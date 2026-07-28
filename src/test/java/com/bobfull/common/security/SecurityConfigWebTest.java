@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -34,6 +35,7 @@ import tools.jackson.databind.ObjectMapper;
         "jwt.secret=security-config-web-test-secret-key-please-keep-this-long-enough",
         "jwt.access-token-expiration-seconds=3600"
 })
+@ActiveProfiles("test-api")
 class SecurityConfigWebTest {
 
     @Autowired

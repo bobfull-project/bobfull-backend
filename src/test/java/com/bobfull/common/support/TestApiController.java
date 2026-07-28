@@ -7,6 +7,7 @@ import com.bobfull.common.security.AuthMember;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.time.ZoneId;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 운영 API가 아니며 src/test 범위 밖으로 노출되지 않는다.
  */
 @RestController
+@Profile("test-api")
 public class TestApiController {
 
     @GetMapping("/api/public/hello")
