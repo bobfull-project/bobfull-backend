@@ -1,0 +1,12 @@
+package com.bobfull.payment.entity;
+
+/**
+ * Payment의 결제 처리 상태다.
+ */
+public enum PaymentStatus {
+
+    READY,
+    PAID,
+    FAILED,
+    CANCELLED
+}
