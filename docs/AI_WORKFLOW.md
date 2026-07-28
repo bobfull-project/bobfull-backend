@@ -117,7 +117,11 @@ status:final-human-review
 
 ```text
 현재 브랜치·작업 트리 확인
-→ 기존 Issue 브랜치 전환 또는 새 Issue 브랜치 생성
+→ 대상 Issue 기존 브랜치 확인
+→ 기존 브랜치가 있으면 전환
+→ 없으면 미커밋 변경의 소속 확인
+→ 작업 트리가 깨끗하면 최신 develop 전환·갱신
+→ 최신 develop에서 Issue 전용 브랜치 생성
 → 브랜치 재확인
 → 최소 변경 계획
 → 구현
@@ -130,7 +134,7 @@ status:final-human-review
 
 필수 원칙:
 
-- `AGENTS.md` 브랜치 안전 규칙에 따라 `main`, `master`, `develop`에서는 직접 수정하지 않고, 브랜치 재확인 후에만 파일을 수정한다.
+- `AGENTS.md` 브랜치 안전 규칙에 따라 `main`, `master`, `develop`에서는 직접 수정하지 않고, 다른 Issue의 작업 브랜치에서도 새 작업을 시작하지 않으며, 새 Issue 브랜치는 항상 최신 `develop` 기준으로 생성하고 브랜치 재확인 후에만 파일을 수정한다. 다른 Issue의 미커밋 변경은 임의로 이동하지 않는다.
 - Issue 댓글에 기록된 최종 계약 범위만 구현한다.
 - 실행하지 않은 테스트를 `PASS`로 기록하지 않는다.
 - build 실패를 성공으로 표현하지 않는다.

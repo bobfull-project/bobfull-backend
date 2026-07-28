@@ -58,20 +58,21 @@ Issue #번호 구현하라
 
 구현 동작:
 
-1. `git branch --show-current`와 작업 트리 상태로 현재 브랜치를 확인한다. `main`, `master`, `develop`에서는 어떤 파일도 수정하지 않는다.
+1. `git branch --show-current`와 작업 트리 상태로 현재 브랜치를 확인한다. 현재 브랜치가 대상 Issue 전용 브랜치가 아니면(`main`, `master`, `develop` 같은 보호 브랜치이거나 다른 Issue의 작업 브랜치여도) 어떤 파일도 수정하지 않는다.
 2. 대상 Issue에 연결된 기존 작업 브랜치가 있으면 해당 브랜치로 전환한다.
-3. 기존 작업 브랜치가 없고 현재 브랜치가 보호 브랜치이며 작업 트리가 깨끗하면 `docs/GITHUB_RULES.md`에 맞춰 별도 Human 승인 없이 Issue 전용 브랜치(기본 형식 `<type>/<issue-number>-<summary>`)를 생성한다.
-4. 보호 브랜치에서 이미 미커밋 변경이 발견되면 변경을 버리지 않고 추가 수정을 중단한 뒤 Issue 브랜치로 이동한다. Issue와 무관한 변경이 있으면 중단한다.
-5. 브랜치 생성·전환 후 현재 브랜치를 다시 확인하고, 대상 Issue 브랜치가 아니면 파일을 수정하지 않는다. 생성·전환에 실패하면 `status:human-answer-required`를 적용하고 원인을 보고한 뒤 중단한다.
-6. Issue 댓글에 기록한 최종 계약 범위의 최소 변경 계획을 세운다.
-7. 강화 검토 대상인지 `docs/AI_REVIEW_GUIDE.md` §4의 기존 목록으로 확인한다. 강화 검토 대상이면 코드 작성 전에 대화창에서 책임 클래스, 상태 변경 위치, 트랜잭션 범위, 실패 처리 방식의 초안을 제시한다.
-8. 담당자 Human이 초안을 `확인`하거나 수정 의견을 남긴 뒤에만 구현한다. 담당자가 네 항목을 처음부터 직접 작성하도록 요구하지 않는다. 정책·API·DB·권한·트랜잭션 재결정이 필요하거나 담당자가 동의하지 않으면 구현을 진행하지 않고 Human 판단을 요청한다. 이전 대화창의 확인 여부를 검증할 수 없으면 네 항목을 다시 제시해 확인받는다.
-9. 코드·테스트·필요 문서를 구현한다.
-10. 테스트와 직접 검증을 실제로 실행한다.
-11. 전체 실제 Diff를 자체 검토한다.
-12. 최신 `.github/pull_request_template.md`를 직접 읽고, 섹션 이름과 순서를 유지한 본문에 담당자 Human 이해도 질문과 PR별 Human Review Checklist를 포함한다.
-13. Issue 관련 변경만 Commit·Push한다.
-14. develop 대상 Draft PR을 생성한다. 강화 검토 대상이었다면 PR Conversation 댓글에 다음 형식으로 구현 전 설계 확인 기록을 남긴다. Issue 댓글이나 PR 본문, 특히 `코드 확인 순서`에는 이 기록을 추가하지 않는다.
+3. 기존 작업 브랜치가 없고 작업 트리가 깨끗하면, 현재 브랜치가 다른 Issue의 작업 브랜치여도 먼저 원격 기준 최신 `develop`으로 전환·갱신한다.
+4. 최신 `develop`에서 `docs/GITHUB_RULES.md`에 맞춰 별도 Human 승인 없이 Issue 전용 브랜치(기본 형식 `<type>/<issue-number>-<summary>`)를 생성한다. Issue 전용 브랜치는 항상 최신 `develop`을 기준으로 생성한다.
+5. 다른 Issue의 작업 브랜치에서 이미 미커밋 변경이 발견되면 새 Issue 브랜치로 임의 이동하지 않고 추가 수정을 중단한 뒤 `status:human-answer-required`를 적용해 Human 판단을 요청한다. 보호 브랜치에서 대상 Issue와 관련된 미커밋 변경이 발견된 경우에만 변경을 유지한 채 Issue 브랜치로 이동한다. Issue와 무관한 변경이 있으면 중단한다.
+6. 브랜치 생성·전환 후 현재 브랜치를 다시 확인하고, 대상 Issue 브랜치가 아니면 파일을 수정하지 않는다. 생성·전환에 실패하면 `status:human-answer-required`를 적용하고 원인을 보고한 뒤 중단한다.
+7. Issue 댓글에 기록한 최종 계약 범위의 최소 변경 계획을 세운다.
+8. 강화 검토 대상인지 `docs/AI_REVIEW_GUIDE.md` §4의 기존 목록으로 확인한다. 강화 검토 대상이면 코드 작성 전에 대화창에서 책임 클래스, 상태 변경 위치, 트랜잭션 범위, 실패 처리 방식의 초안을 제시한다.
+9. 담당자 Human이 초안을 `확인`하거나 수정 의견을 남긴 뒤에만 구현한다. 담당자가 네 항목을 처음부터 직접 작성하도록 요구하지 않는다. 정책·API·DB·권한·트랜잭션 재결정이 필요하거나 담당자가 동의하지 않으면 구현을 진행하지 않고 Human 판단을 요청한다. 이전 대화창의 확인 여부를 검증할 수 없으면 네 항목을 다시 제시해 확인받는다.
+10. 코드·테스트·필요 문서를 구현한다.
+11. 테스트와 직접 검증을 실제로 실행한다.
+12. 전체 실제 Diff를 자체 검토한다.
+13. 최신 `.github/pull_request_template.md`를 직접 읽고, 섹션 이름과 순서를 유지한 본문에 담당자 Human 이해도 질문과 PR별 Human Review Checklist를 포함한다.
+14. Issue 관련 변경만 Commit·Push한다.
+15. develop 대상 Draft PR을 생성한다. 강화 검토 대상이었다면 PR Conversation 댓글에 다음 형식으로 구현 전 설계 확인 기록을 남긴다. Issue 댓글이나 PR 본문, 특히 `코드 확인 순서`에는 이 기록을 추가하지 않는다.
 
 ```markdown
 ## 구현 전 설계 확인 기록
@@ -84,7 +85,7 @@ Issue #번호 구현하라
 - 구현 중 달라진 점: `없음 | 변경 내용과 이유`
 ```
 
-15. 최신 Head 검토와 필수 검증이 끝나면 `status:final-human-review`를 적용하고 Human 최종 리뷰 사항을 Issue 댓글과 PR에 기록한다.
+16. 최신 Head 검토와 필수 검증이 끝나면 `status:final-human-review`를 적용하고 Human 최종 리뷰 사항을 Issue 댓글과 PR에 기록한다.
 
 Draft PR 본문은 실제 연결 Issue·최종 계약·최신 Diff·테스트·build·직접 검증 결과로 작성한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다. `Human Review Checklist`와 `담당자 AI 검토·수정 기록`은 삭제하거나 축약하지 않으며, PR 제목은 Issue의 범위·유형 형식이 아니라 `GITHUB_RULES`의 Conventional Commit 형식을 따른다.
 
