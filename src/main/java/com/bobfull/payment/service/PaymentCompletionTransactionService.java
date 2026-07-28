@@ -33,6 +33,9 @@ public class PaymentCompletionTransactionService {
         if (payment.getStatus() == PaymentStatus.PAID) {
             return new PaymentCompletionResult(payment, payment.getReservationId(), payment.getReservationParticipantId());
         }
+        if (!payment.getExpiresAt().isAfter(clock.instant())) {
+            throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+        }
         payment.complete(clock.instant());
         ReservationConfirmationResult result = reservationConfirmationPort.confirm(payment);
         payment.attachReservationConfirmation(result.reservationId(), result.participationId());

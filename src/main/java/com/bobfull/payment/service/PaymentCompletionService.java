@@ -33,8 +33,12 @@ public class PaymentCompletionService {
             return new PaymentCompletionTransactionService.PaymentCompletionResult(payment,
                     payment.getReservationId(), payment.getReservationParticipantId());
         }
+        if (payment.getStatus() != PaymentStatus.READY) {
+            throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+        }
         PortOnePaymentReader.PortOnePayment external = portOnePaymentReader.read(paymentId);
-        if (!paymentId.equals(external.paymentId()) || !external.paid() || external.amount() == null || !payment.getAmount().equals(external.amount())
+        if (!paymentId.equals(external.paymentId()) || !external.paid() || external.amount() == null
+                || payment.getAmount().compareTo(external.amount()) != 0
                 || !Payment.CURRENCY_KRW.equals(external.currency()) || !payment.getCurrency().equals(external.currency())
                 || !payment.getExpiresAt().isAfter(clock.instant())) {
             throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);

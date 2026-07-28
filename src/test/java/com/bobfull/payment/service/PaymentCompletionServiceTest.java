@@ -8,6 +8,7 @@ import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentPurpose;
+import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.port.PortOnePaymentReader;
 import com.bobfull.payment.repository.PaymentRepository;
 import java.math.BigDecimal;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentCompletionServiceTest {
@@ -63,6 +65,45 @@ class PaymentCompletionServiceTest {
         // then
         assertThat(result.reservationId()).isEqualTo(10L);
         assertThat(result.participationId()).isEqualTo(20L);
+        verifyNoInteractions(portOnePaymentReader, transactionService);
+    }
+
+    @Test
+    void 내부_금액의_scale만_다르면_정상_검증을_통과한다() {
+        // given
+        Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
+                new BigDecimal("10000.00"), Instant.parse("2026-07-28T01:00:00Z"));
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        given(portOnePaymentReader.read("payment-id"))
+                .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "KRW"));
+        var expected = new PaymentCompletionTransactionService.PaymentCompletionResult(payment, 10L, 20L);
+        given(transactionService.complete("payment-id", 1L)).willReturn(expected);
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.fixed(Instant.parse("2026-07-28T00:01:00Z"), ZoneOffset.UTC));
+
+        // when
+        var result = service.complete("payment-id", 1L);
+
+        // then
+        assertThat(result).isSameAs(expected);
+    }
+
+    @Test
+    void READY가_아닌_Payment은_SDK와_예약확정_트랜잭션을_수행하지_않는다() {
+        // given
+        Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
+                BigDecimal.valueOf(10000), Instant.parse("2026-07-28T01:00:00Z"));
+        ReflectionTestUtils.setField(payment, "status", PaymentStatus.FAILED);
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.fixed(Instant.parse("2026-07-28T00:01:00Z"), ZoneOffset.UTC));
+
+        // when
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 1L));
+
+        // then
+        assertThat(thrown).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
         verifyNoInteractions(portOnePaymentReader, transactionService);
     }
 }
