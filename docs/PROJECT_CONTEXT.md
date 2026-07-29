@@ -102,7 +102,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ### 결제 완료와 웹훅
 
 - 결제 당사자는 `/api/payments/{paymentId}/complete`로 결제 완료를 검증한다.
-- 당사자가 아니면 `PAYMENT_ACCESS_DENIED`, 대상 결제가 없으면 `PAYMENT_NOT_FOUND`, 이미 완료 처리됐으면 `PAYMENT_ALREADY_COMPLETED`를 반환한다.
+- 당사자가 아니면 `PAYMENT_ACCESS_DENIED`, 대상 결제가 없으면 `PAYMENT_NOT_FOUND`를 반환한다. 이미 완료 처리된 Payment는 기존 완료 결과를 담아 멱등 응답한다.
 - PortOne 웹훅은 사용자 인증 대신 서명 검증과 멱등성으로 처리한다.
 - 완료 검증과 웹훅이 동시에 실행되어도 예약·참여·결제 상태는 한 번만 반영한다.
 

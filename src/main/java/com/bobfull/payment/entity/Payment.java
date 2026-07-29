@@ -62,6 +62,9 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
     protected Payment() {
     }
 
@@ -180,5 +183,29 @@ public class Payment extends BaseTimeEntity {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public Instant getPaidAt() {
+        return paidAt;
+    }
+
+    public boolean isOwnedBy(Long memberId) {
+        return this.memberId.equals(memberId);
+    }
+
+    public void complete(Instant paidAt) {
+        if (status != PaymentStatus.READY) {
+            throw new IllegalStateException("READY Payment만 완료할 수 있습니다.");
+        }
+        status = PaymentStatus.PAID;
+        this.paidAt = paidAt;
+    }
+
+    public void attachReservationConfirmation(Long reservationId, Long reservationParticipantId) {
+        if (reservationId == null || reservationParticipantId == null) {
+            throw new IllegalArgumentException("예약과 참여자 식별자는 필수입니다.");
+        }
+        this.reservationId = reservationId;
+        this.reservationParticipantId = reservationParticipantId;
     }
 }
