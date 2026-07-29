@@ -185,6 +185,10 @@ public class Payment extends BaseTimeEntity {
         return expiresAt;
     }
 
+    public Instant getPaidAt() {
+        return paidAt;
+    }
+
     public boolean isOwnedBy(Long memberId) {
         return this.memberId.equals(memberId);
     }

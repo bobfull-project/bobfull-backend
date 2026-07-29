@@ -29,6 +29,40 @@ class PaymentCompletionServiceTest {
     @Mock private PaymentCompletionTransactionService transactionService;
 
     @Test
+    void 존재하지_않는_Payment은_결제_검증에_실패하고_외부_호출을_수행하지_않는다() {
+        // given
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.empty());
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.systemUTC());
+
+        // when
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 1L));
+
+        // then
+        assertThat(thrown).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+        verifyNoInteractions(portOnePaymentReader, transactionService);
+    }
+
+    @Test
+    void Payment_소유자가_아니면_결제_검증에_실패하고_외부_호출을_수행하지_않는다() {
+        // given
+        Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
+                BigDecimal.valueOf(10000), Instant.parse("2026-07-28T01:00:00Z"));
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.systemUTC());
+
+        // when
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 2L));
+
+        // then
+        assertThat(thrown).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_ACCESS_DENIED);
+        verifyNoInteractions(portOnePaymentReader, transactionService);
+    }
+
+    @Test
     void 만료된_Payment은_예약확정_트랜잭션을_시작하지_않는다() {
         // given
         Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
@@ -116,6 +150,27 @@ class PaymentCompletionServiceTest {
         given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
         given(portOnePaymentReader.read("payment-id"))
                 .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "USD"));
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.fixed(Instant.parse("2026-07-28T00:01:00Z"), ZoneOffset.UTC));
+
+        // when
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 1L));
+
+        // then
+        assertThat(thrown).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+        verifyNoInteractions(transactionService);
+    }
+
+    @Test
+    void 내부와_외부_통화가_다르면_결제_검증에_실패하고_트랜잭션을_시작하지_않는다() {
+        // given
+        Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
+                BigDecimal.valueOf(10000), Instant.parse("2026-07-28T01:00:00Z"));
+        ReflectionTestUtils.setField(payment, "currency", "USD");
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        given(portOnePaymentReader.read("payment-id"))
+                .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "KRW"));
         PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
                 transactionService, Clock.fixed(Instant.parse("2026-07-28T00:01:00Z"), ZoneOffset.UTC));
 

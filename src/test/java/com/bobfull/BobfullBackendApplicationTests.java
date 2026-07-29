@@ -10,7 +10,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 		"spring.datasource.password=",
 		"spring.jpa.hibernate.ddl-auto=create-drop",
 		"jwt.secret=bobfull-context-load-test-secret-key-please-keep-long",
-		"jwt.access-token-expiration-seconds=3600"
+		"jwt.access-token-expiration-seconds=3600",
+		"portone.api-secret=portone-context-load-test-api-secret",
+		"portone.store-id=portone-context-load-test-store-id"
 })
 class BobfullBackendApplicationTests {
 
