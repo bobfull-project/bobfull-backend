@@ -1,0 +1,184 @@
+package com.bobfull.reservation.service;
+
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.payment.dto.CreateReadyPaymentCommand;
+import com.bobfull.payment.dto.CreateReadyPaymentResult;
+import com.bobfull.payment.entity.PaymentPurpose;
+import com.bobfull.payment.service.PaymentHoldReader;
+import com.bobfull.payment.service.ReadyPaymentCreator;
+import com.bobfull.reservation.dto.ReservationAvailabilityResponse;
+import com.bobfull.reservation.dto.ReservationPrepareRequest;
+import com.bobfull.reservation.dto.ReservationPrepareResponse;
+import com.bobfull.reservation.entity.RecruitmentStatus;
+import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.repository.ReservationParticipantRepository;
+import com.bobfull.reservation.repository.ReservationRepository;
+import com.bobfull.restaurant.entity.Restaurant;
+import com.bobfull.restaurant.repository.RestaurantRepository;
+import com.bobfull.sharedtable.entity.SharedTable;
+import com.bobfull.sharedtable.repository.SharedTableRepository;
+import com.bobfull.timeslot.entity.TimeSlot;
+import com.bobfull.timeslot.repository.TimeSlotRepository;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 최초 예약 생성과 기존 예약 추가 참여의 예약 가능 여부 확인·결제 준비를 담당한다(Issue #35, ADR 0001).
+ * 결제 성공 전에는 Reservation·ReservationParticipant를 생성하지 않으며, 실제 확정은 #93이
+ * {@link com.bobfull.payment.port.ReservationConfirmationPort} 구현에서 이 도메인의
+ * {@link ReservationConfirmationService}를 호출해 수행한다.
+ */
+@Service
+public class ReservationPreparationService {
+
+    private static final List<ReservationStatus> ACTIVE_STATUSES =
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+
+    private final TimeSlotRepository timeSlotRepository;
+    private final SharedTableRepository sharedTableRepository;
+    private final RestaurantRepository restaurantRepository;
+    private final ReservationRepository reservationRepository;
+    private final ReservationParticipantRepository reservationParticipantRepository;
+    private final PaymentHoldReader paymentHoldReader;
+    private final ReadyPaymentCreator readyPaymentCreator;
+    private final AvailableCapacityCalculator availableCapacityCalculator;
+
+    public ReservationPreparationService(
+            TimeSlotRepository timeSlotRepository,
+            SharedTableRepository sharedTableRepository,
+            RestaurantRepository restaurantRepository,
+            ReservationRepository reservationRepository,
+            ReservationParticipantRepository reservationParticipantRepository,
+            PaymentHoldReader paymentHoldReader,
+            ReadyPaymentCreator readyPaymentCreator,
+            AvailableCapacityCalculator availableCapacityCalculator
+    ) {
+        this.timeSlotRepository = timeSlotRepository;
+        this.sharedTableRepository = sharedTableRepository;
+        this.restaurantRepository = restaurantRepository;
+        this.reservationRepository = reservationRepository;
+        this.reservationParticipantRepository = reservationParticipantRepository;
+        this.paymentHoldReader = paymentHoldReader;
+        this.readyPaymentCreator = readyPaymentCreator;
+        this.availableCapacityCalculator = availableCapacityCalculator;
+    }
+
+    @Transactional(readOnly = true)
+    public ReservationAvailabilityResponse checkAvailability(
+            Long memberId, PaymentPurpose type, Long targetId, Integer partySize
+    ) {
+        validatePartySizeInput(partySize);
+        ValidatedTarget target = (type == PaymentPurpose.CREATE)
+                ? resolveCreateTarget(targetId, partySize, false)
+                : resolveJoinTarget(memberId, targetId, partySize, false);
+        return ReservationAvailabilityResponse.available(target.availableCapacity());
+    }
+
+    @Transactional
+    public ReservationPrepareResponse prepare(Long memberId, ReservationPrepareRequest request) {
+        validatePartySizeInput(request.partySize());
+        ValidatedTarget target = (request.type() == PaymentPurpose.CREATE)
+                ? resolveCreateTarget(request.targetId(), request.partySize(), true)
+                : resolveJoinTarget(memberId, request.targetId(), request.partySize(), true);
+
+        BigDecimal amount = BigDecimal.valueOf(target.depositPerPerson()).multiply(BigDecimal.valueOf(request.partySize()));
+        CreateReadyPaymentCommand command = new CreateReadyPaymentCommand(
+                memberId, target.timeSlotId(), target.reservationId(), request.type(), request.partySize(), amount);
+        CreateReadyPaymentResult result = readyPaymentCreator.createReadyPayment(command);
+        return ReservationPrepareResponse.from(result);
+    }
+
+    private ValidatedTarget resolveCreateTarget(Long timeSlotId, Integer partySize, boolean lock) {
+        TimeSlot timeSlot = findTimeSlotOrThrow(timeSlotId, lock);
+        SharedTable sharedTable = findTableOrThrow(timeSlot.getSharedTableId());
+        Restaurant restaurant = findRestaurantOrThrow(sharedTable.getRestaurantId());
+        validatePartySizeAgainstCapacity(partySize, sharedTable.getCapacity());
+        validateNoActiveCreate(timeSlot.getId());
+
+        int availableCapacity = availableCapacityCalculator.calculate(timeSlot.getId(), sharedTable.getCapacity());
+        return new ValidatedTarget(timeSlot.getId(), null, restaurant.getDepositPerPerson(), availableCapacity);
+    }
+
+    private ValidatedTarget resolveJoinTarget(Long memberId, Long reservationId, Integer partySize, boolean lock) {
+        Reservation reservation = findReservationOrThrow(reservationId);
+        validateJoinable(reservation);
+        validateNotAlreadyParticipating(reservation.getId(), memberId);
+
+        TimeSlot timeSlot = findTimeSlotOrThrow(reservation.getTimeSlotId(), lock);
+        SharedTable sharedTable = findTableOrThrow(timeSlot.getSharedTableId());
+        Restaurant restaurant = findRestaurantOrThrow(sharedTable.getRestaurantId());
+        int availableCapacity = availableCapacityCalculator.calculate(timeSlot.getId(), sharedTable.getCapacity());
+        validatePartySizeAgainstRemainingCapacity(partySize, availableCapacity);
+
+        return new ValidatedTarget(timeSlot.getId(), reservation.getId(), restaurant.getDepositPerPerson(), availableCapacity);
+    }
+
+    private void validateNoActiveCreate(Long timeSlotId) {
+        boolean activeReservationExists = reservationRepository.existsByTimeSlotIdAndReservationStatusIn(
+                timeSlotId, ACTIVE_STATUSES);
+        boolean activeCreateReadyExists = paymentHoldReader.existsActiveReadyPayment(timeSlotId, PaymentPurpose.CREATE);
+        if (activeReservationExists || activeCreateReadyExists) {
+            throw new CustomException(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
+        }
+    }
+
+    private void validateJoinable(Reservation reservation) {
+        if (!reservation.isActive() || reservation.getRecruitmentStatus() != RecruitmentStatus.OPEN) {
+            throw new CustomException(ReservationErrorCode.INVALID_STATE);
+        }
+    }
+
+    private void validateNotAlreadyParticipating(Long reservationId, Long memberId) {
+        if (reservationParticipantRepository.existsByReservationIdAndMemberId(reservationId, memberId)) {
+            throw new CustomException(ReservationErrorCode.INVALID_STATE);
+        }
+    }
+
+    private void validatePartySizeInput(Integer partySize) {
+        if (partySize == null || partySize < 1) {
+            throw new CustomException(ReservationErrorCode.INVALID_PARTY_SIZE);
+        }
+    }
+
+    private void validatePartySizeAgainstCapacity(Integer partySize, Integer tableCapacity) {
+        if (partySize > tableCapacity) {
+            throw new CustomException(ReservationErrorCode.INVALID_PARTY_SIZE);
+        }
+    }
+
+    private void validatePartySizeAgainstRemainingCapacity(Integer partySize, int availableCapacity) {
+        if (partySize > availableCapacity) {
+            throw new CustomException(ReservationErrorCode.INSUFFICIENT_REMAINING_CAPACITY);
+        }
+    }
+
+    private TimeSlot findTimeSlotOrThrow(Long timeSlotId, boolean lock) {
+        Optional<TimeSlot> timeSlot = lock
+                ? timeSlotRepository.findWithLockByIdAndDeletedAtIsNull(timeSlotId)
+                : timeSlotRepository.findByIdAndDeletedAtIsNull(timeSlotId);
+        return timeSlot.orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private SharedTable findTableOrThrow(Long tableId) {
+        return sharedTableRepository.findByIdAndDeletedAtIsNull(tableId)
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private Restaurant findRestaurantOrThrow(Long restaurantId) {
+        return restaurantRepository.findByIdAndDeletedAtIsNull(restaurantId)
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private Reservation findReservationOrThrow(Long reservationId) {
+        return reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private record ValidatedTarget(Long timeSlotId, Long reservationId, Integer depositPerPerson, int availableCapacity) {
+    }
+}

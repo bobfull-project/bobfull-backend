@@ -1,6 +1,7 @@
 package com.bobfull.timeslot.repository;
 
 import com.bobfull.timeslot.entity.TimeSlot;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -8,12 +9,18 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
 public interface TimeSlotRepository extends JpaRepository<TimeSlot, Long> {
 
     Optional<TimeSlot> findByIdAndDeletedAtIsNull(Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<TimeSlot> findWithLockByIdAndDeletedAtIsNull(Long id);
+
     boolean existsBySharedTableIdAndDeletedAtIsNull(Long sharedTableId);
+
+    List<TimeSlot> findAllBySharedTableIdAndDeletedAtIsNull(Long sharedTableId);
 
     boolean existsBySharedTableIdAndStartAtAndDeletedAtIsNull(Long sharedTableId, Instant startAt);
 

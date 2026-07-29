@@ -1,5 +1,10 @@
 package com.bobfull.timeslot.service;
 
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.TimeSlotErrorCode;
+import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.repository.ReservationRepository;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -8,11 +13,22 @@ import org.springframework.stereotype.Service;
 @Service
 public class TimeSlotReservationValidator {
 
+    private static final List<ReservationStatus> ACTIVE_STATUSES =
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+
+    private final ReservationRepository reservationRepository;
+
+    public TimeSlotReservationValidator(ReservationRepository reservationRepository) {
+        this.reservationRepository = reservationRepository;
+    }
+
     public void validateChangeAllowed(Long sessionId) {
-        // 예약 도메인이 구현되면 활성 예약 존재 기준 수정 제한을 이 경계에서 연결한다.
+        if (reservationRepository.existsByTimeSlotIdAndReservationStatusIn(sessionId, ACTIVE_STATUSES)) {
+            throw new CustomException(TimeSlotErrorCode.SESSION_HAS_RESERVATION);
+        }
     }
 
     public void validateDeletionAllowed(Long sessionId) {
-        // 예약 도메인이 구현되면 활성 예약 존재 기준 삭제 제한을 이 경계에서 연결한다.
+        validateChangeAllowed(sessionId);
     }
 }
