@@ -2433,6 +2433,7 @@ OWNER 응답 예시:
 ## 3. Response
 
 - Status: `200 OK`
+- 이미 완료된 Payment를 다시 요청하면 기존 완료 결과를 담아 `200 OK`로 멱등 응답한다.
 
 ```json
 {
@@ -2454,7 +2455,6 @@ OWNER 응답 예시:
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `PAYMENT_ACCESS_DENIED` | Payment.memberId와 인증 사용자 ID가 다름 |
 | `404` | `PAYMENT_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `PAYMENT_ALREADY_COMPLETED` | 이미 완료 처리된 결제 |
 | `409` | `PAYMENT_VERIFICATION_FAILED` | 결제 검증 실패 |
 
 ---
