@@ -27,6 +27,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 @DataJpaTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:reservation-search-repository-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -127,6 +128,26 @@ class ReservationSearchRepositoryTest {
         assertThat(result.getContent()).extracting(ReservationSearchResult::reservationId)
                 .containsExactly(remainingThree.getId());
         assertThat(result.getContent().get(0).availableCapacity()).isEqualTo(3);
+    }
+
+    @Test
+    void recent_정렬은_예약_최신_생성순으로_조회한다() {
+        // given
+        Reservation oldReservation =
+                createReservation("먼저생성예약", "한식", "흑돼지", 4, "2026-08-01T18:00:00");
+        Reservation recentReservation =
+                createReservation("나중생성예약", "한식", "갈치조림", 4, "2026-08-01T19:00:00");
+        reservationRepository.flush();
+
+        // when
+        Page<ReservationSearchResult> result = reservationRepository.searchRecruitingReservations(
+                new ReservationSearchRequest(null, null, null, null, null),
+                NOW,
+                PageRequest.of(0, 20, Sort.by(Sort.Order.desc("recent"))));
+
+        // then
+        assertThat(result.getContent()).extracting(ReservationSearchResult::reservationId)
+                .containsExactly(recentReservation.getId(), oldReservation.getId());
     }
 
     private Reservation createReservation(

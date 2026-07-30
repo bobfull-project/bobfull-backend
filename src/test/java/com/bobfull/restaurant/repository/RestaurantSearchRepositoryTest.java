@@ -19,6 +19,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 @DataJpaTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:restaurant-search-repository-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -111,6 +112,22 @@ class RestaurantSearchRepositoryTest {
 
         // then
         assertThat(result.getContent()).containsExactly(matched);
+    }
+
+    @Test
+    void recent_정렬은_식당_최신_등록순으로_조회한다() {
+        // given
+        Restaurant oldRestaurant = restaurantRepository.save(restaurant("먼저등록식당", "한식", "흑돼지"));
+        Restaurant recentRestaurant = restaurantRepository.save(restaurant("나중등록식당", "한식", "갈치조림"));
+        restaurantRepository.flush();
+
+        // when
+        Page<Restaurant> result = restaurantRepository.search(
+                new RestaurantSearchRequest(null, null, null, null),
+                PageRequest.of(0, 20, Sort.by(Sort.Order.desc("recent"))));
+
+        // then
+        assertThat(result.getContent()).containsExactly(recentRestaurant, oldRestaurant);
     }
 
     private Restaurant restaurant(String name, String category, String keyword) {

@@ -117,14 +117,20 @@ public class RestaurantSearchRepositoryImpl implements RestaurantSearchRepositor
 
     private OrderSpecifier<?>[] restaurantOrderSpecifiers(Sort sort, QRestaurant restaurant) {
         List<OrderSpecifier<?>> orderSpecifiers = new ArrayList<>();
+        Order recentDirection = null;
         for (Sort.Order order : sort) {
             OrderSpecifier<?> orderSpecifier = restaurantOrderSpecifier(order, restaurant);
             if (orderSpecifier != null) {
                 orderSpecifiers.add(orderSpecifier);
             }
+            if (order.getProperty().equals("createdAt") || order.getProperty().equals("recent")) {
+                recentDirection = order.isAscending() ? Order.ASC : Order.DESC;
+            }
         }
         if (orderSpecifiers.isEmpty()) {
             orderSpecifiers.add(restaurant.id.asc());
+        } else if (recentDirection != null) {
+            orderSpecifiers.add(order(recentDirection, restaurant.id));
         }
         return orderSpecifiers.toArray(OrderSpecifier[]::new);
     }
@@ -136,6 +142,7 @@ public class RestaurantSearchRepositoryImpl implements RestaurantSearchRepositor
             case "name" -> order(direction, restaurant.name);
             case "category" -> order(direction, restaurant.category);
             case "depositPerPerson" -> order(direction, restaurant.depositPerPerson);
+            case "createdAt", "recent" -> order(direction, restaurant.createdAt);
             default -> null;
         };
     }

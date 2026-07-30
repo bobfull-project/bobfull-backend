@@ -194,6 +194,7 @@ public class ReservationSearchRepositoryImpl implements ReservationSearchReposit
             NumberExpression<Long> availableCapacity
     ) {
         List<OrderSpecifier<?>> orderSpecifiers = new ArrayList<>();
+        Order recentDirection = null;
         for (Sort.Order order : sort) {
             OrderSpecifier<?> orderSpecifier = reservationOrderSpecifier(
                     order, reservation, timeSlot, sharedTable, restaurant,
@@ -201,10 +202,15 @@ public class ReservationSearchRepositoryImpl implements ReservationSearchReposit
             if (orderSpecifier != null) {
                 orderSpecifiers.add(orderSpecifier);
             }
+            if (order.getProperty().equals("createdAt") || order.getProperty().equals("recent")) {
+                recentDirection = order.isAscending() ? Order.ASC : Order.DESC;
+            }
         }
         if (orderSpecifiers.isEmpty()) {
             orderSpecifiers.add(timeSlot.startAt.asc());
             orderSpecifiers.add(reservation.id.asc());
+        } else if (recentDirection != null) {
+            orderSpecifiers.add(order(recentDirection, reservation.id));
         }
         return orderSpecifiers.toArray(OrderSpecifier[]::new);
     }
@@ -228,6 +234,7 @@ public class ReservationSearchRepositoryImpl implements ReservationSearchReposit
             case "capacity" -> order(direction, sharedTable.capacity);
             case "startAt" -> order(direction, timeSlot.startAt);
             case "endAt" -> order(direction, timeSlot.endAt);
+            case "createdAt", "recent" -> order(direction, reservation.createdAt);
             case "currentParticipantCount" -> new OrderSpecifier<>(direction, currentParticipantCount);
             case "availableCapacity" -> new OrderSpecifier<>(direction, availableCapacity);
             default -> null;
