@@ -82,6 +82,16 @@ class PortOneWebhookControllerWebTest {
         performSignedRequest().andExpect(status().isInternalServerError());
     }
 
+    @Test
+    void 분류되지_않은_CustomException은_5xx다() throws Exception {
+        when(webhookVerifier.verify(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(new PortOneWebhookVerifier.WebhookEvent("payment-id"));
+        doThrow(new CustomException(PaymentErrorCode.PAYMENT_ACCESS_DENIED))
+                .when(paymentCompletionService).completeFromWebhook("payment-id");
+
+        performSignedRequest().andExpect(status().isInternalServerError());
+    }
+
     private org.springframework.test.web.servlet.ResultActions performSignedRequest() throws Exception {
         return mockMvc.perform(post("/api/webhooks/portone")
                 .contentType(MediaType.APPLICATION_JSON)

@@ -80,7 +80,7 @@ class ReservationConfirmationServiceTest {
         Reservation reservation = reservation(10L);
         TimeSlot timeSlot = timeSlot(200L, 100L);
         SharedTable sharedTable = sharedTable(100L, 4);
-        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(reservationParticipantRepository.save(any(ReservationParticipant.class))).willAnswer(invocation -> {
             ReservationParticipant participant = invocation.getArgument(0);
             ReflectionTestUtils.setField(participant, "id", 21L);
@@ -104,7 +104,7 @@ class ReservationConfirmationServiceTest {
         Reservation reservation = reservation(10L);
         TimeSlot timeSlot = timeSlot(200L, 100L);
         SharedTable sharedTable = sharedTable(100L, 4);
-        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(reservationParticipantRepository.save(any(ReservationParticipant.class))).willAnswer(invocation -> {
             ReservationParticipant participant = invocation.getArgument(0);
             ReflectionTestUtils.setField(participant, "id", 21L);
@@ -131,7 +131,7 @@ class ReservationConfirmationServiceTest {
         Reservation reservation = reservation(10L);
         TimeSlot timeSlot = timeSlot(200L, 100L);
         SharedTable sharedTable = sharedTable(100L, 2);
-        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(reservationParticipantRepository.save(any(ReservationParticipant.class))).willAnswer(invocation -> {
             ReservationParticipant participant = invocation.getArgument(0);
             ReflectionTestUtils.setField(participant, "id", 22L);

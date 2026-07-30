@@ -40,34 +40,39 @@ public class PaymentCompletionService {
         Payment payment = paymentRepository.findByPaymentId(paymentId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.PAYMENT_NOT_FOUND));
         if (payment.getStatus() == PaymentStatus.PAID) return new PaymentCompletionTransactionService.PaymentCompletionResult(payment, payment.getReservationId(), payment.getReservationParticipantId());
+        if (payment.getStatus() != PaymentStatus.READY && payment.getStatus() != PaymentStatus.EXPIRED) {
+            throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+        }
         PortOnePaymentReader.PortOnePayment external = portOnePaymentReader.read(paymentId);
         if (!paymentId.equals(external.paymentId()) || !external.paid() || external.amount() == null
                 || payment.getAmount().compareTo(external.amount()) != 0
                 || !Payment.CURRENCY_KRW.equals(external.currency()) || !payment.getCurrency().equals(external.currency())) {
             throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
         }
-        try {
-            return transactionService.complete(paymentId);
-        } catch (PaymentExpiredException exception) {
-                log.error("event=PAYMENT_COMPENSATION_REQUIRED paymentId={} externalStatus={} internalStatus={} expiresAt={} reason={}",
-                        paymentId, "PAID", exception.getInternalStatus(), exception.getExpiresAt(), exception.getErrorCode().getCode());
-            throw exception;
-        }
+        return completeAfterExternalPaid(paymentId, null);
     }
 
     private PaymentCompletionTransactionService.PaymentCompletionResult completeVerified(String paymentId, Payment payment, Long memberId) {
         if (payment.getStatus() == PaymentStatus.PAID) return new PaymentCompletionTransactionService.PaymentCompletionResult(payment, payment.getReservationId(), payment.getReservationParticipantId());
-        if (payment.getStatus() == PaymentStatus.EXPIRED || !payment.getExpiresAt().isAfter(clock.instant())) throw new CustomException(PaymentErrorCode.PAYMENT_EXPIRED);
-        if (payment.getStatus() != PaymentStatus.READY) throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+        if (payment.getStatus() != PaymentStatus.READY && payment.getStatus() != PaymentStatus.EXPIRED) {
+            throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+        }
         PortOnePaymentReader.PortOnePayment external = portOnePaymentReader.read(paymentId);
         if (!paymentId.equals(external.paymentId()) || !external.paid() || external.amount() == null
                 || payment.getAmount().compareTo(external.amount()) != 0
                 || !Payment.CURRENCY_KRW.equals(external.currency()) || !payment.getCurrency().equals(external.currency())) {
             throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
         }
-        if (!payment.getExpiresAt().isAfter(clock.instant())) {
-            throw new CustomException(PaymentErrorCode.PAYMENT_EXPIRED);
+        return completeAfterExternalPaid(paymentId, memberId);
+    }
+
+    private PaymentCompletionTransactionService.PaymentCompletionResult completeAfterExternalPaid(String paymentId, Long memberId) {
+        try {
+            return memberId == null ? transactionService.complete(paymentId) : transactionService.complete(paymentId, memberId);
+        } catch (PaymentExpiredException exception) {
+            log.error("event=PAYMENT_COMPENSATION_REQUIRED paymentId={} externalStatus={} internalStatus={} expiresAt={} reason={}",
+                    paymentId, "PAID", exception.getInternalStatus(), exception.getExpiresAt(), exception.getErrorCode().getCode());
+            throw exception;
         }
-        return memberId == null ? transactionService.complete(paymentId) : transactionService.complete(paymentId, memberId);
     }
 }

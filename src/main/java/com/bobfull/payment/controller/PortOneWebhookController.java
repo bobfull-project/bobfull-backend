@@ -14,10 +14,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/webhooks/portone")
 public class PortOneWebhookController {
+    private static final Set<PaymentErrorCode> PERMANENT_FAILURES = Set.of(
+            PaymentErrorCode.PAYMENT_NOT_FOUND,
+            PaymentErrorCode.PAYMENT_VERIFICATION_FAILED,
+            PaymentErrorCode.PAYMENT_EXPIRED);
     private static final Logger log = LoggerFactory.getLogger(PortOneWebhookController.class);
     private final PortOneWebhookVerifier webhookVerifier;
     private final PaymentCompletionService paymentCompletionService;
@@ -36,6 +41,9 @@ public class PortOneWebhookController {
             if (paymentId == null) return ResponseEntity.ok().build();
             try { paymentCompletionService.completeFromWebhook(paymentId); }
             catch (CustomException e) {
+                if (!PERMANENT_FAILURES.contains(e.getErrorCode())) {
+                    throw new IllegalStateException("Unclassified webhook business failure", e);
+                }
                 if (e.getErrorCode() != PaymentErrorCode.PAYMENT_EXPIRED) {
                     log.error("event=PAYMENT_WEBHOOK_PERMANENT_FAILURE paymentId={} reason={}", paymentId,
                             e.getErrorCode().getCode());

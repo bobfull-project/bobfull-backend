@@ -12,6 +12,10 @@ import com.bobfull.payment.port.PortOnePaymentReader;
 import com.bobfull.payment.repository.PaymentRepository;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
+import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationParticipant;
+import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.sharedtable.entity.SharedTable;
 import com.bobfull.sharedtable.repository.SharedTableRepository;
 import com.bobfull.timeslot.entity.TimeSlot;
@@ -161,6 +165,40 @@ class PaymentMySqlConcurrencyIntegrationTest {
         assertThat(expired.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
         assertThat(reservationRepository.count()).isZero();
         assertThat(participantRepository.count()).isZero();
+    }
+
+    @Test
+    void 서로다른_JOIN_Payment_두건이_동시에_완료되면_Reservation은_CONFIRMED_CLOSED가_된다() throws Exception {
+        SharedTable table = sharedTableRepository.saveAndFlush(SharedTable.create(1L, 4));
+        TimeSlot timeSlot = timeSlotRepository.saveAndFlush(TimeSlot.create(table.getId(),
+                Instant.parse("2026-08-01T02:00:00Z"), Instant.parse("2026-08-01T04:00:00Z")));
+        Reservation reservation = reservationRepository.saveAndFlush(Reservation.create(timeSlot.getId(), 1L));
+        participantRepository.saveAndFlush(ReservationParticipant.create(reservation.getId(), 1L, 1));
+        participantRepository.saveAndFlush(ReservationParticipant.create(reservation.getId(), 2L, 1));
+        Payment first = paymentRepository.saveAndFlush(Payment.createReady("join-a-" + UUID.randomUUID(), 11L,
+                timeSlot.getId(), reservation.getId(), PaymentPurpose.JOIN, 1, BigDecimal.valueOf(10000),
+                Instant.parse("2030-09-01T00:00:00Z")));
+        Payment second = paymentRepository.saveAndFlush(Payment.createReady("join-b-" + UUID.randomUUID(), 12L,
+                timeSlot.getId(), reservation.getId(), PaymentPurpose.JOIN, 1, BigDecimal.valueOf(10000),
+                Instant.parse("2030-09-01T00:00:00Z")));
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Throwable> firstResult = executor.submit(() -> { await(start); return capture(() -> completionService.complete(first.getPaymentId(), first.getMemberId())); });
+            Future<Throwable> secondResult = executor.submit(() -> { await(start); return capture(() -> completionService.complete(second.getPaymentId(), second.getMemberId())); });
+            start.countDown();
+            assertThat(firstResult.get(10, TimeUnit.SECONDS)).isNull();
+            assertThat(secondResult.get(10, TimeUnit.SECONDS)).isNull();
+        } finally { executor.shutdownNow(); }
+        Payment paidFirst = paymentRepository.findById(first.getId()).orElseThrow();
+        Payment paidSecond = paymentRepository.findById(second.getId()).orElseThrow();
+        Reservation completed = reservationRepository.findById(reservation.getId()).orElseThrow();
+        assertThat(paidFirst.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(paidSecond.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(participantRepository.count()).isEqualTo(4);
+        assertThat(participantRepository.sumPartySize(reservation.getId(), com.bobfull.reservation.entity.ParticipationStatus.RESERVED)).isEqualTo(4);
+        assertThat(completed.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(completed.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
     }
 
     private void assertPaidWithSingleReservation(Payment payment) {
