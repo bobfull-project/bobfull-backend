@@ -3,7 +3,9 @@ package com.bobfull.common.security;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -33,7 +35,8 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=security-config-web-test-secret-key-please-keep-this-long-enough",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=3600",
+        "cors.allowed-origins=http://localhost:5173"
 })
 @ActiveProfiles("test-api")
 class SecurityConfigWebTest {
@@ -92,6 +95,23 @@ class SecurityConfigWebTest {
         result.andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
+    }
+
+    @Test
+    void 결제완료_preflight는_인증없이_통과하고_허용_origin을_반환한다() throws Exception {
+        mockMvc.perform(options("/api/payments/test123/complete")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type,authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
+    }
+
+    @Test
+    void 결제완료_POST는_인증없이_여전히_401이다() throws Exception {
+        mockMvc.perform(post("/api/payments/test123/complete")
+                        .header("Origin", "http://localhost:5173"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
