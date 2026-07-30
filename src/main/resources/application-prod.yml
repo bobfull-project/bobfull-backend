@@ -23,6 +23,11 @@ portone:
   store-id: ${PORTONE_STORE_ID}
   webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
 
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    image-bucket: ${S3_IMAGE_BUCKET:}
+
 logging:
   level:
     org.hibernate.SQL: info
