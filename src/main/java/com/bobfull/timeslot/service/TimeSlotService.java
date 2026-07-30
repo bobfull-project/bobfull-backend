@@ -6,6 +6,7 @@ import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.exception.SharedTableErrorCode;
 import com.bobfull.common.exception.TimeSlotErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.reservation.service.AvailableCapacityCalculator;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.entity.SharedTable;
@@ -52,6 +53,7 @@ public class TimeSlotService {
     private final SharedTableRepository sharedTableRepository;
     private final RestaurantRepository restaurantRepository;
     private final TimeSlotReservationValidator timeSlotReservationValidator;
+    private final AvailableCapacityCalculator availableCapacityCalculator;
     private final Clock clock;
 
     public TimeSlotService(
@@ -59,12 +61,14 @@ public class TimeSlotService {
             SharedTableRepository sharedTableRepository,
             RestaurantRepository restaurantRepository,
             TimeSlotReservationValidator timeSlotReservationValidator,
+            AvailableCapacityCalculator availableCapacityCalculator,
             Clock clock
     ) {
         this.timeSlotRepository = timeSlotRepository;
         this.sharedTableRepository = sharedTableRepository;
         this.restaurantRepository = restaurantRepository;
         this.timeSlotReservationValidator = timeSlotReservationValidator;
+        this.availableCapacityCalculator = availableCapacityCalculator;
         this.clock = clock;
     }
 
@@ -207,7 +211,7 @@ public class TimeSlotService {
                 capacity,
                 toOffsetDateTime(timeSlot.getStartAt()),
                 toOffsetDateTime(timeSlot.getEndAt()),
-                capacity
+                availableCapacityCalculator.calculate(timeSlot.getId(), capacity)
         );
     }
 

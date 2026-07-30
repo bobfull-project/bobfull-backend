@@ -14,6 +14,7 @@ import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.TimeSlotErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.reservation.service.AvailableCapacityCalculator;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.entity.SharedTable;
@@ -62,12 +63,16 @@ class TimeSlotServiceTest {
     @Mock
     private TimeSlotReservationValidator timeSlotReservationValidator;
 
+    @Mock
+    private AvailableCapacityCalculator availableCapacityCalculator;
+
     private TimeSlotService timeSlotService() {
         return new TimeSlotService(
                 timeSlotRepository,
                 sharedTableRepository,
                 restaurantRepository,
                 timeSlotReservationValidator,
+                availableCapacityCalculator,
                 FIXED_CLOCK
         );
     }
@@ -274,6 +279,8 @@ class TimeSlotServiceTest {
                 .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
                         anyCollection(), any(Instant.class), any(Instant.class)))
                 .willReturn(List.of(smallSlot, largeSlot));
+        given(availableCapacityCalculator.calculate(200L, 2)).willReturn(2);
+        given(availableCapacityCalculator.calculate(201L, 4)).willReturn(4);
 
         // when
         AvailableDiningSessionListResponse response = timeSlotService()
