@@ -1,3 +1,10 @@
+# Default local development:
+#   docker compose up -d
+#   -> starts only MySQL. Run Spring Boot directly from IntelliJ with the local profile.
+#
+# Docker app verification:
+#   docker compose --profile app up --build -d
+#   -> starts MySQL and the Spring Boot app container together.
 services:
   mysql:
     image: mysql:8.4
@@ -26,6 +33,37 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  app:
+    profiles:
+      - app
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bobfull-backend:local
+    container_name: bobfull-app
+    restart: unless-stopped
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRATION_SECONDS: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:-3600}
+      PORTONE_API_SECRET: ${PORTONE_API_SECRET:-}
+      PORTONE_CHANNEL_KEY: ${PORTONE_CHANNEL_KEY:-}
+      PORTONE_STORE_ID: ${PORTONE_STORE_ID:-}
+      PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET:-}
+
+    ports:
+      - "${APP_PORT:-8080}:8080"
 
 volumes:
   bobfull-mysql-data:
