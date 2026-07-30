@@ -13,15 +13,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.bobfull.common.config.ClockConfig;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.response.PageResponse;
 import com.bobfull.common.security.AuthMember;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
+import com.bobfull.reservation.dto.ReservationSearchRequest;
+import com.bobfull.reservation.dto.ReservationSearchResponse;
+import com.bobfull.reservation.entity.RecruitmentStatus;
+import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.dto.ReservationAvailabilityResponse;
 import com.bobfull.reservation.dto.ReservationPrepareRequest;
 import com.bobfull.reservation.dto.ReservationPrepareResponse;
 import com.bobfull.reservation.service.ReservationPreparationService;
+import com.bobfull.reservation.service.ReservationSearchService;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -29,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -56,10 +63,52 @@ class ReservationControllerWebTest {
     @MockitoBean
     private ReservationPreparationService reservationPreparationService;
 
+    @MockitoBean
+    private ReservationSearchService reservationSearchService;
+
     private Authentication memberAuthentication(Long memberId) {
         AuthMember authMember = new AuthMember(memberId, MemberRole.MEMBER);
         return new UsernamePasswordAuthenticationToken(
                 authMember, null, List.of(new SimpleGrantedAuthority("ROLE_MEMBER")));
+    }
+
+    @Test
+    void 인증_없이_모집중_예약을_검색할_수_있다() throws Exception {
+        // given
+        PageResponse<ReservationSearchResponse> page = new PageResponse<>(
+                List.of(new ReservationSearchResponse(
+                        1L,
+                        10L,
+                        "밥풀식당",
+                        100L,
+                        200L,
+                        4,
+                        OffsetDateTime.parse("2026-08-01T18:00:00+09:00"),
+                        OffsetDateTime.parse("2026-08-01T20:00:00+09:00"),
+                        ReservationStatus.RECRUITING,
+                        RecruitmentStatus.OPEN,
+                        2,
+                        2,
+                        3
+                )),
+                0, 20, 1, 1);
+        given(reservationSearchService.searchReservations(
+                any(ReservationSearchRequest.class), any(Pageable.class))).willReturn(page);
+
+        // when
+        ResultActions result = mockMvc.perform(get("/api/reservations/search")
+                .param("keyword", "밥풀")
+                .param("date", "2026-08-01")
+                .param("time", "18:00")
+                .param("capacity", "4")
+                .param("minimumRemainingSeats", "2"));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].reservationId", is(1)))
+                .andExpect(jsonPath("$.data.content[0].restaurantName", is("밥풀식당")))
+                .andExpect(jsonPath("$.data.content[0].recruitmentStatus", is("OPEN")))
+                .andExpect(jsonPath("$.data.content[0].availableCapacity", is(2)));
     }
 
     @Test

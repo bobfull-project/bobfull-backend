@@ -9,6 +9,8 @@ import com.bobfull.restaurant.dto.OwnerRestaurantListResponse;
 import com.bobfull.restaurant.dto.RestaurantCreateRequest;
 import com.bobfull.restaurant.dto.RestaurantDetailResponse;
 import com.bobfull.restaurant.dto.RestaurantIdResponse;
+import com.bobfull.restaurant.dto.RestaurantSearchRequest;
+import com.bobfull.restaurant.dto.RestaurantSearchResponse;
 import com.bobfull.restaurant.dto.RestaurantUpdateRequest;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
@@ -54,6 +56,15 @@ public class RestaurantService {
         Page<Restaurant> restaurants =
                 restaurantRepository.findAllByOwnerMemberIdAndDeletedAtIsNull(ownerMemberId, pageable);
         return PageResponse.from(restaurants.map(OwnerRestaurantListResponse::from));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<RestaurantSearchResponse> searchRestaurants(
+            RestaurantSearchRequest request,
+            Pageable pageable
+    ) {
+        Page<Restaurant> restaurants = restaurantRepository.search(request, pageable);
+        return PageResponse.from(restaurants.map(RestaurantSearchResponse::from));
     }
 
     @Transactional(readOnly = true)
