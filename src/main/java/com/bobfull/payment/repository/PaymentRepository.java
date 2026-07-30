@@ -25,4 +25,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             + "where p.timeSlotId = :timeSlotId and p.status = :status and p.expiresAt > :now")
     int sumPartySizeByTimeSlotIdAndStatusAndExpiresAtAfter(
             @Param("timeSlotId") Long timeSlotId, @Param("status") PaymentStatus status, @Param("now") Instant now);
+
+    boolean existsByReservationIdAndMemberIdAndPurposeAndStatusAndExpiresAtAfter(
+            Long reservationId, Long memberId, PaymentPurpose purpose, PaymentStatus status, Instant now);
 }

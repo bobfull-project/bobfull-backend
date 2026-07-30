@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
+import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
@@ -45,7 +46,7 @@ class ReservationConfirmationServiceTest {
     }
 
     @Test
-    void CREATE는_새_예약과_최초_참여자를_생성하고_정원_미만이면_RECRUITING을_유지한다() {
+    void CREATE는_새_예약과_최초_참여자를_생성하고_확정_기준_미달이면_RECRUITING_OPEN을_유지한다() {
         // given
         TimeSlot timeSlot = timeSlot(200L, 100L);
         SharedTable sharedTable = sharedTable(100L, 4);
@@ -74,7 +75,31 @@ class ReservationConfirmationServiceTest {
     }
 
     @Test
-    void JOIN은_기존_예약에_참여자를_추가하고_정원에_도달하면_CONFIRMED로_전이한다() {
+    void JOIN으로_정원_4명중_3명_확정_기준에_도달하면_CONFIRMED_OPEN을_유지한다() {
+        // given
+        Reservation reservation = reservation(10L);
+        TimeSlot timeSlot = timeSlot(200L, 100L);
+        SharedTable sharedTable = sharedTable(100L, 4);
+        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(reservationParticipantRepository.save(any(ReservationParticipant.class))).willAnswer(invocation -> {
+            ReservationParticipant participant = invocation.getArgument(0);
+            ReflectionTestUtils.setField(participant, "id", 21L);
+            return participant;
+        });
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(3);
+
+        // when
+        service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1);
+
+        // then
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
+    }
+
+    @Test
+    void JOIN으로_정원에_완전히_도달하면_CONFIRMED_CLOSED로_전이한다() {
         // given
         Reservation reservation = reservation(10L);
         TimeSlot timeSlot = timeSlot(200L, 100L);
@@ -91,12 +116,37 @@ class ReservationConfirmationServiceTest {
 
         // when
         ReservationConfirmationService.ReservationConfirmationResult result =
-                service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 2);
+                service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1);
 
         // then
         assertThat(result.reservationId()).isEqualTo(10L);
         assertThat(result.reservationParticipantId()).isEqualTo(21L);
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
+    }
+
+    @Test
+    void 정원_2명_테이블은_확정_기준도_정원과_같아_2명이_차면_CONFIRMED_CLOSED로_전이한다() {
+        // given
+        Reservation reservation = reservation(10L);
+        TimeSlot timeSlot = timeSlot(200L, 100L);
+        SharedTable sharedTable = sharedTable(100L, 2);
+        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(reservationParticipantRepository.save(any(ReservationParticipant.class))).willAnswer(invocation -> {
+            ReservationParticipant participant = invocation.getArgument(0);
+            ReflectionTestUtils.setField(participant, "id", 22L);
+            return participant;
+        });
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(2);
+
+        // when
+        service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1);
+
+        // then
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
     }
 
     private Reservation reservation(Long id) {

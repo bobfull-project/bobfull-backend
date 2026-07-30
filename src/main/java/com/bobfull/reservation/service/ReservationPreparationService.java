@@ -106,12 +106,15 @@ public class ReservationPreparationService {
 
     private ValidatedTarget resolveJoinTarget(Long memberId, Long reservationId, Integer partySize, boolean lock) {
         Reservation reservation = findReservationOrThrow(reservationId);
-        validateJoinable(reservation);
-        validateNotAlreadyParticipating(reservation.getId(), memberId);
-
+        // TimeSlot 잠금을 먼저 획득한 뒤 검증해야 동시 JOIN 요청이 직렬화된다(ADR 0001).
         TimeSlot timeSlot = findTimeSlotOrThrow(reservation.getTimeSlotId(), lock);
         SharedTable sharedTable = findTableOrThrow(timeSlot.getSharedTableId());
         Restaurant restaurant = findRestaurantOrThrow(sharedTable.getRestaurantId());
+
+        validateJoinable(reservation);
+        validateNotAlreadyParticipating(reservation.getId(), memberId);
+        validateNoActiveJoinReady(reservation.getId(), memberId);
+
         int availableCapacity = availableCapacityCalculator.calculate(timeSlot.getId(), sharedTable.getCapacity());
         validatePartySizeAgainstRemainingCapacity(partySize, availableCapacity);
 
@@ -136,6 +139,17 @@ public class ReservationPreparationService {
     private void validateNotAlreadyParticipating(Long reservationId, Long memberId) {
         if (reservationParticipantRepository.existsByReservationIdAndMemberId(reservationId, memberId)) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
+        }
+    }
+
+    /**
+     * 결제 완료 전에는 ReservationParticipant가 생성되지 않으므로, 같은 회원이 같은 예약에
+     * 반복해서 JOIN을 요청해도 {@link #validateNotAlreadyParticipating}만으로는 막을 수 없다.
+     * 만료되지 않은 JOIN READY Payment 존재 여부로 중복 결제 준비 자체를 막는다.
+     */
+    private void validateNoActiveJoinReady(Long reservationId, Long memberId) {
+        if (paymentHoldReader.existsActiveJoinReadyPayment(reservationId, memberId)) {
+            throw new CustomException(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
         }
     }
 

@@ -67,4 +67,11 @@ public class PaymentService implements ReadyPaymentCreator, PaymentHoldReader {
         return paymentRepository.sumPartySizeByTimeSlotIdAndStatusAndExpiresAtAfter(
                 timeSlotId, PaymentStatus.READY, clock.instant());
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsActiveJoinReadyPayment(Long reservationId, Long memberId) {
+        return paymentRepository.existsByReservationIdAndMemberIdAndPurposeAndStatusAndExpiresAtAfter(
+                reservationId, memberId, PaymentPurpose.JOIN, PaymentStatus.READY, clock.instant());
+    }
 }

@@ -256,7 +256,13 @@ class ReservationPreparationServiceTest {
     void JOIN_대상_예약의_모집이_마감되면_409_예외가_발생한다() {
         // given
         Reservation reservation = reservationWithClosedRecruitment(10L, 200L);
+        TimeSlot timeSlot = timeSlot(200L, 100L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        Restaurant restaurant = restaurant(10L, 10000);
         given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
 
         // when
         Throwable result = catchThrowable(() -> service().checkAvailability(2L, PaymentPurpose.JOIN, 10L, 2));
@@ -270,7 +276,13 @@ class ReservationPreparationServiceTest {
     void JOIN_이미_참여중인_회원은_409_예외가_발생한다() {
         // given
         Reservation reservation = reservation(10L, 200L);
+        TimeSlot timeSlot = timeSlot(200L, 100L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        Restaurant restaurant = restaurant(10L, 10000);
         given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
         given(reservationParticipantRepository.existsByReservationIdAndMemberId(10L, 2L)).willReturn(true);
 
         // when
@@ -279,6 +291,59 @@ class ReservationPreparationServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
+    }
+
+    @Test
+    void JOIN_동일_회원의_활성_READY_결제가_이미_있으면_409_예외가_발생한다() {
+        // given
+        Reservation reservation = reservation(10L, 200L);
+        TimeSlot timeSlot = timeSlot(200L, 100L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        Restaurant restaurant = restaurant(10L, 10000);
+        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(reservationParticipantRepository.existsByReservationIdAndMemberId(10L, 2L)).willReturn(false);
+        given(paymentHoldReader.existsActiveJoinReadyPayment(10L, 2L)).willReturn(true);
+
+        // when
+        Throwable result = catchThrowable(() -> service().checkAvailability(2L, PaymentPurpose.JOIN, 10L, 2));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode())
+                .isEqualTo(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
+    }
+
+    @Test
+    void JOIN_동일_회원이_순차적으로_반복_요청해도_두번째_결제_준비는_거절된다() {
+        // given
+        Reservation reservation = reservation(10L, 200L);
+        TimeSlot timeSlot = timeSlot(200L, 100L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        Restaurant restaurant = restaurant(10L, 10000);
+        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(timeSlotRepository.findWithLockByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(reservationParticipantRepository.existsByReservationIdAndMemberId(10L, 2L)).willReturn(false);
+        given(availableCapacityCalculator.calculate(200L, 4)).willReturn(2);
+        given(readyPaymentCreator.createReadyPayment(any(CreateReadyPaymentCommand.class))).willReturn(
+                new CreateReadyPaymentResult("payment-id-1", PaymentStatus.READY, BigDecimal.valueOf(10000),
+                        Instant.parse("2026-07-25T08:10:00Z")));
+        given(paymentHoldReader.existsActiveJoinReadyPayment(10L, 2L)).willReturn(false).willReturn(true);
+
+        // when
+        service().prepare(2L, new ReservationPrepareRequest(PaymentPurpose.JOIN, 10L, 1));
+        Throwable result = catchThrowable(
+                () -> service().prepare(2L, new ReservationPrepareRequest(PaymentPurpose.JOIN, 10L, 1)));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode())
+                .isEqualTo(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
+        verify(readyPaymentCreator, org.mockito.Mockito.times(1)).createReadyPayment(any(CreateReadyPaymentCommand.class));
     }
 
     @Test

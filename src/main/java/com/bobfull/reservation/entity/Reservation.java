@@ -53,12 +53,19 @@ public class Reservation extends BaseTimeEntity {
     }
 
     /**
-     * 정원 도달 등 확정 기준을 만족했을 때 RECRUITING에서 CONFIRMED로 전이한다.
+     * 확정 기준(docs/BOBFULL_API_SPEC_COMPLETE.md §0.8) 도달 시 RECRUITING에서 CONFIRMED로 전이한다.
      */
     public void confirm() {
         if (reservationStatus == ReservationStatus.RECRUITING) {
             this.reservationStatus = ReservationStatus.CONFIRMED;
         }
+    }
+
+    /**
+     * 정원 도달 시 추가 참여 모집을 마감한다(§0.8).
+     */
+    public void closeRecruitment() {
+        this.recruitmentStatus = RecruitmentStatus.CLOSED;
     }
 
     public boolean isActive() {
