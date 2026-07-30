@@ -3,6 +3,7 @@ package com.bobfull.restaurant.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 import com.bobfull.common.exception.CommonErrorCode;
@@ -13,6 +14,8 @@ import com.bobfull.restaurant.dto.OwnerRestaurantDetailResponse;
 import com.bobfull.restaurant.dto.RestaurantCreateRequest;
 import com.bobfull.restaurant.dto.RestaurantDetailResponse;
 import com.bobfull.restaurant.dto.RestaurantIdResponse;
+import com.bobfull.restaurant.dto.RestaurantSearchRequest;
+import com.bobfull.restaurant.dto.RestaurantSearchResponse;
 import com.bobfull.restaurant.dto.RestaurantUpdateRequest;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
@@ -75,6 +78,24 @@ class RestaurantServiceTest {
 
         // then
         assertThat(response.content()).hasSize(1);
+        assertThat(response.totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void 사용자용_식당_검색은_공개_목록_응답으로_변환한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        RestaurantSearchRequest request = new RestaurantSearchRequest("흑돼지", "한식", null, null);
+        Pageable pageable = PageRequest.of(0, 20);
+        given(restaurantRepository.search(eq(request), eq(pageable)))
+                .willReturn(new PageImpl<>(List.of(restaurant), pageable, 1));
+
+        // when
+        PageResponse<RestaurantSearchResponse> response = restaurantService.searchRestaurants(request, pageable);
+
+        // then
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).keyword()).isEqualTo("흑돼지,혼밥");
         assertThat(response.totalElements()).isEqualTo(1);
     }
 
