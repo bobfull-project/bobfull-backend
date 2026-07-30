@@ -1,6 +1,7 @@
 package com.bobfull.restaurant.controller;
 
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -9,13 +10,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.bobfull.common.config.ClockConfig;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.RestaurantErrorCode;
+import com.bobfull.common.response.PageResponse;
 import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.restaurant.dto.RestaurantDetailResponse;
+import com.bobfull.restaurant.dto.RestaurantSearchRequest;
+import com.bobfull.restaurant.dto.RestaurantSearchResponse;
 import com.bobfull.restaurant.service.RestaurantService;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,6 +43,29 @@ class RestaurantControllerWebTest {
 
     @MockitoBean
     private RestaurantService restaurantService;
+
+    @Test
+    void 인증_없이_식당_목록을_검색할_수_있다() throws Exception {
+        // given
+        PageResponse<RestaurantSearchResponse> page = new PageResponse<>(
+                List.of(new RestaurantSearchResponse(1L, "밥풀식당", "제주시 애월읍 1", "한식", "흑돼지,혼밥", 10000)),
+                0, 20, 1, 1);
+        given(restaurantService.searchRestaurants(any(RestaurantSearchRequest.class), any(Pageable.class)))
+                .willReturn(page);
+
+        // when
+        ResultActions result = mockMvc.perform(get("/api/restaurants")
+                .param("keyword", "흑돼지")
+                .param("category", "한식")
+                .param("date", "2026-08-01")
+                .param("time", "18:00"));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].restaurantId", is(1)))
+                .andExpect(jsonPath("$.data.content[0].keyword", is("흑돼지,혼밥")))
+                .andExpect(jsonPath("$.data.totalElements", is(1)));
+    }
 
     @Test
     void 인증_없이_식당_상세를_조회할_수_있다() throws Exception {
