@@ -4,6 +4,7 @@ import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentStatus;
+import com.bobfull.payment.exception.PaymentExpiredException;
 import com.bobfull.payment.port.ReservationConfirmationPort;
 import com.bobfull.payment.repository.PaymentRepository;
 import org.springframework.stereotype.Service;
@@ -28,11 +29,14 @@ public class PaymentCompletionTransactionService {
     public PaymentCompletionResult complete(String paymentId, Long memberId) {
         Payment payment = paymentRepository.findWithLockByPaymentId(paymentId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-        if (!payment.isOwnedBy(memberId)) {
+        if (memberId != null && !payment.isOwnedBy(memberId)) {
             throw new CustomException(PaymentErrorCode.PAYMENT_ACCESS_DENIED);
         }
         if (payment.getStatus() == PaymentStatus.PAID) {
             return new PaymentCompletionResult(payment, payment.getReservationId(), payment.getReservationParticipantId());
+        }
+        if (payment.getStatus() == PaymentStatus.EXPIRED) {
+            throw new PaymentExpiredException(payment.getStatus(), payment.getExpiresAt());
         }
         if (payment.getStatus() != PaymentStatus.READY) {
             throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
@@ -40,12 +44,17 @@ public class PaymentCompletionTransactionService {
 
         Instant now = clock.instant();
         if (!payment.getExpiresAt().isAfter(now)) {
-            throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+            throw new PaymentExpiredException(payment.getStatus(), payment.getExpiresAt());
         }
         payment.complete(now);
         ReservationConfirmationResult result = reservationConfirmationPort.confirm(payment);
         payment.attachReservationConfirmation(result.reservationId(), result.participationId());
         return new PaymentCompletionResult(payment, result.reservationId(), result.participationId());
+    }
+
+    @Transactional
+    public PaymentCompletionResult complete(String paymentId) {
+        return complete(paymentId, null);
     }
 
     public record PaymentCompletionResult(Payment payment, Long reservationId, Long participationId) { }

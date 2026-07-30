@@ -17,7 +17,7 @@ import java.time.Instant;
  * 외부 paymentId와 현재 시각은 서비스가 생성해 전달하며, 이 엔티티는 READY 생성 불변식만 관리한다.
  */
 @Entity
-@Table(name = "payment")
+@Table(name = "payment", indexes = @jakarta.persistence.Index(name = "idx_payment_status_expires_at_id", columnList = "payment_status, expires_at, payment_id"))
 public class Payment extends BaseTimeEntity {
 
     public static final String CURRENCY_KRW = "KRW";
@@ -199,6 +199,14 @@ public class Payment extends BaseTimeEntity {
         }
         status = PaymentStatus.PAID;
         this.paidAt = paidAt;
+    }
+
+    public boolean expireIfNeeded(Instant now) {
+        if (status != PaymentStatus.READY || expiresAt.isAfter(now)) {
+            return false;
+        }
+        status = PaymentStatus.EXPIRED;
+        return true;
     }
 
     public void attachReservationConfirmation(Long reservationId, Long reservationParticipantId) {

@@ -1,0 +1,3 @@
+payment:
+  expiration:
+    enabled: false
