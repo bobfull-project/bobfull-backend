@@ -11,7 +11,8 @@ import org.springframework.test.context.TestPropertySource;
 @SpringJUnitConfig(PortOneConfig.class)
 @TestPropertySource(properties = {
         "portone.api-secret=test-api-secret",
-        "portone.store-id=test-store-id"
+        "portone.store-id=test-store-id",
+        "portone.webhook-secret=d2hzZWNfZEdWemRDMXpkR055WlhRPQ=="
 })
 class PortOneConfigTest {
     @Autowired private PortOneProperties properties;

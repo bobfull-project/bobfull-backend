@@ -54,7 +54,7 @@ public class ReservationConfirmationService {
     ) {
         Reservation reservation = (purpose == PaymentPurpose.CREATE)
                 ? reservationRepository.save(Reservation.create(timeSlotId, memberId))
-                : findReservationOrThrow(reservationId);
+                : findReservationWithLockOrThrow(reservationId);
 
         ReservationParticipant participant = reservationParticipantRepository.save(
                 ReservationParticipant.create(reservation.getId(), memberId, partySize));
@@ -87,8 +87,8 @@ public class ReservationConfirmationService {
         return sharedTable.getCapacity();
     }
 
-    private Reservation findReservationOrThrow(Long reservationId) {
-        return reservationRepository.findById(reservationId)
+    private Reservation findReservationWithLockOrThrow(Long reservationId) {
+        return reservationRepository.findWithLockById(reservationId)
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
     }
 

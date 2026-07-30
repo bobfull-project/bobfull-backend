@@ -122,7 +122,7 @@ class PaymentCompletionTransactionServiceTest {
 
         // then
         assertThat(thrown).isInstanceOf(CustomException.class);
-        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
+        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_EXPIRED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.READY);
         verifyNoInteractions(reservationConfirmationPort);
     }

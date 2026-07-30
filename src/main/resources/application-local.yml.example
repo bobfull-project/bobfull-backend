@@ -21,6 +21,20 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:3600}
 
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+portone:
+  api-secret: ${PORTONE_API_SECRET}
+  store-id: ${PORTONE_STORE_ID}
+  webhook-secret: ${PORTONE_WEBHOOK_SECRET}
+
+payment:
+  expiration:
+    enabled: ${PAYMENT_EXPIRATION_ENABLED:true}
+    fixed-delay: ${PAYMENT_EXPIRATION_FIXED_DELAY:60s}
+    batch-size: ${PAYMENT_EXPIRATION_BATCH_SIZE:100}
+
 logging:
   level:
     org.hibernate.SQL: debug

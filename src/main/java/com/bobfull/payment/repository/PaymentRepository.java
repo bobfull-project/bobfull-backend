@@ -9,6 +9,8 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
+import java.util.List;
 import jakarta.persistence.LockModeType;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
@@ -17,6 +19,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Payment> findWithLockByPaymentId(String paymentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Payment> findWithLockById(Long id);
+
+    @Query("select p.id from Payment p where p.status = :status and p.expiresAt <= :cutoff order by p.expiresAt asc, p.id asc")
+    List<Long> findExpirationCandidateIds(@Param("status") PaymentStatus status, @Param("cutoff") Instant cutoff, Pageable pageable);
 
     boolean existsByTimeSlotIdAndPurposeAndStatusAndExpiresAtAfter(
             Long timeSlotId, PaymentPurpose purpose, PaymentStatus status, Instant now);
