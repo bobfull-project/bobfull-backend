@@ -64,9 +64,16 @@ class SettlementControllerWebTest {
 
         // when & then
         mockMvc.perform(get("/api/owner/restaurants/10/settlements/reservations?startDate=2026-08-01")
-                        .with(authentication(ownerAuthentication())))
+                .with(authentication(ownerAuthentication())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].reservationId", is(3)));
+                .andExpect(jsonPath("$.data.content[0].reservationId", is(3)))
+                .andExpect(jsonPath("$.data.page", is(0)))
+                .andExpect(jsonPath("$.data.size", is(20)))
+                .andExpect(jsonPath("$.data.totalElements", is(1)))
+                .andExpect(jsonPath("$.data.totalPages", is(1)))
+                .andExpect(jsonPath("$.data.restaurantId").doesNotExist())
+                .andExpect(jsonPath("$.data.startDate").doesNotExist())
+                .andExpect(jsonPath("$.data.endDate").doesNotExist());
     }
 
     @Test

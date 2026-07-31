@@ -3246,9 +3246,6 @@ OWNER 응답 예시:
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1,
-    "startDate": "2026-07-01",
-    "endDate": "2026-07-31",
     "content": [
       {
         "reservationId": 101,
