@@ -28,7 +28,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long>,
 
     @Query("select r from Reservation r join TimeSlot ts on r.timeSlotId = ts.id "
             + "join SharedTable st on ts.sharedTableId = st.id "
-            + "where st.restaurantId = :restaurantId and ts.deletedAt is null "
+            + "where st.restaurantId = :restaurantId "
             + "and (:startAt is null or ts.startAt >= :startAt) and (:endAt is null or ts.startAt < :endAt)")
     Page<Reservation> findSettlementReservations(
             @Param("restaurantId") Long restaurantId,

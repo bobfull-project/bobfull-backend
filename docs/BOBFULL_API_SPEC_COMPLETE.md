@@ -73,7 +73,7 @@ ADMIN
 ReservationStatus: RECRUITING, CONFIRMED, CANCELLED, CLOSED
 RecruitmentStatus: OPEN, CLOSED
 ParticipationStatus: RESERVED, NO_SHOW, CANCELLED
-PaymentStatus: READY, PAID, EXPIRED, FAILED, CANCELLED
+PaymentStatus: READY, PAID, EXPIRED, FAILED, REFUNDED
 RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ```
 
@@ -2512,7 +2512,7 @@ OWNER 응답 예시:
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `CANCELLED`) |
+| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `REFUNDED`) |
 | `page` | Integer | N | 페이지 번호 |
 | `size` | Integer | N | 페이지 크기 |
 
@@ -3754,7 +3754,7 @@ OWNER 응답 예시:
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `CANCELLED`) |
+| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `REFUNDED`) |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -4294,7 +4294,7 @@ OWNER 응답 예시:
 ### 환불 완료 후 결제 상태
 
 - 담당자: 김현승
-- 구현 정책: `RefundStatus.COMPLETED`가 되면 해당 결제를 `PaymentStatus.CANCELLED`로 변경한다. 사용자 한 명의 `partySize` 결제 전체만 환불한다.
+- 구현 정책: `RefundStatus.COMPLETED`가 되면 해당 결제를 `PaymentStatus.REFUNDED`로 변경한다. 사용자 한 명의 `partySize` 결제 전체만 환불한다. READY 결제의 명시적 사용자 취소는 현재 범위에 없으며, 필요해질 때 별도 CANCELLED 상태를 계약으로 도입한다.
 
 ## 채팅
 

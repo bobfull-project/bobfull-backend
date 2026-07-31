@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentQueryService {
 
     private static final Set<PaymentStatus> EXPOSED_FILTER_STATUSES =
-            Set.of(PaymentStatus.READY, PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.CANCELLED);
+            Set.of(PaymentStatus.READY, PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.REFUNDED);
 
     private final PaymentRepository paymentRepository;
 

@@ -107,7 +107,7 @@ erDiagram
         integer party_size "결제·임시 선점 인원"
         decimal amount "party_size 기준 예약금"
         varchar(10) currency "PortOne 검증 대상 통화"
-        varchar(20) payment_status "READY, PAID, EXPIRED, FAILED, CANCELLED"
+        varchar(20) payment_status "READY, PAID, EXPIRED, FAILED, REFUNDED"
         datetime expires_at "READY 임시 선점 만료 시각"
         datetime paid_at "PAID 전환 시각"
         datetime created_at "생성 시각"
@@ -283,7 +283,7 @@ erDiagram
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 결제·임시 선점 인원 |
 | `amount` | DECIMAL | N |  | `party_size` 기준 예약금 |
 | `currency` | VARCHAR(10) | N |  | PortOne 검증 대상 통화 |
-| `payment_status` | VARCHAR(20) | N | 앱 Enum | `READY`, `PAID`, `EXPIRED`, `FAILED`, `CANCELLED` |
+| `payment_status` | VARCHAR(20) | N | 앱 Enum | `READY`, `PAID`, `EXPIRED`, `FAILED`, `REFUNDED` |
 | `expires_at` | DATETIME | N | 복합 INDEX | READY 임시 선점 만료 시각 |
 | `paid_at` | DATETIME | Y |  | PAID 전환 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -414,7 +414,7 @@ erDiagram
 | 예약 상태 | `RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED` | `reservation.reservation_status` |
 | 모집 상태 | `OPEN`, `CLOSED` | `reservation.recruitment_status` |
 | 참여자 상태 | `RESERVED`, `NO_SHOW`, `CANCELLED` | `reservation_participant.participation_status` |
-| 결제 상태 | `READY`, `PAID`, `FAILED`, `CANCELLED` | `payment.payment_status` |
+| 결제 상태 | `READY`, `PAID`, `FAILED`, `EXPIRED`, `REFUNDED` | `payment.payment_status`; `REFUNDED`는 Payment 전체 환불 완료 |
 | 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status` |
 
 `no_show_history.is_marked`는 상태 Enum이 아니라 처리·해제 이력을 구분하는 boolean 값이다. `TRUE`는 노쇼 처리, `FALSE`는 노쇼 해제를 뜻한다.

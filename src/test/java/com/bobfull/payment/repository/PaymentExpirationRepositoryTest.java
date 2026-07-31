@@ -30,7 +30,7 @@ class PaymentExpirationRepositoryTest {
         Payment futureReady = save("future", cutoff.plusSeconds(1), PaymentStatus.READY);
         Payment paid = save("paid", cutoff, PaymentStatus.PAID);
         Payment failed = save("failed", cutoff, PaymentStatus.FAILED);
-        Payment cancelled = save("cancelled", cutoff, PaymentStatus.CANCELLED);
+        Payment refunded = save("refunded", cutoff, PaymentStatus.REFUNDED);
         Payment expired = save("expired", cutoff, PaymentStatus.EXPIRED);
 
         List<Long> firstBatch = repository.findExpirationCandidateIds(PaymentStatus.READY, cutoff, PageRequest.of(0, 2));
@@ -38,7 +38,7 @@ class PaymentExpirationRepositoryTest {
 
         assertThat(firstBatch).containsExactly(earliest.getId(), sameTimeFirst.getId());
         assertThat(allCandidates).containsExactly(earliest.getId(), sameTimeFirst.getId(), sameTimeSecond.getId());
-        assertThat(allCandidates).doesNotContain(futureReady.getId(), paid.getId(), failed.getId(), cancelled.getId(), expired.getId());
+        assertThat(allCandidates).doesNotContain(futureReady.getId(), paid.getId(), failed.getId(), refunded.getId(), expired.getId());
         assertThat(allCandidates).allMatch(id -> id instanceof Long);
     }
 

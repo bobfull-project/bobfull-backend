@@ -35,4 +35,16 @@ class PaymentExpirationTest {
         assertThat(paid.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(expired.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
     }
+
+    @Test
+    void 결제전체환불이_완료되면_paidAt을_보존하고_REFUNDED로_전이한다() {
+        Instant paidAt = Instant.parse("2026-07-30T00:00:00Z");
+        Payment paid = ready(paidAt.plusSeconds(600));
+        paid.complete(paidAt);
+
+        paid.markRefunded();
+
+        assertThat(paid.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(paid.getPaidAt()).isEqualTo(paidAt);
+    }
 }
