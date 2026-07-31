@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BobFull V1 Code Execution Debugger V2</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><strong>BOBFULL V1 CODE EXECUTION DEBUGGER · V2</strong><span class="sim">실제 Java 코드·호출 스택·Runtime State 기반 정적 시뮬레이터</span></div>
+    <div class="meta">develop <code>b37b9ee828b26cae09e18220e78706bb119a1a4e</code></div>
+  </header>
+  <section class="scenario-bar">
+    <label>시나리오 <select id="scenario"></select></label>
+    <label id="variant-wrap">변형 <select id="variant"></select></label>
+    <span id="scenario-note"></span>
+  </section>
+  <main>
+    <section class="code-panel panel">
+      <div class="panel-title"><span>실제 Java 코드</span><button id="current-code" type="button">현재 위치</button></div>
+      <div id="file-tabs" class="file-tabs" aria-label="관련 파일"></div>
+      <div id="code-head" class="code-head"></div>
+      <pre id="code-view" class="code-view" aria-live="polite"></pre>
+    </section>
+    <section class="runtime-panel">
+      <div class="panel flow-panel">
+        <div class="panel-title">전체 실행 Mini Map <span id="flow-caption"></span></div>
+        <div id="mini-map" class="mini-map" aria-label="전체 실행 단계"></div>
+        <div class="focus-title">현재 실행 구간 <span id="focus-type"></span></div>
+        <div id="flowchart" class="focus-flow" aria-label="현재 실행 구간"></div>
+      </div>
+      <div class="runtime-grid">
+        <div class="panel"><div class="panel-title">호출 스택</div><ol id="call-stack" class="stack"></ol></div>
+        <div class="panel"><div class="panel-title">Runtime State</div><div id="runtime-state" class="state"></div></div>
+      </div>
+    </section>
+  </main>
+  <section class="timeline-panel panel">
+    <div class="timeline-top"><strong>Timeline</strong><span id="step-count"></span><span class="speed">자동 실행은 학습용 재생 속도이며 실제 성능값이 아닙니다.</span></div>
+    <input id="timeline" type="range" min="0" value="0" aria-label="실행 단계 이동">
+    <div id="timeline-labels" class="timeline-labels"></div>
+    <div class="controls"><button id="prev" type="button">이전</button><button id="next" type="button">다음</button><button id="auto" type="button">자동 실행</button><button id="pause" type="button">일시 정지</button><button id="reset" type="button">처음부터</button></div>
+  </section>
+  <section class="detail panel"><div class="panel-title">현재 단계 설명</div><div id="detail"></div></section>
+  <script src="app.js"></script>
+</body>
+</html>
