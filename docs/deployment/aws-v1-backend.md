@@ -1,58 +1,76 @@
-# AWS V1 Backend Deployment
+# AWS V1 백엔드 배포 문서
 
-This guide covers the backend side of V1 deployment.
+이 문서는 V1 배포 중 백엔드 배포에 필요한 구성과 실행 순서를 정리한다.
 
-Frontend S3 static hosting is handled in the frontend repository. Restaurant and menu image files use S3, but this backend repository currently does not define a Presigned URL or image upload API contract. For Issue #41, S3 is prepared as an AWS resource, IAM target, environment value, and verification step.
+프론트엔드 S3 정적 호스팅은 프론트엔드 저장소에서 별도로 진행한다. 식당과 메뉴 이미지 파일은 S3를 사용하지만, 현재 백엔드 저장소에는 Presigned URL API나 이미지 업로드 API 계약이 없다. 따라서 Issue #41에서는 S3를 AWS 리소스, IAM 권한 대상, 환경변수, 검증 항목으로만 준비한다.
 
-## Target Architecture
+## 목표 구조
 
 ```text
-GitHub Actions or local machine
-  -> Docker image build
-  -> Amazon ECR push
+GitHub Actions 또는 로컬 PC
+  -> Docker 이미지 빌드
+  -> Amazon ECR에 이미지 push
 
 EC2
-  -> ECR image pull
-  -> Spring Boot container
-  -> RDS MySQL
-  -> Parameter Store
-  -> S3 image bucket
-  -> CloudWatch Logs
+  -> ECR에서 이미지 pull
+  -> Spring Boot 컨테이너 실행
+  -> RDS MySQL 연결
+  -> Parameter Store에서 환경변수와 비밀값 조회
+  -> S3 이미지 버킷 접근
+  -> CloudWatch Logs로 로그 전송
 ```
 
-## Required AWS Resources
+## 스크립트가 하는 일
 
-- EC2 instance for the Spring Boot Docker container
-- ECR repository for the backend Docker image
-- RDS MySQL instance for the production database
-- S3 bucket for restaurant and menu images
-- Systems Manager Parameter Store path for backend environment values
-- CloudWatch Logs log group for Spring Boot container logs
-- EC2 IAM role with ECR pull, Parameter Store read, S3 access, and CloudWatch Logs write permissions
-- GitHub Actions OIDC IAM role with ECR push permissions
+여기서 스크립트는 사람이 터미널에 여러 명령어를 하나씩 입력해야 하는 작업을 파일 하나로 묶어둔 실행 파일이다. 실제 AWS 값이나 비밀값을 파일에 저장하지 않고, 실행할 때 환경변수나 Parameter Store에서 받아서 사용한다.
 
-## Security Group Rules
+| 파일 | 실행 위치 | 역할 |
+|---|---|---|
+| `scripts/aws/bootstrap-ec2-v1.sh` | EC2 | EC2에 Docker와 AWS CLI를 설치하고 Docker 서비스를 켠다. |
+| `scripts/aws/push-image-to-ecr-v1.sh` | 로컬 PC 또는 배포 환경 | Spring Boot Docker 이미지를 빌드하고 ECR에 push한다. |
+| `scripts/aws/deploy-backend-v1.sh` | EC2 | Parameter Store 값을 읽고, ECR 이미지를 받아 Spring Boot 컨테이너를 실행한다. |
+| `scripts/aws/verify-backend-v1.sh` | 로컬 PC 또는 EC2 | 배포된 API, 컨테이너, Parameter Store, S3, CloudWatch 접근을 확인한다. |
 
-- EC2 inbound:
-  - SSH `22` from the maintainer's IP only
-  - Application port `8080` from the allowed client range for V1
-- RDS inbound:
-  - MySQL `3306` from the EC2 security group only
-- EC2 outbound:
-  - HTTPS `443` for ECR, SSM, S3, and CloudWatch Logs
-  - MySQL `3306` to the RDS security group
+스크립트는 자동으로 실행되지 않는다. 직접 `bash scripts/aws/...` 명령을 실행하거나, GitHub Actions workflow가 해당 스크립트를 호출할 때만 동작한다.
 
-Do not open the RDS security group to `0.0.0.0/0`.
+## 필요한 AWS 리소스
+
+- Spring Boot Docker 컨테이너를 실행할 EC2 인스턴스
+- 백엔드 Docker 이미지를 저장할 ECR repository
+- 운영 데이터베이스로 사용할 RDS MySQL 인스턴스
+- 식당과 메뉴 이미지를 저장할 S3 버킷
+- 백엔드 환경변수와 비밀값을 저장할 Systems Manager Parameter Store 경로
+- Spring Boot 컨테이너 로그를 저장할 CloudWatch Logs log group
+- ECR pull, Parameter Store read, S3 access, CloudWatch Logs write 권한을 가진 EC2 IAM Role
+- ECR push 권한을 가진 GitHub Actions OIDC IAM Role
+
+## Security Group 규칙
+
+EC2 inbound:
+
+- SSH `22`는 관리자 IP에서만 허용한다.
+- 애플리케이션 포트 `8080`은 V1에서 허용할 client 범위에서만 허용한다.
+
+RDS inbound:
+
+- MySQL `3306`은 EC2 Security Group에서만 허용한다.
+
+EC2 outbound:
+
+- ECR, SSM, S3, CloudWatch Logs 접근을 위해 HTTPS `443`을 허용한다.
+- RDS 연결을 위해 MySQL `3306`을 RDS Security Group으로 허용한다.
+
+RDS Security Group을 `0.0.0.0/0`에 열지 않는다.
 
 ## Parameter Store
 
-Use a path prefix such as:
+Parameter Store 경로 prefix는 다음처럼 둔다.
 
 ```text
 /bobfull/prod
 ```
 
-Required parameters:
+필수 Parameter:
 
 ```text
 /bobfull/prod/DB_URL
@@ -63,7 +81,7 @@ Required parameters:
 /bobfull/prod/PORTONE_STORE_ID
 ```
 
-Optional parameters:
+선택 Parameter:
 
 ```text
 /bobfull/prod/JWT_ACCESS_TOKEN_EXPIRATION_SECONDS
@@ -73,7 +91,7 @@ Optional parameters:
 /bobfull/prod/S3_IMAGE_BUCKET
 ```
 
-Recommended V1 values:
+V1 권장값:
 
 ```text
 SPRING_PROFILES_ACTIVE=prod
@@ -81,21 +99,21 @@ JPA_DDL_AUTO=update
 JWT_ACCESS_TOKEN_EXPIRATION_SECONDS=3600
 ```
 
-Store secrets as `SecureString`. Do not commit real values to Git.
+비밀번호, JWT Secret, PortOne Secret 같은 비밀값은 `SecureString`으로 저장한다. 실제 값을 Git에 커밋하지 않는다.
 
-## EC2 Bootstrap
+## EC2 초기 준비
 
-Copy and run the bootstrap script on EC2:
+EC2에 접속한 뒤 bootstrap 스크립트를 실행한다.
 
 ```bash
 bash scripts/aws/bootstrap-ec2-v1.sh
 ```
 
-Log out and log back in after the script finishes so Docker group membership is applied.
+이 스크립트는 EC2에 Docker와 AWS CLI를 설치하고 Docker 서비스를 시작한다. 스크립트 실행이 끝나면 Docker group 권한 적용을 위해 EC2에서 로그아웃한 뒤 다시 접속한다.
 
-## Manual ECR Push
+## 수동 ECR Push
 
-Run this from a machine that is authenticated to AWS and can access Docker:
+AWS 인증이 되어 있고 Docker를 사용할 수 있는 환경에서 실행한다.
 
 ```bash
 export AWS_REGION=ap-northeast-2
@@ -105,11 +123,11 @@ export IMAGE_TAG=$(git rev-parse --short HEAD)
 bash scripts/aws/push-image-to-ecr-v1.sh
 ```
 
-The script prints the pushed ECR image URI.
+이 스크립트는 ECR repository가 없으면 만들고, Docker 이미지를 빌드한 뒤 ECR에 push한다. 실행이 끝나면 EC2 배포에 사용할 ECR image URI를 출력한다.
 
-## Manual EC2 Deploy
+## 수동 EC2 배포
 
-Run this on EC2 after the image is pushed to ECR:
+이미지를 ECR에 push한 뒤 EC2에서 실행한다.
 
 ```bash
 export AWS_REGION=ap-northeast-2
@@ -123,32 +141,33 @@ export CLOUDWATCH_LOG_GROUP=/bobfull/backend
 bash scripts/aws/deploy-backend-v1.sh
 ```
 
-The deploy script:
+deploy 스크립트는 다음 작업을 한다.
 
-- reads runtime values from Parameter Store without printing secret values
-- logs in to ECR through the EC2 IAM role
-- pulls the requested image
-- replaces the existing backend container
-- runs the container with `SPRING_PROFILES_ACTIVE=prod`
-- sends Docker stdout and stderr to CloudWatch Logs through the `awslogs` driver
-- verifies that the container reaches the running state
+- Parameter Store에서 실행에 필요한 값을 읽는다.
+- 비밀값을 터미널에 출력하지 않는다.
+- EC2 IAM Role 권한으로 ECR에 로그인한다.
+- 지정한 ECR 이미지를 pull한다.
+- 기존 백엔드 컨테이너가 있으면 중지하고 제거한다.
+- `SPRING_PROFILES_ACTIVE=prod`로 새 컨테이너를 실행한다.
+- Docker stdout, stderr 로그를 `awslogs` driver로 CloudWatch Logs에 보낸다.
+- 컨테이너가 실행 상태가 되었는지 확인한다.
 
-## GitHub Actions Deployment
+## GitHub Actions 배포
 
-Workflow:
+workflow 파일:
 
 ```text
 .github/workflows/deploy-backend-v1.yml
 ```
 
-Required GitHub Secrets:
+필수 GitHub Secrets:
 
 ```text
 AWS_ROLE_TO_ASSUME
 EC2_SSH_PRIVATE_KEY
 ```
 
-Required GitHub Variables:
+필수 GitHub Variables:
 
 ```text
 AWS_REGION
@@ -160,7 +179,7 @@ BACKEND_PUBLIC_BASE_URL
 S3_IMAGE_BUCKET
 ```
 
-Optional GitHub Variables:
+선택 GitHub Variables:
 
 ```text
 BACKEND_HOST_PORT
@@ -168,11 +187,11 @@ BACKEND_CONTAINER_NAME
 BACKEND_CLOUDWATCH_LOG_GROUP
 ```
 
-Run the workflow manually from GitHub Actions while this PR remains Draft. The workflow performs Gradle tests, builds the Docker image, pushes it to ECR, copies the EC2 deploy script, deploys the selected image, and verifies `GET /api/restaurants` from outside the EC2 instance.
+이 PR이 Draft 상태인 동안에는 GitHub Actions에서 workflow를 수동으로 실행한다. workflow는 Gradle 테스트, Docker 이미지 빌드, ECR push, EC2 deploy script 복사, EC2 배포, 외부에서 `GET /api/restaurants` 확인을 순서대로 수행한다.
 
-## Verification
+## 배포 검증
 
-From a local machine or EC2:
+로컬 PC 또는 EC2에서 실행한다.
 
 ```bash
 export BASE_URL=http://<ec2-public-host>:8080
@@ -184,23 +203,23 @@ export CLOUDWATCH_LOG_GROUP=/bobfull/backend
 bash scripts/aws/verify-backend-v1.sh
 ```
 
-The verification script checks:
+verify 스크립트는 다음 항목을 확인한다.
 
-- public API response for `GET /api/restaurants`
-- running Docker container when executed on EC2
+- `GET /api/restaurants` 외부 API 응답
+- EC2에서 실행할 경우 Docker 컨테이너 실행 상태
 - AWS caller identity
-- Parameter Store parameter name access without printing values
-- S3 image bucket access
-- CloudWatch log group access
+- 실제 값을 출력하지 않는 Parameter Store parameter 이름 접근
+- S3 image bucket 접근
+- CloudWatch log group 접근
 
-## Issue Boundaries
+## Issue 범위
 
-Issue #41 includes backend AWS deployment infrastructure only.
+Issue #41은 백엔드 AWS 배포 환경 구성만 포함한다.
 
-The following work remains outside this backend Issue:
+다음 작업은 이번 백엔드 Issue 범위가 아니다.
 
-- frontend S3 static hosting
-- frontend production API URL configuration
-- backend CORS policy for the deployed frontend origin
-- S3 Presigned URL API or image upload API implementation
-- Issue #42 smoke test result record
+- 프론트엔드 S3 정적 호스팅
+- 프론트엔드 운영 API URL 설정
+- 배포된 프론트엔드 origin에 대한 백엔드 CORS 정책 설정
+- S3 Presigned URL API 또는 이미지 업로드 API 구현
+- Issue #42 Smoke Test 결과 기록
