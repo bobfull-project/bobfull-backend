@@ -63,7 +63,7 @@ availableCapacity
 ReservationStatus: RECRUITING, CONFIRMED, CANCELLED, CLOSED
 RecruitmentStatus: OPEN, CLOSED
 ParticipationStatus: RESERVED, NO_SHOW, CANCELLED
-PaymentStatus: READY, PAID, EXPIRED, FAILED, CANCELLED
+PaymentStatus: READY, PAID, EXPIRED, FAILED, REFUNDED
 RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ```
 
@@ -110,7 +110,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 
 ### READY 만료 정규화
 
-- `Payment.expireIfNeeded(now)`는 `READY && expiresAt <= now`일 때만 멱등적으로 `EXPIRED`로 전이한다. `PAID`, `FAILED`, `CANCELLED`, `EXPIRED` 또는 만료 전 `READY`는 변경하지 않는다.
+- `Payment.expireIfNeeded(now)`는 `READY && expiresAt <= now`일 때만 멱등적으로 `EXPIRED`로 전이한다. `PAID`, `FAILED`, `REFUNDED`, `EXPIRED` 또는 만료 전 `READY`는 변경하지 않는다.
 - 스케줄러는 `application-local.yml` 또는 배포 환경변수의 `fixedDelay=60s`, `batchSize=100`으로 local·운영에서 활성화하고 test에서는 비활성화한다. 후보는 `READY && expiresAt <= cutoff`을 `expiresAt ASC, paymentId(내부 PK) ASC`로 최대 100건 조회한다.
 - Processor는 각 내부 PK를 같은 Payment 행 비관적 락으로 다시 읽어 별도 REQUIRED 트랜잭션에서 정규화한다. 스케줄러는 예약 확정·외부 취소·환불을 호출하지 않는다.
 
@@ -123,7 +123,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - 모집 마감은 정원 도달 또는 식사 시작 2시간 전에 `CLOSED`가 된다. 마감 시 확정 기준 미달이면 예약 전체를 `CANCELLED`로 변경하고 남은 유효 참여자를 전액 환불하며, 취소 좌석을 재모집하지 않는다.
 - V2에서 OWNER 또는 시스템 귀책으로 예약을 진행할 수 없으면 예약 전체를 `CANCELLED`로 변경하고 모든 유효 참여자를 전액 환불한다. 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot 재사용은 기존 예약이 `CANCELLED`이고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없는 경우만 가능하다.
 - MEMBER 취소는 `NO_SHOW` 또는 이미 `CANCELLED`인 참여자에게 허용되지 않는다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
-- Refund는 Payment 전체 금액을 대상으로 하며 Payment당 하나만 생성한다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.CANCELLED`를 반영한다.
+- Refund는 Payment 전체 금액을 대상으로 하며 Payment당 하나만 생성한다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.REFUNDED`를 반영한다. READY 결제의 명시적 사용자 취소는 현재 범위에 없으며, 필요할 때 별도 CANCELLED 상태를 도입한다.
 - 사용자는 환불 처리 API를 직접 호출하지 않으며, V1에서 본인 환불 목록·상세를 조회한다.
 
 ### TimeSlot 활성 예약 정합성
@@ -137,7 +137,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ## 6. 노쇼·지급 예정 금액
 
 - V2에서 OWNER는 식사 종료 후 노쇼 처리 대상 참여자를 조회하고, 참여자를 노쇼 처리·해제하며 이력을 조회한다.
-- V1 지급 예정 금액은 결제 완료액에서 환불 완료액을 뺀 값이다.
+- V1 지급 예정 금액은 `paidAt`이 존재하는 결제 완료 이력의 금액 합계에서 `COMPLETED` 환불 금액 합계를 뺀 조회 계산값이다. 완료 환불로 Payment의 현재 상태가 `REFUNDED`여도 원결제 금액은 결제 완료액에 포함한다.
 
 ## 7. 채팅
 

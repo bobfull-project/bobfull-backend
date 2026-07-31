@@ -107,7 +107,7 @@ erDiagram
         integer party_size "결제·임시 선점 인원"
         decimal amount "party_size 기준 예약금"
         varchar(10) currency "PortOne 검증 대상 통화"
-        varchar(20) payment_status "READY, PAID, EXPIRED, FAILED, CANCELLED"
+        varchar(20) payment_status "READY, PAID, EXPIRED, FAILED, REFUNDED"
         datetime expires_at "READY 임시 선점 만료 시각"
         datetime paid_at "PAID 전환 시각"
         datetime created_at "생성 시각"
@@ -283,7 +283,7 @@ erDiagram
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 결제·임시 선점 인원 |
 | `amount` | DECIMAL | N |  | `party_size` 기준 예약금 |
 | `currency` | VARCHAR(10) | N |  | PortOne 검증 대상 통화 |
-| `payment_status` | VARCHAR(20) | N | 앱 Enum | `READY`, `PAID`, `EXPIRED`, `FAILED`, `CANCELLED` |
+| `payment_status` | VARCHAR(20) | N | 앱 Enum | `READY`, `PAID`, `EXPIRED`, `FAILED`, `REFUNDED` |
 | `expires_at` | DATETIME | N | 복합 INDEX | READY 임시 선점 만료 시각 |
 | `paid_at` | DATETIME | Y |  | PAID 전환 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -393,8 +393,8 @@ erDiagram
 | `temporaryHeldCount` | 계산값 | `READY`이며 `expires_at`이 현재보다 이후인 Payment의 `party_size` 합계 |
 | `availableCapacity` | 계산값 | `shared_table.capacity - currentParticipantCount - temporaryHeldCount` |
 | `confirmationThreshold` | 계산값 | 정원 `2→2`, `4→3`, `6→5`, `8→7` |
-| `payableAmount` | 계산값 | 식당 또는 예약의 `PAID` 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
-| `expectedSettlementAmount`, `expectedAmount` | 계산값 | 결제 완료 금액 합계에서 환불 완료 금액 합계를 차감 |
+| `payableAmount` | 계산값 | 식당 또는 예약의 `paid_at`이 존재하는 Payment 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
+| `expectedSettlementAmount`, `expectedAmount` | 계산값 | `paid_at`이 존재하는 결제 완료 이력 금액 합계에서 환불 완료 금액 합계를 차감 |
 | `totalPaidAmount`, `totalRefundedAmount` | 계산값 | 기간·식당·예약 조건에 맞는 Payment·Refund 금액 합계 |
 | `noShowCount` | 계산값 | 회원의 `participation_status=NO_SHOW` 참여 건수 |
 | `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |
@@ -414,7 +414,7 @@ erDiagram
 | 예약 상태 | `RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED` | `reservation.reservation_status` |
 | 모집 상태 | `OPEN`, `CLOSED` | `reservation.recruitment_status` |
 | 참여자 상태 | `RESERVED`, `NO_SHOW`, `CANCELLED` | `reservation_participant.participation_status` |
-| 결제 상태 | `READY`, `PAID`, `FAILED`, `CANCELLED` | `payment.payment_status` |
+| 결제 상태 | `READY`, `PAID`, `FAILED`, `EXPIRED`, `REFUNDED` | `payment.payment_status`; `REFUNDED`는 Payment 전체 환불 완료 |
 | 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status` |
 
 `no_show_history.is_marked`는 상태 Enum이 아니라 처리·해제 이력을 구분하는 boolean 값이다. `TRUE`는 노쇼 처리, `FALSE`는 노쇼 해제를 뜻한다.

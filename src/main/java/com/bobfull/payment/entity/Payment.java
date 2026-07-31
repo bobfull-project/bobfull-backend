@@ -209,6 +209,14 @@ public class Payment extends BaseTimeEntity {
         return true;
     }
 
+    /** 결제 전체 환불이 완료되면 결제 완료 시각은 보존한 채 환불 완료 상태로 전이한다. */
+    public void markRefunded() {
+        if (status != PaymentStatus.PAID) {
+            throw new IllegalStateException("PAID Payment만 환불 완료로 전이할 수 있습니다.");
+        }
+        status = PaymentStatus.REFUNDED;
+    }
+
     public void attachReservationConfirmation(Long reservationId, Long reservationParticipantId) {
         if (reservationId == null || reservationParticipantId == null) {
             throw new IllegalArgumentException("예약과 참여자 식별자는 필수입니다.");
