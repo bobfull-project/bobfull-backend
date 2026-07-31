@@ -137,7 +137,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ## 6. 노쇼·지급 예정 금액
 
 - V2에서 OWNER는 식사 종료 후 노쇼 처리 대상 참여자를 조회하고, 참여자를 노쇼 처리·해제하며 이력을 조회한다.
-- V1 지급 예정 금액은 결제 완료액에서 환불 완료액을 뺀 값이다.
+- V1 지급 예정 금액은 `paidAt`이 존재하는 결제 완료 이력의 금액 합계에서 `COMPLETED` 환불 금액 합계를 뺀 조회 계산값이다. 완료 환불로 Payment의 현재 상태가 `CANCELLED`여도 원결제 금액은 결제 완료액에 포함한다.
 
 ## 7. 채팅
 

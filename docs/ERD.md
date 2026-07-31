@@ -393,8 +393,8 @@ erDiagram
 | `temporaryHeldCount` | 계산값 | `READY`이며 `expires_at`이 현재보다 이후인 Payment의 `party_size` 합계 |
 | `availableCapacity` | 계산값 | `shared_table.capacity - currentParticipantCount - temporaryHeldCount` |
 | `confirmationThreshold` | 계산값 | 정원 `2→2`, `4→3`, `6→5`, `8→7` |
-| `payableAmount` | 계산값 | 식당 또는 예약의 `PAID` 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
-| `expectedSettlementAmount`, `expectedAmount` | 계산값 | 결제 완료 금액 합계에서 환불 완료 금액 합계를 차감 |
+| `payableAmount` | 계산값 | 식당 또는 예약의 `paid_at`이 존재하는 Payment 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
+| `expectedSettlementAmount`, `expectedAmount` | 계산값 | `paid_at`이 존재하는 결제 완료 이력 금액 합계에서 환불 완료 금액 합계를 차감 |
 | `totalPaidAmount`, `totalRefundedAmount` | 계산값 | 기간·식당·예약 조건에 맞는 Payment·Refund 금액 합계 |
 | `noShowCount` | 계산값 | 회원의 `participation_status=NO_SHOW` 참여 건수 |
 | `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |

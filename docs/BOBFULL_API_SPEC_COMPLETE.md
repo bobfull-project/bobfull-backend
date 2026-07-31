@@ -3155,7 +3155,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 결제 완료액－환불 완료액
+- 설명: `paidAt`이 존재하는 결제 완료 이력 합계－`COMPLETED` 환불 금액 합계. 기간은 예약 회차(`diningSessionAt`)의 Asia/Seoul 날짜를 양 끝 포함으로 적용하며, 한쪽만 전달하면 열린 구간이다.
 - Method: `GET`
 - Path: `/api/owner/restaurants/{restaurantId}/settlements/expected`
 - Auth: `OWNER`
@@ -3175,6 +3175,8 @@ OWNER 응답 예시:
 |---|---|---:|---|
 | `startDate` | LocalDate | N | startDate 조건 |
 | `endDate` | LocalDate | N | endDate 조건 |
+
+`startDate`가 `endDate`보다 늦으면 `400 INVALID_INPUT_VALUE`를 반환한다.
 
 요청 Body는 사용하지 않는다.
 
@@ -3208,7 +3210,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 기간·페이징 적용
+- 설명: 예약 회차(`diningSessionAt`)의 Asia/Seoul 날짜 기준 기간·페이징 적용. 시작일·종료일은 양 끝 포함이며, 한쪽만 전달하면 열린 구간이다.
 - Method: `GET`
 - Path: `/api/owner/restaurants/{restaurantId}/settlements/reservations`
 - Auth: `OWNER`
@@ -3230,6 +3232,8 @@ OWNER 응답 예시:
 | `endDate` | LocalDate | N | endDate 조건 |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
+
+`startDate`가 `endDate`보다 늦으면 `400 INVALID_INPUT_VALUE`를 반환한다.
 
 요청 Body는 사용하지 않는다.
 
