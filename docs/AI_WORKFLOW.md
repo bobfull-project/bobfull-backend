@@ -38,7 +38,7 @@ PR #번호 검토하라
 → `이 초안으로 Issue 생성하라`
 → `Issue #번호 구현하라`
 → 구현·검증·Diff 자체 검토
-→ 최신 PR 템플릿 직접 확인
+→ `skills/bobfull-pr-explain/SKILL.md` 직접 읽기·적용
 → 템플릿 전체 구조로 develop 대상 Draft PR 생성
 → PR 담당자 Human의 이해도 답변·Human 리뷰
 → `PR #번호 검토하라`
@@ -141,8 +141,9 @@ status:final-human-review
 - 정책·API·DB 재결정이 필요하면 중단한다.
 - PR에는 실제 변경·실행 결과·미검증 위험만 기록한다.
 - PR 템플릿에 담당자 Human 이해도와 PR별 Human Review Checklist의 빈 구조를 포함한다.
-- Draft PR 생성 전 최신 `.github/pull_request_template.md`를 직접 읽고 섹션 이름과 순서를 그대로 유지한다.
-- 실제 연결 Issue, 최종 계약, 최신 Diff, 테스트·build·직접 검증 결과를 근거로 PR 본문을 작성한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다.
+- Draft PR 생성 전 `skills/bobfull-pr-explain/SKILL.md`를 직접 읽고 적용한다. Skill이 요구하는 최신 템플릿·연결 Issue 계약·실제 Diff·검증 근거를 확보하지 못하면 PR 내용을 추측해 작성하지 않는다.
+- Explain Diff는 변경 전 동작·문제, 핵심 아이디어, 변경 후 실행 흐름, 코드 확인 순서, 예외·트레이드오프·제한사항과 실제 검증 근거를 기록한다. 의미 있는 실행 흐름이 있는 기능 PR은 최신 Head와 일치하는 Mermaid 다이어그램을 최소 1개 포함하고, 실행 흐름이 없는 단순 변경만 `해당 없음`과 이유로 생략할 수 있다.
+- 새 Commit 뒤와 `PR #번호 검토하라`, Ready 전 최종 확인에서는 Skill을 다시 적용해 PR 설명·다이어그램·Checklist를 최신 Head에 맞춘다.
 - `담당자 AI 검토·수정 기록`과 PR 본문 마지막의 Human Review Checklist를 삭제하거나 축약하지 않는다. Ready 전환, Approve와 Merge는 Human 책임이다.
 
 ## 5. PR Human 입력
