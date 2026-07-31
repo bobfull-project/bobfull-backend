@@ -142,7 +142,7 @@ status:final-human-review
 - PR에는 실제 변경·실행 결과·미검증 위험만 기록한다.
 - PR 템플릿에 담당자 Human 이해도와 PR별 Human Review Checklist의 빈 구조를 포함한다.
 - Draft PR 생성 전 `skills/bobfull-pr-explain/SKILL.md`를 직접 읽고 적용한다. Skill이 요구하는 최신 템플릿·연결 Issue 계약·실제 Diff·검증 근거를 확보하지 못하면 PR 내용을 추측해 작성하지 않는다.
-- Explain Diff는 변경 전 동작·문제, 핵심 아이디어, 변경 후 실행 흐름, 코드 확인 순서, 예외·트레이드오프·제한사항과 실제 검증 근거를 기록한다. 의미 있는 실행 흐름이 있는 기능 PR은 최신 Head와 일치하는 Mermaid 다이어그램을 최소 1개 포함하고, 실행 흐름이 없는 단순 변경만 `해당 없음`과 이유로 생략할 수 있다.
+- Explain Diff는 한 줄 요약의 기존 네 하위 필드, 변경 전 동작·문제, 핵심 아이디어, 변경 후 실행 흐름, 코드 확인 순서, 추가·수정 테스트, 예외·트레이드오프·제한사항과 실제 검증 근거를 기록한다. 추가·수정 테스트는 검증 코드를 설명하고 `테스트·build·직접 검증`은 실제 실행 결과를 기록한다. 의미 있는 실행 흐름이 있는 기능 PR은 최신 Head와 일치하는 Mermaid 다이어그램을 최소 1개 포함하고, 실행 흐름이 없는 단순 변경만 `해당 없음`과 이유로 생략할 수 있다.
 - 새 Commit 뒤와 `PR #번호 검토하라`, Ready 전 최종 확인에서는 Skill을 다시 적용해 PR 설명·다이어그램·Checklist를 최신 Head에 맞춘다.
 - `담당자 AI 검토·수정 기록`과 PR 본문 마지막의 Human Review Checklist를 삭제하거나 축약하지 않는다. Ready 전환, Approve와 Merge는 Human 책임이다.
 
