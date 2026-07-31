@@ -70,6 +70,8 @@ class PaymentCompletionServiceTest {
         given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
         given(portOnePaymentReader.read("payment-id"))
                 .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "KRW"));
+        given(transactionService.complete("payment-id", 1L))
+                .willThrow(new com.bobfull.payment.exception.PaymentExpiredException(PaymentStatus.READY, payment.getExpiresAt()));
         PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
                 transactionService, Clock.fixed(Instant.parse("2026-07-28T00:01:00Z"), ZoneOffset.UTC));
 
@@ -78,8 +80,8 @@ class PaymentCompletionServiceTest {
 
         // then
         assertThat(thrown).isInstanceOf(CustomException.class);
-        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
-        verifyNoInteractions(transactionService);
+        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_EXPIRED);
+        org.mockito.Mockito.verify(transactionService).complete("payment-id", 1L);
     }
 
     @Test
@@ -224,7 +226,7 @@ class PaymentCompletionServiceTest {
     }
 
     @Test
-    void READY가_아닌_Payment은_SDK와_예약확정_트랜잭션을_수행하지_않는다() {
+    void FAILED는_결제완료를_거절하고_예약확정_트랜잭션을_수행하지_않는다() {
         // given
         Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
                 BigDecimal.valueOf(10000), Instant.parse("2026-07-28T01:00:00Z"));
@@ -240,5 +242,24 @@ class PaymentCompletionServiceTest {
         assertThat(thrown).isInstanceOf(CustomException.class);
         assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
         verifyNoInteractions(portOnePaymentReader, transactionService);
+    }
+
+    @Test
+    void PortOne_재조회_후_만료되면_잠금_트랜잭션에서_PAYMENT_EXPIRED로_거절한다() {
+        Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
+                BigDecimal.valueOf(10000), Instant.parse("2026-07-28T00:00:01Z"));
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        given(portOnePaymentReader.read("payment-id"))
+                .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "KRW"));
+        given(transactionService.complete("payment-id", 1L))
+                .willThrow(new com.bobfull.payment.exception.PaymentExpiredException(PaymentStatus.READY, payment.getExpiresAt()));
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.fixed(Instant.parse("2026-07-28T00:00:01Z"), ZoneOffset.UTC));
+
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 1L));
+
+        assertThat(thrown).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) thrown).getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_EXPIRED);
+        org.mockito.Mockito.verify(transactionService).complete("payment-id", 1L);
     }
 }

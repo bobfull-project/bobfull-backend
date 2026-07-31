@@ -69,7 +69,7 @@ flowchart TB
 
 역할 검증만으로 타인 리소스 접근을 허용하지 않는다. MEMBER의 결제 완료 검증은 인증 사용자와 `Payment.memberId`가 일치해야 하며, OWNER는 본인 식당의 식당·테이블·회차·예약만 관리한다. ADMIN 범위는 문서에 명시된 운영 조회·재처리로 제한한다.
 
-PortOne 웹훅은 사용자 인증이 아닌 서명 검증으로 처리한다. 완료 검증 API와 웹훅이 동시에 도착하더라도 결제, 예약, 참여 상태는 한 번만 반영해야 한다. 상세 권한별 API와 오류 계약은 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
+PortOne 웹훅은 `POST /api/webhooks/portone`을 `permitAll`·JWT 필터 제외로 열되, 사용자 인증 대신 원본 Body와 `webhook-id`·`webhook-signature`·`webhook-timestamp`의 공식 SDK 서명 검증을 수행한다. JSON 해석은 검증 뒤에만 허용한다. 완료 검증 API와 웹훅은 입구 검증만 분리하고 PortOne 재조회, 동일 Payment 행 비관적 락, 상태·만료 재검증, 예약 확정을 공통 처리로 수렴한다.
 
 ## 5. 예약·좌석·결제 처리
 
@@ -85,15 +85,16 @@ sequenceDiagram
     P-->>C: paymentId
     C->>O: 예약금 결제
     C->>P: 결제 완료 검증
-    P->>O: 결제 상태·금액·통화 확인
+    P->>O: 결제 상태·금액·통화 재조회
+    P->>P: Payment 내부 PK 비관적 락·상태/만료 재검증
     alt 검증 성공
-        P->>R: PAID 반영과 예약·참여 생성 또는 등록
+        P->>R: 단일 트랜잭션으로 PAID 반영과 예약·참여 생성 또는 등록
     else 실패 또는 만료
-        P->>R: FAILED 반영과 임시 선점 해제
+        P->>R: 검증 실패는 FAILED, 시간 만료는 EXPIRED; 좌석은 expiresAt로 즉시 반환
     end
 ```
 
-`PaymentStatus.READY`는 별도 좌석 선점 엔티티 없이 임시 선점을 표현하며, 결제 성공 전에는 `Reservation` 또는 `ReservationParticipant`를 생성하지 않는다. 임시 선점 기간, 참여 인원·잔여 정원 계산, `CREATE` 결제 준비의 정합성 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md), [API 명세](./BOBFULL_API_SPEC_COMPLETE.md), [ERD](./ERD.md)를 따른다.
+`PaymentStatus.READY`는 별도 좌석 선점 엔티티 없이 임시 선점을 표현하며, 결제 성공 전에는 `Reservation` 또는 `ReservationParticipant`를 생성하지 않는다. `expiresAt > now`인 READY만 좌석 계산에 포함하므로 만료 좌석은 스케줄러 실행 전에도 반환된다. 만료 스케줄러는 `fixedDelay=60s`, 배치 100건으로 `(payment_status, expires_at, payment_id)` 인덱스를 사용해 내부 PK 후보를 조회하고, 건별 트랜잭션·같은 Payment 행 락에서 EXPIRED만 정규화한다.
 
 ## 6. 취소·환불·노쇼
 
@@ -113,6 +114,8 @@ STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API �
 ERD에 정의된 엔티티는 관계와 상태 이력을 저장한다. 반면 예약 상세의 `currentParticipantCount`, `availableCapacity`, `confirmationThreshold`와 지급 예정 예약금은 원천 데이터에서 계산해 제공한다. 응답 계산값을 별도 컬럼으로 중복 저장하지 않는다.
 
 API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API 경로·Method, HTTP 응답 상태, 처리 시간, 오류 코드, 예약·결제·환불·노쇼 처리 결과 기록을 포함한다. 비밀번호, 토큰, 결제키는 로그에서 제외한다. Actuator의 health·Prometheus 경계는 V3 범위다.
+
+외부 결제가 PAID인데 내부 Payment가 `EXPIRED` 또는 만료 READY면 `event=PAYMENT_COMPENSATION_REQUIRED`와 `paymentId`, `externalStatus`, `internalStatus`, `expiresAt`, `reason`을 기록한다. 웹훅은 이 영구 업무 실패를 200으로 확인하지만 PortOne 네트워크·DB·예상하지 못한 오류는 5xx로 둔다. 자동 취소·환불·보상 트랜잭션과 `WebhookEvent` 저장은 이번 범위에서 제외한다.
 
 ## 9. 제외·보류 항목
 

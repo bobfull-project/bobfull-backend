@@ -20,9 +20,11 @@
 
 ## 결정
 
-별도 `SeatHold` 엔티티를 만들지 않고 만료되지 않은 `PaymentStatus.READY`로 10분 임시 선점을 표현한다. 결제 성공 전에는 `Reservation` 또는 `ReservationParticipant`를 생성하지 않는다.
+별도 `SeatHold` 엔티티를 만들지 않고 `expiresAt > now`인 `PaymentStatus.READY`로 10분 임시 선점을 표현한다. 결제 성공 전에는 `Reservation` 또는 `ReservationParticipant`를 생성하지 않는다. 만료 시 `Payment.expireIfNeeded(now)`가 `READY && expiresAt <= now`만 `EXPIRED`로 정규화하며, 상태 정규화 전에도 좌석 계산은 즉시 만료 READY를 제외한다.
 
 `availableCapacity`는 테이블 정원에서 PAID 유효 참여 인원과 만료되지 않은 READY 선점 인원을 차감해 계산한다. 동일 TimeSlot의 최초 예약은 TimeSlot 행 비관적 락과 활성 Reservation·유효 CREATE READY 확인으로 직렬화하며, 활성 Reservation 또는 유효한 CREATE READY는 동시에 최대 1건만 허용한다.
+
+만료 스케줄러는 좌석 반환이나 예약 확정을 수행하지 않는다. `READY && expiresAt <= cutoff`을 `expiresAt ASC, paymentId(내부 PK) ASC`로 최대 100건 조회하고, 각 내부 PK를 별도 REQUIRED 트랜잭션의 Payment 행 비관적 락으로 다시 읽어 EXPIRED만 반영한다. 기본 실행 주기는 fixed delay 60초이며 test 환경에서는 비활성화한다.
 
 ## 선택 이유
 
@@ -36,7 +38,7 @@
 
 ## 단점과 위험
 
-- READY Payment의 만료·정리·추적 책임이 중요하다.
+- READY Payment의 만료·정리·추적 책임이 중요하다. 외부 PAID가 내부 EXPIRED 뒤에 도착하면 자동 보상 없이 운영 확인이 필요하다.
 - TimeSlot 비관적 락은 처리량 증가 시 병목이 될 수 있다.
 - 다중 인스턴스 환경에서 별도 선점 저장소가 필요해질 수 있다.
 

@@ -56,6 +56,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return "/api/webhooks/portone".equals(request.getRequestURI());
+    }
+
     private Authentication createAuthentication(AuthMember authMember) {
         SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + authMember.role().name());
         return new UsernamePasswordAuthenticationToken(authMember, null, List.of(authority));

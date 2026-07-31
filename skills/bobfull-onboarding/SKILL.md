@@ -13,6 +13,8 @@ description: BobFull 저장소에서 처음 작업하거나 새로운 Issue를 �
 - 새로운 Issue를 처음 인계받았을 때
 - 현재 작업에 필요한 기준 문서를 판단해야 할 때
 
+PR 생성·본문 갱신·`PR #번호 검토하라`·Ready 전 최종 PR 확인은 이 Skill의 범위가 아니다. 해당 요청은 [bobfull-pr-explain](../bobfull-pr-explain/SKILL.md)을 직접 읽어 실행 흐름 설명·Mermaid·최신 Head 정합성을 처리한다.
+
 ## 필수 입력
 
 - 대상 Issue 번호

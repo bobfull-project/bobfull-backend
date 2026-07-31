@@ -73,7 +73,7 @@ ADMIN
 ReservationStatus: RECRUITING, CONFIRMED, CANCELLED, CLOSED
 RecruitmentStatus: OPEN, CLOSED
 ParticipationStatus: RESERVED, NO_SHOW, CANCELLED
-PaymentStatus: READY, PAID, FAILED, CANCELLED
+PaymentStatus: READY, PAID, EXPIRED, FAILED, REFUNDED
 RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ```
 
@@ -83,7 +83,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - 예약 생성(`CREATE`)의 `partySize`는 `1 <= partySize <= table.capacity`여야 한다.
 - 추가 참여(`JOIN`)의 `partySize`는 `1 <= partySize <= availableCapacity`여야 한다.
 - `currentParticipantCount`는 `PAID` 상태의 유효 참여자 `partySize` 합계다.
-- 임시 선점 인원은 만료되지 않은 `READY` 결제의 `partySize` 합계다.
+- 임시 선점 인원은 `expiresAt > now`인 `READY` 결제의 `partySize` 합계다. 스케줄러의 `EXPIRED` 정규화 전에도 만료 좌석은 즉시 반환된다.
 - `availableCapacity = capacity - currentParticipantCount - 임시 선점 인원`이다.
 - 예약 확정 기준은 정원 `2`면 `2명`, `4`면 `3명`, `6`이면 `5명`, `8`이면 `7명`이다.
 - 최초 결제 완료 시 예약은 `RECRUITING + OPEN`으로 시작한다. 확정 기준 도달 시 `CONFIRMED + OPEN`, 정원 도달 시 `CONFIRMED + CLOSED`가 된다.
@@ -1671,7 +1671,7 @@ OWNER 응답 예시:
 ```
 
 - 결제 성공 전에는 예약 또는 참여자를 생성하지 않는다.
-- 결제 실패 또는 10분 만료 시 임시 선점을 해제한다.
+- 결제 실패 시 `FAILED`, 시간 만료 시 `EXPIRED`로 정규화하며 좌석은 `expiresAt` 기준으로 즉시 반환한다.
 - `CREATE`는 대상 TimeSlot을 잠근 뒤 활성 Reservation과 만료되지 않은 CREATE READY Payment를 차례로 확인한다. 둘 다 없을 때만 CREATE READY를 생성하며, 유효한 CREATE READY는 TimeSlot당 최대 1건이다.
 - 유효한 CREATE READY가 있으면 `409 ACTIVE_RESERVATION_ALREADY_EXISTS`를 반환한다. 만료 또는 `FAILED` 처리 후에는 새 CREATE 요청을 허용한다. `JOIN`은 기존 Reservation의 `availableCapacity`를 기준으로 별도 처리한다.
 
@@ -2456,6 +2456,7 @@ OWNER 응답 예시:
 | `403` | `PAYMENT_ACCESS_DENIED` | Payment.memberId와 인증 사용자 ID가 다름 |
 | `404` | `PAYMENT_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
 | `409` | `PAYMENT_VERIFICATION_FAILED` | 결제 검증 실패 |
+| `409` | `PAYMENT_EXPIRED` | 결제 가능 시간이 만료됨 |
 
 ---
 
@@ -2471,30 +2472,27 @@ OWNER 응답 예시:
 
 ## 2. Request
 
-- PortOne V2 웹훅 Payload를 사용한다.
-- 상세 Payload 필드는 구현 Issue에서 공식 SDK·문서 버전에 맞춰 확정한다.
+- `webhook-id`, `webhook-signature`, `webhook-timestamp` 헤더는 필수다.
+- PortOne API·Store·Webhook 시크릿과 `payment.expiration` 실행값은 공통 `application.yml`이 아닌 `application-local.yml` 또는 배포 환경변수로 주입한다. Webhook 시크릿에 기본값을 두지 않으며, 웹훅이 활성화된 환경에서 필수 값이 없으면 애플리케이션 시작이 실패한다.
+- Controller는 JSON DTO 역직렬화 전에 원본 Body(`String` 또는 `byte[]`)와 위 헤더를 PortOne 공식 SDK 검증기에 전달한다. 검증 성공 후에만 이벤트를 해석한다.
+- SecurityConfig는 이 POST 경로를 `permitAll`로 두고 JWT 필터도 이 경로를 인증 실패(`401`)로 차단하지 않는다. 접근 허용은 서명 검증을 대체하지 않는다.
+- `Transaction.Paid`만 `paymentId`를 추출해 공통 결과 반영으로 전달한다. 지원하지 않는 이벤트는 성공으로 무시한다.
 
 ## 3. Response
 
-- Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "result": true
-  }
-}
-```
+- 서명 헤더 누락·서명 검증 실패는 `400 Bad Request`다.
+- 지원하지 않는 이벤트, 이미 `PAID`, Payment 미존재, 금액·통화·외부 paymentId 불일치, 내부 `EXPIRED` 또는 만료된 `READY`는 `200 OK`로 확인 처리한다.
+- 지원하지 않는 이벤트와 알려진 영구 업무 실패의 확인 처리는 `200 OK`와 빈 본문으로 반환한다.
+- 서명 헤더 누락·서명 검증 실패는 `400 Bad Request`와 빈 본문으로 반환한다.
+- PortOne 네트워크 오류, DB 장애, 분류되지 않은 업무 오류, 예상하지 못한 서버 오류는 공통 예외 응답 구조의 `5xx`로 반환한다. 알려진 영구 업무 실패만 웹훅 입구에서 `200`으로 변환하며 예외를 무조건 삼키지 않는다.
 
 ## 4. Error
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 웹훅 서명 또는 요청값 검증 실패 |
-| `404` | `PAYMENT_NOT_FOUND` | paymentId에 해당하는 대상을 찾을 수 없음 |
-| `409` | `INVALID_STATE` | 결제 상태·금액·통화 검증 실패 |
+| `400` | `INVALID_INPUT_VALUE` | 필수 서명 헤더 누락 또는 서명 검증 실패 |
+| `200` | - | 미지원 이벤트·이미 PAID·Payment 미존재·검증 불일치·`PAYMENT_EXPIRED`는 확인 처리 |
+| `5xx` | `INTERNAL_SERVER_ERROR` | PortOne 네트워크·DB·예상하지 못한 서버 오류 |
 
 ---
 
@@ -2514,7 +2512,7 @@ OWNER 응답 예시:
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `CANCELLED`) |
+| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `REFUNDED`) |
 | `page` | Integer | N | 페이지 번호 |
 | `size` | Integer | N | 페이지 크기 |
 
@@ -3157,7 +3155,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 결제 완료액－환불 완료액
+- 설명: `paidAt`이 존재하는 결제 완료 이력 합계－`COMPLETED` 환불 금액 합계. 기간은 예약 회차(`diningSessionAt`)의 Asia/Seoul 날짜를 양 끝 포함으로 적용하며, 한쪽만 전달하면 열린 구간이다.
 - Method: `GET`
 - Path: `/api/owner/restaurants/{restaurantId}/settlements/expected`
 - Auth: `OWNER`
@@ -3177,6 +3175,8 @@ OWNER 응답 예시:
 |---|---|---:|---|
 | `startDate` | LocalDate | N | startDate 조건 |
 | `endDate` | LocalDate | N | endDate 조건 |
+
+`startDate`가 `endDate`보다 늦으면 `400 INVALID_INPUT_VALUE`를 반환한다.
 
 요청 Body는 사용하지 않는다.
 
@@ -3210,7 +3210,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 기간·페이징 적용
+- 설명: 예약 회차(`diningSessionAt`)의 Asia/Seoul 날짜 기준 기간·페이징 적용. 시작일·종료일은 양 끝 포함이며, 한쪽만 전달하면 열린 구간이다.
 - Method: `GET`
 - Path: `/api/owner/restaurants/{restaurantId}/settlements/reservations`
 - Auth: `OWNER`
@@ -3233,6 +3233,8 @@ OWNER 응답 예시:
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
+`startDate`가 `endDate`보다 늦으면 `400 INVALID_INPUT_VALUE`를 반환한다.
+
 요청 Body는 사용하지 않는다.
 
 ## 3. Response
@@ -3244,9 +3246,6 @@ OWNER 응답 예시:
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "restaurantId": 1,
-    "startDate": "2026-07-01",
-    "endDate": "2026-07-31",
     "content": [
       {
         "reservationId": 101,
@@ -3752,7 +3751,7 @@ OWNER 응답 예시:
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `CANCELLED`) |
+| `paymentStatus` | String | N | PaymentStatus 조건(`READY`, `PAID`, `FAILED`, `REFUNDED`) |
 | `page` | Integer | N | page 조건 |
 | `size` | Integer | N | size 조건 |
 
@@ -4254,12 +4253,18 @@ OWNER 응답 예시:
 ### PortOne 결제와 좌석 임시 선점
 
 - 담당자: 김현승
-- 구현 정책: 결제 준비 시 좌석을 10분 임시 선점하고 `PaymentStatus.READY`를 생성한다. 결제 성공 시 `PAID`, 실패·만료 시 `FAILED`와 좌석 해제를 반영한다.
+- 구현 정책: 결제 준비 시 좌석을 10분 임시 선점하고 `PaymentStatus.READY`를 생성한다. 결제 성공 시 `PAID`, 검증 실패 시 `FAILED`, 시간 만료 시 `EXPIRED`로 구분한다. 좌석은 `expiresAt` 기반 계산으로 즉시 반환하며 스케줄러는 상태 정규화만 담당한다.
 
 ### 결제 완료 검증·웹훅 멱등성
 
 - 담당자: 김현승
-- 구현 정책: 완료 검증 API와 PortOne 웹훅이 동시에 실행돼도 예약·참여와 결제 상태를 한 번만 반영한다.
+- 구현 정책: 완료 검증 API와 PortOne 웹훅은 PortOne 재조회·상태/금액/통화 검증 뒤 동일 Payment 행 비관적 락으로 수렴한다. PAID 전환과 `Reservation`·`ReservationParticipant` 생성 및 결과 ID 연결은 하나의 트랜잭션이며, `ReservationConfirmationService`는 `MANDATORY`로 참여한다.
+
+### READY 만료 정리
+
+- 구현 정책: `application-local.yml` 또는 배포 환경변수에서 `payment.expiration.enabled=true`, `fixed-delay=60s`, `batch-size=100`을 V1 기본값으로 사용한다(테스트 환경 비활성화).
+- 후보는 `payment_status=READY AND expires_at <= cutoff ORDER BY expires_at ASC, payment_id ASC LIMIT 100`으로 내부 `payment_id`만 조회한다. 각 건은 별도 REQUIRED 트랜잭션에서 같은 내부 PK를 비관적 락으로 다시 조회해 `expireIfNeeded(now)`를 수행한다.
+- 전체 batch를 하나의 트랜잭션으로 묶지 않으며, 외부 취소·환불·`ReservationConfirmationPort` 호출은 하지 않는다.
 
 ## 환불
 
@@ -4286,7 +4291,7 @@ OWNER 응답 예시:
 ### 환불 완료 후 결제 상태
 
 - 담당자: 김현승
-- 구현 정책: `RefundStatus.COMPLETED`가 되면 해당 결제를 `PaymentStatus.CANCELLED`로 변경한다. 사용자 한 명의 `partySize` 결제 전체만 환불한다.
+- 구현 정책: `RefundStatus.COMPLETED`가 되면 해당 결제를 `PaymentStatus.REFUNDED`로 변경한다. 사용자 한 명의 `partySize` 결제 전체만 환불한다. READY 결제의 명시적 사용자 취소는 현재 범위에 없으며, 필요해질 때 별도 CANCELLED 상태를 계약으로 도입한다.
 
 ## 채팅
 

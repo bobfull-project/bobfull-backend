@@ -107,7 +107,7 @@ erDiagram
         integer party_size "결제·임시 선점 인원"
         decimal amount "party_size 기준 예약금"
         varchar(10) currency "PortOne 검증 대상 통화"
-        varchar(20) payment_status "READY, PAID, FAILED, CANCELLED"
+        varchar(20) payment_status "READY, PAID, EXPIRED, FAILED, REFUNDED"
         datetime expires_at "READY 임시 선점 만료 시각"
         datetime paid_at "PAID 전환 시각"
         datetime created_at "생성 시각"
@@ -283,12 +283,12 @@ erDiagram
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 결제·임시 선점 인원 |
 | `amount` | DECIMAL | N |  | `party_size` 기준 예약금 |
 | `currency` | VARCHAR(10) | N |  | PortOne 검증 대상 통화 |
-| `payment_status` | VARCHAR(20) | N | 앱 Enum | `READY`, `PAID`, `FAILED`, `CANCELLED` |
-| `expires_at` | DATETIME | N | INDEX 후보 | READY 임시 선점 만료 시각 |
+| `payment_status` | VARCHAR(20) | N | 앱 Enum | `READY`, `PAID`, `EXPIRED`, `FAILED`, `REFUNDED` |
+| `expires_at` | DATETIME | N | 복합 INDEX | READY 임시 선점 만료 시각 |
 | `paid_at` | DATETIME | Y |  | PAID 전환 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
-`payment_id`는 DB 내부 PK이며 Java 필드 `id`에 매핑한다. `portone_payment_id`는 Java 필드 `paymentId`에 매핑하며, 외부 식별자 중복을 막고 결제 완료 API·웹훅 멱등 처리의 기준이 된다. `CREATE`는 READY 생성 시 `reservation_id`, `reservation_participant_id`가 NULL이고, PAID 전환 후 생성된 예약·최초 참여자와 연결한다. 동일 `time_slot_id`에는 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 최대 1건만 허용한다. CREATE READY가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE READY를 생성할 수 있다. `JOIN`은 기존 예약을 참조하며 `availableCapacity`를 기준으로 별도 처리한다.
+`payment_id`는 DB 내부 PK이며 Java 필드 `id`에 매핑한다. `portone_payment_id`는 Java 필드 `paymentId`에 매핑하며, 외부 식별자 중복을 막고 결제 완료 API·웹훅 멱등 처리의 기준이 된다. `CREATE`는 READY 생성 시 `reservation_id`, `reservation_participant_id`가 NULL이고, PAID 전환 후 생성된 예약·최초 참여자와 연결한다. 시간 만료는 `READY && expires_at <= now`에서만 `EXPIRED`로 정규화하며, 좌석 계산은 정규화 전에도 `expires_at > now`인 READY만 포함한다. 만료 후보 조회 인덱스는 `(payment_status, expires_at, payment_id)`이고 외부 `portone_payment_id`가 아닌 내부 PK를 반환·잠금 대상으로 사용한다. 동일 `time_slot_id`에는 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 최대 1건만 허용한다. CREATE READY가 만료되거나 `EXPIRED`가 된 뒤에는 새 CREATE READY를 생성할 수 있다. `JOIN`은 기존 예약을 참조하며 `availableCapacity`를 기준으로 별도 처리한다.
 
 ### 4.8 `refund`
 
@@ -393,8 +393,8 @@ erDiagram
 | `temporaryHeldCount` | 계산값 | `READY`이며 `expires_at`이 현재보다 이후인 Payment의 `party_size` 합계 |
 | `availableCapacity` | 계산값 | `shared_table.capacity - currentParticipantCount - temporaryHeldCount` |
 | `confirmationThreshold` | 계산값 | 정원 `2→2`, `4→3`, `6→5`, `8→7` |
-| `payableAmount` | 계산값 | 식당 또는 예약의 `PAID` 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
-| `expectedSettlementAmount`, `expectedAmount` | 계산값 | 결제 완료 금액 합계에서 환불 완료 금액 합계를 차감 |
+| `payableAmount` | 계산값 | 식당 또는 예약의 `paid_at`이 존재하는 Payment 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
+| `expectedSettlementAmount`, `expectedAmount` | 계산값 | `paid_at`이 존재하는 결제 완료 이력 금액 합계에서 환불 완료 금액 합계를 차감 |
 | `totalPaidAmount`, `totalRefundedAmount` | 계산값 | 기간·식당·예약 조건에 맞는 Payment·Refund 금액 합계 |
 | `noShowCount` | 계산값 | 회원의 `participation_status=NO_SHOW` 참여 건수 |
 | `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |
@@ -414,7 +414,7 @@ erDiagram
 | 예약 상태 | `RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED` | `reservation.reservation_status` |
 | 모집 상태 | `OPEN`, `CLOSED` | `reservation.recruitment_status` |
 | 참여자 상태 | `RESERVED`, `NO_SHOW`, `CANCELLED` | `reservation_participant.participation_status` |
-| 결제 상태 | `READY`, `PAID`, `FAILED`, `CANCELLED` | `payment.payment_status` |
+| 결제 상태 | `READY`, `PAID`, `FAILED`, `EXPIRED`, `REFUNDED` | `payment.payment_status`; `REFUNDED`는 Payment 전체 환불 완료 |
 | 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status` |
 
 `no_show_history.is_marked`는 상태 Enum이 아니라 처리·해제 이력을 구분하는 boolean 값이다. `TRUE`는 노쇼 처리, `FALSE`는 노쇼 해제를 뜻한다.
@@ -428,7 +428,7 @@ erDiagram
 3. CREATE면 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment 존재 여부를 확인한다. 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS`로 거절한다. JOIN의 READY Payment 생성과 `availableCapacity` 계산은 같은 잠금 경계에서 별도 처리한다.
 4. `shared_table.capacity`와 만료 전 READY·PAID 데이터를 사용해 `availableCapacity`를 계산하고 CREATE `partySize`를 검증한다.
 5. `payment`에 Member, TimeSlot, `party_size`, 금액, 통화, `payment_purpose=CREATE`, `payment_status=READY`, `expires_at`을 저장한다.
-6. 이 시점에는 `reservation_id`, `reservation_participant_id`가 NULL이다. 만료 시 READY 결제는 좌석 집계에서 제외하고 `FAILED`로 처리한다.
+6. 이 시점에는 `reservation_id`, `reservation_participant_id`가 NULL이다. 만료 READY는 좌석 집계에서 `expires_at` 기준으로 즉시 제외하고 스케줄러가 `EXPIRED`로 정규화한다.
 
 ### 최초 예약 결제 완료
 
@@ -465,7 +465,7 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | `time_slot` | `(shared_table_id, start_at, deleted_at)`, `UNIQUE(shared_table_id, active_start_at)` | 회차 조회·활성 중복 방지. 삭제 후 같은 시간 재생성을 허용하므로 단순 `UNIQUE(shared_table_id, start_at)`는 사용하지 않음 |
 | `reservation` | `(time_slot_id, reservation_status)`, `(reservation_status, recruitment_status)` | 활성 Reservation 조회·모집 예약 검색; `time_slot_id` 단순 UNIQUE 미사용 |
 | `reservation_participant` | `UNIQUE(reservation_id, member_id)`, `(member_id)` | 중복 참여 방지·내 예약 조회 |
-| `payment` | `UNIQUE(portone_payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)` | 외부 결제 식별자 조회·임시 선점 계산·만료 처리 |
+| `payment` | `UNIQUE(portone_payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)`, `(payment_status, expires_at, payment_id)` | 외부 결제 식별자 조회·임시 선점 계산·만료 후보의 상태/시각/내부 PK 정렬 |
 | `refund` | `UNIQUE(payment_id)`, `(refund_status)` | 중복 환불 방지·실패 환불 조회 |
 | `chat_message` | `(chat_room_id, chat_message_id)` | messageId cursor 기반 과거 메시지 조회 |
 

@@ -99,11 +99,15 @@
 → 완료 검증 API 또는 PortOne 웹훅
 → PortOne 결제 단건 재조회
 → 상태·금액·통화 검증
+→ 동일 Payment 내부 PK 비관적 락과 상태·expiresAt 재검증
 → 성공 시 PAID와 예약·참여 반영
-→ 실패·만료 시 FAILED와 좌석 해제
+→ 검증 실패는 FAILED, 시간 만료는 EXPIRED; 좌석은 expiresAt 계산으로 즉시 반환
 ```
 
-- 결제 완료 API와 웹훅이 동시에 실행돼도 예약·참여·결제 결과는 한 번만 반영한다. 상세 검증 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
+- 완료 API는 소유권, 웹훅은 원본 Body·`webhook-id`·`webhook-signature`·`webhook-timestamp` 공식 SDK 서명을 검증한다. 웹훅은 `permitAll`과 JWT 필터 우회를 사용하지만 서명 성공 뒤에만 JSON 이벤트를 해석한다.
+- 결제 완료 API와 웹훅은 동일 Payment 행 비관적 락과 `ReservationConfirmationService(MANDATORY)`의 한 트랜잭션으로 수렴해 예약·참여·결제 결과를 한 번만 반영한다. 웹훅 영구 업무 실패는 200, 인프라 실패는 5xx다.
+- 외부 PAID·내부 EXPIRED 또는 만료 READY는 `PAYMENT_COMPENSATION_REQUIRED` 구조화 로그를 남기며 예약 확정·자동 취소·환불은 수행하지 않는다.
+- `READY && expiresAt <= cutoff` 후보는 `(expiresAt, paymentId 내부 PK)` 순서로 최대 100건만 조회하고, 각 건은 별도 트랜잭션의 내부 PK 행 락으로 EXPIRED 정규화한다. 스케줄러는 예약 확정이나 외부 보상을 호출하지 않는다.
 - 환불 완료 상태와 결제 취소 상태는 함께 반영한다. 상세 상태 관계는 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [ERD](./ERD.md)를 따른다.
 
 ### 예약 확정과 모집 마감
@@ -243,7 +247,7 @@
 
 ## 7. v1 검증 우선순위
 
-1. PortOne 결제 실패·10분 만료 시 예약·참여자·현재 참여 인원이 반영되지 않고 좌석 선점이 해제된다.
+1. PortOne 결제 검증 실패 또는 10분 만료 시 예약·참여자·현재 참여 인원이 반영되지 않는다. 만료 좌석은 `expiresAt` 계산으로 즉시 제외되고 Payment는 `EXPIRED`로 정규화된다.
 2. `partySize`가 남은 참여 가능 인원을 초과하면 실패한다.
 3. 동시에 N명 참여를 요청해도 정원을 초과하지 않는다.
 4. 테이블별 확정 기준에 맞춰 `RECRUITING/CONFIRMED`가 계산된다.

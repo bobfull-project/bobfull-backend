@@ -63,7 +63,7 @@ availableCapacity
 ReservationStatus: RECRUITING, CONFIRMED, CANCELLED, CLOSED
 RecruitmentStatus: OPEN, CLOSED
 ParticipationStatus: RESERVED, NO_SHOW, CANCELLED
-PaymentStatus: READY, PAID, FAILED, CANCELLED
+PaymentStatus: READY, PAID, EXPIRED, FAILED, REFUNDED
 RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ```
 
@@ -97,14 +97,22 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 1. 클라이언트는 `/api/reservations/prepare`에 `type`, `targetId`, `partySize`를 전송한다.
 2. `CREATE`의 `targetId`는 `sessionId`, `JOIN`의 `targetId`는 `reservationId`다.
 3. 서버는 좌석을 10분간 임시 선점하고 `PaymentStatus.READY`와 PortOne `paymentId`를 생성한다.
-4. 결제 성공 전에는 예약 또는 참여자를 생성하지 않는다. 실패 또는 만료 시 `FAILED`와 좌석 해제를 반영한다.
+4. 결제 성공 전에는 예약 또는 참여자를 생성하지 않는다. 검증 실패는 `FAILED`, 시간 만료는 `EXPIRED`로 구분한다. 좌석은 만료된 `READY`를 `expiresAt` 계산에서 제외해 즉시 반환한다.
 
 ### 결제 완료와 웹훅
 
 - 결제 당사자는 `/api/payments/{paymentId}/complete`로 결제 완료를 검증한다.
-- 당사자가 아니면 `PAYMENT_ACCESS_DENIED`, 대상 결제가 없으면 `PAYMENT_NOT_FOUND`를 반환한다. 이미 완료 처리된 Payment는 기존 완료 결과를 담아 멱등 응답한다.
-- PortOne 웹훅은 사용자 인증 대신 서명 검증과 멱등성으로 처리한다.
-- 완료 검증과 웹훅이 동시에 실행되어도 예약·참여·결제 상태는 한 번만 반영한다.
+- 당사자가 아니면 `PAYMENT_ACCESS_DENIED`, 대상 결제가 없으면 `PAYMENT_NOT_FOUND`, 내부 `EXPIRED` 또는 만료된 `READY`면 `409 PAYMENT_EXPIRED`를 반환한다. 이미 완료 처리된 Payment는 기존 완료 결과를 담아 멱등 응답한다.
+- PortOne 웹훅은 `/api/webhooks/portone`의 `permitAll`·JWT 필터 우회와 별개로, JSON 해석 전 원본 Body 및 `webhook-id`·`webhook-signature`·`webhook-timestamp`를 공식 SDK로 검증한다.
+- 완료 API와 웹훅은 입구 인증·검증만 분리하고 PortOne 재조회, 상태·금액·통화 검증, 동일 Payment 행 비관적 락, 결과 반영을 공통 처리로 수렴한다. PAID 전환과 Reservation·ReservationParticipant 생성은 하나의 트랜잭션이다.
+- 웹훅의 서명 실패는 `400`, 알려진 영구 업무 실패는 오류 로그 후 `200`, PortOne 네트워크·DB·예상하지 못한 오류는 `5xx`다.
+- 외부 PAID인데 내부가 `EXPIRED` 또는 만료 `READY`면 `event=PAYMENT_COMPENSATION_REQUIRED`와 `paymentId`, `externalStatus`, `internalStatus`, `expiresAt`, `reason`을 기록하고 예약 확정은 하지 않는다. 자동 취소·환불·보상 트랜잭션은 이번 범위에서 제외한다.
+
+### READY 만료 정규화
+
+- `Payment.expireIfNeeded(now)`는 `READY && expiresAt <= now`일 때만 멱등적으로 `EXPIRED`로 전이한다. `PAID`, `FAILED`, `REFUNDED`, `EXPIRED` 또는 만료 전 `READY`는 변경하지 않는다.
+- 스케줄러는 `application-local.yml` 또는 배포 환경변수의 `fixedDelay=60s`, `batchSize=100`으로 local·운영에서 활성화하고 test에서는 비활성화한다. 후보는 `READY && expiresAt <= cutoff`을 `expiresAt ASC, paymentId(내부 PK) ASC`로 최대 100건 조회한다.
+- Processor는 각 내부 PK를 같은 Payment 행 비관적 락으로 다시 읽어 별도 REQUIRED 트랜잭션에서 정규화한다. 스케줄러는 예약 확정·외부 취소·환불을 호출하지 않는다.
 
 ### 취소·환불
 
@@ -115,7 +123,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - 모집 마감은 정원 도달 또는 식사 시작 2시간 전에 `CLOSED`가 된다. 마감 시 확정 기준 미달이면 예약 전체를 `CANCELLED`로 변경하고 남은 유효 참여자를 전액 환불하며, 취소 좌석을 재모집하지 않는다.
 - V2에서 OWNER 또는 시스템 귀책으로 예약을 진행할 수 없으면 예약 전체를 `CANCELLED`로 변경하고 모든 유효 참여자를 전액 환불한다. 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot 재사용은 기존 예약이 `CANCELLED`이고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없는 경우만 가능하다.
 - MEMBER 취소는 `NO_SHOW` 또는 이미 `CANCELLED`인 참여자에게 허용되지 않는다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
-- Refund는 Payment 전체 금액을 대상으로 하며 Payment당 하나만 생성한다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.CANCELLED`를 반영한다.
+- Refund는 Payment 전체 금액을 대상으로 하며 Payment당 하나만 생성한다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.REFUNDED`를 반영한다. READY 결제의 명시적 사용자 취소는 현재 범위에 없으며, 필요할 때 별도 CANCELLED 상태를 도입한다.
 - 사용자는 환불 처리 API를 직접 호출하지 않으며, V1에서 본인 환불 목록·상세를 조회한다.
 
 ### TimeSlot 활성 예약 정합성
@@ -129,7 +137,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ## 6. 노쇼·지급 예정 금액
 
 - V2에서 OWNER는 식사 종료 후 노쇼 처리 대상 참여자를 조회하고, 참여자를 노쇼 처리·해제하며 이력을 조회한다.
-- V1 지급 예정 금액은 결제 완료액에서 환불 완료액을 뺀 값이다.
+- V1 지급 예정 금액은 `paidAt`이 존재하는 결제 완료 이력의 금액 합계에서 `COMPLETED` 환불 금액 합계를 뺀 조회 계산값이다. 완료 환불로 Payment의 현재 상태가 `REFUNDED`여도 원결제 금액은 결제 완료액에 포함한다.
 
 ## 7. 채팅
 
