@@ -8,7 +8,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -65,9 +64,6 @@ public class Payment extends BaseTimeEntity {
 
     @Column(name = "paid_at")
     private Instant paidAt;
-
-    @OneToOne(mappedBy = "payment")
-    private Refund refund;
 
     protected Payment() {
     }
