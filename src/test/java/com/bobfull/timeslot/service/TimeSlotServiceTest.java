@@ -14,6 +14,8 @@ import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.TimeSlotErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.reservation.repository.ReservationParticipantRepository;
+import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.service.AvailableCapacityCalculator;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
@@ -66,6 +68,12 @@ class TimeSlotServiceTest {
     @Mock
     private AvailableCapacityCalculator availableCapacityCalculator;
 
+    @Mock
+    private ReservationRepository reservationRepository;
+
+    @Mock
+    private ReservationParticipantRepository reservationParticipantRepository;
+
     private TimeSlotService timeSlotService() {
         return new TimeSlotService(
                 timeSlotRepository,
@@ -73,6 +81,8 @@ class TimeSlotServiceTest {
                 restaurantRepository,
                 timeSlotReservationValidator,
                 availableCapacityCalculator,
+                reservationRepository,
+                reservationParticipantRepository,
                 FIXED_CLOCK
         );
     }
@@ -281,6 +291,10 @@ class TimeSlotServiceTest {
                 .willReturn(List.of(smallSlot, largeSlot));
         given(availableCapacityCalculator.calculate(200L, 2)).willReturn(2);
         given(availableCapacityCalculator.calculate(201L, 4)).willReturn(4);
+        given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(200L), anyCollection()))
+                .willReturn(Optional.empty());
+        given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(201L), anyCollection()))
+                .willReturn(Optional.empty());
 
         // when
         AvailableDiningSessionListResponse response = timeSlotService()
@@ -290,6 +304,8 @@ class TimeSlotServiceTest {
         assertThat(response.content()).hasSize(1);
         assertThat(response.content().get(0).sessionId()).isEqualTo(201L);
         assertThat(response.content().get(0).availableCapacity()).isEqualTo(4);
+        assertThat(response.content().get(0).reservationId()).isNull();
+        assertThat(response.content().get(0).currentParticipantCount()).isEqualTo(0);
     }
 
     @Test

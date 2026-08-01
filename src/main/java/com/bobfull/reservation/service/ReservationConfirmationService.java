@@ -6,6 +6,7 @@ import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
+import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.sharedtable.entity.SharedTable;
@@ -67,16 +68,12 @@ public class ReservationConfirmationService {
         int tableCapacity = tableCapacityOf(timeSlotId);
         int currentParticipantCount = reservationParticipantRepository.sumPartySize(
                 reservation.getId(), ParticipationStatus.RESERVED);
-        if (currentParticipantCount >= confirmationThreshold(tableCapacity)) {
+        if (currentParticipantCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
             reservation.confirm();
         }
         if (currentParticipantCount >= tableCapacity) {
             reservation.closeRecruitment();
         }
-    }
-
-    private int confirmationThreshold(int tableCapacity) {
-        return tableCapacity == 2 ? 2 : tableCapacity - 1;
     }
 
     private int tableCapacityOf(Long timeSlotId) {

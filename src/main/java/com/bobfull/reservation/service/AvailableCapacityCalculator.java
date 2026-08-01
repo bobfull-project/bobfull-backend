@@ -4,6 +4,7 @@ import com.bobfull.payment.service.PaymentHoldReader;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.util.List;
@@ -39,7 +40,7 @@ public class AvailableCapacityCalculator {
                 .map(this::activeParticipantCount)
                 .orElse(0);
         int pendingHoldCount = paymentHoldReader.sumActiveReadyPartySize(timeSlotId);
-        return Math.max(0, tableCapacity - currentParticipantCount - pendingHoldCount);
+        return ReservationCapacityPolicy.availableCapacity(tableCapacity, currentParticipantCount, pendingHoldCount);
     }
 
     private int activeParticipantCount(Reservation reservation) {
