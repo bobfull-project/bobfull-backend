@@ -10,27 +10,34 @@ required_env() {
 }
 
 fetch_parameter() {
-  local key="$1"
+  local parameter_name="$1"
   aws ssm get-parameter \
     --region "${AWS_REGION}" \
-    --name "${PARAMETER_PREFIX}/${key}" \
+    --name "${PARAMETER_PREFIX}/${parameter_name}" \
     --with-decryption \
     --query 'Parameter.Value' \
     --output text
 }
 
+append_env_value() {
+  local env_key="$1"
+  local value="$2"
+  printf '%s=%s\n' "${env_key}" "${value}" >> "${APP_ENV_FILE}"
+}
+
 append_parameter() {
-  local key="$1"
-  local required="$2"
+  local env_key="$1"
+  local parameter_name="$2"
+  local required="$3"
   local value
 
-  if value="$(fetch_parameter "${key}" 2>/dev/null)"; then
-    printf '%s=%s\n' "${key}" "${value}" >> "${APP_ENV_FILE}"
+  if value="$(fetch_parameter "${parameter_name}" 2>/dev/null)"; then
+    append_env_value "${env_key}" "${value}"
     return
   fi
 
   if [ "${required}" = "true" ]; then
-    echo "Missing required Parameter Store value: ${PARAMETER_PREFIX}/${key}" >&2
+    echo "Missing required Parameter Store value: ${PARAMETER_PREFIX}/${parameter_name}" >&2
     exit 1
   fi
 }
@@ -62,45 +69,49 @@ sudo chown "$USER":"$USER" "$(dirname "${APP_ENV_FILE}")"
 umask 077
 : > "${APP_ENV_FILE}"
 
-printf 'SPRING_PROFILES_ACTIVE=prod\n' >> "${APP_ENV_FILE}"
-printf 'AWS_REGION=%s\n' "${AWS_REGION}" >> "${APP_ENV_FILE}"
+append_env_value SPRING_PROFILES_ACTIVE prod
+append_env_value AWS_REGION "${AWS_REGION}"
 
-required_keys=(
-  DB_URL
-  DB_USERNAME
-  DB_PASSWORD
-  JWT_SECRET
-  PORTONE_API_SECRET
-  PORTONE_STORE_ID
+required_parameters=(
+  "DB_URL:db-url"
+  "DB_USERNAME:db-username"
+  "DB_PASSWORD:db-password"
+  "JWT_SECRET:jwt-secret"
+  "PORTONE_API_SECRET:portone-api-secret"
+  "PORTONE_STORE_ID:portone-store-id"
 )
 
-optional_keys=(
-  JWT_ACCESS_TOKEN_EXPIRATION_SECONDS
-  JPA_DDL_AUTO
-  PORTONE_CHANNEL_KEY
-  PORTONE_WEBHOOK_SECRET
+optional_parameters=(
+  "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
+  "JPA_DDL_AUTO:jpa-ddl-auto"
+  "CORS_ALLOWED_ORIGINS:cors-allowed-origins"
+  "PORTONE_CHANNEL_KEY:portone-channel-key"
+  "PORTONE_WEBHOOK_SECRET:portone-webhook-secret"
+  "PAYMENT_EXPIRATION_ENABLED:payment-expiration-enabled"
+  "PAYMENT_EXPIRATION_FIXED_DELAY:payment-expiration-fixed-delay"
+  "PAYMENT_EXPIRATION_BATCH_SIZE:payment-expiration-batch-size"
 )
 
-for key in "${required_keys[@]}"; do
-  append_parameter "${key}" true
+for item in "${required_parameters[@]}"; do
+  append_parameter "${item%%:*}" "${item#*:}" true
 done
 
-for key in "${optional_keys[@]}"; do
-  append_parameter "${key}" false
+for item in "${optional_parameters[@]}"; do
+  append_parameter "${item%%:*}" "${item#*:}" false
 done
 
 if [ -n "${S3_IMAGE_BUCKET:-}" ]; then
-  printf 'S3_IMAGE_BUCKET=%s\n' "${S3_IMAGE_BUCKET}" >> "${APP_ENV_FILE}"
+  append_env_value S3_IMAGE_BUCKET "${S3_IMAGE_BUCKET}"
 else
-  append_parameter S3_IMAGE_BUCKET false
+  append_parameter S3_IMAGE_BUCKET s3-image-bucket false
 fi
 
 if ! grep -q '^JPA_DDL_AUTO=' "${APP_ENV_FILE}"; then
-  printf 'JPA_DDL_AUTO=update\n' >> "${APP_ENV_FILE}"
+  append_env_value JPA_DDL_AUTO update
 fi
 
 if ! grep -q '^JWT_ACCESS_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
-  printf 'JWT_ACCESS_TOKEN_EXPIRATION_SECONDS=3600\n' >> "${APP_ENV_FILE}"
+  append_env_value JWT_ACCESS_TOKEN_EXPIRATION_SECONDS 3600
 fi
 
 s3_bucket="$(awk -F= '$1 == "S3_IMAGE_BUCKET" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
