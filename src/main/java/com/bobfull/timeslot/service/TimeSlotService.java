@@ -6,6 +6,11 @@ import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.exception.SharedTableErrorCode;
 import com.bobfull.common.exception.TimeSlotErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.reservation.entity.ParticipationStatus;
+import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.repository.ReservationParticipantRepository;
+import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.service.AvailableCapacityCalculator;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
@@ -33,6 +38,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -48,12 +54,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class TimeSlotService {
 
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
+    private static final List<ReservationStatus> ACTIVE_RESERVATION_STATUSES =
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
 
     private final TimeSlotRepository timeSlotRepository;
     private final SharedTableRepository sharedTableRepository;
     private final RestaurantRepository restaurantRepository;
     private final TimeSlotReservationValidator timeSlotReservationValidator;
     private final AvailableCapacityCalculator availableCapacityCalculator;
+    private final ReservationRepository reservationRepository;
+    private final ReservationParticipantRepository reservationParticipantRepository;
     private final Clock clock;
 
     public TimeSlotService(
@@ -62,6 +72,8 @@ public class TimeSlotService {
             RestaurantRepository restaurantRepository,
             TimeSlotReservationValidator timeSlotReservationValidator,
             AvailableCapacityCalculator availableCapacityCalculator,
+            ReservationRepository reservationRepository,
+            ReservationParticipantRepository reservationParticipantRepository,
             Clock clock
     ) {
         this.timeSlotRepository = timeSlotRepository;
@@ -69,6 +81,8 @@ public class TimeSlotService {
         this.restaurantRepository = restaurantRepository;
         this.timeSlotReservationValidator = timeSlotReservationValidator;
         this.availableCapacityCalculator = availableCapacityCalculator;
+        this.reservationRepository = reservationRepository;
+        this.reservationParticipantRepository = reservationParticipantRepository;
         this.clock = clock;
     }
 
@@ -206,12 +220,21 @@ public class TimeSlotService {
     }
 
     private AvailableDiningSessionResponse toAvailableDiningSessionResponse(TimeSlot timeSlot, Integer capacity) {
+        Optional<Reservation> activeReservation = reservationRepository
+                .findByTimeSlotIdAndReservationStatusIn(timeSlot.getId(), ACTIVE_RESERVATION_STATUSES);
+        Long reservationId = activeReservation.map(Reservation::getId).orElse(null);
+        int currentParticipantCount = activeReservation
+                .map(reservation -> reservationParticipantRepository.sumPartySize(
+                        reservation.getId(), ParticipationStatus.RESERVED))
+                .orElse(0);
         return AvailableDiningSessionResponse.of(
                 timeSlot,
                 capacity,
                 toOffsetDateTime(timeSlot.getStartAt()),
                 toOffsetDateTime(timeSlot.getEndAt()),
-                availableCapacityCalculator.calculate(timeSlot.getId(), capacity)
+                availableCapacityCalculator.calculate(timeSlot.getId(), capacity),
+                reservationId,
+                currentParticipantCount
         );
     }
 

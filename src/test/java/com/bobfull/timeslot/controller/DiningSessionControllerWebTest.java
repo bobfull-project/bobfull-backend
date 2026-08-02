@@ -217,7 +217,9 @@ class DiningSessionControllerWebTest {
                 4,
                 OffsetDateTime.parse("2026-08-01T11:00:00+09:00"),
                 OffsetDateTime.parse("2026-08-01T13:00:00+09:00"),
-                4
+                4,
+                null,
+                0
         );
         given(timeSlotService.getAvailableDiningSessions(10L, LocalDate.of(2026, 8, 1), 2))
                 .willReturn(new AvailableDiningSessionListResponse(10L, List.of(item)));

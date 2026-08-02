@@ -1450,12 +1450,17 @@ OWNER 응답 예시:
         "capacity": 4,
         "startAt": "2026-07-25T18:00:00+09:00",
         "endAt": "2026-07-25T20:00:00+09:00",
-        "availableCapacity": 4
+        "availableCapacity": 4,
+        "reservationId": null,
+        "currentParticipantCount": 0
       }
     ]
   }
 }
 ```
+
+- `reservationId`는 이 회차를 이미 점유한 활성(`RECRUITING`/`CONFIRMED`) Reservation이 없으면 `null`이다. `null`이면 새 예약 생성(`type=CREATE`), 값이 있으면 해당 예약 참여(`type=JOIN`)의 targetId로 사용한다.
+- `currentParticipantCount`는 활성 Reservation의 결제 완료(`RESERVED`) 참여자 partySize 합계이며, 활성 Reservation이 없으면 `0`이다.
 
 ## 4. Error
 

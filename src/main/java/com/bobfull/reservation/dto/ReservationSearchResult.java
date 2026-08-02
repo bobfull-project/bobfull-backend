@@ -2,6 +2,7 @@ package com.bobfull.reservation.dto;
 
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import java.time.Instant;
 
 public record ReservationSearchResult(
@@ -19,10 +20,10 @@ public record ReservationSearchResult(
         Long temporaryHeldCount
 ) {
     public int availableCapacity() {
-        return Math.max(0, capacity - currentParticipantCount.intValue() - temporaryHeldCount.intValue());
+        return ReservationCapacityPolicy.availableCapacity(capacity, currentParticipantCount, temporaryHeldCount);
     }
 
     public int confirmationThreshold() {
-        return capacity == 2 ? 2 : capacity - 1;
+        return ReservationCapacityPolicy.confirmationThreshold(capacity);
     }
 }
