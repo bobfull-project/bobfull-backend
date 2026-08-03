@@ -1,0 +1,186 @@
+package com.bobfull.reservation.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.payment.entity.Payment;
+import com.bobfull.payment.entity.PaymentPurpose;
+import com.bobfull.payment.entity.PaymentStatus;
+import com.bobfull.payment.repository.PaymentRepository;
+import com.bobfull.reservation.dto.ReservationPrepareRequest;
+import com.bobfull.reservation.entity.ParticipationStatus;
+import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationParticipant;
+import com.bobfull.reservation.repository.ReservationParticipantRepository;
+import com.bobfull.reservation.repository.ReservationRepository;
+import com.bobfull.restaurant.entity.Restaurant;
+import com.bobfull.restaurant.repository.RestaurantRepository;
+import com.bobfull.sharedtable.entity.SharedTable;
+import com.bobfull.sharedtable.repository.SharedTableRepository;
+import com.bobfull.timeslot.entity.TimeSlot;
+import com.bobfull.timeslot.repository.TimeSlotRepository;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+/**
+ * Issue #36: TimeSlot 행 잠금이 실제 MySQL에서도 CREATE·JOIN 경쟁을 직렬화하는지 검증하는
+ * 선택적 통합 테스트다. BOBFULL_MYSQL_CONCURRENCY_TEST=true 일 때만 실행한다(ADR 0001).
+ */
+@EnabledIfEnvironmentVariable(named = "BOBFULL_MYSQL_CONCURRENCY_TEST", matches = "true")
+@SpringBootTest(properties = {
+        "spring.datasource.url=${BOBFULL_TEST_MYSQL_URL}",
+        "spring.datasource.username=${BOBFULL_TEST_MYSQL_USERNAME}",
+        "spring.datasource.password=${BOBFULL_TEST_MYSQL_PASSWORD}",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "payment.expiration.enabled=false",
+        "jwt.secret=reservation-seat-concurrency-test-secret-key-please-keep-long",
+        "jwt.access-token-expiration-seconds=3600",
+        "portone.api-secret=portone-reservation-seat-concurrency-test-api-secret",
+        "portone.store-id=portone-reservation-seat-concurrency-test-store-id",
+        "portone.webhook-secret=d2hzZWNfcmVzZXJ2YXRpb24tc2VhdC1jb25jdXJyZW5jeQ=="
+})
+class ReservationPreparationConcurrencyIntegrationTest {
+
+    @Autowired private ReservationPreparationService preparationService;
+    @Autowired private ReservationRepository reservationRepository;
+    @Autowired private ReservationParticipantRepository participantRepository;
+    @Autowired private PaymentRepository paymentRepository;
+    @Autowired private TimeSlotRepository timeSlotRepository;
+    @Autowired private SharedTableRepository sharedTableRepository;
+    @Autowired private RestaurantRepository restaurantRepository;
+
+    @AfterEach
+    void cleanUp() {
+        paymentRepository.deleteAll();
+        participantRepository.deleteAll();
+        reservationRepository.deleteAll();
+        timeSlotRepository.deleteAll();
+        sharedTableRepository.deleteAll();
+        restaurantRepository.deleteAll();
+    }
+
+    @Test
+    void 같은_회차에_동시_CREATE_요청이_들어오면_하나만_성공하고_활성_예약은_한_건만_남는다() throws Exception {
+        TimeSlot timeSlot = timeSlot(4);
+
+        List<AttemptResult> results = raceTwo(
+                () -> preparationService.prepare(10L, new ReservationPrepareRequest(PaymentPurpose.CREATE, timeSlot.getId(), 1)),
+                () -> preparationService.prepare(11L, new ReservationPrepareRequest(PaymentPurpose.CREATE, timeSlot.getId(), 1))
+        );
+
+        assertThat(successCount(results)).isEqualTo(1);
+        assertThat(failureCodes(results)).containsExactly(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
+        assertThat(paymentRepository.count()).isEqualTo(1);
+        Payment createdPayment = paymentRepository.findAll().get(0);
+        assertThat(createdPayment.getStatus()).isEqualTo(PaymentStatus.READY);
+        assertThat(createdPayment.getPurpose()).isEqualTo(PaymentPurpose.CREATE);
+    }
+
+    @Test
+    void 마지막_좌석에_동시_JOIN_요청이_들어오면_하나만_성공하고_정원을_넘지_않는다() throws Exception {
+        int capacity = 4;
+        TimeSlot timeSlot = timeSlot(capacity);
+        Reservation reservation = reservationRepository.saveAndFlush(Reservation.create(timeSlot.getId(), 1L));
+        // 이미 capacity-1명이 확정 참여 중 → 잔여 좌석 1석만 남은 상태를 재현한다.
+        for (long memberId = 1L; memberId <= capacity - 1; memberId++) {
+            participantRepository.saveAndFlush(ReservationParticipant.create(reservation.getId(), memberId, 1));
+        }
+
+        List<AttemptResult> results = raceTwo(
+                () -> preparationService.prepare(20L, new ReservationPrepareRequest(PaymentPurpose.JOIN, reservation.getId(), 1)),
+                () -> preparationService.prepare(21L, new ReservationPrepareRequest(PaymentPurpose.JOIN, reservation.getId(), 1))
+        );
+
+        assertThat(successCount(results)).isEqualTo(1);
+        assertThat(failureCodes(results)).containsExactly(ReservationErrorCode.INSUFFICIENT_REMAINING_CAPACITY);
+
+        long readyJoinPayments = paymentRepository.findAll().stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.READY)
+                .count();
+        assertThat(readyJoinPayments).isEqualTo(1);
+
+        int confirmedParticipants = capacity - 1;
+        int pendingHold = 1;
+        assertThat(confirmedParticipants + pendingHold).isEqualTo(capacity);
+    }
+
+    @Test
+    void 같은_회원의_중복_JOIN_요청_중_하나만_성공한다() throws Exception {
+        TimeSlot timeSlot = timeSlot(4);
+        Reservation reservation = reservationRepository.saveAndFlush(Reservation.create(timeSlot.getId(), 1L));
+        participantRepository.saveAndFlush(ReservationParticipant.create(reservation.getId(), 1L, 1));
+
+        List<AttemptResult> results = raceTwo(
+                () -> preparationService.prepare(30L, new ReservationPrepareRequest(PaymentPurpose.JOIN, reservation.getId(), 1)),
+                () -> preparationService.prepare(30L, new ReservationPrepareRequest(PaymentPurpose.JOIN, reservation.getId(), 1))
+        );
+
+        assertThat(successCount(results)).isEqualTo(1);
+        assertThat(failureCodes(results)).containsExactly(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
+        assertThat(paymentRepository.count()).isEqualTo(1);
+    }
+
+    private TimeSlot timeSlot(int capacity) {
+        Restaurant restaurant = restaurantRepository.saveAndFlush(
+                Restaurant.create(1L, "동시성 테스트 식당", "제주시", "한식", "설명", "키워드", 10000));
+        SharedTable table = sharedTableRepository.saveAndFlush(SharedTable.create(restaurant.getId(), capacity));
+        return timeSlotRepository.saveAndFlush(TimeSlot.create(
+                table.getId(), Instant.parse("2030-08-01T02:00:00Z"), Instant.parse("2030-08-01T04:00:00Z")));
+    }
+
+    private List<AttemptResult> raceTwo(Callable<?> first, Callable<?> second) throws Exception {
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<AttemptResult> firstFuture = executor.submit(() -> attempt(start, first));
+            Future<AttemptResult> secondFuture = executor.submit(() -> attempt(start, second));
+            start.countDown();
+            return List.of(firstFuture.get(10, TimeUnit.SECONDS), secondFuture.get(10, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    private AttemptResult attempt(CountDownLatch start, Callable<?> call) throws InterruptedException {
+        assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
+        try {
+            call.call();
+            return AttemptResult.succeeded();
+        } catch (CustomException exception) {
+            return AttemptResult.failed(exception.getErrorCode());
+        } catch (Exception exception) {
+            throw new IllegalStateException("예상하지 못한 예외로 동시성 시도가 실패했습니다.", exception);
+        }
+    }
+
+    private long successCount(List<AttemptResult> results) {
+        return results.stream().filter(AttemptResult::success).count();
+    }
+
+    private List<Object> failureCodes(List<AttemptResult> results) {
+        return results.stream().filter(result -> !result.success()).map(AttemptResult::errorCode).toList();
+    }
+
+    private record AttemptResult(boolean success, Object errorCode) {
+        static AttemptResult succeeded() {
+            return new AttemptResult(true, null);
+        }
+
+        static AttemptResult failed(Object errorCode) {
+            return new AttemptResult(false, errorCode);
+        }
+    }
+}
