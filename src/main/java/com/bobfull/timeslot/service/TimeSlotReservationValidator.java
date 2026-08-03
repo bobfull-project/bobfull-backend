@@ -2,9 +2,7 @@ package com.bobfull.timeslot.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.TimeSlotErrorCode;
-import com.bobfull.reservation.entity.ReservationStatus;
-import com.bobfull.reservation.repository.ReservationRepository;
-import java.util.List;
+import com.bobfull.timeslot.port.TimeSlotReservationUsagePort;
 import org.springframework.stereotype.Service;
 
 /**
@@ -13,17 +11,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class TimeSlotReservationValidator {
 
-    private static final List<ReservationStatus> ACTIVE_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+    private final TimeSlotReservationUsagePort reservationUsagePort;
 
-    private final ReservationRepository reservationRepository;
-
-    public TimeSlotReservationValidator(ReservationRepository reservationRepository) {
-        this.reservationRepository = reservationRepository;
+    public TimeSlotReservationValidator(TimeSlotReservationUsagePort reservationUsagePort) {
+        this.reservationUsagePort = reservationUsagePort;
     }
 
     public void validateChangeAllowed(Long sessionId) {
-        if (reservationRepository.existsByTimeSlotIdAndReservationStatusIn(sessionId, ACTIVE_STATUSES)) {
+        if (reservationUsagePort.hasActiveReservation(sessionId)) {
             throw new CustomException(TimeSlotErrorCode.SESSION_HAS_RESERVATION);
         }
     }

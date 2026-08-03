@@ -73,3 +73,4 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 - [ADR 0002: 결제 완료 API와 PortOne 웹훅의 멱등성 경계](./0002-payment-completion-idempotency.md)
 - [ADR 0003: UTC Instant 저장과 Clock 주입 시간 전략](./0003-utc-instant-and-clock.md)
 - [ADR 0004: Java 17 프로젝트 기준](./0004-use-java-17.md)
+- [ADR 0005: 도메인 간 의존 경계와 조회 조합 원칙](./0005-domain-boundary-dependency-policy.md)
