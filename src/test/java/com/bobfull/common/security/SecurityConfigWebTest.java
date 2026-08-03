@@ -26,7 +26,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * SecurityConfig의 공개/인증 필요 API 구분, JWT 기반 인증, 역할 기반 접근 제어를 검증한다.
@@ -46,9 +45,6 @@ class SecurityConfigWebTest {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @Test
     void 공개_API는_인증_없이_접근할_수_있다() throws Exception {
@@ -219,8 +215,7 @@ class SecurityConfigWebTest {
     void 서명이_위조된_토큰이면_보호_API_접근시_401을_반환한다() throws Exception {
         // given
         String accessToken = jwtTokenProvider.createAccessToken(10L, MemberRole.MEMBER);
-        String tamperedToken = accessToken.substring(0, accessToken.length() - 1)
-                + (accessToken.endsWith("a") ? "b" : "a");
+        String tamperedToken = tamperSignature(accessToken);
 
         // when
         ResultActions result = mockMvc.perform(
@@ -236,7 +231,7 @@ class SecurityConfigWebTest {
         // given
         Clock pastClock = Clock.fixed(Instant.parse("2020-01-01T00:00:00Z"), ZoneOffset.UTC);
         JwtTokenProvider expiredTokenProvider = new JwtTokenProvider(
-                objectMapper, pastClock, "security-config-web-test-secret-key-please-keep-this-long-enough", 1L);
+                pastClock, "security-config-web-test-secret-key-please-keep-this-long-enough", 1L);
         String expiredToken = expiredTokenProvider.createAccessToken(10L, MemberRole.MEMBER);
 
         // when
@@ -257,5 +252,16 @@ class SecurityConfigWebTest {
         // then
         result.andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
+    }
+
+    /**
+     * 서명 부분의 첫 글자를 변조한다. 마지막 글자는 Base64url 인코딩의 padding 비트에 걸릴 수 있어
+     * 디코딩 결과가 우연히 바뀌지 않을 수 있으므로(flaky), 항상 실제 바이트가 바뀌는 첫 글자를 사용한다.
+     */
+    private String tamperSignature(String token) {
+        String[] parts = token.split("\\.");
+        char[] signatureChars = parts[2].toCharArray();
+        signatureChars[0] = signatureChars[0] == 'a' ? 'b' : 'a';
+        return parts[0] + "." + parts[1] + "." + new String(signatureChars);
     }
 }

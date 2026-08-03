@@ -31,12 +31,11 @@ public class SecurityConfig {
 
     @Bean
     public JwtTokenProvider jwtTokenProvider(
-            ObjectMapper objectMapper,
             Clock clock,
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.access-token-expiration-seconds}") long accessTokenExpirationSeconds
     ) {
-        return new JwtTokenProvider(objectMapper, clock, secret, accessTokenExpirationSeconds);
+        return new JwtTokenProvider(clock, secret, accessTokenExpirationSeconds);
     }
 
     @Bean
