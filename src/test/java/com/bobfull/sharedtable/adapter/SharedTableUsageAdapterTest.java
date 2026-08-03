@@ -1,10 +1,9 @@
 package com.bobfull.sharedtable.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
-import com.bobfull.reservation.repository.ReservationRepository;
+import com.bobfull.sharedtable.port.SharedTableReservationUsagePort;
 import com.bobfull.timeslot.entity.TimeSlot;
 import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.time.Instant;
@@ -19,7 +18,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class SharedTableUsageAdapterTest {
 
     @Mock private TimeSlotRepository timeSlotRepository;
-    @Mock private ReservationRepository reservationRepository;
+    @Mock private SharedTableReservationUsagePort reservationUsagePort;
 
     @Test
     void 연결된_회차의_활성_예약_여부를_조회한다() {
@@ -27,8 +26,8 @@ class SharedTableUsageAdapterTest {
         TimeSlot timeSlot = TimeSlot.create(100L, Instant.parse("2026-08-01T02:00:00Z"), Instant.parse("2026-08-01T04:00:00Z"));
         ReflectionTestUtils.setField(timeSlot, "id", 200L);
         given(timeSlotRepository.findAllBySharedTableIdAndDeletedAtIsNull(100L)).willReturn(List.of(timeSlot));
-        given(reservationRepository.existsByTimeSlotIdInAndReservationStatusIn(any(), any())).willReturn(true);
-        SharedTableUsageAdapter adapter = new SharedTableUsageAdapter(timeSlotRepository, reservationRepository);
+        given(reservationUsagePort.hasActiveReservation(List.of(200L))).willReturn(true);
+        SharedTableUsageAdapter adapter = new SharedTableUsageAdapter(timeSlotRepository, reservationUsagePort);
 
         // when
         boolean result = adapter.hasActiveReservation(100L);
