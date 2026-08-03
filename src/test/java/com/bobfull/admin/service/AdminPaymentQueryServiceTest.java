@@ -13,6 +13,7 @@ import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.repository.PaymentRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @ExtendWith(MockitoExtension.class)
 class AdminPaymentQueryServiceTest {
@@ -58,5 +60,26 @@ class AdminPaymentQueryServiceTest {
         service.getPayments("PAID", pageable);
 
         verify(paymentRepository).findAllByStatus(eq(PaymentStatus.PAID), any(Pageable.class));
+    }
+
+    @Test
+    void 필터_유무와_관계없이_생성일_역순_id_역순으로_정렬한다() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<com.bobfull.payment.entity.Payment> emptyPage = new PageImpl<>(java.util.List.of(), pageable, 0);
+        given(paymentRepository.findAll(any(Pageable.class))).willReturn(emptyPage);
+        given(paymentRepository.findAllByStatus(eq(PaymentStatus.PAID), any(Pageable.class))).willReturn(emptyPage);
+
+        service.getPayments(null, pageable);
+        service.getPayments("PAID", pageable);
+
+        ArgumentCaptor<Pageable> noFilterCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(paymentRepository).findAll(noFilterCaptor.capture());
+        assertThat(noFilterCaptor.getValue().getSort())
+                .isEqualTo(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+
+        ArgumentCaptor<Pageable> statusFilterCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(paymentRepository).findAllByStatus(eq(PaymentStatus.PAID), statusFilterCaptor.capture());
+        assertThat(statusFilterCaptor.getValue().getSort())
+                .isEqualTo(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
     }
 }

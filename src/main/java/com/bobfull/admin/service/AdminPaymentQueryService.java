@@ -9,7 +9,9 @@ import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.repository.PaymentRepository;
 import java.util.Set;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,7 @@ public class AdminPaymentQueryService {
 
     private static final Set<PaymentStatus> EXPOSED_FILTER_STATUSES =
             Set.of(PaymentStatus.READY, PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.REFUNDED);
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final PaymentRepository paymentRepository;
 
@@ -29,9 +32,10 @@ public class AdminPaymentQueryService {
     @Transactional(readOnly = true)
     public PageResponse<AdminPaymentListItemResponse> getPayments(String paymentStatus, Pageable pageable) {
         PaymentStatus status = parseStatus(paymentStatus);
+        Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), DEFAULT_SORT);
         Page<Payment> payments = status == null
-                ? paymentRepository.findAll(pageable)
-                : paymentRepository.findAllByStatus(status, pageable);
+                ? paymentRepository.findAll(sortedPageable)
+                : paymentRepository.findAllByStatus(status, sortedPageable);
         return PageResponse.from(payments.map(AdminPaymentListItemResponse::from));
     }
 
