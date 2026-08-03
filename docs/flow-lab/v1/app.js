@@ -1,9 +1,10 @@
 /*
  * BobFull V1 Flow Lab
- * 기준 브랜치: develop / 기준 Commit SHA: 5d0b528b9113737f9b5b543dda592c8c62aa5ba9
+ * 측정 기준 브랜치: develop / 측정 기준 Commit SHA: feebb8c24aac4f6043c89578e5dfa55fa05e8036
  *
  * 이 파일은 실제 코드를 실행하지 않는다. 각 사용자 행동(userAction)의 steps[]는 기준 SHA의
- * 실제 코드·테스트를 근거로 사람이 정리한 재생 데이터다. actor/target/performance는 layer 등
+ * 실제 코드·테스트를 근거로 사람이 정리한 재생 데이터다. PR 최신 검증 Head는 측정값의 기준 SHA와
+ * 구분해 PR 본문과 RESULTS.md에 기록한다. actor/target/performance는 layer 등
  * 이미 검증된 필드로부터 파생(derive)되며, 별도로 지어낸 값이 아니다.
  */
 

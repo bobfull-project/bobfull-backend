@@ -16,6 +16,7 @@ import com.bobfull.timeslot.service.TimeSlotService;
 import com.bobfull.payment.service.SettlementQueryService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -24,11 +25,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 
 /** performance 프로필의 Docker MySQL에서 Controller 요청별 JDBC prepare 수를 기록한다. */
 @SpringBootTest
 @ActiveProfiles("performance")
+@ContextConfiguration(initializers = PerformanceDatabaseUrlInitializer.class)
 @EnabledIfEnvironmentVariable(named = "BOBFULL_PERF_DB_URL", matches = ".+")
 class PerformanceQueryCountIntegrationTest {
 
@@ -66,8 +70,8 @@ class PerformanceQueryCountIntegrationTest {
     void 예약가능회차_조회_쿼리수를_기록한다() throws Exception {
         Statistics statistics = statistics();
         statistics.clear();
-        assertThat(timeSlotService.getAvailableDiningSessions(restaurantId, java.time.LocalDate.parse("2026-08-10"), null).content()).hasSize(2);
-        assertThat(statistics.getPrepareStatementCount()).isPositive();
+        assertThat(timeSlotService.getAvailableDiningSessions(restaurantId, LocalDate.parse("2026-08-10"), null).content()).hasSize(2);
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(11);
         System.out.println("PERF_QUERY_COUNT available-dining-sessions=" + statistics.getPrepareStatementCount());
     }
 
@@ -75,8 +79,8 @@ class PerformanceQueryCountIntegrationTest {
     void 지급예정정산총액_조회_쿼리수를_기록한다() throws Exception {
         Statistics statistics = statistics();
         statistics.clear();
-        assertThat(settlementQueryService.getExpectedSettlement(1L, restaurantId, java.time.LocalDate.parse("2026-08-10"), java.time.LocalDate.parse("2026-08-10")).expectedSettlementAmount()).isEqualByComparingTo("10000");
-        assertThat(statistics.getPrepareStatementCount()).isPositive();
+        assertThat(settlementQueryService.getExpectedSettlement(1L, restaurantId, LocalDate.parse("2026-08-10"), LocalDate.parse("2026-08-10")).expectedSettlementAmount()).isEqualByComparingTo("10000");
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
         System.out.println("PERF_QUERY_COUNT expected-settlement=" + statistics.getPrepareStatementCount());
     }
 
@@ -84,8 +88,8 @@ class PerformanceQueryCountIntegrationTest {
     void 예약별지급예정목록_조회_쿼리수를_기록한다() throws Exception {
         Statistics statistics = statistics();
         statistics.clear();
-        assertThat(settlementQueryService.getReservationSettlements(1L, restaurantId, java.time.LocalDate.parse("2026-08-10"), java.time.LocalDate.parse("2026-08-10"), org.springframework.data.domain.PageRequest.of(0, 20)).content()).hasSize(1);
-        assertThat(statistics.getPrepareStatementCount()).isPositive();
+        assertThat(settlementQueryService.getReservationSettlements(1L, restaurantId, LocalDate.parse("2026-08-10"), LocalDate.parse("2026-08-10"), PageRequest.of(0, 20)).content()).hasSize(1);
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(5);
         System.out.println("PERF_QUERY_COUNT settlement-list=" + statistics.getPrepareStatementCount());
     }
 

@@ -21,4 +21,4 @@ jwt:
 portone:
   api-secret: performance-test-api-secret
   store-id: performance-test-store
-  webhook-secret: performance-test-webhook-secret
+  webhook-secret: d2hzZWNfcmVzZXJ2YXRpb24tc2VhdC1jb25jdXJyZW5jeQ==
