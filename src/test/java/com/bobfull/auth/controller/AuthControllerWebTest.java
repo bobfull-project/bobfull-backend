@@ -2,26 +2,36 @@ package com.bobfull.auth.controller;
 
 import static org.hamcrest.Matchers.is;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.bobfull.auth.dto.LoginRequest;
 import com.bobfull.auth.dto.LoginResponse;
+import com.bobfull.auth.dto.LogoutResponse;
+import com.bobfull.auth.dto.ReissueRequest;
+import com.bobfull.auth.dto.ReissueResponse;
 import com.bobfull.auth.dto.SignupOwnerRequest;
 import com.bobfull.auth.dto.SignupResponse;
 import com.bobfull.auth.dto.SignupUserRequest;
 import com.bobfull.auth.service.AuthService;
 import com.bobfull.common.config.ClockConfig;
+import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
+import com.bobfull.common.security.AuthMember;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.common.security.SecurityConfig;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,8 +39,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 회원가입·로그인 API의 요청 검증, 응답 형식, 중복·인증 실패 매핑을 검증한다.
- * /api/auth/**는 실제 운영에서 SecurityConfig의 permitAll 대상이라 같은 설정을 Import해 검증한다.
+ * 회원가입·로그인·재발급·로그아웃 API의 요청 검증, 응답 형식, 인증·인가 매핑을 검증한다.
+ * /api/auth/**는 실제 운영에서 SecurityConfig의 permitAll(로그아웃 제외) 대상이라 같은 설정을 Import해 검증한다.
  */
 @WebMvcTest(controllers = AuthController.class)
 @Import({SecurityConfig.class, ClockConfig.class})
@@ -118,10 +128,10 @@ class AuthControllerWebTest {
     }
 
     @Test
-    void 로그인_성공시_AccessToken을_반환한다() throws Exception {
+    void 로그인_성공시_AccessToken과_RefreshToken을_반환한다() throws Exception {
         // given
         LoginRequest request = new LoginRequest("user@example.com", "Password123!");
-        given(authService.login(request)).willReturn(LoginResponse.of("access-token"));
+        given(authService.login(request)).willReturn(LoginResponse.of("access-token", "refresh-token"));
 
         // when
         ResultActions result = mockMvc.perform(post("/api/auth/login")
@@ -131,7 +141,8 @@ class AuthControllerWebTest {
         // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken", is("access-token")))
-                .andExpect(jsonPath("$.data.tokenType", is("Bearer")));
+                .andExpect(jsonPath("$.data.tokenType", is("Bearer")))
+                .andExpect(jsonPath("$.data.refreshToken", is("refresh-token")));
     }
 
     @Test
@@ -148,5 +159,77 @@ class AuthControllerWebTest {
         // then
         result.andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code", is("INVALID_CREDENTIALS")));
+    }
+
+    @Test
+    void 유효한_RefreshToken으로_재발급하면_새_토큰_쌍을_반환한다() throws Exception {
+        // given
+        ReissueRequest request = new ReissueRequest("old-refresh-token");
+        given(authService.reissue("old-refresh-token"))
+                .willReturn(new ReissueResponse("new-access-token", "new-refresh-token"));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/auth/reissue")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken", is("new-access-token")))
+                .andExpect(jsonPath("$.data.refreshToken", is("new-refresh-token")));
+    }
+
+    @Test
+    void 무효한_RefreshToken으로_재발급하면_401을_반환한다() throws Exception {
+        // given
+        ReissueRequest request = new ReissueRequest("invalid-refresh-token");
+        given(authService.reissue("invalid-refresh-token"))
+                .willThrow(new CustomException(CommonErrorCode.UNAUTHORIZED));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/auth/reissue")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
+    }
+
+    @Test
+    void 재발급요청에_RefreshToken이_없으면_400을_반환한다() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(post("/api/auth/reissue")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("INVALID_INPUT_VALUE")));
+    }
+
+    @Test
+    void 인증된_회원이_로그아웃하면_200을_반환한다() throws Exception {
+        // given
+        given(authService.logout(1L)).willReturn(LogoutResponse.success());
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/auth/logout")
+                .with(authentication(memberAuthentication(1L))));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result", is(true)));
+    }
+
+    @Test
+    void 인증없이_로그아웃을_요청하면_401을_반환한다() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private Authentication memberAuthentication(Long memberId) {
+        AuthMember authMember = new AuthMember(memberId, MemberRole.MEMBER);
+        return new UsernamePasswordAuthenticationToken(authMember, null, List.of(new SimpleGrantedAuthority("ROLE_MEMBER")));
     }
 }

@@ -71,6 +71,10 @@ flowchart TB
 
 PortOne 웹훅은 `POST /api/webhooks/portone`을 `permitAll`·JWT 필터 제외로 열되, 사용자 인증 대신 원본 Body와 `webhook-id`·`webhook-signature`·`webhook-timestamp`의 공식 SDK 서명 검증을 수행한다. JSON 해석은 검증 뒤에만 허용한다. 완료 검증 API와 웹훅은 입구 검증만 분리하고 PortOne 재조회, 동일 Payment 행 비관적 락, 상태·만료 재검증, 예약 확정을 공통 처리로 수렴한다.
 
+### 인증 세션(Access·Refresh Token)
+
+Access Token은 HS256 JWT로 서명·만료만 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃의 Redis 실패는 감추지 않고 그대로 전파한다. Access Token Blacklist(요청마다 Redis 조회)는 도입하지 않으며, Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)도 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
+
 ## 5. 예약·좌석·결제 처리
 
 ```mermaid
@@ -122,7 +126,8 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 다음 항목은 기준 문서에서 확정되지 않았거나 이번 문서 범위가 아니므로 구조를 구체화하지 않는다.
 
 - 배포 구조, 최종 AWS 구성, 프론트엔드 배포 방식, V1·V2·V3별 물리 아키텍처
-- Redis·Kafka 도입 구조와 채팅 Pub/Sub
+- Redis의 배포·클러스터 구성(로컬 단일 인스턴스만 구성됨), Kafka 도입 구조, 채팅 Pub/Sub
+- Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
 - 개별 ADR의 사전 생성, API·ERD 상세 복제, 클래스·패키지 구조

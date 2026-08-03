@@ -31,12 +31,11 @@ public class SecurityConfig {
 
     @Bean
     public JwtTokenProvider jwtTokenProvider(
-            ObjectMapper objectMapper,
             Clock clock,
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.access-token-expiration-seconds}") long accessTokenExpirationSeconds
     ) {
-        return new JwtTokenProvider(objectMapper, clock, secret, accessTokenExpirationSeconds);
+        return new JwtTokenProvider(clock, secret, accessTokenExpirationSeconds);
     }
 
     @Bean
@@ -74,6 +73,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/portone").permitAll()
                         .requestMatchers(HttpMethod.GET,
