@@ -1,0 +1,4 @@
+2026-08-03T12:37:46+09:00 Docker MySQL performance profile
+PERF_QUERY_COUNT expected-settlement=2
+PERF_QUERY_COUNT available-dining-sessions=11
+PERF_QUERY_COUNT settlement-list=5

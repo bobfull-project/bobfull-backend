@@ -9,8 +9,14 @@
 
 const CONFIG = {
   branch: "develop",
-  sha: "5d0b528b9113737f9b5b543dda592c8c62aa5ba9",
-  generatedDate: "2026-07-31"
+  sha: "feebb8c24aac4f6043c89578e5dfa55fa05e8036",
+  generatedDate: "2026-08-03"
+};
+
+const PERFORMANCE_BASELINES = {
+  "available-dining-sessions": { status: "실측 완료", measuredAt: "2026-08-03T12:37:46+09:00", http: "평균 19.289ms / p50 15.367ms / 최소 13.856ms / 최대 32.960ms", queries: "11건 (Hibernate Statistics prepareStatementCount)", source: "perf-baseline/RESULTS.md" },
+  "expected-settlement": { status: "실측 완료", measuredAt: "2026-08-03T12:37:46+09:00", http: "평균 5.763ms / p50 5.285ms / 최소 4.968ms / 최대 6.980ms", queries: "2건 (Hibernate Statistics prepareStatementCount)", source: "perf-baseline/RESULTS.md" },
+  "settlement-list": { status: "실측 완료", measuredAt: "2026-08-03T12:37:46+09:00", http: "평균 13.047ms / p50 10.806ms / 최소 9.576ms / 최대 21.270ms", queries: "5건 (Hibernate Statistics prepareStatementCount)", source: "perf-baseline/RESULTS.md" }
 };
 
 /* ------------------------------------------------------------------ */
@@ -2981,6 +2987,17 @@ function renderDetailBody() {
       ]));
     });
     body.appendChild(grid);
+    const baseline = PERFORMANCE_BASELINES[action.id];
+    if (baseline) {
+      body.appendChild(el("div", { class: "perf-baseline" }, [
+        el("strong", { text: "현재 V1 실행 관찰 — " + baseline.status }),
+        el("p", { text: "전체 HTTP 응답시간: " + baseline.http }),
+        el("p", { text: "DB 쿼리 수: " + baseline.queries }),
+        el("p", { text: "기준: " + CONFIG.sha + " / " + baseline.measuredAt + " / 근거: " + baseline.source }),
+        el("p", { text: "개선 후보: 회차별 반복 조회·정산 집계 방식은 실제 쿼리 수와 EXPLAIN 확인 후 향후 검토한다. Redis·인덱스·Projection은 현재 적용하지 않았다." }),
+        el("p", { text: "향후 성능 비교: 개선 후 응답시간·DB 쿼리 수·K6·개선율 모두 측정 전" })
+      ]));
+    }
     body.appendChild(el("p", { class: "perf-disclaimer", text: "자동 실행의 재생 간격(약 1.4초)은 시뮬레이션 진행 속도이며 실제 API 실행 시간이 아닙니다." }));
   }
 }
