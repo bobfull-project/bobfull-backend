@@ -1,4 +1,4 @@
-# ADR 0005: Refresh Token 저장소로 Redis를 최초 도입
+# ADR 0006: Refresh Token 저장소로 Redis를 최초 도입
 
 - 상태: `Accepted`
 - 작성일: `2026-08-03`

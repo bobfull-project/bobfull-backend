@@ -73,7 +73,7 @@ PortOne 웹훅은 `POST /api/webhooks/portone`을 `permitAll`·JWT 필터 제외
 
 ### 인증 세션(Access·Refresh Token)
 
-Access Token은 HS256 JWT로 서명·만료만 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃의 Redis 실패는 감추지 않고 그대로 전파한다. Access Token Blacklist(요청마다 Redis 조회)는 도입하지 않으며, Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)도 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0005-refresh-token-redis.md`).
+Access Token은 HS256 JWT로 서명·만료만 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃의 Redis 실패는 감추지 않고 그대로 전파한다. Access Token Blacklist(요청마다 Redis 조회)는 도입하지 않으며, Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)도 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
 
 ## 5. 예약·좌석·결제 처리
 
