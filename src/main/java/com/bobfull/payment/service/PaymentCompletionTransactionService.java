@@ -25,6 +25,8 @@ public class PaymentCompletionTransactionService {
         this.clock = clock;
     }
 
+    // 락 순서: Payment → Reservation(JOIN 확정 시 ReservationConfirmationService에서 획득).
+    // ADR 0001 "복수 비관적 락의 획득 순서" 참고, 역순 금지.
     @Transactional
     public PaymentCompletionResult complete(String paymentId, Long memberId) {
         Payment payment = paymentRepository.findWithLockByPaymentId(paymentId)

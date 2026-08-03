@@ -60,6 +60,7 @@ class ReservationPreparationConcurrencyIntegrationTest {
     @Autowired private TimeSlotRepository timeSlotRepository;
     @Autowired private SharedTableRepository sharedTableRepository;
     @Autowired private RestaurantRepository restaurantRepository;
+    @Autowired private AvailableCapacityCalculator availableCapacityCalculator;
 
     @AfterEach
     void cleanUp() {
@@ -72,7 +73,8 @@ class ReservationPreparationConcurrencyIntegrationTest {
     }
 
     @Test
-    void 같은_회차에_동시_CREATE_요청이_들어오면_하나만_성공하고_활성_예약은_한_건만_남는다() throws Exception {
+    void 같은_회차에_동시_CREATE_준비_요청이_들어오면_유효한_CREATE_READY_Payment가_한_건만_생성되고_Reservation은_아직_생성되지_않는다()
+            throws Exception {
         TimeSlot timeSlot = timeSlot(4);
 
         List<AttemptResult> results = raceTwo(
@@ -82,14 +84,17 @@ class ReservationPreparationConcurrencyIntegrationTest {
 
         assertThat(successCount(results)).isEqualTo(1);
         assertThat(failureCodes(results)).containsExactly(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
-        assertThat(paymentRepository.count()).isEqualTo(1);
-        Payment createdPayment = paymentRepository.findAll().get(0);
-        assertThat(createdPayment.getStatus()).isEqualTo(PaymentStatus.READY);
-        assertThat(createdPayment.getPurpose()).isEqualTo(PaymentPurpose.CREATE);
+        // CREATE 준비는 READY Payment만 만들고, 실제 Reservation은 결제 완료 시점에 생성된다(ADR 0001).
+        assertThat(reservationRepository.count()).isZero();
+        List<Payment> readyPayments = paymentRepository.findAll().stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.READY)
+                .toList();
+        assertThat(readyPayments).hasSize(1);
+        assertThat(readyPayments.get(0).getPurpose()).isEqualTo(PaymentPurpose.CREATE);
     }
 
     @Test
-    void 마지막_좌석에_동시_JOIN_요청이_들어오면_하나만_성공하고_정원을_넘지_않는다() throws Exception {
+    void 마지막_좌석에_동시_JOIN_요청이_들어오면_하나만_성공하고_실제_참여_인원과_선점_인원의_합이_정원을_넘지_않는다() throws Exception {
         int capacity = 4;
         TimeSlot timeSlot = timeSlot(capacity);
         Reservation reservation = reservationRepository.saveAndFlush(Reservation.create(timeSlot.getId(), 1L));
@@ -106,14 +111,24 @@ class ReservationPreparationConcurrencyIntegrationTest {
         assertThat(successCount(results)).isEqualTo(1);
         assertThat(failureCodes(results)).containsExactly(ReservationErrorCode.INSUFFICIENT_REMAINING_CAPACITY);
 
-        long readyJoinPayments = paymentRepository.findAll().stream()
+        // 하드코딩한 산술식이 아니라, 실제 DB에서 참여 인원·선점 인원·잔여 좌석을 다시 조회해 검증한다.
+        int actualConfirmedParticipants = participantRepository.sumPartySize(
+                reservation.getId(), ParticipationStatus.RESERVED);
+        long actualReadyHoldPartySize = paymentRepository.findAll().stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.READY)
+                .filter(payment -> payment.getTimeSlotId().equals(timeSlot.getId()))
+                .mapToLong(Payment::getPartySize)
+                .sum();
+        int actualAvailableCapacity = availableCapacityCalculator.calculate(timeSlot.getId(), capacity);
+        long successfulReadyPayments = paymentRepository.findAll().stream()
                 .filter(payment -> payment.getStatus() == PaymentStatus.READY)
                 .count();
-        assertThat(readyJoinPayments).isEqualTo(1);
 
-        int confirmedParticipants = capacity - 1;
-        int pendingHold = 1;
-        assertThat(confirmedParticipants + pendingHold).isEqualTo(capacity);
+        assertThat(actualConfirmedParticipants).isEqualTo(capacity - 1);
+        assertThat(actualReadyHoldPartySize).isEqualTo(1);
+        assertThat(actualConfirmedParticipants + actualReadyHoldPartySize).isEqualTo(capacity);
+        assertThat(actualAvailableCapacity).isZero();
+        assertThat(successfulReadyPayments).isEqualTo(1);
     }
 
     @Test

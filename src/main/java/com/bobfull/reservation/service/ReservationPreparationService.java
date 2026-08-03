@@ -93,6 +93,7 @@ public class ReservationPreparationService {
         return ReservationPrepareResponse.from(result);
     }
 
+    // 락 순서: TimeSlot 단독(ADR 0001 "복수 비관적 락의 획득 순서" 참고).
     private ValidatedTarget resolveCreateTarget(Long timeSlotId, Integer partySize, boolean lock) {
         TimeSlot timeSlot = findTimeSlotOrThrow(timeSlotId, lock);
         SharedTable sharedTable = findTableOrThrow(timeSlot.getSharedTableId());
@@ -109,6 +110,7 @@ public class ReservationPreparationService {
         // 이후의 일반 SELECT(잔여 인원 합계 등)가 트랜잭션의 첫 조회 시점 스냅샷을 그대로 쓰기 때문에,
         // 잠금 없는 조회를 먼저 하면 TimeSlot 락을 기다렸다 풀려도 그 사이 상대가 커밋한 결과를
         // 못 보고 통과해버릴 수 있다(ADR 0001, Issue #36에서 재현·확인됨).
+        // 락 순서: Reservation → TimeSlot(ADR 0001 "복수 비관적 락의 획득 순서" 참고, 역순 금지).
         Reservation reservation = lock ? findReservationWithLockOrThrow(reservationId) : findReservationOrThrow(reservationId);
         TimeSlot timeSlot = findTimeSlotOrThrow(reservation.getTimeSlotId(), lock);
         SharedTable sharedTable = findTableOrThrow(timeSlot.getSharedTableId());

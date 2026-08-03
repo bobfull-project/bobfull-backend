@@ -26,6 +26,29 @@
 
 만료 스케줄러는 좌석 반환이나 예약 확정을 수행하지 않는다. `READY && expiresAt <= cutoff`을 `expiresAt ASC, paymentId(내부 PK) ASC`로 최대 100건 조회하고, 각 내부 PK를 별도 REQUIRED 트랜잭션의 Payment 행 비관적 락으로 다시 읽어 EXPIRED만 반영한다. 기본 실행 주기는 fixed delay 60초이며 test 환경에서는 비활성화한다.
 
+## 복수 비관적 락의 획득 순서
+
+저장소 전체의 `@Lock(PESSIMISTIC_WRITE)`/`findWithLock*` 호출 지점을 모두 확인한 결과, 한 트랜잭션이 둘 이상의 락을 잡는 흐름은 다음과 같다.
+
+```text
+결제 완료 JOIN(PaymentCompletionTransactionService → ReservationConfirmationService.confirm): Payment → Reservation
+예약 준비 JOIN(ReservationPreparationService.resolveJoinTarget): Reservation → TimeSlot
+예약 준비 CREATE(ReservationPreparationService.resolveCreateTarget): TimeSlot 단독
+만료 Processor(PaymentExpirationProcessor): Payment 단독
+```
+
+이 네 흐름은 모두 다음 공통 순서의 부분열이며, 어떤 흐름도 이 순서를 역행하지 않는다.
+
+```text
+Payment → Reservation → TimeSlot
+```
+
+**규칙**: 새로운 흐름이 이 중 두 개 이상의 락을 같은 트랜잭션에서 잡아야 하면, 반드시 위 순서(부분열)로만 획득한다. 역순으로 락을 잡지 않는다(예: TimeSlot을 먼저 잡고 그다음 Reservation을 잡는 흐름을 추가하지 않는다). 이 순서를 벗어나야 하는 요구가 생기면 이 ADR을 먼저 갱신하고, 저장소 전체의 락 경로를 다시 확인한다.
+
+`ReservationPreparationService.resolveJoinTarget`이 Reservation을 잠금 없는 일반 조회 대신 `findWithLockById`로 트랜잭션의 첫 쿼리이자 잠금 조회로 만든 이유는, MySQL 기본 격리수준(REPEATABLE_READ)에서 트랜잭션의 첫 조회가 이후 모든 일반 SELECT의 스냅샷 시점을 고정하기 때문이다. 잠금 없는 조회를 먼저 실행하면 TimeSlot 락을 기다렸다 획득해도, 그 뒤의 잔여 좌석 계산(`AvailableCapacityCalculator`)은 락 획득 이전 스냅샷을 그대로 사용해 상대방이 방금 커밋한 결과를 보지 못한다(Issue #36에서 실제 MySQL로 재현·확인).
+
+**처리량 저하와 데드락 가능성**: 이 순서 규칙을 지키는 한, 서로 다른 흐름끼리 순환 대기(circular wait)가 생기지 않아 데드락 위험은 없다. 다만 각 락은 해당 트랜잭션이 끝날 때까지 다른 트랜잭션의 같은 행 접근을 막으므로, 동시 요청이 몰리는 인기 회차·인기 예약에서는 락 대기로 처리량이 떨어질 수 있다(기존 단점 항목과 동일). 검증 방법은 `ReservationPreparationConcurrencyIntegrationTest`(`BOBFULL_MYSQL_CONCURRENCY_TEST=true`)로, 위 순서를 지키는 두 흐름을 실제 MySQL에서 동시 실행해 데드락 없이 하나만 성공하고 나머지는 정상적으로 대기 후 실패하는지 확인한다.
+
 ## 선택 이유
 
 현재 결제 상태와 예약 흐름을 이용해 임시 선점을 표현하면서, 취소 이력을 보존하는 TimeSlot 재사용 요구와 동시 최초 예약 방지 요구를 함께 만족한다.
