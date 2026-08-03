@@ -13,14 +13,9 @@ import com.bobfull.reservation.dto.ReservationPrepareResponse;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.port.ReservationTargetReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
-import com.bobfull.restaurant.entity.Restaurant;
-import com.bobfull.restaurant.repository.RestaurantRepository;
-import com.bobfull.sharedtable.entity.SharedTable;
-import com.bobfull.sharedtable.repository.SharedTableRepository;
-import com.bobfull.timeslot.entity.TimeSlot;
-import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -39,9 +34,7 @@ public class ReservationPreparationService {
     private static final List<ReservationStatus> ACTIVE_STATUSES =
             List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
 
-    private final TimeSlotRepository timeSlotRepository;
-    private final SharedTableRepository sharedTableRepository;
-    private final RestaurantRepository restaurantRepository;
+    private final ReservationTargetReader reservationTargetReader;
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final PaymentHoldReader paymentHoldReader;
@@ -49,18 +42,14 @@ public class ReservationPreparationService {
     private final AvailableCapacityCalculator availableCapacityCalculator;
 
     public ReservationPreparationService(
-            TimeSlotRepository timeSlotRepository,
-            SharedTableRepository sharedTableRepository,
-            RestaurantRepository restaurantRepository,
+            ReservationTargetReader reservationTargetReader,
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
             PaymentHoldReader paymentHoldReader,
             ReadyPaymentCreator readyPaymentCreator,
             AvailableCapacityCalculator availableCapacityCalculator
     ) {
-        this.timeSlotRepository = timeSlotRepository;
-        this.sharedTableRepository = sharedTableRepository;
-        this.restaurantRepository = restaurantRepository;
+        this.reservationTargetReader = reservationTargetReader;
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.paymentHoldReader = paymentHoldReader;
@@ -95,14 +84,12 @@ public class ReservationPreparationService {
 
     // 락 순서: TimeSlot 단독(ADR 0001 "복수 비관적 락의 획득 순서" 참고).
     private ValidatedTarget resolveCreateTarget(Long timeSlotId, Integer partySize, boolean lock) {
-        TimeSlot timeSlot = findTimeSlotOrThrow(timeSlotId, lock);
-        SharedTable sharedTable = findTableOrThrow(timeSlot.getSharedTableId());
-        Restaurant restaurant = findRestaurantOrThrow(sharedTable.getRestaurantId());
-        validatePartySizeAgainstCapacity(partySize, sharedTable.getCapacity());
-        validateNoActiveCreate(timeSlot.getId());
+        ReservationTargetReader.ReservationTarget target = reservationTargetReader.read(timeSlotId, lock);
+        validatePartySizeAgainstCapacity(partySize, target.tableCapacity());
+        validateNoActiveCreate(target.timeSlotId());
 
-        int availableCapacity = availableCapacityCalculator.calculate(timeSlot.getId(), sharedTable.getCapacity());
-        return new ValidatedTarget(timeSlot.getId(), null, restaurant.getDepositPerPerson(), availableCapacity);
+        int availableCapacity = availableCapacityCalculator.calculate(target.timeSlotId(), target.tableCapacity());
+        return new ValidatedTarget(target.timeSlotId(), null, target.depositPerPerson(), availableCapacity);
     }
 
     private ValidatedTarget resolveJoinTarget(Long memberId, Long reservationId, Integer partySize, boolean lock) {
@@ -112,18 +99,16 @@ public class ReservationPreparationService {
         // 못 보고 통과해버릴 수 있다(ADR 0001, Issue #36에서 재현·확인됨).
         // 락 순서: Reservation → TimeSlot(ADR 0001 "복수 비관적 락의 획득 순서" 참고, 역순 금지).
         Reservation reservation = lock ? findReservationWithLockOrThrow(reservationId) : findReservationOrThrow(reservationId);
-        TimeSlot timeSlot = findTimeSlotOrThrow(reservation.getTimeSlotId(), lock);
-        SharedTable sharedTable = findTableOrThrow(timeSlot.getSharedTableId());
-        Restaurant restaurant = findRestaurantOrThrow(sharedTable.getRestaurantId());
+        ReservationTargetReader.ReservationTarget target = reservationTargetReader.read(reservation.getTimeSlotId(), lock);
 
         validateJoinable(reservation);
         validateNotAlreadyParticipating(reservation.getId(), memberId);
         validateNoActiveJoinReady(reservation.getId(), memberId);
 
-        int availableCapacity = availableCapacityCalculator.calculate(timeSlot.getId(), sharedTable.getCapacity());
+        int availableCapacity = availableCapacityCalculator.calculate(target.timeSlotId(), target.tableCapacity());
         validatePartySizeAgainstRemainingCapacity(partySize, availableCapacity);
 
-        return new ValidatedTarget(timeSlot.getId(), reservation.getId(), restaurant.getDepositPerPerson(), availableCapacity);
+        return new ValidatedTarget(target.timeSlotId(), reservation.getId(), target.depositPerPerson(), availableCapacity);
     }
 
     private void validateNoActiveCreate(Long timeSlotId) {
@@ -174,23 +159,6 @@ public class ReservationPreparationService {
         if (partySize > availableCapacity) {
             throw new CustomException(ReservationErrorCode.INSUFFICIENT_REMAINING_CAPACITY);
         }
-    }
-
-    private TimeSlot findTimeSlotOrThrow(Long timeSlotId, boolean lock) {
-        Optional<TimeSlot> timeSlot = lock
-                ? timeSlotRepository.findWithLockByIdAndDeletedAtIsNull(timeSlotId)
-                : timeSlotRepository.findByIdAndDeletedAtIsNull(timeSlotId);
-        return timeSlot.orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
-    }
-
-    private SharedTable findTableOrThrow(Long tableId) {
-        return sharedTableRepository.findByIdAndDeletedAtIsNull(tableId)
-                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
-    }
-
-    private Restaurant findRestaurantOrThrow(Long restaurantId) {
-        return restaurantRepository.findByIdAndDeletedAtIsNull(restaurantId)
-                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
     }
 
     private Reservation findReservationOrThrow(Long reservationId) {

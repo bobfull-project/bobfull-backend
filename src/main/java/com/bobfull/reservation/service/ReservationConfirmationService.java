@@ -7,12 +7,9 @@ import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
+import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
-import com.bobfull.sharedtable.entity.SharedTable;
-import com.bobfull.sharedtable.repository.SharedTableRepository;
-import com.bobfull.timeslot.entity.TimeSlot;
-import com.bobfull.timeslot.repository.TimeSlotRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,19 +26,16 @@ public class ReservationConfirmationService {
 
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
-    private final TimeSlotRepository timeSlotRepository;
-    private final SharedTableRepository sharedTableRepository;
+    private final ReservationCapacityReader reservationCapacityReader;
 
     public ReservationConfirmationService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            TimeSlotRepository timeSlotRepository,
-            SharedTableRepository sharedTableRepository
+            ReservationCapacityReader reservationCapacityReader
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
-        this.timeSlotRepository = timeSlotRepository;
-        this.sharedTableRepository = sharedTableRepository;
+        this.reservationCapacityReader = reservationCapacityReader;
     }
 
     /**
@@ -65,7 +59,7 @@ public class ReservationConfirmationService {
     }
 
     private void updateReservationStatus(Reservation reservation, Long timeSlotId) {
-        int tableCapacity = tableCapacityOf(timeSlotId);
+        int tableCapacity = reservationCapacityReader.readTableCapacity(timeSlotId);
         int currentParticipantCount = reservationParticipantRepository.sumPartySize(
                 reservation.getId(), ParticipationStatus.RESERVED);
         if (currentParticipantCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
@@ -74,14 +68,6 @@ public class ReservationConfirmationService {
         if (currentParticipantCount >= tableCapacity) {
             reservation.closeRecruitment();
         }
-    }
-
-    private int tableCapacityOf(Long timeSlotId) {
-        TimeSlot timeSlot = timeSlotRepository.findByIdAndDeletedAtIsNull(timeSlotId)
-                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
-        SharedTable sharedTable = sharedTableRepository.findByIdAndDeletedAtIsNull(timeSlot.getSharedTableId())
-                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
-        return sharedTable.getCapacity();
     }
 
     private Reservation findReservationWithLockOrThrow(Long reservationId) {
