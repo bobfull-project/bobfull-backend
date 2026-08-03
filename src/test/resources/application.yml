@@ -4,3 +4,7 @@ payment:
 
 cors:
   allowed-origins: http://localhost:5173
+
+auth:
+  refresh-token:
+    expiration-seconds: 1209600

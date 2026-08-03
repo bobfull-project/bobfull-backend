@@ -282,7 +282,7 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
 
 ## 1. INFO
 
-- 설명: Access Token 발급. Refresh Token 발급·재발급·로그아웃은 V2에서 제공한다.
+- 설명: Access Token과 Refresh Token을 함께 발급한다. Refresh Token은 Redis에만 저장하며(회원당 1건), 재발급마다 회전한다.
 - Method: `POST`
 - Path: `/api/auth/login`
 - Auth: 불필요
@@ -316,7 +316,8 @@ jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 1.2345678E7
   "message": "요청이 성공했습니다.",
   "data": {
     "accessToken": "access-token",
-    "tokenType": "Bearer"
+    "tokenType": "Bearer",
+    "refreshToken": "refresh-token"
   }
 }
 ```
@@ -444,7 +445,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: Refresh Token 도입 시 제공
+- 설명: 인증된 회원의 Refresh Token을 Redis에서 즉시 삭제한다. Access Token은 별도로 무효화하지 않으며 자연 만료까지 유효하다.
 - Method: `POST`
 - Path: `/api/auth/logout`
 - Auth: 필요
@@ -476,7 +477,6 @@ OWNER 응답 예시:
 
 | Status | Code | 설명 |
 |---:|---|---|
-| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 
 ---
@@ -485,7 +485,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: Refresh Token 도입 시 제공
+- 설명: Refresh Token을 검증하고 회전(rotation)한다. 기존 Refresh Token은 즉시 삭제되고 새 Access·Refresh Token을 발급한다. Redis 조회 실패를 포함해 유효하지 않은 모든 경우를 401로 거부한다(fail-closed).
 - Method: `POST`
 - Path: `/api/auth/reissue`
 - Auth: Refresh Token

@@ -9,15 +9,20 @@ import static org.mockito.Mockito.verify;
 
 import com.bobfull.auth.dto.LoginRequest;
 import com.bobfull.auth.dto.LoginResponse;
+import com.bobfull.auth.dto.LogoutResponse;
+import com.bobfull.auth.dto.ReissueResponse;
 import com.bobfull.auth.dto.SignupOwnerRequest;
 import com.bobfull.auth.dto.SignupResponse;
 import com.bobfull.auth.dto.SignupUserRequest;
+import com.bobfull.auth.token.RefreshTokenStore;
+import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,9 +30,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * 회원가입 중복 검증·비밀번호 해시, 로그인 성공·실패 흐름을 검증한다.
+ * 회원가입 중복 검증·비밀번호 해시, 로그인·재발급·로그아웃 흐름을 검증한다.
  */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -40,6 +46,9 @@ class AuthServiceTest {
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private RefreshTokenStore refreshTokenStore;
 
     @InjectMocks
     private AuthService authService;
@@ -159,13 +168,15 @@ class AuthServiceTest {
     }
 
     @Test
-    void 로그인_성공시_AccessToken을_발급한다() {
+    void 로그인_성공시_AccessToken과_RefreshToken을_함께_발급한다() {
         // given
         LoginRequest request = new LoginRequest("user@example.com", "Password123!");
         Member member = Member.createMember("user@example.com", "encoded-password", "홍길동", "01011112222");
-        given(memberRepository.findByEmail(request.email())).willReturn(java.util.Optional.of(member));
+        ReflectionTestUtils.setField(member, "id", 1L);
+        given(memberRepository.findByEmail(request.email())).willReturn(Optional.of(member));
         given(passwordEncoder.matches(request.password(), member.getPasswordHash())).willReturn(true);
         given(jwtTokenProvider.createAccessToken(member.getId(), member.getRole())).willReturn("access-token");
+        given(refreshTokenStore.issue(member.getId())).willReturn("refresh-token");
 
         // when
         LoginResponse response = authService.login(request);
@@ -173,5 +184,61 @@ class AuthServiceTest {
         // then
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.tokenType()).isEqualTo("Bearer");
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
+    }
+
+    @Test
+    void 유효한_RefreshToken으로_재발급하면_회전된_토큰과_새_AccessToken을_반환한다() {
+        // given
+        Member member = Member.createMember("user@example.com", "encoded-password", "홍길동", "01011112222");
+        ReflectionTestUtils.setField(member, "id", 1L);
+        given(refreshTokenStore.rotate("old-refresh-token"))
+                .willReturn(Optional.of(new RefreshTokenStore.RotatedToken(1L, "new-refresh-token")));
+        given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+        given(jwtTokenProvider.createAccessToken(1L, member.getRole())).willReturn("new-access-token");
+
+        // when
+        ReissueResponse response = authService.reissue("old-refresh-token");
+
+        // then
+        assertThat(response.accessToken()).isEqualTo("new-access-token");
+        assertThat(response.refreshToken()).isEqualTo("new-refresh-token");
+    }
+
+    @Test
+    void 존재하지_않거나_만료된_RefreshToken으로_재발급하면_401_예외가_발생한다() {
+        // given
+        given(refreshTokenStore.rotate("invalid-refresh-token")).willReturn(Optional.empty());
+
+        // when
+        Throwable result = catchThrowable(() -> authService.reissue("invalid-refresh-token"));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.UNAUTHORIZED);
+    }
+
+    @Test
+    void Redis_장애로_RefreshToken을_확인할_수_없으면_401로_재발급을_거부한다() {
+        // given
+        given(refreshTokenStore.rotate(anyString()))
+                .willThrow(new org.springframework.data.redis.RedisConnectionFailureException("연결 실패"));
+
+        // when
+        Throwable result = catchThrowable(() -> authService.reissue("any-refresh-token"));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.UNAUTHORIZED);
+    }
+
+    @Test
+    void 로그아웃하면_해당_회원의_RefreshToken을_삭제한다() {
+        // when
+        LogoutResponse response = authService.logout(1L);
+
+        // then
+        assertThat(response.result()).isTrue();
+        verify(refreshTokenStore).deleteByMember(1L);
     }
 }
