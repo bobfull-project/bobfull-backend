@@ -10,10 +10,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 
 /**
  * 인증 사용자와 역할(MEMBER, OWNER, ADMIN)을 보관하는 Entity다.
  * businessNumber는 OWNER만 값을 가지며 MEMBER는 NULL이다(docs/ERD.md 4.1).
+ * deletedAt은 ERD에 이미 확정된 회원 탈퇴(소프트 삭제) 컬럼이지만, 실제 탈퇴 액션은 아직
+ * 별도 Issue로 구현되지 않아 이 필드는 현재 항상 NULL이다(Issue #49는 조회만 담당).
  */
 @Entity
 @Table(name = "member")
@@ -42,6 +45,9 @@ public class Member extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private MemberRole role;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     protected Member() {
     }
@@ -107,5 +113,9 @@ public class Member extends BaseTimeEntity {
 
     public MemberRole getRole() {
         return role;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
     }
 }
