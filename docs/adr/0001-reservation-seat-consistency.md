@@ -47,7 +47,7 @@ Payment → Reservation → TimeSlot
 
 `ReservationPreparationService.resolveJoinTarget`이 Reservation을 잠금 없는 일반 조회 대신 `findWithLockById`로 트랜잭션의 첫 쿼리이자 잠금 조회로 만든 이유는, MySQL 기본 격리수준(REPEATABLE_READ)에서 트랜잭션의 첫 조회가 이후 모든 일반 SELECT의 스냅샷 시점을 고정하기 때문이다. 잠금 없는 조회를 먼저 실행하면 TimeSlot 락을 기다렸다 획득해도, 그 뒤의 잔여 좌석 계산(`AvailableCapacityCalculator`)은 락 획득 이전 스냅샷을 그대로 사용해 상대방이 방금 커밋한 결과를 보지 못한다(Issue #36에서 실제 MySQL로 재현·확인).
 
-**처리량 저하와 데드락 가능성**: 이 순서 규칙을 지키는 한, 서로 다른 흐름끼리 순환 대기(circular wait)가 생기지 않아 데드락 위험은 없다. 다만 각 락은 해당 트랜잭션이 끝날 때까지 다른 트랜잭션의 같은 행 접근을 막으므로, 동시 요청이 몰리는 인기 회차·인기 예약에서는 락 대기로 처리량이 떨어질 수 있다(기존 단점 항목과 동일). 검증 방법은 `ReservationPreparationConcurrencyIntegrationTest`(`BOBFULL_MYSQL_CONCURRENCY_TEST=true`)로, 위 순서를 지키는 두 흐름을 실제 MySQL에서 동시 실행해 데드락 없이 하나만 성공하고 나머지는 정상적으로 대기 후 실패하는지 확인한다.
+**처리량 저하와 데드락 가능성**: 이 순서 규칙을 지키는 한, 서로 다른 흐름끼리 순환 대기(circular wait)가 생기지 않아 데드락 위험은 없다. 다만 각 락은 해당 트랜잭션이 끝날 때까지 다른 트랜잭션의 같은 행 접근을 막으므로, 동시 요청이 몰리는 인기 회차·인기 예약에서는 락 대기로 처리량이 떨어질 수 있다(기존 단점 항목과 동일). 검증 방법은 `ReservationPreparationConcurrencyIntegrationTest`(`BOBFULL_MYSQL_CONCURRENCY_TEST=true`)로, 위 순서를 지키는 두 흐름을 실제 MySQL에서 동시 실행해 데드락 없이 하나만 성공하고 나머지는 정상적으로 대기 후 실패하는지 확인한다. 이 테스트는 `ddl-auto=create-drop`으로 대상 DB를 매번 지우고 새로 만들므로, `BOBFULL_TEST_MYSQL_URL`은 반드시 로컬 개발 DB와 분리된 별도 스키마(예: `bobfull_concurrency_test`)를 가리켜야 한다.
 
 ## 선택 이유
 
