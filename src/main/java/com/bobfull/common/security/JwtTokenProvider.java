@@ -39,7 +39,7 @@ public class JwtTokenProvider {
                 .claim(CLAIM_ROLE, role.name())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiration))
-                .signWith(secretKey)
+                .signWith(secretKey, Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -57,10 +57,13 @@ public class JwtTokenProvider {
                     .parseSignedClaims(token)
                     .getPayload();
 
-            Long memberId = claims.get(CLAIM_MEMBER_ID, Number.class).longValue();
-            MemberRole role = MemberRole.valueOf(claims.get(CLAIM_ROLE, String.class));
+            Number memberId = claims.get(CLAIM_MEMBER_ID, Number.class);
+            String role = claims.get(CLAIM_ROLE, String.class);
+            if (memberId == null || role == null) {
+                throw new InvalidJwtException("토큰에 필수 Claim이 없습니다.");
+            }
 
-            return new AuthMember(memberId, role);
+            return new AuthMember(memberId.longValue(), MemberRole.valueOf(role));
         } catch (JwtException | IllegalArgumentException e) {
             throw new InvalidJwtException("토큰을 검증할 수 없습니다.", e);
         }

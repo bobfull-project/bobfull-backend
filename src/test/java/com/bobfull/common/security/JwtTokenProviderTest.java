@@ -3,9 +3,14 @@ package com.bobfull.common.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Date;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -28,6 +33,25 @@ class JwtTokenProviderTest {
         // then
         assertThat(authMember.id()).isEqualTo(1L);
         assertThat(authMember.role()).isEqualTo(MemberRole.OWNER);
+    }
+
+    @Test
+    void 발급한_토큰의_서명_알고리즘은_HS256으로_고정된다() {
+        // given
+        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(FIXED_CLOCK, SECRET, 3600L);
+        String accessToken = jwtTokenProvider.createAccessToken(1L, MemberRole.OWNER);
+
+        // when
+        String algorithm = Jwts.parser()
+                .clock(() -> Date.from(FIXED_CLOCK.instant()))
+                .verifyWith(secretKeyFor(SECRET))
+                .build()
+                .parseSignedClaims(accessToken)
+                .getHeader()
+                .getAlgorithm();
+
+        // then
+        assertThat(algorithm).isEqualTo("HS256");
     }
 
     @Test
@@ -81,6 +105,46 @@ class JwtTokenProviderTest {
 
         // then
         assertThat(result).isInstanceOf(InvalidJwtException.class);
+    }
+
+    @Test
+    void memberId_클레임이_없으면_검증에_실패한다() {
+        // given
+        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(FIXED_CLOCK, SECRET, 3600L);
+        String tokenWithoutMemberId = Jwts.builder()
+                .claim("role", MemberRole.MEMBER.name())
+                .issuedAt(Date.from(FIXED_CLOCK.instant()))
+                .expiration(Date.from(FIXED_CLOCK.instant().plusSeconds(3600L)))
+                .signWith(secretKeyFor(SECRET), Jwts.SIG.HS256)
+                .compact();
+
+        // when
+        Throwable result = catchThrowable(() -> jwtTokenProvider.parseAccessToken(tokenWithoutMemberId));
+
+        // then
+        assertThat(result).isInstanceOf(InvalidJwtException.class);
+    }
+
+    @Test
+    void role_클레임이_없으면_검증에_실패한다() {
+        // given
+        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(FIXED_CLOCK, SECRET, 3600L);
+        String tokenWithoutRole = Jwts.builder()
+                .claim("memberId", 1L)
+                .issuedAt(Date.from(FIXED_CLOCK.instant()))
+                .expiration(Date.from(FIXED_CLOCK.instant().plusSeconds(3600L)))
+                .signWith(secretKeyFor(SECRET), Jwts.SIG.HS256)
+                .compact();
+
+        // when
+        Throwable result = catchThrowable(() -> jwtTokenProvider.parseAccessToken(tokenWithoutRole));
+
+        // then
+        assertThat(result).isInstanceOf(InvalidJwtException.class);
+    }
+
+    private SecretKey secretKeyFor(String secret) {
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
