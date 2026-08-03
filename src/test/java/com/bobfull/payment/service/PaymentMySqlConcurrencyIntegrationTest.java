@@ -43,7 +43,15 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** MySQL 행 잠금 검증용 선택적 통합 테스트: BOBFULL_MYSQL_CONCURRENCY_TEST=true 일 때만 실행한다. */
+/**
+ * MySQL 행 잠금 검증용 선택적 통합 테스트: BOBFULL_MYSQL_CONCURRENCY_TEST=true 일 때만 실행한다.
+ *
+ * <p><b>주의</b>: {@code spring.jpa.hibernate.ddl-auto=create-drop}이라 실행할 때마다 대상 DB의
+ * 모든 테이블을 지우고 다시 만든다. {@code BOBFULL_TEST_MYSQL_URL}은 반드시 로컬 개발용 DB(예:
+ * {@code bobfull})가 아닌 별도 스키마(예: {@code bobfull_concurrency_test})를 가리켜야 한다.
+ * 개발 DB를 가리키면 실행할 때마다 회원·식당·예약 등 실제 데이터가 전부 삭제된다(2026-08-03에
+ * 실제로 발생한 사고).</p>
+ */
 @EnabledIfEnvironmentVariable(named = "BOBFULL_MYSQL_CONCURRENCY_TEST", matches = "true")
 @SpringBootTest(properties = {
         "spring.datasource.url=${BOBFULL_TEST_MYSQL_URL}",

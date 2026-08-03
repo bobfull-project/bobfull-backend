@@ -323,7 +323,7 @@ class ReservationPreparationServiceTest {
         TimeSlot timeSlot = timeSlot(200L, 100L);
         SharedTable sharedTable = sharedTable(100L, 10L, 4);
         Restaurant restaurant = restaurant(10L, 10000);
-        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(timeSlotRepository.findWithLockByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
         given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
@@ -376,7 +376,7 @@ class ReservationPreparationServiceTest {
         TimeSlot timeSlot = timeSlot(200L, 100L);
         SharedTable sharedTable = sharedTable(100L, 10L, 4);
         Restaurant restaurant = restaurant(10L, 10000);
-        given(reservationRepository.findById(10L)).willReturn(Optional.of(reservation));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(reservationParticipantRepository.existsByReservationIdAndMemberId(10L, 2L)).willReturn(false);
         given(timeSlotRepository.findWithLockByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
         given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
