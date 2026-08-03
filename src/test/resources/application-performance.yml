@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: ${BOBFULL_PERF_DB_URL}
+    username: ${BOBFULL_PERF_DB_USERNAME}
+    password: ${BOBFULL_PERF_DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        generate_statistics: true
+
+payment:
+  expiration:
+    enabled: false
+
+jwt:
+  secret: performance-test-secret-key-must-be-at-least-32-bytes
+  access-token-expiration-seconds: 3600
+
+portone:
+  api-secret: performance-test-api-secret
+  store-id: performance-test-store
+  webhook-secret: d2hzZWNfcmVzZXJ2YXRpb24tc2VhdC1jb25jdXJyZW5jeQ==
