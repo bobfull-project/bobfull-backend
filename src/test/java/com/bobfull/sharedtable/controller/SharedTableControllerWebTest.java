@@ -20,6 +20,8 @@ import com.bobfull.common.security.AuthMember;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.sharedtable.dto.SharedTableIdResponse;
+import com.bobfull.sharedtable.dto.SharedTableBulkRequest;
+import com.bobfull.sharedtable.dto.SharedTableBulkResponse;
 import com.bobfull.sharedtable.dto.SharedTableRequest;
 import com.bobfull.sharedtable.dto.SharedTableResponse;
 import com.bobfull.sharedtable.entity.SharedTableStatus;
@@ -103,7 +105,7 @@ class SharedTableControllerWebTest {
     void OWNER가_합석_테이블을_등록하면_201과_tableId를_반환한다() throws Exception {
         // given
         SharedTableRequest request = new SharedTableRequest(4);
-        given(sharedTableService.register(1L, 10L, request)).willReturn(new SharedTableIdResponse(100L));
+        given(sharedTableService.register(1L, 10L, request)).willReturn(new SharedTableIdResponse(100L, 1));
 
         // when
         ResultActions result = mockMvc.perform(post("/api/owner/restaurants/10/tables")
@@ -113,7 +115,47 @@ class SharedTableControllerWebTest {
 
         // then
         result.andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.tableId", is(100)));
+                .andExpect(jsonPath("$.data.tableId", is(100)))
+                .andExpect(jsonPath("$.data.displayNumber", is(1)));
+    }
+
+    @Test
+    void OWNER가_합석_테이블을_일괄_등록하면_생성_개수와_표시번호를_반환한다() throws Exception {
+        // given
+        SharedTableBulkRequest request = new SharedTableBulkRequest(4, 2);
+        SharedTableBulkResponse response = new SharedTableBulkResponse(2, List.of(
+                new SharedTableResponse(100L, 10L, 1, 4, SharedTableStatus.ACTIVE),
+                new SharedTableResponse(101L, 10L, 2, 4, SharedTableStatus.ACTIVE)
+        ));
+        given(sharedTableService.registerBulk(1L, 10L, request)).willReturn(response);
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/owner/restaurants/10/tables/bulk")
+                .with(authentication(ownerAuthentication(1L)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.createdTableCount", is(2)))
+                .andExpect(jsonPath("$.data.tables[0].displayNumber", is(1)))
+                .andExpect(jsonPath("$.data.tables[1].displayNumber", is(2)));
+    }
+
+    @Test
+    void 일괄_등록_개수가_10개를_초과하면_400을_반환한다() throws Exception {
+        // given
+        SharedTableBulkRequest request = new SharedTableBulkRequest(4, 11);
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/owner/restaurants/10/tables/bulk")
+                .with(authentication(ownerAuthentication(1L)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("INVALID_INPUT_VALUE")));
     }
 
     @Test
@@ -135,7 +177,7 @@ class SharedTableControllerWebTest {
     @Test
     void 본인_식당의_합석_테이블_목록을_조회하면_페이징_형식으로_반환한다() throws Exception {
         // given
-        SharedTableResponse item = new SharedTableResponse(100L, 10L, 4, SharedTableStatus.ACTIVE);
+        SharedTableResponse item = new SharedTableResponse(100L, 10L, 1, 4, SharedTableStatus.ACTIVE);
         PageResponse<SharedTableResponse> page = new PageResponse<>(List.of(item), 0, 20, 1, 1);
         given(sharedTableService.getTables(eq(1L), eq(10L), any(Pageable.class))).willReturn(page);
 
@@ -146,6 +188,7 @@ class SharedTableControllerWebTest {
         // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].tableId", is(100)))
+                .andExpect(jsonPath("$.data.content[0].displayNumber", is(1)))
                 .andExpect(jsonPath("$.data.content[0].status", is("ACTIVE")))
                 .andExpect(jsonPath("$.data.totalElements", is(1)));
     }
@@ -154,7 +197,7 @@ class SharedTableControllerWebTest {
     void 합석_테이블_상세를_조회한다() throws Exception {
         // given
         given(sharedTableService.getTable(1L, 100L))
-                .willReturn(new SharedTableResponse(100L, 10L, 6, SharedTableStatus.ACTIVE));
+                .willReturn(new SharedTableResponse(100L, 10L, 1, 6, SharedTableStatus.ACTIVE));
 
         // when
         ResultActions result = mockMvc.perform(
@@ -169,7 +212,7 @@ class SharedTableControllerWebTest {
     void 합석_테이블_capacity를_수정한다() throws Exception {
         // given
         SharedTableRequest request = new SharedTableRequest(8);
-        given(sharedTableService.update(1L, 100L, request)).willReturn(new SharedTableIdResponse(100L));
+        given(sharedTableService.update(1L, 100L, request)).willReturn(new SharedTableIdResponse(100L, 1));
 
         // when
         ResultActions result = mockMvc.perform(patch("/api/owner/tables/100")
@@ -203,7 +246,7 @@ class SharedTableControllerWebTest {
     @Test
     void 합석_테이블을_삭제한다() throws Exception {
         // given
-        given(sharedTableService.delete(1L, 100L)).willReturn(new SharedTableIdResponse(100L));
+        given(sharedTableService.delete(1L, 100L)).willReturn(new SharedTableIdResponse(100L, 1));
 
         // when
         ResultActions result = mockMvc.perform(

@@ -60,6 +60,7 @@ erDiagram
     SHARED_TABLE {
         bigint shared_table_id PK "합석 테이블 식별자"
         bigint restaurant_id FK "소속 식당"
+        integer display_number "식당별 자동 표시 번호"
         integer capacity "허용 정원 2·4·6·8"
         varchar(20) status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
         datetime deleted_at "소프트 삭제 시각"
@@ -214,6 +215,7 @@ erDiagram
 |---|---|---:|---|---|
 | `shared_table_id` | BIGINT | N | PK | 합석 테이블 식별자 |
 | `restaurant_id` | BIGINT | N | FK → `restaurant.restaurant_id`, INDEX | 소속 식당 |
+| `display_number` | INTEGER | N | UNIQUE(`restaurant_id`, `display_number`) | 식당별 1부터 자동 증가하며 삭제 후에도 재사용하지 않는 표시 번호 |
 | `capacity` | INTEGER | N | CHECK 후보: `2,4,6,8` | 허용 정원 |
 | `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
@@ -461,7 +463,7 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 |---|---|---|
 | `member` | `UNIQUE(email)`, `UNIQUE(phone_number)`, `UNIQUE(business_number)` | 로그인·이메일·전화번호·사업자등록번호 중복 검증 |
 | `restaurant` | `(owner_member_id)` | 내 식당 목록·소유권 확인 |
-| `shared_table` | `(restaurant_id)` | 식당별 테이블 조회 |
+| `shared_table` | `(restaurant_id)`, `UNIQUE(restaurant_id, display_number)` | 식당별 테이블 조회·표시 번호 중복 방지 |
 | `time_slot` | `(shared_table_id, start_at, deleted_at)`, `UNIQUE(shared_table_id, active_start_at)` | 회차 조회·활성 중복 방지. 삭제 후 같은 시간 재생성을 허용하므로 단순 `UNIQUE(shared_table_id, start_at)`는 사용하지 않음 |
 | `reservation` | `(time_slot_id, reservation_status)`, `(reservation_status, recruitment_status)` | 활성 Reservation 조회·모집 예약 검색; `time_slot_id` 단순 UNIQUE 미사용 |
 | `reservation_participant` | `UNIQUE(reservation_id, member_id)`, `(member_id)` | 중복 참여 방지·내 예약 조회 |
