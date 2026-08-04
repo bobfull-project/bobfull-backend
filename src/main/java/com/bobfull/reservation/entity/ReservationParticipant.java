@@ -79,4 +79,18 @@ public class ReservationParticipant extends BaseTimeEntity {
     public ParticipationStatus getParticipationStatus() {
         return participationStatus;
     }
+
+    public void markNoShow() {
+        if (participationStatus != ParticipationStatus.RESERVED) {
+            throw new IllegalStateException("RESERVED 상태만 노쇼 처리할 수 있습니다.");
+        }
+        this.participationStatus = ParticipationStatus.NO_SHOW;
+    }
+
+    public void unmarkNoShow() {
+        if (participationStatus != ParticipationStatus.NO_SHOW) {
+            throw new IllegalStateException("NO_SHOW 상태만 노쇼 처리를 해제할 수 있습니다.");
+        }
+        this.participationStatus = ParticipationStatus.RESERVED;
+    }
 }
