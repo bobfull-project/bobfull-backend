@@ -26,11 +26,7 @@ public class PortOneSdkRefundRequester implements PortOneRefundRequester {
                     .cancelPayment(paymentId, amount.longValueExact(), null, null, reason,
                             null, null, null, null, null, null)
                     .join();
-            PaymentCancellation cancellation = response.getCancellation();
-            if (!(cancellation instanceof PaymentCancellation.Recognized recognized)) {
-                throw new IllegalStateException("PortOne cancellation response is unrecognized");
-            }
-            return new RefundResult(recognized.getId(), true);
+            return toRefundResult(response.getCancellation());
         } catch (CompletionException exception) {
             if (containsExplicitCancelFailure(exception)) {
                 throw new ExplicitRefundFailureException("PortOne explicitly rejected the refund", exception);
@@ -48,12 +44,24 @@ public class PortOneSdkRefundRequester implements PortOneRefundRequester {
         return false;
     }
 
+    static RefundResult toRefundResult(PaymentCancellation cancellation) {
+        if (!(cancellation instanceof PaymentCancellation.Recognized recognized)) {
+            throw new IllegalStateException("PortOne cancellation response is unrecognized");
+        }
+        return new RefundResult(recognized.getId(), recognized.getCancelledAt() != null);
+    }
+
     @Override
     public boolean isCancellationCompleted(String paymentId, String cancellationId) {
         io.portone.sdk.server.payment.Payment payment = portOneClient.getPayment().getPayment(paymentId).join();
         java.util.List<? extends PaymentCancellation> cancellations = payment instanceof PaidPayment paid ? paid.getCancellations()
                 : payment instanceof CancelledPayment cancelled ? cancelled.getCancellations() : java.util.List.of();
         return cancellations.stream().filter(PaymentCancellation.Recognized.class::isInstance)
-                .map(PaymentCancellation.Recognized.class::cast).anyMatch(cancellation -> cancellationId.equals(cancellation.getId()));
+                .map(PaymentCancellation.Recognized.class::cast)
+                .anyMatch(cancellation -> isCompletedCancellation(cancellation, cancellationId));
+    }
+
+    static boolean isCompletedCancellation(PaymentCancellation.Recognized cancellation, String cancellationId) {
+        return cancellationId.equals(cancellation.getId()) && cancellation.getCancelledAt() != null;
     }
 }

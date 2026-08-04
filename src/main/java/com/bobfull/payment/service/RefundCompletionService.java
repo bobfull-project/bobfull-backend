@@ -4,6 +4,8 @@ import com.bobfull.payment.entity.RefundStatus;
 import com.bobfull.reservation.service.ReservationCancellationService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 즉시 응답과 웹훅이 같은 예약 완료 경로를 사용하도록 환불 완료를 조정한다. */
 @Service
@@ -17,6 +19,7 @@ public class RefundCompletionService {
         this.cancellationServiceProvider = cancellationServiceProvider;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public RefundTransactionService.RefundCompletion reflectExternalResult(
             Long refundId, String cancellationId, boolean completed) {
         RefundTransactionService.RefundCompletion completion =
@@ -25,6 +28,7 @@ public class RefundCompletionService {
         return completion;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void completeFromWebhook(String cancellationId) {
         transactionService.completeFromWebhook(cancellationId).ifPresent(this::completeParticipantIfCompleted);
     }

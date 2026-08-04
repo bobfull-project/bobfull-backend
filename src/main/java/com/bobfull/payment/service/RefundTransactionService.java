@@ -27,23 +27,29 @@ public class RefundTransactionService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Refund createRequested(Long reservationId, Long participantId) {
+    public RefundPreparation createRequested(Long reservationId, Long participantId) {
         Payment payment = paymentRepository.findByReservationIdAndReservationParticipantId(reservationId, participantId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-        if (payment.getStatus() != PaymentStatus.PAID) {
-            throw new CustomException(PaymentErrorCode.PAYMENT_NOT_REFUNDABLE);
-        }
-        refundRepository.findByPayment_Id(payment.getId()).ifPresent(refund -> {
-            if (refund.getStatus() == RefundStatus.COMPLETED) return;
+        var existingRefund = refundRepository.findByPayment_Id(payment.getId());
+        if (existingRefund.isPresent()) {
+            Refund refund = existingRefund.get();
+            if (refund.getStatus() == RefundStatus.COMPLETED) {
+                return new RefundPreparation(refund, false);
+            }
             if (refund.getStatus() == RefundStatus.PROCESSING || refund.getStatus() == RefundStatus.REQUESTED) {
                 throw new CustomException(PaymentErrorCode.REFUND_PROCESSING);
             }
             throw new CustomException(PaymentErrorCode.REFUND_FAILED);
-        });
-        return refundRepository.saveAndFlush(Refund.create(payment, payment.getAmount(), RefundStatus.REQUESTED, clock.instant(), null));
+        }
+        if (payment.getStatus() != PaymentStatus.PAID) {
+            throw new CustomException(PaymentErrorCode.PAYMENT_NOT_REFUNDABLE);
+        }
+        Refund refund = refundRepository.saveAndFlush(
+                Refund.create(payment, payment.getAmount(), RefundStatus.REQUESTED, clock.instant(), null));
+        return new RefundPreparation(refund, true);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public RefundCompletion reflectExternalResult(Long refundId, String cancellationId, boolean completed) {
         Refund refund = refundRepository.findById(refundId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.REFUND_ID_NOT_FOUND));
@@ -68,7 +74,7 @@ public class RefundTransactionService {
         refundRepository.findByCancellationId(cancellationId).ifPresent(refund -> refund.markProcessing(cancellationId));
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public java.util.Optional<RefundCompletion> completeFromWebhook(String cancellationId) {
         return refundRepository.findByCancellationId(cancellationId).map(refund -> {
             refund.complete(cancellationId, clock.instant());
@@ -84,5 +90,8 @@ public class RefundTransactionService {
             return new RefundCompletion(refund.getStatus(), payment.getReservationId(),
                     payment.getReservationParticipantId(), refund.getCompletedAt());
         }
+    }
+
+    public record RefundPreparation(Refund refund, boolean externalCallRequired) {
     }
 }

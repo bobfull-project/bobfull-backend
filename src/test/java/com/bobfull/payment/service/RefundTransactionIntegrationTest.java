@@ -7,6 +7,7 @@ import com.bobfull.payment.adapter.ReservationCancellationRefundAdapter;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
+import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.entity.RefundStatus;
 import com.bobfull.payment.port.PortOneRefundRequester;
 import com.bobfull.payment.repository.PaymentRepository;
@@ -87,6 +88,20 @@ class RefundTransactionIntegrationTest {
     }
 
     @Test
+    void 완료된_Refund_중복요청은_외부환불_재호출없이_기존완료결과를_반환한다() {
+        Payment payment = paid(1L);
+        RefundRequestCommand command = new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test");
+
+        adapter.requestRefunds(command);
+        var repeated = adapter.requestRefunds(command);
+
+        assertThat(repeated).singleElement().extracting(result -> result.refundStatus()).isEqualTo(RefundStatus.COMPLETED.name());
+        assertThat(refundRepository.count()).isEqualTo(1);
+        assertThat(requester.calls()).isEqualTo(1);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
     void 타임아웃은_실패로_확정하지_않고_자동_재호출하지_않는다() {
         Payment payment = paid(1L); requester.timeoutNextCall();
         assertThatThrownBy(() -> adapter.requestRefunds(new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test")))
@@ -109,7 +124,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void Cancelled_웹훅_완료는_Refund_Payment_Participant_Reservation까지_반영한다() {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L));
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
         refundCompletionService.reflectExternalResult(refund.getId(), "cancel-webhook", false);
         refundWebhookService.complete(payment.getPaymentId(), "cancel-webhook");
         assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
@@ -136,7 +151,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void 웹훅과_즉시응답_동시완료도_Participant를_한번만_완료한다() throws Exception {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L));
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
         refundCompletionService.reflectExternalResult(refund.getId(), "cancel-race", false);
         var executor = Executors.newFixedThreadPool(2);
         try {
@@ -156,7 +171,7 @@ class RefundTransactionIntegrationTest {
     void 다른_CANCEL_REQUESTED가_남으면_웹훅_완료후에도_CANCELLING을_유지한다() {
         Payment first = paid(1L);
         paid(2L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L));
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
         refundCompletionService.reflectExternalResult(refund.getId(), "cancel-first", false);
         refundWebhookService.complete(first.getPaymentId(), "cancel-first");
         assertThat(reservationParticipantRepository.findById(participantIds.get(1L)).orElseThrow().getParticipationStatus())
@@ -172,6 +187,22 @@ class RefundTransactionIntegrationTest {
         org.assertj.core.api.Assertions.assertThatCode(
                 () -> refundWebhookService.complete("missing-payment", "missing-cancellation"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 예약완료_반영에_실패하면_Refund와_Payment_완료상태도_함께_롤백한다() {
+        Payment payment = Payment.createReady("rollback-" + UUID.randomUUID(), 1L, 1L, 999L,
+                PaymentPurpose.JOIN, 1, BigDecimal.valueOf(1000), Instant.parse("2026-12-01T00:00:00Z"));
+        payment.complete(Instant.parse("2026-08-01T00:00:00Z"));
+        payment.attachReservationConfirmation(999L, 888L);
+        payment = paymentRepository.saveAndFlush(payment);
+        Refund refund = transactionService.createRequested(999L, 888L).refund();
+
+        assertThatThrownBy(() -> refundCompletionService.reflectExternalResult(refund.getId(), "cancel-rollback", true))
+                .isInstanceOf(CustomException.class);
+
+        assertThat(refundRepository.findById(refund.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
     }
 
     private Payment paid(Long participantId) {
