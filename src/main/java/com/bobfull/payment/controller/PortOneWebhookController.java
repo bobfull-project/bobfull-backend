@@ -3,12 +3,14 @@ package com.bobfull.payment.controller;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
 import com.bobfull.payment.service.PaymentCompletionService;
+import com.bobfull.payment.service.RefundWebhookService;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookVerifier;
 import com.bobfull.payment.port.PortOneWebhookVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -26,7 +28,10 @@ public class PortOneWebhookController {
     private static final Logger log = LoggerFactory.getLogger(PortOneWebhookController.class);
     private final PortOneWebhookVerifier webhookVerifier;
     private final PaymentCompletionService paymentCompletionService;
-    public PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService) { this.webhookVerifier = webhookVerifier; this.paymentCompletionService = paymentCompletionService; }
+    private final RefundWebhookService refundWebhookService;
+    PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService) { this(webhookVerifier, paymentCompletionService, null); }
+    @Autowired
+    public PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService, RefundWebhookService refundWebhookService) { this.webhookVerifier = webhookVerifier; this.paymentCompletionService = paymentCompletionService; this.refundWebhookService = refundWebhookService; }
 
     @PostMapping
     public ResponseEntity<Void> receive(@RequestBody String rawBody,
@@ -37,8 +42,15 @@ public class PortOneWebhookController {
             if (id == null || signature == null || timestamp == null) {
                 return ResponseEntity.badRequest().build();
             }
-            String paymentId = webhookVerifier.verify(rawBody, id, signature, timestamp).paymentId();
-            if (paymentId == null) return ResponseEntity.ok().build();
+            var event = webhookVerifier.verify(rawBody, id, signature, timestamp);
+            if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.UNSUPPORTED) return ResponseEntity.ok().build();
+            if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.PARTIAL_CANCELLED) {
+                log.info("event=PORTONE_PARTIAL_CANCELLED_IGNORED paymentId={} cancellationId={}", event.paymentId(), event.cancellationId());
+                return ResponseEntity.ok().build();
+            }
+            if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.CANCEL_PENDING) { refundWebhookService.markProcessing(event.cancellationId()); return ResponseEntity.ok().build(); }
+            if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.CANCELLED) { refundWebhookService.complete(event.paymentId(), event.cancellationId()); return ResponseEntity.ok().build(); }
+            String paymentId = event.paymentId();
             try { paymentCompletionService.completeFromWebhook(paymentId); }
             catch (CustomException e) {
                 if (!PERMANENT_FAILURES.contains(e.getErrorCode())) {

@@ -42,6 +42,9 @@ public class Refund extends BaseTimeEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "cancellation_id", unique = true, length = 64)
+    private String cancellationId;
+
     protected Refund() {
     }
 
@@ -66,4 +69,23 @@ public class Refund extends BaseTimeEntity {
     public RefundStatus getStatus() { return status; }
     public Instant getRequestedAt() { return requestedAt; }
     public Instant getCompletedAt() { return completedAt; }
+
+    public String getCancellationId() { return cancellationId; }
+
+    public void markProcessing(String cancellationId) {
+        if (status == RefundStatus.COMPLETED) return;
+        this.cancellationId = cancellationId;
+        this.status = RefundStatus.PROCESSING;
+    }
+
+    public void complete(String cancellationId, Instant completedAt) {
+        if (status == RefundStatus.COMPLETED) return;
+        this.cancellationId = cancellationId;
+        this.status = RefundStatus.COMPLETED;
+        this.completedAt = completedAt;
+    }
+
+    public void fail() {
+        if (status != RefundStatus.COMPLETED) this.status = RefundStatus.FAILED;
+    }
 }

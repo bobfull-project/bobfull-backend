@@ -13,7 +13,12 @@ public enum PaymentErrorCode implements BaseErrorCode {
     PAYMENT_VERIFICATION_FAILED(HttpStatus.CONFLICT, "결제 검증에 실패했습니다."),
     PAYMENT_EXPIRED(HttpStatus.CONFLICT, "결제 가능 시간이 만료되었습니다."),
     RESERVATION_CONFIRMATION_NOT_READY(HttpStatus.CONFLICT, "예약 확정 기능이 아직 준비되지 않았습니다."),
-    REFUND_ID_NOT_FOUND(HttpStatus.NOT_FOUND, "환불을 찾을 수 없습니다.");
+    REFUND_ID_NOT_FOUND(HttpStatus.NOT_FOUND, "환불을 찾을 수 없습니다."),
+    PAYMENT_NOT_REFUNDABLE(HttpStatus.CONFLICT, "환불 가능한 결제 상태가 아닙니다."),
+    REFUND_ALREADY_REQUESTED(HttpStatus.CONFLICT, "환불이 이미 요청되었습니다."),
+    REFUND_PROCESSING(HttpStatus.CONFLICT, "환불 처리 중입니다."),
+    REFUND_FAILED(HttpStatus.CONFLICT, "환불에 실패했습니다."),
+    PORTONE_REFUND_FAILED(HttpStatus.BAD_GATEWAY, "PortOne 환불 요청에 실패했습니다.");
 
     private final HttpStatus httpStatus;
     private final String message;

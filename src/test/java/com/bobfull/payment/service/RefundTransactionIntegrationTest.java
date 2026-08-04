@@ -1,0 +1,131 @@
+package com.bobfull.payment.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.bobfull.payment.adapter.ReservationCancellationRefundAdapter;
+import com.bobfull.payment.entity.Payment;
+import com.bobfull.payment.entity.PaymentPurpose;
+import com.bobfull.payment.entity.PaymentStatus;
+import com.bobfull.payment.entity.RefundStatus;
+import com.bobfull.payment.port.PortOneRefundRequester;
+import com.bobfull.payment.repository.PaymentRepository;
+import com.bobfull.payment.repository.RefundRepository;
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.reservation.port.ReservationCancellationRefundPort.RefundRequestCommand;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.transaction.annotation.Transactional;
+
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:refund-transaction-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=refund-transaction-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=3600", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
+@ContextConfiguration(classes = RefundTransactionIntegrationTest.Config.class)
+class RefundTransactionIntegrationTest {
+    @Autowired private OuterRollbackProbe outerRollbackProbe;
+    @Autowired private PaymentRepository paymentRepository;
+    @Autowired private RefundRepository refundRepository;
+    @Autowired private ReservationCancellationRefundAdapter adapter;
+    @Autowired private SequencedRequester requester;
+    @Autowired private RefundTransactionService transactionService;
+    @Autowired private RefundWebhookService refundWebhookService;
+
+    @AfterEach void clean() { requester.reset(); refundRepository.deleteAll(); paymentRepository.deleteAll(); }
+
+    @Test
+    void 앞선_외부_환불_성공은_뒤_실패와_예약트랜잭션_롤백_후에도_보존된다() {
+        Payment first = paid(1L); Payment second = paid(2L);
+        assertThatThrownBy(() -> outerRollbackProbe.cancel(List.of(1L, 2L))).isInstanceOf(RuntimeException.class);
+        assertThat(refundRepository.findByPayment_Id(first.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(paymentRepository.findById(first.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(refundRepository.findByPayment_Id(second.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(paymentRepository.findById(second.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @Test
+    void 동일_Payment_동시_환불은_Refund_한건과_외부호출_한번으로_수렴한다() throws Exception {
+        Payment payment = paid(1L);
+        requester.blockFirstCall();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> adapter.requestRefunds(new RefundRequestCommand(99L, List.of(1L), 1L, "test")));
+            assertThat(requester.firstCallEntered.await(5, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> adapter.requestRefunds(new RefundRequestCommand(99L, List.of(1L), 1L, "test")));
+            requester.releaseFirstCall.countDown();
+            first.get(5, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> second.get(5, TimeUnit.SECONDS)).isInstanceOf(Exception.class);
+        } finally { executor.shutdownNow(); }
+        assertThat(refundRepository.count()).isEqualTo(1);
+        assertThat(requester.calls()).isEqualTo(1);
+        assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    void 타임아웃은_실패로_확정하지_않고_자동_재호출하지_않는다() {
+        Payment payment = paid(1L); requester.timeoutNextCall();
+        assertThatThrownBy(() -> adapter.requestRefunds(new RefundRequestCommand(99L, List.of(1L), 1L, "test")))
+                .isInstanceOf(CustomException.class);
+        assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(requester.calls()).isEqualTo(1);
+    }
+
+    @Test
+    void Cancelled_웹훅을_중복_수신해도_완료상태는_멱등하다() {
+        Payment payment = paid(1L);
+        var refund = transactionService.createRequested(99L, 1L);
+        transactionService.reflectExternalResult(refund.getId(), "cancel-webhook", false);
+        refundWebhookService.complete(payment.getPaymentId(), "cancel-webhook");
+        refundWebhookService.complete(payment.getPaymentId(), "cancel-webhook");
+        assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    private Payment paid(Long participantId) {
+        Payment payment = Payment.createReady("refund-" + UUID.randomUUID(), participantId, 1L, 99L, PaymentPurpose.JOIN, 1, BigDecimal.valueOf(1000), Instant.parse("2026-12-01T00:00:00Z"));
+        payment.complete(Instant.parse("2026-08-01T00:00:00Z")); payment.attachReservationConfirmation(99L, participantId);
+        return paymentRepository.saveAndFlush(payment);
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class Config {
+        @Bean @Primary SequencedRequester requester() { return new SequencedRequester(); }
+        @Bean OuterRollbackProbe outerRollbackProbe(ReservationCancellationRefundAdapter adapter) { return new OuterRollbackProbe(adapter); }
+    }
+    static class SequencedRequester implements PortOneRefundRequester {
+        private final AtomicInteger calls = new AtomicInteger();
+        private volatile CountDownLatch firstCallEntered;
+        private volatile CountDownLatch releaseFirstCall;
+        private volatile boolean timeoutNext;
+        public RefundResult request(String paymentId, BigDecimal amount, String reason) {
+            int call = calls.incrementAndGet();
+            if (timeoutNext) { timeoutNext = false; throw new java.util.concurrent.CompletionException(new java.util.concurrent.TimeoutException("timeout")); }
+            if (call == 2) throw new IllegalStateException("PortOne failed");
+            CountDownLatch entered = firstCallEntered; if (entered != null) { entered.countDown(); try { releaseFirstCall.await(5, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); } }
+            return new RefundResult("cancel-" + paymentId, true);
+        }
+        public boolean isCancellationCompleted(String paymentId, String cancellationId) { return true; }
+        void blockFirstCall() { firstCallEntered = new CountDownLatch(1); releaseFirstCall = new CountDownLatch(1); }
+        int calls() { return calls.get(); }
+        void timeoutNextCall() { timeoutNext = true; }
+        void reset() { calls.set(0); firstCallEntered = null; releaseFirstCall = null; timeoutNext = false; }
+    }
+    static class OuterRollbackProbe {
+        private final ReservationCancellationRefundAdapter adapter;
+        OuterRollbackProbe(ReservationCancellationRefundAdapter adapter) { this.adapter = adapter; }
+        @Transactional public void cancel(List<Long> ids) { adapter.requestRefunds(new RefundRequestCommand(99L, ids, 1L, "test")); }
+    }
+}

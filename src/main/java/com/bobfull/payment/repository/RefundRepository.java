@@ -10,6 +10,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RefundRepository extends JpaRepository<Refund, Long> {
 
+    Optional<Refund> findByPayment_Id(Long paymentId);
+
+    Optional<Refund> findByCancellationId(String cancellationId);
+
     @EntityGraph(attributePaths = "payment")
     Page<Refund> findAllByPayment_MemberId(Long memberId, Pageable pageable);
 
