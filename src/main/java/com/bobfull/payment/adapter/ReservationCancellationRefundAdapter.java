@@ -4,28 +4,26 @@ import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
 import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.port.PortOneRefundRequester;
+import com.bobfull.payment.service.RefundCompletionService;
 import com.bobfull.payment.service.RefundTransactionService;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort;
-import com.bobfull.reservation.service.ReservationCancellationService;
-import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.ObjectProvider;
 
 @Component
 public class ReservationCancellationRefundAdapter implements ReservationCancellationRefundPort {
     private static final Logger log = LoggerFactory.getLogger(ReservationCancellationRefundAdapter.class);
     private final RefundTransactionService transactionService;
+    private final RefundCompletionService completionService;
     private final PortOneRefundRequester refundRequester;
-    private final ObjectProvider<ReservationCancellationService> cancellationServiceProvider;
 
-    public ReservationCancellationRefundAdapter(RefundTransactionService transactionService, PortOneRefundRequester refundRequester,
-            ObjectProvider<ReservationCancellationService> cancellationServiceProvider) {
+    public ReservationCancellationRefundAdapter(RefundTransactionService transactionService,
+            RefundCompletionService completionService, PortOneRefundRequester refundRequester) {
         this.transactionService = transactionService;
+        this.completionService = completionService;
         this.refundRequester = refundRequester;
-        this.cancellationServiceProvider = cancellationServiceProvider;
     }
 
     @Override
@@ -37,14 +35,10 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
         Refund refund = transactionService.createRequested(command.reservationId(), participantId);
         try {
             var result = refundRequester.request(refund.getPayment().getPaymentId(), refund.getAmount(), command.cancelReason());
-            var status = transactionService.reflectExternalResult(refund.getId(), result.cancellationId(), result.completed());
-            if (status == com.bobfull.payment.entity.RefundStatus.COMPLETED) {
-                cancellationServiceProvider.getObject().completeParticipantCancellation(
-                        command.reservationId(), participantId, Instant.now());
-            }
-            return new RefundRequestResult(participantId, status.name());
+            var completion = completionService.reflectExternalResult(refund.getId(), result.cancellationId(), result.completed());
+            return new RefundRequestResult(participantId, completion.refundStatus().name());
         } catch (RuntimeException exception) {
-            if (isResultUnknown(exception)) {
+            if (!(exception instanceof PortOneRefundRequester.ExplicitRefundFailureException)) {
                 log.error("event=REFUND_RESULT_UNKNOWN paymentId={} refundId={} externalStatus=UNKNOWN internalStatus=REQUESTED autoRetry=false",
                         refund.getPayment().getId(), refund.getId());
                 throw new CustomException(PaymentErrorCode.PORTONE_REFUND_FAILED);
@@ -56,12 +50,4 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
         }
     }
 
-    private boolean isResultUnknown(RuntimeException exception) {
-        Throwable current = exception;
-        while (current != null) {
-            if (current instanceof java.util.concurrent.TimeoutException) return true;
-            current = current.getCause();
-        }
-        return false;
-    }
 }

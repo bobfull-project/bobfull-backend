@@ -5,19 +5,19 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class RefundWebhookService {
-    private final RefundTransactionService transactionService;
+    private final RefundCompletionService completionService;
     private final PortOneRefundRequester refundRequester;
 
-    public RefundWebhookService(RefundTransactionService transactionService, PortOneRefundRequester refundRequester) {
-        this.transactionService = transactionService;
+    public RefundWebhookService(RefundCompletionService completionService, PortOneRefundRequester refundRequester) {
+        this.completionService = completionService;
         this.refundRequester = refundRequester;
     }
 
-    public void markProcessing(String cancellationId) { transactionService.markProcessingFromWebhook(cancellationId); }
+    public void markProcessing(String cancellationId) { completionService.markProcessingFromWebhook(cancellationId); }
     public void complete(String paymentId, String cancellationId) {
         if (!refundRequester.isCancellationCompleted(paymentId, cancellationId)) {
             throw new IllegalStateException("PortOne cancellation verification failed");
         }
-        transactionService.completeFromWebhook(cancellationId);
+        completionService.completeFromWebhook(cancellationId);
     }
 }

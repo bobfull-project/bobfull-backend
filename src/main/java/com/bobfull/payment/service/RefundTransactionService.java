@@ -44,16 +44,16 @@ public class RefundTransactionService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public RefundStatus reflectExternalResult(Long refundId, String cancellationId, boolean completed) {
+    public RefundCompletion reflectExternalResult(Long refundId, String cancellationId, boolean completed) {
         Refund refund = refundRepository.findById(refundId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.REFUND_ID_NOT_FOUND));
         if (completed) {
             refund.complete(cancellationId, clock.instant());
-            refund.getPayment().markRefunded();
+            if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
         } else {
             refund.markProcessing(cancellationId);
         }
-        return refund.getStatus();
+        return RefundCompletion.from(refund);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -69,10 +69,20 @@ public class RefundTransactionService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void completeFromWebhook(String cancellationId) {
-        refundRepository.findByCancellationId(cancellationId).ifPresent(refund -> {
+    public java.util.Optional<RefundCompletion> completeFromWebhook(String cancellationId) {
+        return refundRepository.findByCancellationId(cancellationId).map(refund -> {
             refund.complete(cancellationId, clock.instant());
             if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
+            return RefundCompletion.from(refund);
         });
+    }
+
+    public record RefundCompletion(RefundStatus refundStatus, Long reservationId,
+                                   Long reservationParticipantId, Instant completedAt) {
+        private static RefundCompletion from(Refund refund) {
+            Payment payment = refund.getPayment();
+            return new RefundCompletion(refund.getStatus(), payment.getReservationId(),
+                    payment.getReservationParticipantId(), refund.getCompletedAt());
+        }
     }
 }

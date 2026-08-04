@@ -6,7 +6,9 @@ import io.portone.sdk.server.payment.CancelPaymentResponse;
 import io.portone.sdk.server.payment.PaymentCancellation;
 import io.portone.sdk.server.payment.PaidPayment;
 import io.portone.sdk.server.payment.CancelledPayment;
+import io.portone.sdk.server.errors.CancelPaymentException;
 import java.math.BigDecimal;
+import java.util.concurrent.CompletionException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -19,15 +21,31 @@ public class PortOneSdkRefundRequester implements PortOneRefundRequester {
 
     @Override
     public RefundResult request(String paymentId, BigDecimal amount, String reason) {
-        CancelPaymentResponse response = portOneClient.getPayment()
-                .cancelPayment(paymentId, amount.longValueExact(), null, null, reason,
-                        null, null, null, null, null, null)
-                .join();
-        PaymentCancellation cancellation = response.getCancellation();
-        if (!(cancellation instanceof PaymentCancellation.Recognized recognized)) {
-            throw new IllegalStateException("PortOne cancellation response is unrecognized");
+        try {
+            CancelPaymentResponse response = portOneClient.getPayment()
+                    .cancelPayment(paymentId, amount.longValueExact(), null, null, reason,
+                            null, null, null, null, null, null)
+                    .join();
+            PaymentCancellation cancellation = response.getCancellation();
+            if (!(cancellation instanceof PaymentCancellation.Recognized recognized)) {
+                throw new IllegalStateException("PortOne cancellation response is unrecognized");
+            }
+            return new RefundResult(recognized.getId(), true);
+        } catch (CompletionException exception) {
+            if (containsExplicitCancelFailure(exception)) {
+                throw new ExplicitRefundFailureException("PortOne explicitly rejected the refund", exception);
+            }
+            throw exception;
         }
-        return new RefundResult(recognized.getId(), true);
+    }
+
+    private boolean containsExplicitCancelFailure(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof CancelPaymentException) return true;
+            current = current.getCause();
+        }
+        return false;
     }
 
     @Override

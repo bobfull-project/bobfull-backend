@@ -11,4 +11,15 @@ public interface PortOneRefundRequester {
 
     record RefundResult(String cancellationId, boolean completed) {
     }
+
+    /** PortOne이 환불을 처리하지 않았음을 명시적으로 응답한 경우에만 사용한다. */
+    class ExplicitRefundFailureException extends RuntimeException {
+        public ExplicitRefundFailureException(String message) {
+            super(message);
+        }
+
+        public ExplicitRefundFailureException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 }
