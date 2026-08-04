@@ -9,6 +9,7 @@ public enum ReservationErrorCode implements BaseErrorCode {
 
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "대상 회차 또는 예약을 찾을 수 없습니다."),
     RESERVATION_ID_NOT_FOUND(HttpStatus.NOT_FOUND, "reservationId에 해당하는 대상을 찾을 수 없습니다."),
+    PARTICIPATION_ID_NOT_FOUND(HttpStatus.NOT_FOUND, "participationId에 해당하는 대상을 찾을 수 없습니다."),
     ACTIVE_RESERVATION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 활성 예약 또는 결제 준비가 존재합니다."),
     INSUFFICIENT_REMAINING_CAPACITY(HttpStatus.CONFLICT, "남은 참여 가능 인원을 초과했습니다."),
     INVALID_PARTY_SIZE(HttpStatus.BAD_REQUEST, "partySize가 올바르지 않습니다."),
