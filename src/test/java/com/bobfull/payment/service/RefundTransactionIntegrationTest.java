@@ -382,6 +382,24 @@ class RefundTransactionIntegrationTest {
         assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
     }
 
+    @Test
+    void PortOne_환불_성공_직후_예약완료_반영이_실패하면_PortOne_실패와_구분되는_재조정_필요_오류를_반환한다() {
+        Payment payment = Payment.createReady("rollback-adapter-" + UUID.randomUUID(), 1L, 1L, 999L,
+                PaymentPurpose.JOIN, 1, BigDecimal.valueOf(1000), Instant.parse("2026-12-01T00:00:00Z"));
+        payment.complete(Instant.parse("2026-08-01T00:00:00Z"));
+        payment.attachReservationConfirmation(999L, 888L);
+        payment = paymentRepository.saveAndFlush(payment);
+
+        assertThatThrownBy(() -> adapter.requestRefunds(new RefundRequestCommand(999L, List.of(888L), 1L, "test")))
+                .isInstanceOf(CustomException.class)
+                .extracting(exception -> ((CustomException) exception).getErrorCode())
+                .isEqualTo(PaymentErrorCode.REFUND_RECONCILIATION_REQUIRED);
+
+        assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(requester.calls()).isEqualTo(1);
+    }
+
     private Payment paid(Long participantId) {
         if (activeReservation == null) {
             activeReservation = reservationRepository.saveAndFlush(Reservation.create(1L, 1L));

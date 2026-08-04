@@ -60,8 +60,16 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
             var completion = completionService.reflectExternalResult(refund.getId(), result.cancellationId(), result.completed());
             return new RefundRequestResult(participantId, completion.refundStatus().name());
         } catch (RuntimeException exception) {
-            log.error("event=REFUND_COMPENSATION_REQUIRED paymentId={} refundId={} externalStatus={} internalStatus=ROLLBACK autoRetry=false",
-                    refund.getPayment().getId(), refund.getId(), result.completed() ? "COMPLETED" : "PROCESSING");
+            // 예약 완료 반영 실패는 하나의 완료 트랜잭션으로 묶여 있어(Issue #44) Refund·Payment까지
+            // 함께 롤백된다. 이 시점에 PortOne이 이미 환불을 완료했다면(completed=true), 롤백으로
+            // cancellationId가 DB에서 사라지므로 이 로그가 그 값을 확인할 유일한 단서다 — PortOne이
+            // 실제로 실패한 것이 아니므로 PORTONE_REFUND_FAILED로 뭉뚱그리지 않고 재조정이 필요하다는
+            // 별도 오류로 구분해, 호출자가 "환불 자체가 실패했다"고 잘못 안내하지 않게 한다.
+            log.error("event=REFUND_COMPENSATION_REQUIRED paymentId={} refundId={} cancellationId={} externalStatus={} internalStatus=ROLLBACK autoRetry=false",
+                    refund.getPayment().getId(), refund.getId(), result.cancellationId(), result.completed() ? "COMPLETED" : "PROCESSING");
+            if (result.completed()) {
+                throw new CustomException(PaymentErrorCode.REFUND_RECONCILIATION_REQUIRED);
+            }
             throw new CustomException(PaymentErrorCode.PORTONE_REFUND_FAILED);
         }
     }

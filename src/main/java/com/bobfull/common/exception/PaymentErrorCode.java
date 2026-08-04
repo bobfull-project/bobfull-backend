@@ -18,7 +18,9 @@ public enum PaymentErrorCode implements BaseErrorCode {
     REFUND_ALREADY_REQUESTED(HttpStatus.CONFLICT, "환불이 이미 요청되었습니다."),
     REFUND_PROCESSING(HttpStatus.CONFLICT, "환불 처리 중입니다."),
     REFUND_FAILED(HttpStatus.CONFLICT, "환불에 실패했습니다."),
-    PORTONE_REFUND_FAILED(HttpStatus.BAD_GATEWAY, "PortOne 환불 요청에 실패했습니다.");
+    PORTONE_REFUND_FAILED(HttpStatus.BAD_GATEWAY, "PortOne 환불 요청에 실패했습니다."),
+    REFUND_RECONCILIATION_REQUIRED(HttpStatus.INTERNAL_SERVER_ERROR,
+            "환불 처리 결과를 확인하는 중 문제가 발생했습니다. 잠시 후 상태를 다시 확인해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String message;
