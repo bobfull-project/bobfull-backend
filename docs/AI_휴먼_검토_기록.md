@@ -42,6 +42,16 @@ AI 제안·설계·Issue 계약을 Human이 검토하면서 발견한 누락과 
 - Human 결정: 만료 후 외부 승인 가능성을 별도 경계로 기록하고 PortOne V2 수동 승인을 후보안으로 검토한다.
 - 관련 기술 검토: [결제 트러블슈팅](troubleshooting/결제_트러블슈팅.md)
 
+### 5. 예약 취소·환불 트랜잭션 경계 재설계
+
+- 관련 Issue: #44, #45, #131, #141
+- 관련 PR: #135(병합됨), #144
+- AI 제안: 예약 취소 전체 흐름을 Reservation 락을 보유한 하나의 트랜잭션으로 묶고, 참여자별 환불 처리를 REQUIRES_NEW 트랜잭션으로 즉시 커밋한다. 환불 중 하나가 실패하면 예약 취소 트랜잭션은 예외로 롤백한다.
+- Human 발견: 참여자 A의 외부 환불이 REQUIRES_NEW로 먼저 성공 커밋된 뒤 참여자 B의 환불이 실패하면, 바깥 예약 트랜잭션만 롤백돼 A의 `Refund=COMPLETED`/`Payment=REFUNDED`와 `Participant=RESERVED`가 불일치하는 상태가 남을 수 있다. REQUIRES_NEW는 앞선 외부 환불 결과를 보존할 뿐, 예약·참여 상태까지 함께 정합하게 맞춰주는 해결책은 아니었다.
+- Human 판단: 전체 흐름을 하나의 트랜잭션으로 묶지 않고, 트랜잭션 없는 파사드가 접수(짧은 트랜잭션)·외부 환불 실행(트랜잭션 밖)·완료 확정(짧은 트랜잭션)의 3단계를 조정하도록 변경한다. 즉시 응답·PortOne 웹훅·정합성 확인 스케줄러가 모두 같은 완료 확정 경로(`RefundCompletionService` → `completeParticipantCancellation`)를 사용하도록 통일한다.
+- 반영: `ReservationStatus.CANCELLING`, `ParticipationStatus.CANCEL_REQUESTED`, `ReservationCancellationTransactionService.accept()`(짧은 접수 트랜잭션), `RefundCompletionService`(공통 완료 경로), `completeCancelIfRequested()`(조건부 UPDATE 기반 멱등 처리), Issue #141(정합성 확인 스케줄러 후속 분리), PR #135·#144, ADR 0001.
+- 관련 기술 검토: [예약 트러블슈팅](troubleshooting/예약_트러블슈팅.md)
+
 ## 새 기록 작성
 
 [AI Human 검토 양식](templates/AI_휴먼_검토_양식.md)을 복사해 사용한다.
