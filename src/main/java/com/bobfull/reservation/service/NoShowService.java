@@ -95,7 +95,7 @@ public class NoShowService {
         OwnershipContext context = resolveOwnership(reservationId, ownerMemberId);
         requireDiningEnded(context.timeSlot());
 
-        ReservationParticipant participant = findParticipantOrThrow(reservationId, participationId);
+        ReservationParticipant participant = findParticipantWithLockOrThrow(reservationId, participationId);
         if (participant.getParticipationStatus() != ParticipationStatus.RESERVED) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
         }
@@ -108,7 +108,7 @@ public class NoShowService {
     public NoShowProcessResponse unmarkNoShow(Long ownerMemberId, Long reservationId, Long participationId) {
         resolveOwnership(reservationId, ownerMemberId);
 
-        ReservationParticipant participant = findParticipantOrThrow(reservationId, participationId);
+        ReservationParticipant participant = findParticipantWithLockOrThrow(reservationId, participationId);
         if (participant.getParticipationStatus() != ParticipationStatus.NO_SHOW) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
         }
@@ -156,8 +156,14 @@ public class NoShowService {
         }
     }
 
-    private ReservationParticipant findParticipantOrThrow(Long reservationId, Long participationId) {
-        return reservationParticipantRepository.findByIdAndReservationId(participationId, reservationId)
+    /**
+     * 노쇼 처리·해제 대상 참여자를 비관적 락으로 조회한다.
+     * 락 없이 조회·상태 확인·전이를 하면 동시에 들어온 두 요청이 서로의 커밋 전에 같은 상태를
+     * 읽어 둘 다 검증을 통과할 수 있다 — 참여자 최종 상태는 같은 값으로 수렴해 깨지지 않지만,
+     * NoShowHistory가 중복 기록돼 §9-4 이력 조회에 그대로 노출된다(PR #133 리뷰 반영).
+     */
+    private ReservationParticipant findParticipantWithLockOrThrow(Long reservationId, Long participationId) {
+        return reservationParticipantRepository.findWithLockByIdAndReservationId(participationId, reservationId)
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.PARTICIPATION_ID_NOT_FOUND));
     }
 

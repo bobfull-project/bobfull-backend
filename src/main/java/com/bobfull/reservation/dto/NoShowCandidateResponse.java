@@ -1,6 +1,6 @@
 package com.bobfull.reservation.dto;
 
-import com.bobfull.admin.support.MemberNameMasker;
+import com.bobfull.common.support.MemberNameMasker;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.ReservationParticipant;
 

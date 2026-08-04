@@ -1,4 +1,4 @@
-package com.bobfull.admin.support;
+package com.bobfull.common.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

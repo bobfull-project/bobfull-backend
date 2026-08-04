@@ -162,7 +162,7 @@ class NoShowServiceTest {
         setUpOwnershipChain(FIXED_CLOCK.instant().minusSeconds(60));
         ReservationParticipant participant = ReservationParticipant.create(reservation.getId(), 20L, 2);
         ReflectionTestUtils.setField(participant, "id", 500L);
-        given(reservationParticipantRepository.findByIdAndReservationId(500L, reservation.getId()))
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(500L, reservation.getId()))
                 .willReturn(Optional.of(participant));
 
         // when
@@ -182,7 +182,7 @@ class NoShowServiceTest {
         ReservationParticipant participant = ReservationParticipant.create(reservation.getId(), 20L, 2);
         ReflectionTestUtils.setField(participant, "id", 500L);
         participant.markNoShow();
-        given(reservationParticipantRepository.findByIdAndReservationId(500L, reservation.getId()))
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(500L, reservation.getId()))
                 .willReturn(Optional.of(participant));
 
         // when
@@ -198,7 +198,7 @@ class NoShowServiceTest {
     void 존재하지_않는_참여자_노쇼_처리는_404() {
         // given
         setUpOwnershipChain(FIXED_CLOCK.instant().minusSeconds(60));
-        given(reservationParticipantRepository.findByIdAndReservationId(999L, reservation.getId()))
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(999L, reservation.getId()))
                 .willReturn(Optional.empty());
 
         // when
@@ -220,7 +220,7 @@ class NoShowServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
-        verify(reservationParticipantRepository, never()).findByIdAndReservationId(any(), any());
+        verify(reservationParticipantRepository, never()).findWithLockByIdAndReservationId(any(), any());
     }
 
     @Test
@@ -230,7 +230,7 @@ class NoShowServiceTest {
         ReservationParticipant participant = ReservationParticipant.create(reservation.getId(), 20L, 2);
         ReflectionTestUtils.setField(participant, "id", 500L);
         participant.markNoShow();
-        given(reservationParticipantRepository.findByIdAndReservationId(500L, reservation.getId()))
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(500L, reservation.getId()))
                 .willReturn(Optional.of(participant));
 
         // when
@@ -248,7 +248,7 @@ class NoShowServiceTest {
         setUpOwnershipChain(FIXED_CLOCK.instant().minusSeconds(60));
         ReservationParticipant participant = ReservationParticipant.create(reservation.getId(), 20L, 2);
         ReflectionTestUtils.setField(participant, "id", 500L);
-        given(reservationParticipantRepository.findByIdAndReservationId(500L, reservation.getId()))
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(500L, reservation.getId()))
                 .willReturn(Optional.of(participant));
 
         // when

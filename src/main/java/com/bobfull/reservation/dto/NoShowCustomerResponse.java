@@ -1,6 +1,6 @@
 package com.bobfull.reservation.dto;
 
-import com.bobfull.admin.support.MemberNameMasker;
+import com.bobfull.common.support.MemberNameMasker;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
