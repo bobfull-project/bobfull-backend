@@ -25,6 +25,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Page<Payment> findAllByMemberIdAndStatus(Long memberId, PaymentStatus status, Pageable pageable);
 
+    Page<Payment> findAllByStatus(PaymentStatus status, Pageable pageable);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Payment> findWithLockByPaymentId(String paymentId);
 

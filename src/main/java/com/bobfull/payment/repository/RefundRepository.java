@@ -14,6 +14,12 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
     Page<Refund> findAllByPayment_MemberId(Long memberId, Pageable pageable);
 
     @EntityGraph(attributePaths = "payment")
+    Page<Refund> findAllByStatus(RefundStatus status, Pageable pageable);
+
+    @EntityGraph(attributePaths = "payment")
+    Page<Refund> findAll(Pageable pageable);
+
+    @EntityGraph(attributePaths = "payment")
     Page<Refund> findAllByPayment_MemberIdAndStatus(Long memberId, RefundStatus status, Pageable pageable);
 
     @EntityGraph(attributePaths = "payment")
