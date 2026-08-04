@@ -98,27 +98,21 @@ public class ReservationCancellationTransactionService {
     /**
      * 추가 참여자 취소를 접수한다. 취소로 확정 기준 미달이 될지를 먼저 계산해, 모집 CLOSED에서
      * 기준 미달이 되면 {@link #acceptEntireReservationCancellation}로 예약 전체 취소를 대신 접수한다.
-     * 기준을 유지하거나 모집이 OPEN이면 본인만 CANCEL_REQUESTED로 전환하고 RECRUITING/CONFIRMED를
-     * 재계산한다.
+     * 그 외에는 본인만 CANCEL_REQUESTED로 전환할 뿐, Reservation의 RECRUITING/CONFIRMED 상태는
+     * 여기서 재계산하지 않는다 — CANCEL_REQUESTED 참여자는 환불이 실제로 완료되기 전까지 좌석을
+     * 점유한 상태로 집계해야 하므로(Issue #44 최종 계약), 접수 시점에 미리 정원 완화를 반영하면
+     * "참여자는 아직 환불 대기 중인데 예약만 먼저 여유가 생김" 불일치가 생긴다. 실제 재계산은 환불
+     * 완료 후 {@link #recalculateAfterCompletion}에서 수행한다.
      */
     private CancellationAcceptance acceptParticipantCancellation(
             Reservation reservation, ReservationParticipant actingParticipant, String reason
     ) {
-        int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
-        int countAfterCancel = reservationParticipantRepository
-                .sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES) - actingParticipant.getPartySize();
-        boolean meetsThreshold = countAfterCancel >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity);
-
-        if (reservation.getRecruitmentStatus() == RecruitmentStatus.CLOSED && !meetsThreshold) {
+        if (reservation.getRecruitmentStatus() == RecruitmentStatus.CLOSED
+                && willFallBelowThresholdAfterCancel(reservation, actingParticipant)) {
             return acceptEntireReservationCancellation(reservation, actingParticipant, reason);
         }
 
         actingParticipant.requestCancel(reason);
-        if (meetsThreshold) {
-            reservation.confirm();
-        } else {
-            reservation.revertToRecruiting();
-        }
 
         ReservationCancellationRefundPort.RefundRequestCommand command =
                 new ReservationCancellationRefundPort.RefundRequestCommand(
@@ -126,6 +120,28 @@ public class ReservationCancellationTransactionService {
 
         return new CancellationAcceptance(
                 reservation.getId(), actingParticipant.getId(), CancellationScope.PARTICIPATION, command);
+    }
+
+    private boolean willFallBelowThresholdAfterCancel(Reservation reservation, ReservationParticipant actingParticipant) {
+        int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
+        int countAfterCancel = reservationParticipantRepository
+                .sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES) - actingParticipant.getPartySize();
+        return countAfterCancel < ReservationCapacityPolicy.confirmationThreshold(tableCapacity);
+    }
+
+    /**
+     * 취소 접수(CANCEL_REQUESTED)된 참여자의 환불이 완료된 뒤 남은 유효 인원을 다시 계산해
+     * RECRUITING/CONFIRMED를 재계산한다({@link ReservationCancellationService#completeParticipantCancellation}
+     * 이 호출). 예약 전체가 CANCELLING인 경로에서는 호출하지 않는다.
+     */
+    void recalculateAfterCompletion(Reservation reservation) {
+        int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
+        int currentCount = reservationParticipantRepository.sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES);
+        if (currentCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
+            reservation.confirm();
+        } else {
+            reservation.revertToRecruiting();
+        }
     }
 
     private void validateReservationCancellable(Reservation reservation) {

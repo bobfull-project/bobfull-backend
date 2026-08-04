@@ -68,17 +68,27 @@ public class ReservationCancellationService {
     /**
      * 취소 접수(CANCEL_REQUESTED)된 참여자 1명의 환불이 완료되어 CANCELLED로 확정한다
      * (Issue #44 완료 진입점, PR #137의 공통 완료 Service가 호출). 이 참여자가 속한 예약이
-     * CANCELLING이고 취소 접수된 참여자 전원이 완료됐을 때만 Reservation도 CANCELLED로 확정한다.
+     * CANCELLING이고 취소 접수된 참여자 전원이 완료됐을 때만 Reservation도 CANCELLED로 확정하며,
+     * 아니면(단건 참여자 취소) 환불 완료로 열린 좌석을 반영해 RECRUITING/CONFIRMED를 재계산한다.
      * Payment·Refund 상태 전이는 이 메서드의 책임이 아니다.
+     *
+     * <p>참여자 완료 전환은 {@code completeCancelIfRequested}(원자적 조건부 UPDATE)로 수행한다.
+     * 즉시 응답·웹훅·재확인 스케줄러가 같은 참여자를 동시에 완료 처리하려 할 때, 엔티티를 읽어
+     * 메모리 상태만 검사하면 두 경로 모두 CANCEL_REQUESTED를 읽고 완료를 시도할 수 있다 — DB
+     * 조건절이 있는 UPDATE만이 오직 한 경로만 처리권을 얻도록 보장한다(Issue #44 최종 계약).</p>
      */
     @Transactional
     public void completeParticipantCancellation(Long reservationParticipantId, Instant completedAt) {
         ReservationParticipant participant = reservationParticipantRepository.findById(reservationParticipantId)
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.PARTICIPATION_ID_NOT_FOUND));
+
+        int updatedRows = reservationParticipantRepository.completeCancelIfRequested(reservationParticipantId, completedAt);
+        if (updatedRows == 0) {
+            return;
+        }
+
         Reservation reservation = reservationRepository.findWithLockById(participant.getReservationId())
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
-
-        participant.completeCancel(completedAt);
 
         if (reservation.isCancelling()) {
             boolean anyStillRequested = reservationParticipantRepository.existsByReservationIdAndParticipationStatus(
@@ -86,6 +96,8 @@ public class ReservationCancellationService {
             if (!anyStillRequested) {
                 reservation.cancel();
             }
+        } else {
+            transactionService.recalculateAfterCompletion(reservation);
         }
     }
 }

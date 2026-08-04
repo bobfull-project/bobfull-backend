@@ -130,17 +130,18 @@ class ReservationCancellationServiceTest {
         Reservation reservation = reservation(10L);
         reservation.startCancelling();
         ReservationParticipant participant = participant(30L, 10L, 2L);
-        participant.requestCancel("개인 사정");
+        Instant completedAt = Instant.parse("2026-08-08T00:00:00Z");
         given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
+        given(reservationParticipantRepository.completeCancelIfRequested(30L, completedAt)).willReturn(1);
         given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(reservationParticipantRepository.existsByReservationIdAndParticipationStatus(10L, ParticipationStatus.CANCEL_REQUESTED))
                 .willReturn(false);
 
         // when
-        service().completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:00:00Z"));
+        service().completeParticipantCancellation(30L, completedAt);
 
-        // then
-        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
+        // then: 참여자 완료 전환은 원자적 UPDATE(completeCancelIfRequested)가 수행하므로 여기서는 호출 여부만 확인한다
+        verify(reservationParticipantRepository).completeCancelIfRequested(30L, completedAt);
         assertThat(reservation.isCancelled()).isTrue();
     }
 
@@ -150,58 +151,55 @@ class ReservationCancellationServiceTest {
         Reservation reservation = reservation(10L);
         reservation.startCancelling();
         ReservationParticipant participant = participant(30L, 10L, 2L);
-        participant.requestCancel("개인 사정");
+        Instant completedAt = Instant.parse("2026-08-08T00:00:00Z");
         given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
+        given(reservationParticipantRepository.completeCancelIfRequested(30L, completedAt)).willReturn(1);
         given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(reservationParticipantRepository.existsByReservationIdAndParticipationStatus(10L, ParticipationStatus.CANCEL_REQUESTED))
                 .willReturn(true);
 
         // when
-        service().completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:00:00Z"));
+        service().completeParticipantCancellation(30L, completedAt);
 
         // then
-        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
         assertThat(reservation.isCancelling()).isTrue();
     }
 
     @Test
-    void 예약이_CANCELLING이_아닌_단일_참여자_취소_완료는_예약_상태를_바꾸지_않는다() {
+    void 예약이_CANCELLING이_아닌_단일_참여자_취소_완료는_남은_인원을_다시_계산한다() {
         // given: 모집 OPEN 상태에서 추가 참여자 1명만 취소를 접수한 경우
         Reservation reservation = reservation(10L);
         ReservationParticipant participant = participant(30L, 10L, 2L);
-        participant.requestCancel("개인 사정");
+        Instant completedAt = Instant.parse("2026-08-08T00:00:00Z");
         given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
+        given(reservationParticipantRepository.completeCancelIfRequested(30L, completedAt)).willReturn(1);
         given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
 
         // when
-        service().completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:00:00Z"));
+        service().completeParticipantCancellation(30L, completedAt);
 
-        // then
-        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
-        assertThat(reservation.isActive()).isTrue();
+        // then: CANCELLING이 아니므로 전원 완료 여부 조회 없이 재계산으로 위임한다
         verify(reservationParticipantRepository, org.mockito.Mockito.never())
                 .existsByReservationIdAndParticipationStatus(any(), any());
+        verify(transactionService).recalculateAfterCompletion(reservation);
     }
 
     @Test
-    void 이미_완료된_참여자에_대한_중복_완료_요청은_아무_일도_하지_않는다() {
-        // given: 웹훅 중복 전달 시나리오
-        Reservation reservation = reservation(10L);
-        reservation.startCancelling();
-        reservation.cancel();
+    void 이미_다른_경로가_완료_처리한_참여자는_아무_일도_하지_않는다() {
+        // given: 즉시 응답·웹훅·재확인 스케줄러 등 동시 완료 요청 중 다른 경로가 먼저 처리권을 얻은 경우
+        // (completeCancelIfRequested가 0을 반환 = 이미 CANCEL_REQUESTED가 아님)
         ReservationParticipant participant = participant(30L, 10L, 2L);
-        participant.requestCancel("개인 사정");
-        participant.completeCancel(Instant.parse("2026-08-08T00:00:00Z"));
+        Instant completedAt = Instant.parse("2026-08-08T00:10:00Z");
         given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(reservationParticipantRepository.completeCancelIfRequested(30L, completedAt)).willReturn(0);
 
         // when
-        Throwable result = catchThrowable(() -> service()
-                .completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:10:00Z")));
+        Throwable result = catchThrowable(() -> service().completeParticipantCancellation(30L, completedAt));
 
-        // then
+        // then: 처리권을 얻지 못했으므로 Reservation 조회·재계산을 전혀 수행하지 않는다
         assertThat(result).isNull();
-        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
+        verify(reservationRepository, org.mockito.Mockito.never()).findWithLockById(any());
+        verify(transactionService, org.mockito.Mockito.never()).recalculateAfterCompletion(any());
     }
 
     private Reservation reservation(Long id) {

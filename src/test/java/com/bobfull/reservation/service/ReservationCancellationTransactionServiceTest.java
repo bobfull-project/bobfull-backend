@@ -2,6 +2,7 @@ package com.bobfull.reservation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.BDDMockito.given;
@@ -234,16 +235,15 @@ class ReservationCancellationTransactionServiceTest {
     }
 
     @Test
-    void 추가_참여자_취소_접수_후_확정_기준_미달이면_RECRUITING으로_되돌아간다() {
-        // given: capacity 4, threshold 3. 취소 전 잔여 3명(취소 대상 본인 partySize 1 포함)이라 취소 후 2명으로 기준 미달.
+    void 모집이_OPEN이면_기준_미달이_되더라도_접수_시점에는_Reservation_상태를_바꾸지_않는다() {
+        // given: CONFIRMED + OPEN. 이 참여자가 취소돼도 모집이 OPEN이므로 캐스케이드 대상이 아니다.
+        // Reservation의 RECRUITING/CONFIRMED 재계산은 환불 완료 후 recalculateAfterCompletion에서 수행한다.
         Reservation reservation = reservation(10L, 1L);
         reservation.confirm();
         ReservationParticipant participant = participant(22L, 10L, 3L);
         given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
         given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
         given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 3L)).willReturn(Optional.of(participant));
-        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(3);
 
         // when
         ReservationCancellationTransactionService.CancellationAcceptance acceptance =
@@ -252,24 +252,37 @@ class ReservationCancellationTransactionServiceTest {
         // then
         assertThat(acceptance.scope()).isEqualTo(CancellationScope.PARTICIPATION);
         assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
-        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.RECRUITING);
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
+        verify(reservationCapacityReader, never()).readTableCapacity(any());
+        verify(reservationParticipantRepository, never()).sumPartySizeByStatuses(any(), any());
     }
 
     @Test
-    void 추가_참여자_취소_접수_후_확정_기준_이상이면_CONFIRMED를_유지한다() {
-        // given: capacity 4, threshold 3. 취소 전 잔여 4명(본인 partySize 1 포함)이라 취소 후 3명으로 기준 충족.
+    void recalculateAfterCompletion은_기준_미달이면_RECRUITING으로_되돌린다() {
+        // given: capacity 4, threshold 3. 환불 완료 후 남은 인원 2명으로 기준 미달.
         Reservation reservation = reservation(10L, 1L);
         reservation.confirm();
-        ReservationParticipant participant = participant(22L, 10L, 3L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 3L)).willReturn(Optional.of(participant));
         given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
 
         // when
-        service().accept(3L, 10L, new ReservationCancellationRequest("사유"));
+        service().recalculateAfterCompletion(reservation);
+
+        // then
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.RECRUITING);
+    }
+
+    @Test
+    void recalculateAfterCompletion은_기준_이상이면_CONFIRMED를_유지한다() {
+        // given: capacity 4, threshold 3. 환불 완료 후 남은 인원 3명으로 기준 충족.
+        Reservation reservation = reservation(10L, 1L);
+        reservation.confirm();
+        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(3);
+
+        // when
+        service().recalculateAfterCompletion(reservation);
 
         // then
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
