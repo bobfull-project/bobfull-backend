@@ -10,9 +10,13 @@ import com.bobfull.restaurant.entity.QRestaurant;
 import com.bobfull.sharedtable.entity.QSharedTable;
 import com.bobfull.timeslot.entity.QTimeSlot;
 import com.querydsl.core.BooleanBuilder;
-import com.querydsl.core.types.Projections;
+import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +32,14 @@ public class AdminNoShowRepositoryImpl implements AdminNoShowRepository {
         this.queryFactory = new JPAQueryFactory(entityManager);
     }
 
+    /**
+     * 참여자별로 마지막 노쇼 처리(marked=true) 이력 1건만 반환한다.
+     * 처리 → 해제 → 재처리가 반복되면 marked=true 이력이 여러 건 남을 수 있는데,
+     * 이미 해제로 대체된 과거 이력까지 그대로 나열하면 "현재 노쇼 현황"에 같은 참여자가
+     * 중복 노출된다(PR #136 리뷰 반영). JPQL은 "그룹별 최신 행" 조회에 윈도우 함수를
+     * 지원하지 않아, 대상 이력을 평면으로 조회한 뒤 Java에서 참여자별 최신 건만 추리고
+     * 수동으로 페이지네이션한다(NoShowQueryRepositoryImpl.findNoShowCustomers와 동일한 방식).
+     */
     @Override
     public Page<AdminNoShowResult> searchNoShows(Long memberId, Long restaurantId, Pageable pageable) {
         QNoShowHistory history = QNoShowHistory.noShowHistory;
@@ -49,18 +61,10 @@ public class AdminNoShowRepositoryImpl implements AdminNoShowRepository {
             predicates.and(restaurant.id.eq(restaurantId));
         }
 
-        var content = queryFactory
-                .select(Projections.constructor(
-                        AdminNoShowResult.class,
-                        history.id,
-                        participant.memberId,
-                        member.name,
-                        restaurant.id,
-                        restaurant.name,
-                        participant.reservationId,
-                        participant.id,
-                        participant.partySize,
-                        history.processedAt))
+        List<Tuple> rows = queryFactory
+                .select(history.id, participant.id, participant.memberId, member.name,
+                        restaurant.id, restaurant.name, participant.reservationId,
+                        participant.partySize, history.processedAt)
                 .from(history)
                 .join(participant).on(participant.id.eq(history.reservationParticipantId))
                 .join(reservation).on(reservation.id.eq(participant.reservationId))
@@ -69,22 +73,34 @@ public class AdminNoShowRepositoryImpl implements AdminNoShowRepository {
                 .join(restaurant).on(restaurant.id.eq(sharedTable.restaurantId))
                 .join(member).on(member.id.eq(participant.memberId))
                 .where(predicates)
-                .orderBy(history.processedAt.desc(), history.id.desc())
-                .offset(pageable.getOffset())
-                .limit(pageable.getPageSize())
                 .fetch();
 
-        Long total = queryFactory
-                .select(history.count())
-                .from(history)
-                .join(participant).on(participant.id.eq(history.reservationParticipantId))
-                .join(reservation).on(reservation.id.eq(participant.reservationId))
-                .join(timeSlot).on(timeSlot.id.eq(reservation.timeSlotId))
-                .join(sharedTable).on(sharedTable.id.eq(timeSlot.sharedTableId))
-                .join(restaurant).on(restaurant.id.eq(sharedTable.restaurantId))
-                .where(predicates)
-                .fetchOne();
+        Map<Long, List<Tuple>> rowsByParticipant = rows.stream()
+                .collect(Collectors.groupingBy(row -> row.get(participant.id)));
 
-        return new PageImpl<>(content, pageable, total == null ? 0 : total);
+        List<AdminNoShowResult> allResults = rowsByParticipant.values().stream()
+                .map(participantRows -> participantRows.stream()
+                        .max(Comparator.comparing(row -> row.get(history.processedAt)))
+                        .orElseThrow())
+                .map(latest -> new AdminNoShowResult(
+                        latest.get(history.id),
+                        latest.get(participant.memberId),
+                        latest.get(member.name),
+                        latest.get(restaurant.id),
+                        latest.get(restaurant.name),
+                        latest.get(participant.reservationId),
+                        latest.get(participant.id),
+                        latest.get(participant.partySize),
+                        latest.get(history.processedAt)))
+                .sorted(Comparator.comparing(AdminNoShowResult::processedAt).reversed()
+                        .thenComparing(Comparator.comparing(AdminNoShowResult::noShowHistoryId).reversed()))
+                .toList();
+
+        int total = allResults.size();
+        int fromIndex = Math.min((int) pageable.getOffset(), total);
+        int toIndex = Math.min(fromIndex + pageable.getPageSize(), total);
+        List<AdminNoShowResult> pageContent = allResults.subList(fromIndex, toIndex);
+
+        return new PageImpl<>(pageContent, pageable, total);
     }
 }

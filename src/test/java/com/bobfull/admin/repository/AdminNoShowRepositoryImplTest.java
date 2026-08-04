@@ -91,6 +91,36 @@ class AdminNoShowRepositoryImplTest {
     }
 
     @Test
+    void 처리_해제_재처리를_반복해도_최신_이력_1건만_조회된다() {
+        Restaurant restaurant = restaurant();
+        Member member = member("10");
+        SharedTable table = sharedTableRepository.saveAndFlush(SharedTable.create(restaurant.getId(), 4));
+        TimeSlot timeSlot = timeSlotRepository.saveAndFlush(
+                TimeSlot.create(table.getId(), NOW.minusSeconds(7200), NOW.minusSeconds(3600)));
+        Reservation reservation = reservationRepository.saveAndFlush(Reservation.create(timeSlot.getId(), 1L));
+        ReservationParticipant participant = participantRepository.saveAndFlush(
+                ReservationParticipant.create(reservation.getId(), member.getId(), 2));
+
+        // 처리 → 해제 → 재처리: marked=true 이력이 2건 남지만 현재 상태는 NO_SHOW 1건이다.
+        participant.markNoShow();
+        participantRepository.saveAndFlush(participant);
+        noShowHistoryRepository.saveAndFlush(NoShowHistory.marked(participant.getId(), 1L, NOW));
+        participant.unmarkNoShow();
+        participantRepository.saveAndFlush(participant);
+        noShowHistoryRepository.saveAndFlush(NoShowHistory.unmarked(participant.getId(), 1L, NOW.plusSeconds(60)));
+        participant.markNoShow();
+        participantRepository.saveAndFlush(participant);
+        NoShowHistory latest = noShowHistoryRepository.saveAndFlush(
+                NoShowHistory.marked(participant.getId(), 1L, NOW.plusSeconds(120)));
+
+        Page<AdminNoShowResult> result = adminNoShowRepository.searchNoShows(null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).noShowHistoryId()).isEqualTo(latest.getId());
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
     void restaurantId_필터가_적용된다() {
         Restaurant first = restaurant();
         Restaurant second = restaurantRepository.saveAndFlush(
