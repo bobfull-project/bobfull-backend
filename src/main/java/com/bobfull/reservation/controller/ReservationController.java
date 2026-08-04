@@ -5,10 +5,13 @@ import com.bobfull.common.response.PageResponse;
 import com.bobfull.common.security.AuthMember;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.dto.ReservationAvailabilityResponse;
+import com.bobfull.reservation.dto.ReservationCancellationRequest;
+import com.bobfull.reservation.dto.ReservationCancellationResponse;
 import com.bobfull.reservation.dto.ReservationPrepareRequest;
 import com.bobfull.reservation.dto.ReservationPrepareResponse;
 import com.bobfull.reservation.dto.ReservationSearchRequest;
 import com.bobfull.reservation.dto.ReservationSearchResponse;
+import com.bobfull.reservation.service.ReservationCancellationService;
 import com.bobfull.reservation.service.ReservationPreparationService;
 import com.bobfull.reservation.service.ReservationSearchService;
 import jakarta.validation.Valid;
@@ -18,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,13 +34,16 @@ public class ReservationController {
 
     private final ReservationPreparationService reservationPreparationService;
     private final ReservationSearchService reservationSearchService;
+    private final ReservationCancellationService reservationCancellationService;
 
     public ReservationController(
             ReservationPreparationService reservationPreparationService,
-            ReservationSearchService reservationSearchService
+            ReservationSearchService reservationSearchService,
+            ReservationCancellationService reservationCancellationService
     ) {
         this.reservationPreparationService = reservationPreparationService;
         this.reservationSearchService = reservationSearchService;
+        this.reservationCancellationService = reservationCancellationService;
     }
 
     @GetMapping("/search")
@@ -70,5 +77,15 @@ public class ReservationController {
             @Valid @RequestBody ReservationPrepareRequest request
     ) {
         return ApiResponse.success(reservationPreparationService.prepare(authMember.id(), request));
+    }
+
+    @PostMapping("/{reservationId}/participations/me/cancel")
+    public ApiResponse<ReservationCancellationResponse> cancelMyParticipation(
+            @AuthenticationPrincipal AuthMember authMember,
+            @PathVariable Long reservationId,
+            @Valid @RequestBody ReservationCancellationRequest request
+    ) {
+        return ApiResponse.success(
+                reservationCancellationService.cancel(authMember.id(), reservationId, request));
     }
 }

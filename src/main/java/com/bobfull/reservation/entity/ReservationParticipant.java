@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Instant;
 
 /**
  * 예약에 참여하는 회원 1명(1신청 단위)이다(docs/ERD.md 4.6).
@@ -46,6 +47,12 @@ public class ReservationParticipant extends BaseTimeEntity {
     @Column(name = "participation_status", nullable = false, length = 20)
     private ParticipationStatus participationStatus;
 
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
     protected ReservationParticipant() {
     }
 
@@ -58,6 +65,19 @@ public class ReservationParticipant extends BaseTimeEntity {
 
     public static ReservationParticipant create(Long reservationId, Long memberId, Integer partySize) {
         return new ReservationParticipant(reservationId, memberId, partySize);
+    }
+
+    /**
+     * MEMBER 본인 취소로 참여 전체를 CANCELLED로 전환한다(Issue #131). 부분 취소는 지원하지 않는다.
+     */
+    public void cancel(String cancelReason, Instant cancelledAt) {
+        this.participationStatus = ParticipationStatus.CANCELLED;
+        this.cancelReason = cancelReason;
+        this.cancelledAt = cancelledAt;
+    }
+
+    public boolean isCancellable() {
+        return participationStatus == ParticipationStatus.RESERVED;
     }
 
     public Long getId() {
@@ -92,5 +112,13 @@ public class ReservationParticipant extends BaseTimeEntity {
             throw new IllegalStateException("NO_SHOW 상태만 노쇼 처리를 해제할 수 있습니다.");
         }
         this.participationStatus = ParticipationStatus.RESERVED;
+    }
+
+    public Instant getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
     }
 }

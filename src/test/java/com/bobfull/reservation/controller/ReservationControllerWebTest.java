@@ -19,13 +19,18 @@ import com.bobfull.common.security.MemberRole;
 import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
+import com.bobfull.reservation.dto.CancellationScope;
+import com.bobfull.reservation.dto.ReservationCancellationRequest;
+import com.bobfull.reservation.dto.ReservationCancellationResponse;
 import com.bobfull.reservation.dto.ReservationSearchRequest;
 import com.bobfull.reservation.dto.ReservationSearchResponse;
+import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.dto.ReservationAvailabilityResponse;
 import com.bobfull.reservation.dto.ReservationPrepareRequest;
 import com.bobfull.reservation.dto.ReservationPrepareResponse;
+import com.bobfull.reservation.service.ReservationCancellationService;
 import com.bobfull.reservation.service.ReservationPreparationService;
 import com.bobfull.reservation.service.ReservationSearchService;
 import java.math.BigDecimal;
@@ -65,6 +70,9 @@ class ReservationControllerWebTest {
 
     @MockitoBean
     private ReservationSearchService reservationSearchService;
+
+    @MockitoBean
+    private ReservationCancellationService reservationCancellationService;
 
     private Authentication memberAuthentication(Long memberId) {
         AuthMember authMember = new AuthMember(memberId, MemberRole.MEMBER);
@@ -188,5 +196,72 @@ class ReservationControllerWebTest {
         // then
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is("INVALID_INPUT_VALUE")));
+    }
+
+    @Test
+    void 내_참여를_취소한다() throws Exception {
+        // given
+        ReservationCancellationRequest request = new ReservationCancellationRequest("개인 일정 변경");
+        given(reservationCancellationService.cancel(eq(1L), eq(10L), any(ReservationCancellationRequest.class)))
+                .willReturn(new ReservationCancellationResponse(
+                        10L, 20L, ParticipationStatus.CANCELLED, CancellationScope.PARTICIPATION, "REQUESTED"));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/reservations/10/participations/me/cancel")
+                .with(authentication(memberAuthentication(1L)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reservationId", is(10)))
+                .andExpect(jsonPath("$.data.participationId", is(20)))
+                .andExpect(jsonPath("$.data.participationStatus", is("CANCELLED")))
+                .andExpect(jsonPath("$.data.cancellationScope", is("PARTICIPATION")))
+                .andExpect(jsonPath("$.data.refundStatus", is("REQUESTED")));
+    }
+
+    @Test
+    void 인증_없이_취소를_요청하면_401을_반환한다() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(post("/api/reservations/10/participations/me/cancel")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new ReservationCancellationRequest("사유"))));
+
+        // then
+        result.andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 취소_사유가_비어있으면_400을_반환한다() throws Exception {
+        // given
+        String invalidBody = "{\"reason\":\"\"}";
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/reservations/10/participations/me/cancel")
+                .with(authentication(memberAuthentication(1L)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("INVALID_INPUT_VALUE")));
+    }
+
+    @Test
+    void 취소_기한이_지나면_409를_반환한다() throws Exception {
+        // given
+        given(reservationCancellationService.cancel(eq(1L), eq(10L), any(ReservationCancellationRequest.class)))
+                .willThrow(new CustomException(ReservationErrorCode.CANCELLATION_DEADLINE_PASSED));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/reservations/10/participations/me/cancel")
+                .with(authentication(memberAuthentication(1L)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new ReservationCancellationRequest("사유"))));
+
+        // then
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is("CANCELLATION_DEADLINE_PASSED")));
     }
 }
