@@ -21,7 +21,10 @@ public interface ReservationCancellationRefundPort {
      * 순서로 락을 잡으므로, 이 메서드의 실제 구현(Adapter)이 같은 트랜잭션 안에서 Payment 행에
      * 비관적 락을 걸면 Reservation → Payment 역순이 되어 결제 완료 흐름과 교착(deadlock) 위험이
      * 생긴다. 구현체는 Payment에 비관적 락을 걸지 않아야 하며, 환불 중복 방지는 낙관적 락이나
-     * {@code Refund.payment_id} UNIQUE 제약, 또는 별도 트랜잭션 분리로 처리한다.</p>
+     * {@code Refund.payment_id} UNIQUE 제약으로 처리한다. 내부 트랜잭션을 {@code REQUIRES_NEW}로
+     * 분리해도 바깥 Reservation 트랜잭션의 행 락은 유지되므로 이 문제는 해결되지 않는다 — 락 순서를
+     * 끊으려면 Reservation 트랜잭션을 먼저 커밋한 뒤 별도 트랜잭션에서 환불을 요청하도록
+     * 오케스트레이션을 분리해야 한다.</p>
      */
     List<RefundRequestResult> requestRefunds(RefundRequestCommand command);
 
