@@ -1,6 +1,6 @@
 package com.bobfull.admin.dto;
 
-import com.bobfull.admin.support.MemberNameMasker;
+import com.bobfull.common.support.MemberNameMasker;
 
 public record AdminMemberNoShowRateResponse(
         Long memberId,

@@ -1,6 +1,9 @@
-package com.bobfull.admin.support;
+package com.bobfull.common.support;
 
-/** 회원 이름을 노쇼 통계 응답에 노출할 때 가운데 글자를 마스킹한다(Issue #49 §11-11, API 명세 예시 "홍○동" 기준). */
+/**
+ * 회원 이름을 노쇼 통계·이력 응답에 노출할 때 가운데 글자를 마스킹한다(API 명세 예시 "홍○동" 기준).
+ * Issue #49(관리자 조회)와 Issue #48(OWNER 노쇼 처리)이 모두 사용해 공통 위치에 둔다.
+ */
 public final class MemberNameMasker {
 
     private MemberNameMasker() {
