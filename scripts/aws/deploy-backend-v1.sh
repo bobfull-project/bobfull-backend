@@ -90,6 +90,8 @@ optional_parameters=(
   "PAYMENT_EXPIRATION_ENABLED:payment-expiration-enabled"
   "PAYMENT_EXPIRATION_FIXED_DELAY:payment-expiration-fixed-delay"
   "PAYMENT_EXPIRATION_BATCH_SIZE:payment-expiration-batch-size"
+  "S3_IMAGE_UPLOAD_URL_EXPIRATION:s3-image-upload-url-expiration"
+  "S3_IMAGE_GET_URL_EXPIRATION:s3-image-get-url-expiration"
 )
 
 for item in "${required_parameters[@]}"; do
@@ -103,7 +105,7 @@ done
 if [ -n "${S3_IMAGE_BUCKET:-}" ]; then
   append_env_value S3_IMAGE_BUCKET "${S3_IMAGE_BUCKET}"
 else
-  append_parameter S3_IMAGE_BUCKET s3-image-bucket false
+  append_parameter S3_IMAGE_BUCKET s3-image-bucket true
 fi
 
 if ! grep -q '^JPA_DDL_AUTO=' "${APP_ENV_FILE}"; then

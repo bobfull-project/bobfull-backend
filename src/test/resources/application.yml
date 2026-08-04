@@ -8,3 +8,10 @@ cors:
 auth:
   refresh-token:
     expiration-seconds: 1209600
+
+aws:
+  region: ap-northeast-2
+  s3:
+    image-bucket: bobfull-test-image-bucket
+    upload-url-expiration: 5m
+    get-url-expiration: 5m

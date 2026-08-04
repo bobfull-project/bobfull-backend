@@ -592,7 +592,8 @@ OWNER 응답 예시:
   "category": "KOREAN",
   "description": "합석 예약이 가능한 식당입니다.",
   "keyword": "흑돼지,혼밥",
-  "depositPerPerson": 10000
+  "depositPerPerson": 10000,
+  "imageKey": "restaurants/1/11111111-1111-1111-1111-111111111111.png"
 }
 ```
 
@@ -606,6 +607,7 @@ OWNER 응답 예시:
 | `description` | String | Y | description 값 |
 | `keyword` | String | Y | 사장님이 직접 입력하는 식당 키워드 |
 | `depositPerPerson` | Integer | Y | depositPerPerson 값 |
+| `imageKey` | String | N | 식당 이미지 업로드 URL 발급 응답의 `finalImageKey`. 없으면 이미지 없이 등록 |
 
 ## 3. Response
 
@@ -626,6 +628,8 @@ OWNER 응답 예시:
 | Status | Code | 설명 |
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
+| `400` | `INVALID_RESTAURANT_IMAGE_KEY` | 식당 이미지 Key 형식 또는 소유자 경로가 올바르지 않음 |
+| `400` | `RESTAURANT_IMAGE_NOT_FOUND` | Lambda 검증 완료 후 최종 경로로 이동된 이미지를 찾을 수 없음 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
 
@@ -661,7 +665,8 @@ OWNER 응답 예시:
         "address": "제주시 애월읍 1",
         "category": "한식",
         "depositPerPerson": 10000,
-        "status": "ACTIVE"
+        "status": "ACTIVE",
+        "imageUrl": "https://s3-presigned-get-url.example"
       }
     ],
     "page": 0,
@@ -717,7 +722,8 @@ OWNER 응답 예시:
     "description": "합석 예약이 가능한 식당입니다.",
     "keyword": "흑돼지,혼밥",
     "depositPerPerson": 10000,
-    "status": "ACTIVE"
+    "status": "ACTIVE",
+    "imageUrl": "https://s3-presigned-get-url.example"
   }
 }
 ```
@@ -757,7 +763,8 @@ OWNER 응답 예시:
   "name": "밥풀 한식당",
   "description": "수정된 식당 소개",
   "keyword": "한식,혼밥",
-  "depositPerPerson": 12000
+  "depositPerPerson": 12000,
+  "imageKey": "restaurants/1/22222222-2222-2222-2222-222222222222.png"
 }
 ```
 
@@ -769,6 +776,7 @@ OWNER 응답 예시:
 | `description` | String | Y | description 값 |
 | `keyword` | String | Y | 사장님이 직접 입력하는 식당 키워드 |
 | `depositPerPerson` | Integer | Y | depositPerPerson 값 |
+| `imageKey` | String | N | 새 이미지로 교체할 `finalImageKey`. 필드를 보내지 않으면 기존 이미지 유지 |
 
 ## 3. Response
 
@@ -789,6 +797,8 @@ OWNER 응답 예시:
 | Status | Code | 설명 |
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
+| `400` | `INVALID_RESTAURANT_IMAGE_KEY` | 식당 이미지 Key 형식 또는 소유자 경로가 올바르지 않음 |
+| `400` | `RESTAURANT_IMAGE_NOT_FOUND` | Lambda 검증 완료 후 최종 경로로 이동된 이미지를 찾을 수 없음 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
 | `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
@@ -839,7 +849,8 @@ OWNER 응답 예시:
         "address": "제주시 애월읍 1",
         "category": "한식",
         "keyword": "흑돼지,혼밥",
-        "depositPerPerson": 10000
+        "depositPerPerson": 10000,
+        "imageUrl": "https://s3-presigned-get-url.example"
       }
     ],
     "page": 0,
@@ -891,7 +902,8 @@ OWNER 응답 예시:
     "category": "한식",
     "description": "합석 예약이 가능한 식당입니다.",
     "keyword": "흑돼지,혼밥",
-    "depositPerPerson": 10000
+    "depositPerPerson": 10000,
+    "imageUrl": "https://s3-presigned-get-url.example"
   }
 }
 ```
@@ -946,6 +958,81 @@ OWNER 응답 예시:
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
 | `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
 | `409` | `RESTAURANT_DELETE_NOT_ALLOWED` | 연결된 테이블·회차·예약이 있어 삭제할 수 없음 |
+
+---
+
+## 3-8. 식당 이미지 업로드 URL 발급 `[V1]`
+
+## 1. INFO
+
+- 설명: OWNER가 식당 등록·수정 전에 S3 Presigned PUT URL을 발급받는다.
+- Method: `POST`
+- Path: `/api/owner/restaurants/images/upload-url`
+- Auth: `OWNER`
+- 담당자: 정용태
+
+## 2. Request
+
+### Body
+
+```json
+{
+  "extension": "png",
+  "contentType": "image/png",
+  "fileSize": 1048576
+}
+```
+
+### Request Fields
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `extension` | String | Y | `jpg`, `jpeg`, `png`만 허용. `webp`는 허용하지 않음 |
+| `contentType` | String | Y | `image/jpeg` 또는 `image/png` |
+| `fileSize` | Long | Y | 업로드 예정 파일 크기. 최대 5MB |
+
+## 3. Response
+
+- Status: `200 OK`
+- `uploadUrl` 만료 시간은 5분이다.
+- `tempImageKey`는 클라이언트가 직접 저장하지 않는 임시 업로드 경로다.
+- `finalImageKey`는 Lambda 검증 후 최종 경로에 객체가 존재할 때 식당 등록·수정 Request의 `imageKey`로 사용한다.
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "uploadUrl": "https://s3-presigned-put-url.example",
+    "tempImageKey": "temp/restaurants/1/11111111-1111-1111-1111-111111111111.png",
+    "finalImageKey": "restaurants/1/11111111-1111-1111-1111-111111111111.png"
+  }
+}
+```
+
+## 4. 처리 정책
+
+- 클라이언트는 `uploadUrl`로 S3 `PUT` 업로드를 수행한다.
+- S3 ObjectCreated 이벤트가 Java Lambda를 실행하고, Lambda는 임시 객체의 경로·확장자·Content-Type·파일 크기·파일 시그니처를 검증한다.
+- 검증 성공 시 Lambda는 `temp/restaurants/{ownerId}/{uuid}.{extension}` 객체를 `restaurants/{ownerId}/{uuid}.{extension}`로 복사한 뒤 임시 객체를 삭제한다.
+- 검증 실패 시 Lambda는 임시 객체를 삭제한다.
+- 별도 상태 조회 API는 제공하지 않는다. 식당 등록·수정 API가 `finalImageKey`의 최종 객체 존재 여부를 확인한다.
+- 식당 조회 응답의 `imageUrl`은 DB 저장값이 아니라 5분 만료 Presigned GET URL이다. DB에는 `imageKey`만 저장한다.
+- 이미지 교체 시 새 `imageKey` 등록이 성공한 뒤 기존 S3 객체를 삭제한다.
+
+## 5. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
+| `400` | `INVALID_IMAGE_EXTENSION` | 허용하지 않는 이미지 확장자 |
+| `400` | `UNSUPPORTED_IMAGE_CONTENT_TYPE` | 허용하지 않는 이미지 Content-Type |
+| `400` | `IMAGE_EXTENSION_CONTENT_TYPE_MISMATCH` | 확장자와 Content-Type 불일치 |
+| `400` | `IMAGE_FILE_SIZE_EXCEEDED` | 파일 크기가 5MB를 초과하거나 0 이하 |
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | OWNER 권한 없음 |
+| `500` | `IMAGE_STORAGE_NOT_CONFIGURED` | 이미지 저장소 설정 누락 |
+| `500` | `IMAGE_STORAGE_REQUEST_FAILED` | 이미지 저장소 요청 실패 |
 
 ---
 
@@ -4570,7 +4657,7 @@ OWNER 응답 예시:
 
 # 15. API 목록 요약
 
-- 실제 HTTP API 수: **74개**
+- 실제 HTTP API 수: **75개**
 - API가 아닌 기능은 V2·V3 내부 구현 정책(13·14장)으로 별도 정리했다.
 - 상세 명세가 없거나 다른 API와 중복돼 이번 정리에서 제거한 항목: `GET /api/restaurants/search`(3-5와 중복), `GET /api/payments/{paymentId}/status`(7-4와 중복), `GET /api/refunds/{refundId}/status`(8-2와 중복).
 - 상세 명세도 요약표도 근거가 부족해 이번 집계에서 제외하고 16장 "결정 필요"로 넘긴 항목: `PATCH /api/owner/dining-sessions/{sessionId}/status`.
@@ -4589,6 +4676,7 @@ OWNER 응답 예시:
 | 회원·인증 | V2 | 토큰 재발급 | `POST` | `/api/auth/reissue` | 정용태 |
 | 회원·인증 | V1 | 회원 탈퇴 | `DELETE` | `/api/members/me` | 정용태 |
 | 식당 관리 | V1 | 식당 등록 | `POST` | `/api/owner/restaurants` | 정용태 |
+| 식당 관리 | V1 | 식당 이미지 업로드 URL 발급 | `POST` | `/api/owner/restaurants/images/upload-url` | 정용태 |
 | 식당 관리 | V1 | 내 식당 목록 조회 | `GET` | `/api/owner/restaurants` | 정용태 |
 | 식당 관리 | V1 | 내 식당 상세 조회 | `GET` | `/api/owner/restaurants/{restaurantId}` | 정용태 |
 | 식당 관리 | V1 | 식당 정보 수정 | `PATCH` | `/api/owner/restaurants/{restaurantId}` | 정용태 |

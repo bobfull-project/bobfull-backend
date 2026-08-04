@@ -12,9 +12,14 @@ public record RestaurantDetailResponse(
         String category,
         String description,
         String keyword,
-        Integer depositPerPerson
+        Integer depositPerPerson,
+        String imageUrl
 ) {
     public static RestaurantDetailResponse from(Restaurant restaurant) {
+        return from(restaurant, null);
+    }
+
+    public static RestaurantDetailResponse from(Restaurant restaurant, String imageUrl) {
         return new RestaurantDetailResponse(
                 restaurant.getId(),
                 restaurant.getName(),
@@ -22,7 +27,8 @@ public record RestaurantDetailResponse(
                 restaurant.getCategory(),
                 restaurant.getDescription(),
                 restaurant.getKeyword(),
-                restaurant.getDepositPerPerson()
+                restaurant.getDepositPerPerson(),
+                imageUrl
         );
     }
 }

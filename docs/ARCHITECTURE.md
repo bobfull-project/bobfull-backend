@@ -21,8 +21,12 @@ flowchart LR
     admin["ADMIN"] --> client
 
     client -->|"HTTP /api/**"| api["BobFull 백엔드"]
+    client -->|"Presigned PUT"| s3["S3 이미지 버킷"]
     client <-->|"WebSocket /ws"| chat["채팅 경계"]
     api --> payment["PortOne"]
+    api -->|"Presigned URL·HEAD·DELETE"| s3
+    s3 -->|"ObjectCreated: temp/restaurants/**"| lambda["식당 이미지 검증 Lambda(Java)"]
+    lambda -->|"검증 성공 시 최종 Key 복사"| s3
     ops["운영·모니터링"] -->|"/actuator/**"| actuator["Actuator"]
 
     api --- chat
@@ -34,6 +38,7 @@ flowchart LR
 - `ADMIN`은 V2의 운영 조회와 V3의 재처리·재집계 범위를 가진다.
 - 일반 서비스 HTTP API는 `/api/**`, OWNER·ADMIN 경계는 각각 `/api/owner`, `/api/admin`이다. 채팅 연결은 `/ws`, 운영 상태·모니터링은 `/actuator/**` 경계에 둔다.
 - PortOne은 결제 완료 검증과 웹훅 처리의 외부 결제 시스템이다.
+- S3 이미지 버킷은 식당 이미지 원본 객체 저장소다. 백엔드는 바이너리를 직접 수신하지 않고 Presigned URL과 Object Key만 다룬다.
 
 ## 3. 논리 구성 요소와 의존 관계
 
@@ -43,11 +48,14 @@ flowchart TB
     restaurant["식당·합석 테이블·회차"]
     reservation["예약·참여·좌석 정합성"]
     payment["결제·환불"]
+    image["이미지 저장·검증"]
     noshow["노쇼"]
     chat["채팅"]
 
     auth --> restaurant
+    auth --> image
     auth --> reservation
+    restaurant --> image
     restaurant --> reservation
     reservation <--> payment
     reservation --> noshow
@@ -59,7 +67,8 @@ flowchart TB
 | 구성 요소 | 책임 | 기준 데이터·경계 |
 |---|---|---|
 | 회원·인증 | 역할 식별, 인증 사용자와 본인 리소스 연결 | `Member`, `MEMBER`·`OWNER`·`ADMIN` |
-| 식당·합석 테이블·회차 | OWNER 소유 식당, 정원, 예약 가능한 회차 관리 | `Restaurant`, `SharedTable`, `TimeSlot` |
+| 식당·합석 테이블·회차 | OWNER 소유 식당, 이미지 Key, 정원, 예약 가능한 회차 관리 | `Restaurant`, `SharedTable`, `TimeSlot` |
+| 이미지 저장·검증 | Presigned PUT/GET URL 발급, S3 최종 객체 존재 확인, Lambda 기반 임시 객체 검증·승격 | S3 Object Key, Java Lambda |
 | 예약·참여·좌석 정합성 | 최초 예약·추가 참여, 참여 인원·모집·예약 상태 계산 | `Reservation`, `ReservationParticipant`, `TimeSlot` |
 | 결제·환불 | 임시 선점, PortOne 검증, 결제·환불 상태 반영 | `Payment`, `Refund` |
 | 노쇼 | 식사 종료 후 OWNER의 참여자 단위 처리·해제 이력 | `NoShowHistory` |
@@ -70,6 +79,12 @@ flowchart TB
 역할 검증만으로 타인 리소스 접근을 허용하지 않는다. MEMBER의 결제 완료 검증은 인증 사용자와 `Payment.memberId`가 일치해야 하며, OWNER는 본인 식당의 식당·테이블·회차·예약만 관리한다. ADMIN 범위는 문서에 명시된 운영 조회·재처리로 제한한다.
 
 PortOne 웹훅은 `POST /api/webhooks/portone`을 `permitAll`·JWT 필터 제외로 열되, 사용자 인증 대신 원본 Body와 `webhook-id`·`webhook-signature`·`webhook-timestamp`의 공식 SDK 서명 검증을 수행한다. JSON 해석은 검증 뒤에만 허용한다. 완료 검증 API와 웹훅은 입구 검증만 분리하고 PortOne 재조회, 동일 Payment 행 비관적 락, 상태·만료 재검증, 예약 확정을 공통 처리로 수렴한다.
+
+### 식당 이미지 저장
+
+OWNER는 백엔드에서 Presigned PUT URL을 발급받아 `temp/restaurants/{ownerId}/{uuid}.{extension}`에 직접 업로드한다. S3 ObjectCreated 이벤트가 Java Lambda를 실행하고, Lambda는 경로·확장자·Content-Type·파일 크기·파일 시그니처를 검증한 뒤 `restaurants/{ownerId}/{uuid}.{extension}`로 복사한다. 별도 상태 조회 API는 두지 않고, 식당 등록·수정 시 최종 객체가 존재하는지 확인한다.
+
+`Restaurant`는 S3 Object Key만 저장한다. 조회 응답의 `imageUrl`은 저장값이 아니라 Presigned GET URL이며, 기존 이미지 교체 시 새 Key 반영이 성공한 뒤 기존 객체를 삭제한다. S3 버킷, 이벤트 알림, Lambda 메모리·Timeout·로그는 배포 문서의 수동 설정 항목을 따른다.
 
 ### 인증 세션(Access·Refresh Token)
 

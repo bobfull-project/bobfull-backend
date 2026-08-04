@@ -52,6 +52,7 @@ erDiagram
         varchar(1000) description "식당 소개"
         varchar(100) keyword "사장님 입력 식당 키워드"
         integer deposit_per_person "1인당 예약금"
+        varchar(500) image_key "S3 최종 Object Key"
         varchar(20) status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
         datetime deleted_at "소프트 삭제 시각"
         datetime created_at "생성 시각"
@@ -200,6 +201,7 @@ erDiagram
 | `description` | VARCHAR(1000) | N |  | 식당 소개 |
 | `keyword` | VARCHAR(100) | N |  | 사장님이 직접 입력하는 식당 키워드 |
 | `deposit_per_person` | DECIMAL | N |  | 1인당 예약금 |
+| `image_key` | VARCHAR(500) | Y |  | S3 최종 Object Key. `restaurants/{ownerId}/{uuid}.{extension}` 형식만 저장하며 URL은 저장하지 않음 |
 | `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -396,11 +398,12 @@ erDiagram
 | `payableAmount` | 계산값 | 식당 또는 예약의 `paid_at`이 존재하는 Payment 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
 | `expectedSettlementAmount`, `expectedAmount` | 계산값 | `paid_at`이 존재하는 결제 완료 이력 금액 합계에서 환불 완료 금액 합계를 차감 |
 | `totalPaidAmount`, `totalRefundedAmount` | 계산값 | 기간·식당·예약 조건에 맞는 Payment·Refund 금액 합계 |
+| `imageUrl` | 계산값 | `restaurant.image_key`가 있을 때 S3 Presigned GET URL로 생성 |
 | `noShowCount` | 계산값 | 회원의 `participation_status=NO_SHOW` 참여 건수 |
 | `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |
 | `reservationConfirmationRate`, `confirmationRate` | 계산값 | 전체 예약 수 대비 확정 예약 수 비율 |
 | `totalReservationCount`, `confirmedReservationCount`, `reservationCount`, `refundCount` | 계산값 | 조건에 맞는 예약·환불 건수 집계 |
-| `party_size`, `amount`, `expires_at`, 상태값 | 저장값 | 결제·참여 이력과 임시 선점·환불·정산 조회의 원천 데이터 |
+| `party_size`, `amount`, `expires_at`, `restaurant.image_key`, 상태값 | 저장값 | 결제·참여 이력, 식당 이미지 Object Key, 임시 선점·환불·정산 조회의 원천 데이터 |
 
 위 집계값은 API 응답에 포함되더라도 중복 컬럼으로 저장하지 않는다. 성능·동시성 문제로 별도 저장이 필요해지면 갱신 책임과 정합성 전략을 별도 결정해야 한다.
 

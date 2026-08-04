@@ -48,6 +48,13 @@ payment:
     fixed-delay: ${PAYMENT_EXPIRATION_FIXED_DELAY:60s}
     batch-size: ${PAYMENT_EXPIRATION_BATCH_SIZE:100}
 
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    image-bucket: ${S3_IMAGE_BUCKET:}
+    upload-url-expiration: ${S3_IMAGE_UPLOAD_URL_EXPIRATION:5m}
+    get-url-expiration: ${S3_IMAGE_GET_URL_EXPIRATION:5m}
+
 logging:
   level:
     org.hibernate.SQL: debug
