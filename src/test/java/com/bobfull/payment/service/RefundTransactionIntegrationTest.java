@@ -39,6 +39,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:refund-transaction-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=refund-transaction-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=3600", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
@@ -54,6 +55,7 @@ class RefundTransactionIntegrationTest {
     @Autowired private RefundWebhookService refundWebhookService;
     @Autowired private ReservationRepository reservationRepository;
     @Autowired private ReservationParticipantRepository reservationParticipantRepository;
+    @Autowired private DelayedCompletionProbe delayedCompletionProbe;
     private Reservation activeReservation;
     private final Map<Long, Long> participantIds = new ConcurrentHashMap<>();
 
@@ -272,6 +274,83 @@ class RefundTransactionIntegrationTest {
     }
 
     @Test
+    void 완료_트랜잭션이_Refund_락을_쥔_동안_뒤늦은_CancelPending은_대기했다가_완료상태를_덮지_못한다() throws Exception {
+        Payment payment = paid(1L);
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+
+        CountDownLatch lockAcquired = new CountDownLatch(1);
+        CountDownLatch releaseCommit = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var completion = executor.submit(() ->
+                    delayedCompletionProbe.completeAndWait(refund.getId(), "cancel-done", lockAcquired, releaseCommit));
+            assertThat(lockAcquired.await(5, TimeUnit.SECONDS)).isTrue();
+
+            // 완료 트랜잭션이 Refund 행 락을 쥔 채 커밋 전 대기 중이다. 뒤늦게 도착한 CancelPending은
+            // 같은 행의 락을 기다려야 하므로 짧은 시간 안에 끝나지 않는 것으로 락이 실제 대기를
+            // 강제하는지 확인한다.
+            var latePending = executor.submit(() -> refundWebhookService.markProcessing(payment.getPaymentId(), "cancel-done"));
+            assertThatThrownBy(() -> latePending.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(java.util.concurrent.TimeoutException.class);
+
+            releaseCommit.countDown();
+            completion.get(5, TimeUnit.SECONDS);
+            latePending.get(5, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        Refund reloaded = refundRepository.findById(refund.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(reloaded.getCancellationId()).isEqualTo("cancel-done");
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    void 완료_트랜잭션이_Refund_락을_쥔_동안_뒤늦은_실패처리는_대기했다가_완료상태를_덮지_못한다() throws Exception {
+        Payment payment = paid(1L);
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+
+        CountDownLatch lockAcquired = new CountDownLatch(1);
+        CountDownLatch releaseCommit = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var completion = executor.submit(() ->
+                    delayedCompletionProbe.completeAndWait(refund.getId(), "cancel-done", lockAcquired, releaseCommit));
+            assertThat(lockAcquired.await(5, TimeUnit.SECONDS)).isTrue();
+
+            var lateFailure = executor.submit(() -> { transactionService.markFailed(refund.getId()); return null; });
+            assertThatThrownBy(() -> lateFailure.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(java.util.concurrent.TimeoutException.class);
+
+            releaseCommit.countDown();
+            completion.get(5, TimeUnit.SECONDS);
+            lateFailure.get(5, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        Refund reloaded = refundRepository.findById(refund.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(reloaded.getCancellationId()).isEqualTo("cancel-done");
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    void 완료_이후_같은_cancellationId의_뒤늦은_CancelPending은_순차적으로도_완료상태를_유지한다() {
+        Payment payment = paid(1L);
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        refundWebhookService.complete(payment.getPaymentId(), "cancel-final");
+
+        refundWebhookService.markProcessing(payment.getPaymentId(), "cancel-final");
+
+        Refund reloaded = refundRepository.findById(refund.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(reloaded.getCancellationId()).isEqualTo("cancel-final");
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
     void 예약완료_반영에_실패하면_Refund와_Payment_완료상태도_함께_롤백한다() {
         Payment payment = Payment.createReady("rollback-" + UUID.randomUUID(), 1L, 1L, 999L,
                 PaymentPurpose.JOIN, 1, BigDecimal.valueOf(1000), Instant.parse("2026-12-01T00:00:00Z"));
@@ -306,6 +385,29 @@ class RefundTransactionIntegrationTest {
     static class Config {
         @Bean @Primary SequencedRequester requester() { return new SequencedRequester(); }
         @Bean OuterRollbackProbe outerRollbackProbe(ReservationCancellationRefundAdapter adapter) { return new OuterRollbackProbe(adapter); }
+        @Bean DelayedCompletionProbe delayedCompletionProbe(RefundRepository refundRepository) { return new DelayedCompletionProbe(refundRepository); }
+    }
+    /**
+     * Refund 행 락을 쥔 채 커밋 직전에 멈춰, 그 사이 다른 트랜잭션이 같은 행에 대한 잠금 조회를
+     * 시도하면 실제로 대기하는지(=락이 진짜 동시 갱신을 직렬화하는지) 결정적으로 검증하기 위한
+     * 테스트 전용 프로브다.
+     */
+    static class DelayedCompletionProbe {
+        private final RefundRepository refundRepository;
+        DelayedCompletionProbe(RefundRepository refundRepository) { this.refundRepository = refundRepository; }
+        @Transactional(propagation = Propagation.REQUIRES_NEW)
+        public void completeAndWait(Long refundId, String cancellationId, CountDownLatch lockAcquired, CountDownLatch releaseCommit) {
+            Refund refund = refundRepository.findWithLockById(refundId).orElseThrow();
+            refund.complete(cancellationId, Instant.now());
+            if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
+            lockAcquired.countDown();
+            try {
+                if (!releaseCommit.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("release latch timed out");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
     }
     static class SequencedRequester implements PortOneRefundRequester {
         private final AtomicInteger calls = new AtomicInteger();

@@ -60,33 +60,58 @@ public class RefundTransactionService {
 
     @Transactional
     public RefundCompletion reflectExternalResult(Long refundId, String cancellationId, boolean completed) {
-        Refund refund = refundRepository.findById(refundId)
+        // 비관적 락으로 조회한다 — CancelPending/Cancelled 웹훅과 동시에 같은 Refund를 갱신할 때
+        // 락 없는 조회는 각자 읽은 스냅샷만으로 판단해 나중에 커밋된 트랜잭션이 앞선 완료 상태를
+        // 덮어쓸 수 있다(lost update). 뒤 트랜잭션은 이 락에서 대기했다가 앞 트랜잭션이 남긴 최신
+        // 상태를 다시 읽으므로, 아래 엔티티 메서드의 종료 상태 가드가 실제로 적용된다.
+        Refund refund = refundRepository.findWithLockById(refundId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.REFUND_ID_NOT_FOUND));
+        RefundStatus before = refund.getStatus();
         if (completed) {
             refund.complete(cancellationId, clock.instant());
+            if (before == RefundStatus.FAILED) {
+                log.warn("event=REFUND_STATE_TRANSITION_BLOCKED refundId={} attempted=COMPLETED currentStatus=FAILED", refundId);
+            }
             if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
         } else {
             refund.markProcessing(cancellationId);
+            if (before == RefundStatus.COMPLETED || before == RefundStatus.FAILED) {
+                log.warn("event=REFUND_STATE_TRANSITION_BLOCKED refundId={} attempted=PROCESSING currentStatus={}", refundId, before);
+            }
         }
         return RefundCompletion.from(refund);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markFailed(Long refundId) {
-        Refund refund = refundRepository.findById(refundId)
+        Refund refund = refundRepository.findWithLockById(refundId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.REFUND_ID_NOT_FOUND));
+        RefundStatus before = refund.getStatus();
         refund.fail();
+        if (before == RefundStatus.COMPLETED) {
+            log.warn("event=REFUND_STATE_TRANSITION_BLOCKED refundId={} attempted=FAILED currentStatus=COMPLETED", refundId);
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markProcessingFromWebhook(String paymentId, String cancellationId) {
-        findRefundForWebhook(paymentId, cancellationId).ifPresent(refund -> refund.markProcessing(cancellationId));
+        findRefundForWebhook(paymentId, cancellationId).ifPresent(refund -> {
+            RefundStatus before = refund.getStatus();
+            refund.markProcessing(cancellationId);
+            if (before == RefundStatus.COMPLETED || before == RefundStatus.FAILED) {
+                log.warn("event=REFUND_STATE_TRANSITION_BLOCKED refundId={} attempted=PROCESSING currentStatus={}", refund.getId(), before);
+            }
+        });
     }
 
     @Transactional
     public java.util.Optional<RefundCompletion> completeFromWebhook(String paymentId, String cancellationId) {
         return findRefundForWebhook(paymentId, cancellationId).map(refund -> {
+            RefundStatus before = refund.getStatus();
             refund.complete(cancellationId, clock.instant());
+            if (before == RefundStatus.FAILED) {
+                log.warn("event=REFUND_STATE_TRANSITION_BLOCKED refundId={} attempted=COMPLETED currentStatus=FAILED", refund.getId());
+            }
             if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
             return RefundCompletion.from(refund);
         });
@@ -105,11 +130,11 @@ public class RefundTransactionService {
      * 취소 시도(웹훅)가 기존 Refund를 엉뚱한 cancellationId로 덮어쓰고 완료 처리할 수 있다.</p>
      */
     private java.util.Optional<Refund> findRefundForWebhook(String paymentId, String cancellationId) {
-        var byCancellationId = refundRepository.findByCancellationId(cancellationId);
+        var byCancellationId = refundRepository.findWithLockByCancellationId(cancellationId);
         if (byCancellationId.isPresent()) {
             return byCancellationId;
         }
-        var byPaymentId = paymentRepository.findByPaymentId(paymentId).flatMap(payment -> refundRepository.findByPayment_Id(payment.getId()));
+        var byPaymentId = paymentRepository.findByPaymentId(paymentId).flatMap(payment -> refundRepository.findWithLockByPayment_Id(payment.getId()));
         if (byPaymentId.isPresent() && byPaymentId.get().getCancellationId() != null) {
             log.warn("event=REFUND_WEBHOOK_CANCELLATION_ID_MISMATCH paymentId={} refundId={} webhookCancellationId={} storedCancellationId={}",
                     paymentId, byPaymentId.get().getId(), cancellationId, byPaymentId.get().getCancellationId());
