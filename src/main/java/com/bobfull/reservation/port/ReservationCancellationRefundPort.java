@@ -15,6 +15,13 @@ public interface ReservationCancellationRefundPort {
      * 취소 대상 참여자들의 Payment 전체 금액에 대한 환불을 요청한다. 실패하거나 이미 환불이
      * 존재하는 경우 결제 도메인이 정의하는 예외를 던져야 하며, 이 경우 호출자의 트랜잭션이
      * 롤백되어 예약·참여 상태 전이가 커밋되지 않아야 한다(완료 조건: 환불 실패 시 상태 미확정).
+     *
+     * <p><b>락 순서 제약(ADR 0001)</b>: 호출자({@code ReservationCancellationService})는 이미
+     * Reservation을 잠근 트랜잭션 안에서 이 메서드를 호출한다. 결제 완료 흐름은 Payment → Reservation
+     * 순서로 락을 잡으므로, 이 메서드의 실제 구현(Adapter)이 같은 트랜잭션 안에서 Payment 행에
+     * 비관적 락을 걸면 Reservation → Payment 역순이 되어 결제 완료 흐름과 교착(deadlock) 위험이
+     * 생긴다. 구현체는 Payment에 비관적 락을 걸지 않아야 하며, 환불 중복 방지는 낙관적 락이나
+     * {@code Refund.payment_id} UNIQUE 제약, 또는 별도 트랜잭션 분리로 처리한다.</p>
      */
     List<RefundRequestResult> requestRefunds(RefundRequestCommand command);
 

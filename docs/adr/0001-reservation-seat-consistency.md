@@ -35,15 +35,18 @@
 예약 준비 JOIN(ReservationPreparationService.resolveJoinTarget): Reservation → TimeSlot
 예약 준비 CREATE(ReservationPreparationService.resolveCreateTarget): TimeSlot 단독
 만료 Processor(PaymentExpirationProcessor): Payment 단독
+예약 취소(ReservationCancellationService.cancel, Issue #131): Reservation 단독
 ```
 
-이 네 흐름은 모두 다음 공통 순서의 부분열이며, 어떤 흐름도 이 순서를 역행하지 않는다.
+이 다섯 흐름은 모두 다음 공통 순서의 부분열이며, 어떤 흐름도 이 순서를 역행하지 않는다.
 
 ```text
 Payment → Reservation → TimeSlot
 ```
 
 **규칙**: 새로운 흐름이 이 중 두 개 이상의 락을 같은 트랜잭션에서 잡아야 하면, 반드시 위 순서(부분열)로만 획득한다. 역순으로 락을 잡지 않는다(예: TimeSlot을 먼저 잡고 그다음 Reservation을 잡는 흐름을 추가하지 않는다). 이 순서를 벗어나야 하는 요구가 생기면 이 ADR을 먼저 갱신하고, 저장소 전체의 락 경로를 다시 확인한다.
+
+**예약 취소 흐름과 #45 환불 Adapter에 대한 제약**: `ReservationCancellationService.cancel`은 Reservation을 잠그고 그 트랜잭션 안에서 `ReservationCancellationRefundPort`로 환불을 요청한다. 이미 결제 완료 흐름(`PaymentCompletionTransactionService`)이 Payment → Reservation 순서로 락을 잡으므로, 이 포트의 실제 Adapter(#45)가 같은 트랜잭션 안에서 Payment를 잠그는 조회(`findWithLockById` 등)를 수행하면 취소 흐름은 Reservation → Payment 순서가 되어 공통 순서와 정반대가 된다. 두 흐름이 같은 Payment·Reservation 쌍에서 동시에 실행되면 결제 완료는 Payment를 잡은 채 Reservation을 기다리고, 취소는 Reservation을 잡은 채 Payment를 기다리는 순환 대기(deadlock)가 발생할 수 있다. 따라서 **환불 Adapter 구현은 이 트랜잭션 안에서 Payment 행에 비관적 락을 걸지 않아야 한다** — 환불 생성·중복 확인에 락이 필요하다면 낙관적 락(버전 컬럼)이나 `Refund.payment_id` UNIQUE 제약의 저장 시점 충돌로 대체하거나, 별도 `REQUIRES_NEW` 트랜잭션으로 분리해 Reservation 락 보유 구간과 겹치지 않게 해야 한다. #45 구현 시 이 제약을 지킬 수 없다면 이 ADR을 먼저 갱신한다.
 
 `ReservationPreparationService.resolveJoinTarget`이 Reservation을 잠금 없는 일반 조회 대신 `findWithLockById`로 트랜잭션의 첫 쿼리이자 잠금 조회로 만든 이유는, MySQL 기본 격리수준(REPEATABLE_READ)에서 트랜잭션의 첫 조회가 이후 모든 일반 SELECT의 스냅샷 시점을 고정하기 때문이다. 잠금 없는 조회를 먼저 실행하면 TimeSlot 락을 기다렸다 획득해도, 그 뒤의 잔여 좌석 계산(`AvailableCapacityCalculator`)은 락 획득 이전 스냅샷을 그대로 사용해 상대방이 방금 커밋한 결과를 보지 못한다(Issue #36에서 실제 MySQL로 재현·확인).
 
