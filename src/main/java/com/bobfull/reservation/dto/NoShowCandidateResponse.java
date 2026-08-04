@@ -1,8 +1,8 @@
 package com.bobfull.reservation.dto;
 
+import com.bobfull.admin.support.MemberNameMasker;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.ReservationParticipant;
-import com.bobfull.reservation.support.MemberNameMasker;
 
 /** §9-1 노쇼 처리 대상 참여자 조회 응답이다(Issue #48). */
 public record NoShowCandidateResponse(

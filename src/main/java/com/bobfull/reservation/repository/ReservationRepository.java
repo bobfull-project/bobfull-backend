@@ -1,5 +1,6 @@
 package com.bobfull.reservation.repository;
 
+import com.bobfull.admin.repository.AdminReservationRepository;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationStatus;
 import java.util.Collection;
@@ -13,7 +14,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
-public interface ReservationRepository extends JpaRepository<Reservation, Long>, ReservationSearchRepository {
+public interface ReservationRepository
+        extends JpaRepository<Reservation, Long>, ReservationSearchRepository, AdminReservationRepository {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Reservation> findWithLockById(Long reservationId);
@@ -25,6 +27,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long>,
     boolean existsByTimeSlotIdInAndReservationStatusIn(Collection<Long> timeSlotIds, Collection<ReservationStatus> statuses);
 
     Page<Reservation> findAllByTimeSlotIdIn(Collection<Long> timeSlotIds, Pageable pageable);
+
+    long countByReservationStatus(ReservationStatus status);
 
     @Query("select r from Reservation r join TimeSlot ts on r.timeSlotId = ts.id "
             + "join SharedTable st on ts.sharedTableId = st.id "

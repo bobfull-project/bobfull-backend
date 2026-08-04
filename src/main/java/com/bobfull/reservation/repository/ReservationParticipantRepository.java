@@ -2,6 +2,7 @@ package com.bobfull.reservation.repository;
 
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.ReservationParticipant;
+import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,4 +22,8 @@ public interface ReservationParticipantRepository extends JpaRepository<Reservat
             Long reservationId, ParticipationStatus status, Pageable pageable);
 
     Optional<ReservationParticipant> findByIdAndReservationId(Long id, Long reservationId);
+
+    long countByParticipationStatus(ParticipationStatus status);
+
+    long countByParticipationStatusIn(Collection<ParticipationStatus> statuses);
 }
