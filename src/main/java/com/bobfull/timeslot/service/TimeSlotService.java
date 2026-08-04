@@ -55,7 +55,9 @@ public class TimeSlotService {
 
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
     private static final List<ReservationStatus> ACTIVE_RESERVATION_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
+    private static final List<ParticipationStatus> OCCUPYING_PARTICIPATION_STATUSES =
+            List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
     private final TimeSlotRepository timeSlotRepository;
     private final SharedTableRepository sharedTableRepository;
@@ -224,8 +226,8 @@ public class TimeSlotService {
                 .findByTimeSlotIdAndReservationStatusIn(timeSlot.getId(), ACTIVE_RESERVATION_STATUSES);
         Long reservationId = activeReservation.map(Reservation::getId).orElse(null);
         int currentParticipantCount = activeReservation
-                .map(reservation -> reservationParticipantRepository.sumPartySize(
-                        reservation.getId(), ParticipationStatus.RESERVED))
+                .map(reservation -> reservationParticipantRepository.sumPartySizeByStatuses(
+                        reservation.getId(), OCCUPYING_PARTICIPATION_STATUSES))
                 .orElse(0);
         return AvailableDiningSessionResponse.of(
                 timeSlot,

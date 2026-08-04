@@ -32,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReservationPreparationService {
 
     private static final List<ReservationStatus> ACTIVE_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
 
     private final ReservationTargetReader reservationTargetReader;
     private final ReservationRepository reservationRepository;

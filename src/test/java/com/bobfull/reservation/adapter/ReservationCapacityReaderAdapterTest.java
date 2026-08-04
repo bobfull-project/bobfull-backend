@@ -36,4 +36,20 @@ class ReservationCapacityReaderAdapterTest {
         // then
         assertThat(capacity).isEqualTo(4);
     }
+
+    @Test
+    void 취소_기한_검증에_필요한_회차_시작_시각을_반환한다() {
+        // given
+        Instant startAt = Instant.parse("2026-08-01T02:00:00Z");
+        TimeSlot timeSlot = TimeSlot.create(100L, startAt, Instant.parse("2026-08-01T04:00:00Z"));
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        ReservationCapacityReaderAdapter adapter = new ReservationCapacityReaderAdapter(
+                timeSlotRepository, sharedTableRepository);
+
+        // when
+        Instant result = adapter.readTimeSlotStartAt(200L);
+
+        // then
+        assertThat(result).isEqualTo(startAt);
+    }
 }

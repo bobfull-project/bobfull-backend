@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 public class TimeSlotReservationUsageAdapter implements TimeSlotReservationUsagePort {
 
     private static final List<ReservationStatus> ACTIVE_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
 
     private final ReservationRepository reservationRepository;
 

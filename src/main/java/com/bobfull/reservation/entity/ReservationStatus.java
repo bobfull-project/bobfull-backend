@@ -7,6 +7,8 @@ public enum ReservationStatus {
 
     RECRUITING,
     CONFIRMED,
+    /** 취소가 접수되어 환불 완료를 기다리는 중이다(Issue #44). 좌석은 계속 점유 상태로 집계한다. */
+    CANCELLING,
     CANCELLED,
     CLOSED
 }
