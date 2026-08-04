@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 public class AvailableCapacityCalculator {
 
     private static final List<ReservationStatus> ACTIVE_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
+    private static final List<ParticipationStatus> OCCUPYING_STATUSES =
+            List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
@@ -44,6 +46,6 @@ public class AvailableCapacityCalculator {
     }
 
     private int activeParticipantCount(Reservation reservation) {
-        return reservationParticipantRepository.sumPartySize(reservation.getId(), ParticipationStatus.RESERVED);
+        return reservationParticipantRepository.sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES);
     }
 }

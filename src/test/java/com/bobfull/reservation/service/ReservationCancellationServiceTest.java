@@ -4,29 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.reservation.dto.CancellationScope;
 import com.bobfull.reservation.dto.ReservationCancellationRequest;
 import com.bobfull.reservation.dto.ReservationCancellationResponse;
 import com.bobfull.reservation.entity.ParticipationStatus;
-import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
-import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort;
+import com.bobfull.reservation.port.ReservationCancellationRefundPort.RefundRequestCommand;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort.RefundRequestResult;
-import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -38,10 +31,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class ReservationCancellationServiceTest {
 
-    private static final Long TIME_SLOT_ID = 200L;
-    private static final Instant NOW = Instant.parse("2026-08-08T00:00:00Z");
-    private static final Instant CANCELLABLE_START_AT = Instant.parse("2026-08-08T03:00:00Z");
-    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+    @Mock
+    private ReservationCancellationTransactionService transactionService;
+
+    @Mock
+    private ReservationCancellationRefundPort reservationCancellationRefundPort;
 
     @Mock
     private ReservationRepository reservationRepository;
@@ -49,318 +43,169 @@ class ReservationCancellationServiceTest {
     @Mock
     private ReservationParticipantRepository reservationParticipantRepository;
 
-    @Mock
-    private ReservationCapacityReader reservationCapacityReader;
-
-    @Mock
-    private ReservationCancellationRefundPort reservationCancellationRefundPort;
-
     private ReservationCancellationService service() {
         return new ReservationCancellationService(
-                reservationRepository, reservationParticipantRepository,
-                reservationCapacityReader, reservationCancellationRefundPort, CLOCK);
+                transactionService, reservationCancellationRefundPort, reservationRepository, reservationParticipantRepository);
     }
 
     @Test
-    void 예약을_찾을_수_없으면_RESERVATION_ID_NOT_FOUND를_반환한다() {
+    void 취소를_접수하고_환불을_요청해_CANCEL_REQUESTED_응답을_반환한다() {
         // given
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.empty());
-
-        // when
-        Throwable result = catchThrowable(
-                () -> service().cancel(1L, 10L, new ReservationCancellationRequest("사유")));
-
-        // then
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.RESERVATION_ID_NOT_FOUND);
-    }
-
-    @Test
-    void 이미_취소된_예약이면_RESERVATION_ALREADY_CANCELLED를_반환한다() {
-        // given
-        Reservation reservation = reservation(10L, 1L);
-        reservation.cancel();
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-
-        // when
-        Throwable result = catchThrowable(
-                () -> service().cancel(1L, 10L, new ReservationCancellationRequest("사유")));
-
-        // then
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.RESERVATION_ALREADY_CANCELLED);
-    }
-
-    @Test
-    void 식사_시작_2시간_이내면_CANCELLATION_DEADLINE_PASSED를_반환한다() {
-        // given
-        Reservation reservation = reservation(10L, 1L);
-        ReservationParticipant participant = participant(20L, 10L, 1L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 1L))
-                .willReturn(Optional.of(participant));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID))
-                .willReturn(Instant.parse("2026-08-08T01:30:00Z"));
-
-        // when
-        Throwable result = catchThrowable(
-                () -> service().cancel(1L, 10L, new ReservationCancellationRequest("사유")));
-
-        // then
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.CANCELLATION_DEADLINE_PASSED);
-    }
-
-    @Test
-    void 취소_기한_경계_시각에는_취소할_수_있다() {
-        // given: startAt - 2h == now
-        Reservation reservation = reservation(10L, 1L);
-        ReservationParticipant participant = participant(20L, 10L, 1L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID))
-                .willReturn(Instant.parse("2026-08-08T02:00:00Z"));
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 1L))
-                .willReturn(Optional.of(participant));
-        given(reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED))
-                .willReturn(List.of(participant));
-        given(reservationCancellationRefundPort.requestRefunds(any()))
+        RefundRequestCommand command = new RefundRequestCommand(10L, List.of(20L), 1L, "사유");
+        ReservationCancellationTransactionService.CancellationAcceptance acceptance =
+                new ReservationCancellationTransactionService.CancellationAcceptance(
+                        10L, 20L, CancellationScope.PARTICIPATION, command);
+        given(transactionService.accept(1L, 10L, new ReservationCancellationRequest("사유"))).willReturn(acceptance);
+        given(reservationCancellationRefundPort.requestRefunds(command))
                 .willReturn(List.of(new RefundRequestResult(20L, "REQUESTED")));
 
         // when
-        ReservationCancellationResponse response = service().cancel(1L, 10L, new ReservationCancellationRequest("사유"));
+        ReservationCancellationResponse response =
+                service().cancel(1L, 10L, new ReservationCancellationRequest("사유"));
 
         // then
-        assertThat(response.cancellationScope()).isEqualTo(CancellationScope.RESERVATION);
+        assertThat(response.reservationId()).isEqualTo(10L);
+        assertThat(response.participationId()).isEqualTo(20L);
+        assertThat(response.participationStatus()).isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
+        assertThat(response.cancellationScope()).isEqualTo(CancellationScope.PARTICIPATION);
+        assertThat(response.refundStatus()).isEqualTo("REQUESTED");
     }
 
     @Test
-    void 본인_참여를_찾을_수_없으면_PARTICIPATION_NOT_FOUND를_반환한다() {
-        // given: Reservation에 참여자가 하나도 없는 데이터 정합성 붕괴 상황(정상 흐름에서는 발생하지 않음)
-        Reservation reservation = reservation(10L, 1L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 2L)).willReturn(Optional.empty());
-        given(reservationParticipantRepository.existsByReservationId(10L)).willReturn(false);
-
-        // when
-        Throwable result = catchThrowable(
-                () -> service().cancel(2L, 10L, new ReservationCancellationRequest("사유")));
-
-        // then
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.PARTICIPATION_NOT_FOUND);
-    }
-
-    @Test
-    void 본인_참여가_아니면_ACCESS_DENIED를_반환한다() {
-        // given: 예약에 다른 회원의 참여는 있지만 요청자 본인의 참여는 없음
-        Reservation reservation = reservation(10L, 1L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 2L)).willReturn(Optional.empty());
-        given(reservationParticipantRepository.existsByReservationId(10L)).willReturn(true);
-
-        // when
-        Throwable result = catchThrowable(
-                () -> service().cancel(2L, 10L, new ReservationCancellationRequest("사유")));
-
-        // then
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.ACCESS_DENIED);
-    }
-
-    @Test
-    void 이미_취소된_참여자는_PARTICIPATION_ALREADY_CANCELLED를_반환한다() {
+    void 접수가_먼저_커밋된_뒤_환불_포트를_호출한다() {
         // given
-        Reservation reservation = reservation(10L, 1L);
-        ReservationParticipant participant = participant(21L, 10L, 2L);
-        participant.cancel("이전 취소", NOW.minusSeconds(60));
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 2L)).willReturn(Optional.of(participant));
-
-        // when
-        Throwable result = catchThrowable(
-                () -> service().cancel(2L, 10L, new ReservationCancellationRequest("사유")));
-
-        // then
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.PARTICIPATION_ALREADY_CANCELLED);
-    }
-
-    @Test
-    void NO_SHOW_참여자는_CANCELLATION_NOT_ALLOWED를_반환한다() {
-        // given
-        Reservation reservation = reservation(10L, 1L);
-        ReservationParticipant participant = participant(21L, 10L, 2L);
-        ReflectionTestUtils.setField(participant, "participationStatus", ParticipationStatus.NO_SHOW);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 2L)).willReturn(Optional.of(participant));
-
-        // when
-        Throwable result = catchThrowable(
-                () -> service().cancel(2L, 10L, new ReservationCancellationRequest("사유")));
-
-        // then
-        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.CANCELLATION_NOT_ALLOWED);
-    }
-
-    @Test
-    void 최초_예약자가_취소하면_예약_전체와_유효_참여자_전원이_취소되고_모두_환불을_요청한다() {
-        // given
-        Reservation reservation = reservation(10L, 1L);
-        ReservationParticipant creator = participant(20L, 10L, 1L);
-        ReservationParticipant other = participant(21L, 10L, 2L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 1L)).willReturn(Optional.of(creator));
-        given(reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED))
-                .willReturn(List.of(creator, other));
-        given(reservationCancellationRefundPort.requestRefunds(any())).willReturn(List.of(
+        RefundRequestCommand command = new RefundRequestCommand(10L, List.of(20L, 21L), 1L, "사유");
+        ReservationCancellationTransactionService.CancellationAcceptance acceptance =
+                new ReservationCancellationTransactionService.CancellationAcceptance(
+                        10L, 20L, CancellationScope.RESERVATION, command);
+        given(transactionService.accept(1L, 10L, new ReservationCancellationRequest("사유"))).willReturn(acceptance);
+        given(reservationCancellationRefundPort.requestRefunds(command)).willReturn(List.of(
                 new RefundRequestResult(20L, "REQUESTED"), new RefundRequestResult(21L, "REQUESTED")));
 
         // when
-        ReservationCancellationResponse response = service().cancel(1L, 10L, new ReservationCancellationRequest("개인 사정"));
+        service().cancel(1L, 10L, new ReservationCancellationRequest("사유"));
 
-        // then
-        assertThat(response.cancellationScope()).isEqualTo(CancellationScope.RESERVATION);
-        assertThat(response.refundStatus()).isEqualTo("REQUESTED");
-        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CANCELLED);
-        assertThat(creator.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
-        assertThat(other.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
-        assertThat(creator.getCancelReason()).isEqualTo("개인 사정");
-        assertThat(other.getCancelReason()).isEqualTo("개인 사정");
-
-        ReservationCancellationRefundPort.RefundRequestCommand command =
-                captureRefundCommand();
-        assertThat(command.reservationParticipantIds()).containsExactlyInAnyOrder(20L, 21L);
-        assertThat(command.requesterMemberId()).isEqualTo(1L);
+        // then: accept()가 requestRefunds()보다 먼저 호출됐는지 순서를 확인한다
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(transactionService, reservationCancellationRefundPort);
+        inOrder.verify(transactionService).accept(1L, 10L, new ReservationCancellationRequest("사유"));
+        inOrder.verify(reservationCancellationRefundPort).requestRefunds(command);
     }
 
     @Test
-    void 추가_참여자_취소_후_확정_기준_미달이면_RECRUITING으로_되돌아간다() {
-        // given: capacity 4, threshold 3. 취소 전 잔여 3명(취소 대상 본인 partySize 1 포함)이라 취소 후 2명으로 기준 미달.
-        Reservation reservation = reservation(10L, 1L);
-        reservation.confirm();
-        ReservationParticipant participant = participant(22L, 10L, 3L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 3L)).willReturn(Optional.of(participant));
-        given(reservationCancellationRefundPort.requestRefunds(any()))
-                .willReturn(List.of(new RefundRequestResult(22L, "REQUESTED")));
-        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(3);
-
-        // when
-        ReservationCancellationResponse response = service().cancel(3L, 10L, new ReservationCancellationRequest("사유"));
-
-        // then
-        assertThat(response.cancellationScope()).isEqualTo(CancellationScope.PARTICIPATION);
-        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.RECRUITING);
-        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
-    }
-
-    @Test
-    void 추가_참여자_취소_후_확정_기준_이상이면_CONFIRMED를_유지한다() {
-        // given: capacity 4, threshold 3. 취소 전 잔여 4명(본인 partySize 1 포함)이라 취소 후 3명으로 기준 충족.
-        Reservation reservation = reservation(10L, 1L);
-        reservation.confirm();
-        ReservationParticipant participant = participant(22L, 10L, 3L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 3L)).willReturn(Optional.of(participant));
-        given(reservationCancellationRefundPort.requestRefunds(any()))
-                .willReturn(List.of(new RefundRequestResult(22L, "REQUESTED")));
-        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(4);
-
-        // when
-        service().cancel(3L, 10L, new ReservationCancellationRequest("사유"));
-
-        // then
-        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
-    }
-
-    @Test
-    void 모집이_CLOSED이고_기준_미달이면_재오픈하지_않고_남은_참여자를_전액_환불하며_예약_전체를_취소한다() {
-        // given: CONFIRMED + CLOSED, capacity 4, threshold 3. 취소 전 잔여 3명(본인 partySize 1 포함)이라
-        // 취소 후 2명으로 기준 미달 -> 본인+나머지 참여자를 한 번의 환불 요청으로 묶어 예약 전체를 취소한다.
-        Reservation reservation = reservation(10L, 1L);
-        reservation.confirm();
-        reservation.closeRecruitment();
-        ReservationParticipant cancelling = participant(23L, 10L, 4L);
-        ReservationParticipant remaining = participant(24L, 10L, 1L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 4L)).willReturn(Optional.of(cancelling));
-        given(reservationCancellationRefundPort.requestRefunds(any())).willReturn(List.of(
-                new RefundRequestResult(23L, "REQUESTED"), new RefundRequestResult(24L, "REQUESTED")));
-        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(3);
-        given(reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED))
-                .willReturn(List.of(cancelling, remaining));
-
-        // when
-        ReservationCancellationResponse response = service().cancel(4L, 10L, new ReservationCancellationRequest("사유"));
-
-        // then
-        assertThat(response.cancellationScope()).isEqualTo(CancellationScope.RESERVATION);
-        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CANCELLED);
-        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
-        assertThat(cancelling.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
-        assertThat(remaining.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
-        verify(reservationCancellationRefundPort, times(1)).requestRefunds(any());
-
-        ReservationCancellationRefundPort.RefundRequestCommand command = captureRefundCommand();
-        assertThat(command.reservationParticipantIds()).containsExactlyInAnyOrder(23L, 24L);
-    }
-
-    @Test
-    void 모집이_CLOSED이고_기준_이상이면_CONFIRMED_CLOSED를_유지한다() {
-        // given: capacity 4, threshold 3. 취소 전 잔여 4명(본인 partySize 1 포함)이라 취소 후 3명으로 기준 충족.
-        Reservation reservation = reservation(10L, 1L);
-        reservation.confirm();
-        reservation.closeRecruitment();
-        ReservationParticipant participant = participant(25L, 10L, 4L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 4L)).willReturn(Optional.of(participant));
-        given(reservationCancellationRefundPort.requestRefunds(any()))
-                .willReturn(List.of(new RefundRequestResult(25L, "REQUESTED")));
-        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(4);
-
-        // when
-        service().cancel(4L, 10L, new ReservationCancellationRequest("사유"));
-
-        // then
-        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
-        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
-        verify(reservationParticipantRepository, never())
-                .findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED);
-    }
-
-    @Test
-    void 환불_요청이_실패하면_참여_상태가_변경되지_않는다() {
-        // given
-        Reservation reservation = reservation(10L, 1L);
-        ReservationParticipant participant = participant(26L, 10L, 5L);
-        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
-        given(reservationCapacityReader.readTimeSlotStartAt(TIME_SLOT_ID)).willReturn(CANCELLABLE_START_AT);
-        given(reservationParticipantRepository.findByReservationIdAndMemberId(10L, 5L)).willReturn(Optional.of(participant));
-        given(reservationCancellationRefundPort.requestRefunds(any()))
+    void 환불_포트가_예외를_던지면_그대로_전파한다() {
+        // given: 접수 트랜잭션은 이미 커밋되어 있으므로 여기서 예외가 나도 되돌릴 상태가 없다
+        RefundRequestCommand command = new RefundRequestCommand(10L, List.of(20L), 1L, "사유");
+        ReservationCancellationTransactionService.CancellationAcceptance acceptance =
+                new ReservationCancellationTransactionService.CancellationAcceptance(
+                        10L, 20L, CancellationScope.PARTICIPATION, command);
+        given(transactionService.accept(1L, 10L, new ReservationCancellationRequest("사유"))).willReturn(acceptance);
+        given(reservationCancellationRefundPort.requestRefunds(command))
                 .willThrow(new IllegalStateException("환불 요청 실패"));
 
         // when
         Throwable result = catchThrowable(
-                () -> service().cancel(5L, 10L, new ReservationCancellationRequest("사유")));
+                () -> service().cancel(1L, 10L, new ReservationCancellationRequest("사유")));
 
         // then
         assertThat(result).isInstanceOf(IllegalStateException.class);
-        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.RESERVED);
-        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.RECRUITING);
+        verify(transactionService).accept(1L, 10L, new ReservationCancellationRequest("사유"));
     }
 
-    private ReservationCancellationRefundPort.RefundRequestCommand captureRefundCommand() {
-        org.mockito.ArgumentCaptor<ReservationCancellationRefundPort.RefundRequestCommand> captor =
-                org.mockito.ArgumentCaptor.forClass(ReservationCancellationRefundPort.RefundRequestCommand.class);
-        verify(reservationCancellationRefundPort).requestRefunds(captor.capture());
-        return captor.getValue();
+    @Test
+    void 참여자를_찾을_수_없으면_완료_처리는_PARTICIPATION_ID_NOT_FOUND를_반환한다() {
+        // given
+        given(reservationParticipantRepository.findById(30L)).willReturn(Optional.empty());
+
+        // when
+        Throwable result = catchThrowable(
+                () -> service().completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:00:00Z")));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.PARTICIPATION_ID_NOT_FOUND);
     }
 
-    private Reservation reservation(Long id, Long creatorMemberId) {
-        Reservation reservation = Reservation.create(TIME_SLOT_ID, creatorMemberId);
+    @Test
+    void 예약_전체_취소_중_마지막_참여자의_환불이_완료되면_예약도_CANCELLED로_확정한다() {
+        // given
+        Reservation reservation = reservation(10L);
+        reservation.startCancelling();
+        ReservationParticipant participant = participant(30L, 10L, 2L);
+        participant.requestCancel("개인 사정");
+        given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(reservationParticipantRepository.existsByReservationIdAndParticipationStatus(10L, ParticipationStatus.CANCEL_REQUESTED))
+                .willReturn(false);
+
+        // when
+        service().completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:00:00Z"));
+
+        // then
+        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
+        assertThat(reservation.isCancelled()).isTrue();
+    }
+
+    @Test
+    void 다른_참여자가_아직_환불_대기_중이면_예약은_CANCELLING을_유지한다() {
+        // given
+        Reservation reservation = reservation(10L);
+        reservation.startCancelling();
+        ReservationParticipant participant = participant(30L, 10L, 2L);
+        participant.requestCancel("개인 사정");
+        given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(reservationParticipantRepository.existsByReservationIdAndParticipationStatus(10L, ParticipationStatus.CANCEL_REQUESTED))
+                .willReturn(true);
+
+        // when
+        service().completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:00:00Z"));
+
+        // then
+        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
+        assertThat(reservation.isCancelling()).isTrue();
+    }
+
+    @Test
+    void 예약이_CANCELLING이_아닌_단일_참여자_취소_완료는_예약_상태를_바꾸지_않는다() {
+        // given: 모집 OPEN 상태에서 추가 참여자 1명만 취소를 접수한 경우
+        Reservation reservation = reservation(10L);
+        ReservationParticipant participant = participant(30L, 10L, 2L);
+        participant.requestCancel("개인 사정");
+        given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+
+        // when
+        service().completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:00:00Z"));
+
+        // then
+        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
+        assertThat(reservation.isActive()).isTrue();
+        verify(reservationParticipantRepository, org.mockito.Mockito.never())
+                .existsByReservationIdAndParticipationStatus(any(), any());
+    }
+
+    @Test
+    void 이미_완료된_참여자에_대한_중복_완료_요청은_아무_일도_하지_않는다() {
+        // given: 웹훅 중복 전달 시나리오
+        Reservation reservation = reservation(10L);
+        reservation.startCancelling();
+        reservation.cancel();
+        ReservationParticipant participant = participant(30L, 10L, 2L);
+        participant.requestCancel("개인 사정");
+        participant.completeCancel(Instant.parse("2026-08-08T00:00:00Z"));
+        given(reservationParticipantRepository.findById(30L)).willReturn(Optional.of(participant));
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+
+        // when
+        Throwable result = catchThrowable(() -> service()
+                .completeParticipantCancellation(30L, Instant.parse("2026-08-08T00:10:00Z")));
+
+        // then
+        assertThat(result).isNull();
+        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
+    }
+
+    private Reservation reservation(Long id) {
+        Reservation reservation = Reservation.create(200L, 1L);
         ReflectionTestUtils.setField(reservation, "id", id);
         return reservation;
     }

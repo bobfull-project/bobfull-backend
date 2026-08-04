@@ -10,6 +10,7 @@ import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ReservationConfirmationService {
+
+    private static final List<ParticipationStatus> OCCUPYING_STATUSES =
+            List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
@@ -51,6 +55,10 @@ public class ReservationConfirmationService {
                 ? reservationRepository.save(Reservation.create(timeSlotId, memberId))
                 : findReservationWithLockOrThrow(reservationId);
 
+        if (purpose == PaymentPurpose.JOIN) {
+            validateJoinable(reservation);
+        }
+
         ReservationParticipant participant = reservationParticipantRepository.save(
                 ReservationParticipant.create(reservation.getId(), memberId, partySize));
 
@@ -58,10 +66,22 @@ public class ReservationConfirmationService {
         return new ReservationConfirmationResult(reservation.getId(), participant.getId());
     }
 
+    /**
+     * 취소 접수(CANCELLING)로 예약이 비활성화된 뒤 결제 완료 웹훅이 뒤늦게 도착해 새 참여자가
+     * 추가되는 경쟁 조건을 막는다(Issue #44). READY Payment 준비 시점에도 같은 검증이 있지만
+     * (ReservationPreparationService.validateJoinable), 그 사이 취소가 접수될 수 있으므로 실제
+     * 참여자 생성 직전인 여기서 다시 확인해야 한다.
+     */
+    private void validateJoinable(Reservation reservation) {
+        if (!reservation.isActive()) {
+            throw new CustomException(ReservationErrorCode.RESERVATION_ALREADY_CANCELLED);
+        }
+    }
+
     private void updateReservationStatus(Reservation reservation, Long timeSlotId) {
         int tableCapacity = reservationCapacityReader.readTableCapacity(timeSlotId);
-        int currentParticipantCount = reservationParticipantRepository.sumPartySize(
-                reservation.getId(), ParticipationStatus.RESERVED);
+        int currentParticipantCount = reservationParticipantRepository.sumPartySizeByStatuses(
+                reservation.getId(), OCCUPYING_STATUSES);
         if (currentParticipantCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
             reservation.confirm();
         }

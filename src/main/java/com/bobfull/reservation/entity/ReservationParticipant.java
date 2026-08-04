@@ -68,11 +68,28 @@ public class ReservationParticipant extends BaseTimeEntity {
     }
 
     /**
-     * MEMBER 본인 취소로 참여 전체를 CANCELLED로 전환한다(Issue #131). 부분 취소는 지원하지 않는다.
+     * MEMBER 본인 취소를 접수해 CANCEL_REQUESTED로 전환한다(Issue #44). 실제 환불이 완료되기
+     * 전까지는 좌석을 계속 점유한 상태로 집계하며, 환불 완료 후 {@link #completeCancel}로 확정한다.
+     * 부분 취소는 지원하지 않는다.
      */
-    public void cancel(String cancelReason, Instant cancelledAt) {
-        this.participationStatus = ParticipationStatus.CANCELLED;
+    public void requestCancel(String cancelReason) {
+        this.participationStatus = ParticipationStatus.CANCEL_REQUESTED;
         this.cancelReason = cancelReason;
+    }
+
+    /**
+     * 취소 접수(CANCEL_REQUESTED)에 대한 환불이 완료되어 CANCELLED로 확정한다
+     * (Issue #44 완료 경로, PR #137이 호출). 웹훅 중복 전달에 대비해 이미 CANCELLED면 아무 일도
+     * 하지 않는다.
+     */
+    public void completeCancel(Instant cancelledAt) {
+        if (participationStatus == ParticipationStatus.CANCELLED) {
+            return;
+        }
+        if (participationStatus != ParticipationStatus.CANCEL_REQUESTED) {
+            throw new IllegalStateException("CANCEL_REQUESTED 상태만 취소를 완료할 수 있습니다.");
+        }
+        this.participationStatus = ParticipationStatus.CANCELLED;
         this.cancelledAt = cancelledAt;
     }
 

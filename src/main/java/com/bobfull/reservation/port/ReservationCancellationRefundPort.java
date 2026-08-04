@@ -12,19 +12,17 @@ import java.util.List;
 public interface ReservationCancellationRefundPort {
 
     /**
-     * 취소 대상 참여자들의 Payment 전체 금액에 대한 환불을 요청한다. 실패하거나 이미 환불이
-     * 존재하는 경우 결제 도메인이 정의하는 예외를 던져야 하며, 이 경우 호출자의 트랜잭션이
-     * 롤백되어 예약·참여 상태 전이가 커밋되지 않아야 한다(완료 조건: 환불 실패 시 상태 미확정).
+     * 취소 대상 참여자들의 Payment 전체 금액에 대한 환불을 요청한다(Issue #44 최종 계약).
+     * 호출자({@code ReservationCancellationService.cancel})는 이미 취소 접수 트랜잭션이 커밋되어
+     * Reservation·참여자가 CANCELLING/CANCEL_REQUESTED로 저장된 뒤, 트랜잭션 밖에서 이 메서드를
+     * 호출한다 — Reservation 행 락을 쥔 채로는 호출되지 않으므로 이 메서드의 실제 구현(Adapter)은
+     * 결제 완료 흐름(Payment → Reservation)과의 락 순서 역전을 걱정하지 않아도 된다.
      *
-     * <p><b>락 순서 제약(ADR 0001)</b>: 호출자({@code ReservationCancellationService})는 이미
-     * Reservation을 잠근 트랜잭션 안에서 이 메서드를 호출한다. 결제 완료 흐름은 Payment → Reservation
-     * 순서로 락을 잡으므로, 이 메서드의 실제 구현(Adapter)이 같은 트랜잭션 안에서 Payment 행에
-     * 비관적 락을 걸면 Reservation → Payment 역순이 되어 결제 완료 흐름과 교착(deadlock) 위험이
-     * 생긴다. 구현체는 Payment에 비관적 락을 걸지 않아야 하며, 환불 중복 방지는 낙관적 락이나
-     * {@code Refund.payment_id} UNIQUE 제약으로 처리한다. 내부 트랜잭션을 {@code REQUIRES_NEW}로
-     * 분리해도 바깥 Reservation 트랜잭션의 행 락은 유지되므로 이 문제는 해결되지 않는다 — 락 순서를
-     * 끊으려면 Reservation 트랜잭션을 먼저 커밋한 뒤 별도 트랜잭션에서 환불을 요청하도록
-     * 오케스트레이션을 분리해야 한다.</p>
+     * <p>이 메서드가 예외를 던지거나 참여자별 환불 중 일부만 성공해도 이미 커밋된
+     * CANCELLING/CANCEL_REQUESTED 상태는 롤백되지 않는다. 각 참여자의 실제 CANCELLED 확정은
+     * 환불이 개별적으로 완료될 때마다 {@code ReservationCancellationService.completeParticipantCancellation}
+     * (PR #137의 공통 완료 Service가 호출)을 통해 이뤄지며, 완료되지 않은 채 남은 건은 #141의
+     * 정합성 확인 스케줄러가 재확인한다.</p>
      */
     List<RefundRequestResult> requestRefunds(RefundRequestCommand command);
 

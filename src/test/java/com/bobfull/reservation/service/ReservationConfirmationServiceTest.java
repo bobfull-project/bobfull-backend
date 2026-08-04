@@ -1,10 +1,14 @@
 package com.bobfull.reservation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
@@ -14,6 +18,7 @@ import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.port.ReservationCapacityReader;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +28,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ReservationConfirmationServiceTest {
+
+    private static final List<ParticipationStatus> OCCUPYING_STATUSES =
+            List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
     @Mock
     private ReservationRepository reservationRepository;
@@ -52,7 +60,7 @@ class ReservationConfirmationServiceTest {
             return participant;
         });
         given(reservationCapacityReader.readTableCapacity(200L)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(2);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
 
         // when
         ReservationConfirmationService.ReservationConfirmationResult result =
@@ -75,7 +83,7 @@ class ReservationConfirmationServiceTest {
             return participant;
         });
         given(reservationCapacityReader.readTableCapacity(200L)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(3);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(3);
 
         // when
         service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1);
@@ -96,7 +104,7 @@ class ReservationConfirmationServiceTest {
             return participant;
         });
         given(reservationCapacityReader.readTableCapacity(200L)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(4);
 
         // when
         ReservationConfirmationService.ReservationConfirmationResult result =
@@ -120,7 +128,7 @@ class ReservationConfirmationServiceTest {
             return participant;
         });
         given(reservationCapacityReader.readTableCapacity(200L)).willReturn(2);
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(2);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
 
         // when
         service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1);
@@ -128,6 +136,41 @@ class ReservationConfirmationServiceTest {
         // then
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
+    }
+
+    @Test
+    void JOIN_결제_완료_시점에_예약이_취소_접수_상태면_참여자_생성을_거부한다() {
+        // given: 결제 완료 웹훅 도착 전에 다른 참여자가 예약 취소를 접수해 CANCELLING이 된 경쟁 조건
+        Reservation reservation = reservation(10L);
+        reservation.startCancelling();
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+
+        // when
+        Throwable result = catchThrowable(
+                () -> service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode())
+                .isEqualTo(ReservationErrorCode.RESERVATION_ALREADY_CANCELLED);
+        verify(reservationParticipantRepository, never()).save(any(ReservationParticipant.class));
+    }
+
+    @Test
+    void JOIN_결제_완료_시점에_예약이_이미_CANCELLED면_참여자_생성을_거부한다() {
+        // given
+        Reservation reservation = reservation(10L);
+        reservation.startCancelling();
+        reservation.cancel();
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+
+        // when
+        Throwable result = catchThrowable(
+                () -> service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode())
+                .isEqualTo(ReservationErrorCode.RESERVATION_ALREADY_CANCELLED);
+        verify(reservationParticipantRepository, never()).save(any(ReservationParticipant.class));
     }
 
     private Reservation reservation(Long id) {
