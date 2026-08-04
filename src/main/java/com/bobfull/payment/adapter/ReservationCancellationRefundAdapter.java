@@ -6,20 +6,26 @@ import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.port.PortOneRefundRequester;
 import com.bobfull.payment.service.RefundTransactionService;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort;
+import com.bobfull.reservation.service.ReservationCancellationService;
+import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.ObjectProvider;
 
 @Component
 public class ReservationCancellationRefundAdapter implements ReservationCancellationRefundPort {
     private static final Logger log = LoggerFactory.getLogger(ReservationCancellationRefundAdapter.class);
     private final RefundTransactionService transactionService;
     private final PortOneRefundRequester refundRequester;
+    private final ObjectProvider<ReservationCancellationService> cancellationServiceProvider;
 
-    public ReservationCancellationRefundAdapter(RefundTransactionService transactionService, PortOneRefundRequester refundRequester) {
+    public ReservationCancellationRefundAdapter(RefundTransactionService transactionService, PortOneRefundRequester refundRequester,
+            ObjectProvider<ReservationCancellationService> cancellationServiceProvider) {
         this.transactionService = transactionService;
         this.refundRequester = refundRequester;
+        this.cancellationServiceProvider = cancellationServiceProvider;
     }
 
     @Override
@@ -32,6 +38,10 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
         try {
             var result = refundRequester.request(refund.getPayment().getPaymentId(), refund.getAmount(), command.cancelReason());
             var status = transactionService.reflectExternalResult(refund.getId(), result.cancellationId(), result.completed());
+            if (status == com.bobfull.payment.entity.RefundStatus.COMPLETED) {
+                cancellationServiceProvider.getObject().completeParticipantCancellation(
+                        command.reservationId(), participantId, Instant.now());
+            }
             return new RefundRequestResult(participantId, status.name());
         } catch (RuntimeException exception) {
             if (isResultUnknown(exception)) {

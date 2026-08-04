@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class SharedTableReservationUsageAdapter implements SharedTableReservationUsagePort {
 
     private static final List<ReservationStatus> ACTIVE_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
 
     private final ReservationRepository reservationRepository;
 

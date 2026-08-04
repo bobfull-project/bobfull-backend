@@ -15,7 +15,7 @@ public enum ReservationErrorCode implements BaseErrorCode {
     INVALID_PARTY_SIZE(HttpStatus.BAD_REQUEST, "partySize가 올바르지 않습니다."),
     INVALID_STATE(HttpStatus.CONFLICT, "현재 상태에서 요청을 처리할 수 없습니다."),
     PARTICIPATION_NOT_FOUND(HttpStatus.NOT_FOUND, "본인 참여를 찾을 수 없습니다."),
-    CANCELLATION_NOT_ALLOWED(HttpStatus.FORBIDDEN, "본인 참여가 아니거나 취소가 허용되지 않는 상태입니다."),
+    CANCELLATION_NOT_ALLOWED(HttpStatus.FORBIDDEN, "취소할 수 없는 참여 상태입니다."),
     CANCELLATION_DEADLINE_PASSED(HttpStatus.CONFLICT, "서버 시간 기준 식사 시작 2시간 이내에는 취소할 수 없습니다."),
     PARTICIPATION_ALREADY_CANCELLED(HttpStatus.CONFLICT, "이미 취소된 참여입니다."),
     RESERVATION_ALREADY_CANCELLED(HttpStatus.CONFLICT, "이미 취소된 예약입니다.");

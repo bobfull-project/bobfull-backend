@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.bobfull.common.config.ClockConfig;
+import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.common.response.PageResponse;
@@ -200,11 +201,11 @@ class ReservationControllerWebTest {
 
     @Test
     void 내_참여를_취소한다() throws Exception {
-        // given
+        // given: 취소는 접수만 되고(CANCEL_REQUESTED), 실제 CANCELLED 확정은 환불 완료 후 이뤄진다(Issue #44)
         ReservationCancellationRequest request = new ReservationCancellationRequest("개인 일정 변경");
         given(reservationCancellationService.cancel(eq(1L), eq(10L), any(ReservationCancellationRequest.class)))
                 .willReturn(new ReservationCancellationResponse(
-                        10L, 20L, ParticipationStatus.CANCELLED, CancellationScope.PARTICIPATION, "REQUESTED"));
+                        10L, 20L, ParticipationStatus.CANCEL_REQUESTED, CancellationScope.PARTICIPATION, "REQUESTED"));
 
         // when
         ResultActions result = mockMvc.perform(post("/api/reservations/10/participations/me/cancel")
@@ -216,7 +217,7 @@ class ReservationControllerWebTest {
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.reservationId", is(10)))
                 .andExpect(jsonPath("$.data.participationId", is(20)))
-                .andExpect(jsonPath("$.data.participationStatus", is("CANCELLED")))
+                .andExpect(jsonPath("$.data.participationStatus", is("CANCEL_REQUESTED")))
                 .andExpect(jsonPath("$.data.cancellationScope", is("PARTICIPATION")))
                 .andExpect(jsonPath("$.data.refundStatus", is("REQUESTED")));
     }
@@ -246,6 +247,40 @@ class ReservationControllerWebTest {
         // then
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is("INVALID_INPUT_VALUE")));
+    }
+
+    @Test
+    void 취소_사유가_255자를_초과하면_400을_반환한다() throws Exception {
+        // given
+        String invalidBody = objectMapper.writeValueAsString(
+                new ReservationCancellationRequest("가".repeat(256)));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/reservations/10/participations/me/cancel")
+                .with(authentication(memberAuthentication(1L)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("INVALID_INPUT_VALUE")));
+    }
+
+    @Test
+    void 본인_참여가_아니면_403을_반환한다() throws Exception {
+        // given
+        given(reservationCancellationService.cancel(eq(1L), eq(10L), any(ReservationCancellationRequest.class)))
+                .willThrow(new CustomException(CommonErrorCode.ACCESS_DENIED));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/reservations/10/participations/me/cancel")
+                .with(authentication(memberAuthentication(1L)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new ReservationCancellationRequest("사유"))));
+
+        // then
+        result.andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code", is("ACCESS_DENIED")));
     }
 
     @Test
