@@ -13,6 +13,7 @@ import com.bobfull.payment.port.PortOneRefundRequester;
 import com.bobfull.payment.repository.PaymentRepository;
 import com.bobfull.payment.repository.RefundRepository;
 import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.PaymentErrorCode;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort.RefundRequestCommand;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
@@ -83,6 +84,33 @@ class RefundTransactionIntegrationTest {
         assertThat(refundRepository.findByPayment_Id(third.getId())).isPresent();
         assertThat(refundRepository.findByPayment_Id(third.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(requester.calls()).isEqualTo(3);
+    }
+
+    @Test
+    void 동시_최초_환불_생성_요청_중_하나만_성공하고_나머지는_REFUND_PROCESSING으로_거절된다() throws Exception {
+        Payment payment = paid(1L);
+        var executor = Executors.newFixedThreadPool(2);
+        int successCount = 0;
+        Exception rejected = null;
+        try {
+            var first = executor.submit(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)));
+            var second = executor.submit(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)));
+            for (var future : List.of(first, second)) {
+                try {
+                    future.get(5, TimeUnit.SECONDS);
+                    successCount++;
+                } catch (java.util.concurrent.ExecutionException e) {
+                    rejected = (Exception) e.getCause();
+                }
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+        assertThat(successCount).isEqualTo(1);
+        assertThat(rejected).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) rejected).getErrorCode()).isEqualTo(PaymentErrorCode.REFUND_PROCESSING);
+        assertThat(refundRepository.findByPayment_Id(payment.getId())).isPresent();
+        assertThat(refundRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -225,6 +253,22 @@ class RefundTransactionIntegrationTest {
         assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
         assertThat(reservationRepository.findById(activeReservation.getId()).orElseThrow().getReservationStatus())
                 .isEqualTo(ReservationStatus.CANCELLED);
+    }
+
+    @Test
+    void 다른_cancellationId_웹훅은_이미_추적중인_Refund를_바꾸지_않는다() {
+        Payment payment = paid(1L);
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        refundCompletionService.reflectExternalResult(refund.getId(), "cancel-A", false);
+
+        refundWebhookService.complete(payment.getPaymentId(), "cancel-B");
+
+        Refund reloaded = refundRepository.findById(refund.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(RefundStatus.PROCESSING);
+        assertThat(reloaded.getCancellationId()).isEqualTo("cancel-A");
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(reservationParticipantRepository.findById(participantIds.get(1L)).orElseThrow().getParticipationStatus())
+                .isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
     }
 
     @Test
