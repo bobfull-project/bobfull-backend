@@ -72,7 +72,10 @@ public class RefundTransactionService {
             if (before == RefundStatus.FAILED) {
                 log.warn("event=REFUND_STATE_TRANSITION_BLOCKED refundId={} attempted=COMPLETED currentStatus=FAILED", refundId);
             }
-            if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
+            if (refund.getStatus() == RefundStatus.COMPLETED
+                    && refund.getPayment().getStatus() == PaymentStatus.PAID) {
+                refund.getPayment().markRefunded();
+            }
         } else {
             refund.markProcessing(cancellationId);
             if (before == RefundStatus.COMPLETED || before == RefundStatus.FAILED) {
@@ -112,7 +115,10 @@ public class RefundTransactionService {
             if (before == RefundStatus.FAILED) {
                 log.warn("event=REFUND_STATE_TRANSITION_BLOCKED refundId={} attempted=COMPLETED currentStatus=FAILED", refund.getId());
             }
-            if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
+            if (refund.getStatus() == RefundStatus.COMPLETED
+                    && refund.getPayment().getStatus() == PaymentStatus.PAID) {
+                refund.getPayment().markRefunded();
+            }
             return RefundCompletion.from(refund);
         });
     }

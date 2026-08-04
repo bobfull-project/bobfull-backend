@@ -351,6 +351,22 @@ class RefundTransactionIntegrationTest {
     }
 
     @Test
+    void FAILED_Refund에_늦은_Cancelled_웹훅이와도_Payment와_예약완료상태를_바꾸지않는다() {
+        Payment payment = paid(1L);
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        transactionService.markFailed(refund.getId());
+
+        refundWebhookService.complete(payment.getPaymentId(), "cancel-after-failure");
+
+        assertThat(refundRepository.findById(refund.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(reservationParticipantRepository.findById(participantIds.get(1L)).orElseThrow().getParticipationStatus())
+                .isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
+        assertThat(reservationRepository.findById(activeReservation.getId()).orElseThrow().getReservationStatus())
+                .isEqualTo(ReservationStatus.CANCELLING);
+    }
+
+    @Test
     void 예약완료_반영에_실패하면_Refund와_Payment_완료상태도_함께_롤백한다() {
         Payment payment = Payment.createReady("rollback-" + UUID.randomUUID(), 1L, 1L, 999L,
                 PaymentPurpose.JOIN, 1, BigDecimal.valueOf(1000), Instant.parse("2026-12-01T00:00:00Z"));
