@@ -23,7 +23,7 @@ class RefundWebhookServiceTest {
 
         service().complete("payment-1", "cancellation-1");
 
-        verify(completionService).completeFromWebhook("cancellation-1");
+        verify(completionService).completeFromWebhook("payment-1", "cancellation-1");
     }
 
     @Test
@@ -38,9 +38,9 @@ class RefundWebhookServiceTest {
 
     @Test
     void CancelPending_웹훅은_처리중상태만_공통서비스에_전달한다() {
-        service().markProcessing("cancellation-1");
+        service().markProcessing("payment-1", "cancellation-1");
 
-        verify(completionService).markProcessingFromWebhook("cancellation-1");
+        verify(completionService).markProcessingFromWebhook("payment-1", "cancellation-1");
     }
 
     private RefundWebhookService service() {

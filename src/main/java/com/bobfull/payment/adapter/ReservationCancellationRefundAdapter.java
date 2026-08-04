@@ -7,6 +7,7 @@ import com.bobfull.payment.port.PortOneRefundRequester;
 import com.bobfull.payment.service.RefundCompletionService;
 import com.bobfull.payment.service.RefundTransactionService;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +29,24 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
 
     @Override
     public List<RefundRequestResult> requestRefunds(RefundRequestCommand command) {
-        return command.reservationParticipantIds().stream().distinct().map(participantId -> request(command, participantId)).toList();
+        // 참여자별 환불은 서로 독립이어야 한다 — 앞선 참여자의 예외가 뒤 참여자의 시도 자체를
+        // 막으면 안 된다(순차 Stream.map은 예외 발생 시 나머지 원소를 건너뛴다). 그래서 각
+        // 참여자를 개별적으로 시도하고, 실패가 있어도 전원 시도가 끝난 뒤에 대표 예외를 던진다.
+        List<RefundRequestResult> results = new ArrayList<>();
+        RuntimeException firstFailure = null;
+        for (Long participantId : command.reservationParticipantIds().stream().distinct().toList()) {
+            try {
+                results.add(request(command, participantId));
+            } catch (RuntimeException exception) {
+                if (firstFailure == null) {
+                    firstFailure = exception;
+                }
+            }
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
+        }
+        return results;
     }
 
     private RefundRequestResult request(RefundRequestCommand command, Long participantId) {
@@ -42,8 +60,8 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
             var completion = completionService.reflectExternalResult(refund.getId(), result.cancellationId(), result.completed());
             return new RefundRequestResult(participantId, completion.refundStatus().name());
         } catch (RuntimeException exception) {
-            log.error("event=REFUND_COMPENSATION_REQUIRED paymentId={} refundId={} externalStatus=COMPLETED internalStatus=ROLLBACK autoRetry=false",
-                    refund.getPayment().getId(), refund.getId());
+            log.error("event=REFUND_COMPENSATION_REQUIRED paymentId={} refundId={} externalStatus={} internalStatus=ROLLBACK autoRetry=false",
+                    refund.getPayment().getId(), refund.getId(), result.completed() ? "COMPLETED" : "PROCESSING");
             throw new CustomException(PaymentErrorCode.PORTONE_REFUND_FAILED);
         }
     }

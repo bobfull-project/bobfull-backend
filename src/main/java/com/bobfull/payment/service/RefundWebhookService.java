@@ -13,11 +13,11 @@ public class RefundWebhookService {
         this.refundRequester = refundRequester;
     }
 
-    public void markProcessing(String cancellationId) { completionService.markProcessingFromWebhook(cancellationId); }
+    public void markProcessing(String paymentId, String cancellationId) { completionService.markProcessingFromWebhook(paymentId, cancellationId); }
     public void complete(String paymentId, String cancellationId) {
         if (!refundRequester.isCancellationCompleted(paymentId, cancellationId)) {
             throw new IllegalStateException("PortOne cancellation verification failed");
         }
-        completionService.completeFromWebhook(cancellationId);
+        completionService.completeFromWebhook(paymentId, cancellationId);
     }
 }

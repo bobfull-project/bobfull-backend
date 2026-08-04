@@ -69,6 +69,23 @@ class RefundTransactionIntegrationTest {
     }
 
     @Test
+    void 참여자_3명_중_두번째가_실패해도_세번째는_시도되어_완료된다() {
+        Payment first = paid(1L);
+        Payment second = paid(2L);
+        Payment third = paid(3L);
+        List<Long> ids = List.of(participantIds.get(1L), participantIds.get(2L), participantIds.get(3L));
+
+        assertThatThrownBy(() -> adapter.requestRefunds(new RefundRequestCommand(activeReservation.getId(), ids, 1L, "test")))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(refundRepository.findByPayment_Id(first.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(refundRepository.findByPayment_Id(second.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(refundRepository.findByPayment_Id(third.getId())).isPresent();
+        assertThat(refundRepository.findByPayment_Id(third.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(requester.calls()).isEqualTo(3);
+    }
+
+    @Test
     void 동일_Payment_동시_환불은_Refund_한건과_외부호출_한번으로_수렴한다() throws Exception {
         Payment payment = paid(1L);
         requester.blockFirstCall();
@@ -187,6 +204,27 @@ class RefundTransactionIntegrationTest {
         org.assertj.core.api.Assertions.assertThatCode(
                 () -> refundWebhookService.complete("missing-payment", "missing-cancellation"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 파싱_전_실패로_cancellationId가_없는_Refund도_웹훅이_paymentId로_찾아_완료한다() {
+        Payment payment = paid(1L);
+        requester.timeoutNextCall();
+        assertThatThrownBy(() -> adapter.requestRefunds(new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test")))
+                .isInstanceOf(CustomException.class);
+        assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getCancellationId()).isNull();
+        assertThat(refundRepository.findByCancellationId("cancel-late")).isEmpty();
+
+        refundWebhookService.complete(payment.getPaymentId(), "cancel-late");
+
+        Refund refund = refundRepository.findByPayment_Id(payment.getId()).orElseThrow();
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(refund.getCancellationId()).isEqualTo("cancel-late");
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        ReservationParticipant participant = reservationParticipantRepository.findById(participantIds.get(1L)).orElseThrow();
+        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCELLED);
+        assertThat(reservationRepository.findById(activeReservation.getId()).orElseThrow().getReservationStatus())
+                .isEqualTo(ReservationStatus.CANCELLED);
     }
 
     @Test

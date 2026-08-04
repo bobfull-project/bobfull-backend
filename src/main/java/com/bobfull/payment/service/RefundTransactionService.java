@@ -70,17 +70,32 @@ public class RefundTransactionService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markProcessingFromWebhook(String cancellationId) {
-        refundRepository.findByCancellationId(cancellationId).ifPresent(refund -> refund.markProcessing(cancellationId));
+    public void markProcessingFromWebhook(String paymentId, String cancellationId) {
+        findRefundForWebhook(paymentId, cancellationId).ifPresent(refund -> refund.markProcessing(cancellationId));
     }
 
     @Transactional
-    public java.util.Optional<RefundCompletion> completeFromWebhook(String cancellationId) {
-        return refundRepository.findByCancellationId(cancellationId).map(refund -> {
+    public java.util.Optional<RefundCompletion> completeFromWebhook(String paymentId, String cancellationId) {
+        return findRefundForWebhook(paymentId, cancellationId).map(refund -> {
             refund.complete(cancellationId, clock.instant());
             if (refund.getPayment().getStatus() == PaymentStatus.PAID) refund.getPayment().markRefunded();
             return RefundCompletion.from(refund);
         });
+    }
+
+    /**
+     * cancellationId로 먼저 찾고, 없으면 paymentId로 대신 찾는다. timeout·connection reset처럼
+     * PortOne 응답을 파싱하기 전에 실패한 요청은 Refund에 cancellationId가 저장된 적이 없어
+     * (Refund.markProcessing/complete만 이 필드를 채운다) cancellationId만으로는 이후 도착하는
+     * 웹훅과 영영 매칭되지 않는다. paymentId는 Refund 생성 시점부터 Payment에 이미 있으므로
+     * 이 fallback으로 그 결과 불명확 요청도 웹훅이 회수할 수 있다.
+     */
+    private java.util.Optional<Refund> findRefundForWebhook(String paymentId, String cancellationId) {
+        var byCancellationId = refundRepository.findByCancellationId(cancellationId);
+        if (byCancellationId.isPresent()) {
+            return byCancellationId;
+        }
+        return paymentRepository.findByPaymentId(paymentId).flatMap(payment -> refundRepository.findByPayment_Id(payment.getId()));
     }
 
     public record RefundCompletion(RefundStatus refundStatus, Long reservationId,

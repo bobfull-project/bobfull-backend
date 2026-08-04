@@ -29,12 +29,12 @@ public class RefundCompletionService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void completeFromWebhook(String cancellationId) {
-        transactionService.completeFromWebhook(cancellationId).ifPresent(this::completeParticipantIfCompleted);
+    public void completeFromWebhook(String paymentId, String cancellationId) {
+        transactionService.completeFromWebhook(paymentId, cancellationId).ifPresent(this::completeParticipantIfCompleted);
     }
 
-    public void markProcessingFromWebhook(String cancellationId) {
-        transactionService.markProcessingFromWebhook(cancellationId);
+    public void markProcessingFromWebhook(String paymentId, String cancellationId) {
+        transactionService.markProcessingFromWebhook(paymentId, cancellationId);
     }
 
     private void completeParticipantIfCompleted(RefundTransactionService.RefundCompletion completion) {

@@ -48,7 +48,7 @@ public class PortOneWebhookController {
                 log.info("event=PORTONE_PARTIAL_CANCELLED_IGNORED paymentId={} cancellationId={}", event.paymentId(), event.cancellationId());
                 return ResponseEntity.ok().build();
             }
-            if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.CANCEL_PENDING) { refundWebhookService.markProcessing(event.cancellationId()); return ResponseEntity.ok().build(); }
+            if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.CANCEL_PENDING) { refundWebhookService.markProcessing(event.paymentId(), event.cancellationId()); return ResponseEntity.ok().build(); }
             if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.CANCELLED) { refundWebhookService.complete(event.paymentId(), event.cancellationId()); return ResponseEntity.ok().build(); }
             String paymentId = event.paymentId();
             try { paymentCompletionService.completeFromWebhook(paymentId); }
