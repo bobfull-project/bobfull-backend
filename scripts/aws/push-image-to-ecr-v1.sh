@@ -16,7 +16,6 @@ IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-LATEST_IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
 
 if ! repository_check_output="$(aws ecr describe-repositories \
   --region "${AWS_REGION}" \
@@ -31,8 +30,6 @@ aws ecr get-login-password --region "${AWS_REGION}" \
   | docker login --username AWS --password-stdin "${ECR_REGISTRY}" >/dev/null
 
 docker build -t "${IMAGE_URI}" .
-docker tag "${IMAGE_URI}" "${LATEST_IMAGE_URI}"
 docker push "${IMAGE_URI}"
-docker push "${LATEST_IMAGE_URI}"
 
 printf '%s\n' "${IMAGE_URI}"
