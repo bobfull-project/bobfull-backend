@@ -1,0 +1,19 @@
+payment:
+  expiration:
+    enabled: false
+  refund-reconciliation:
+    enabled: false
+
+cors:
+  allowed-origins: http://localhost:5173
+
+auth:
+  refresh-token:
+    expiration-seconds: 1209600
+
+aws:
+  region: ap-northeast-2
+  s3:
+    image-bucket: bobfull-test-image-bucket
+    upload-url-expiration: 5m
+    get-url-expiration: 5m

@@ -1,0 +1,150 @@
+name: Deploy Backend V1
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-backend-v1.yml'
+      - 'Dockerfile'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'lambda/**'
+      - 'scripts/aws/**'
+      - 'src/**'
+
+concurrency:
+  group: backend-v1-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  BACKEND_EC2_INSTANCE_ID: ${{ vars.BACKEND_EC2_INSTANCE_ID }}
+  BACKEND_PARAMETER_PREFIX: ${{ vars.BACKEND_PARAMETER_PREFIX }}
+
+jobs:
+  ci:
+    name: Gradle check and Docker build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Gradle build and test
+        run: |
+          set -euo pipefail
+          sed -i 's/\r$//' ./gradlew
+          chmod +x ./gradlew
+          ./gradlew clean check bootJar --no-daemon
+
+      - name: Docker build
+        run: |
+          set -euo pipefail
+          docker build -t bobfull-backend-ci:${GITHUB_SHA} .
+
+  deploy:
+    name: Push to ECR and deploy with SSM
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment settings
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        run: |
+          set -euo pipefail
+
+          required_values=(
+            AWS_REGION
+            ECR_REPOSITORY
+            BACKEND_EC2_INSTANCE_ID
+            BACKEND_PARAMETER_PREFIX
+            AWS_ROLE_TO_ASSUME
+          )
+
+          for key in "${required_values[@]}"; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing required GitHub secret or variable: ${key}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve image URI
+        id: image
+        run: |
+          set -euo pipefail
+
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          ecr_registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          image_uri="${ecr_registry}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+          latest_image_uri="${ecr_registry}/${ECR_REPOSITORY}:latest"
+
+          echo "ecr_registry=${ecr_registry}" >> "${GITHUB_OUTPUT}"
+          echo "image_uri=${image_uri}" >> "${GITHUB_OUTPUT}"
+          echo "latest_image_uri=${latest_image_uri}" >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure ECR repository exists
+        run: |
+          set -euo pipefail
+
+          if ! aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" >/dev/null 2>&1; then
+            aws ecr create-repository \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-scanning-configuration scanOnPush=true \
+              >/dev/null
+          fi
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        run: |
+          set -euo pipefail
+
+          docker build -t "${{ steps.image.outputs.image_uri }}" .
+          docker tag "${{ steps.image.outputs.image_uri }}" "${{ steps.image.outputs.latest_image_uri }}"
+          docker push "${{ steps.image.outputs.image_uri }}"
+          docker push "${{ steps.image.outputs.latest_image_uri }}"
+
+      - name: Deploy on EC2 with SSM Run Command
+        env:
+          BACKEND_EC2_INSTANCE_ID: ${{ env.BACKEND_EC2_INSTANCE_ID }}
+          ECR_IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+          PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
+        run: |
+          set -euo pipefail
+          bash scripts/aws/run-ssm-backend-deploy-v1.sh
+
+      - name: Verify backend deployment
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
+          CLOUDWATCH_LOG_GROUP: /bobfull/backend
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          bash scripts/aws/verify-backend-v1.sh

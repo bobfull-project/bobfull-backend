@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BobFull V1 Core Engineering Experiment Lab</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="masthead">
+      <div><span class="eyebrow">BOBFULL · FLOW LAB · V3</span><h1>BobFull V1 Core Engineering Experiment Lab</h1><p>팀이 검토한 기술 대안을 직접 변경하고 실행 결과를 비교하는 백엔드 의사결정 실험실</p></div>
+      <div class="static-badge">정적 의사결정 시뮬레이션</div>
+    </header>
+    <main>
+      <nav id="case-tabs" class="case-tabs" aria-label="실험 사례"></nav>
+      <section class="workspace" aria-live="polite">
+        <section class="panel controls-panel"><div class="panel-heading"><div><span id="case-kind" class="evidence-tag"></span><h2 id="case-title"></h2><p id="case-summary"></p></div><button id="reset-button" class="ghost-button" type="button">설정 초기화</button></div>
+          <div id="experiment-form" class="experiment-form"></div>
+          <div class="action-row"><button id="run-button" class="run-button" type="button">실험 실행</button><button id="compare-button" class="outline-button" type="button">모든 대안 비교</button></div>
+        </section>
+        <section class="panel preview-panel"><div class="panel-heading compact"><div><span class="section-kicker">선택에 따라 바뀌는 구현 미리보기</span><h2>코드 · DDL · 테스트</h2></div><span id="preview-evidence" class="evidence-tag"></span></div><div id="preview-meta" class="preview-meta"></div><pre id="code-preview" class="code-preview"></pre><div id="preview-note" class="preview-note"></div></section>
+        <section class="panel result-panel"><div class="panel-heading compact"><div><span class="section-kicker">실행 결과</span><h2 id="result-title">실험 대기 중</h2></div><span id="result-evidence" class="evidence-tag neutral">선택 후 실행</span></div><p id="result-intro" class="result-intro">대안과 조건을 정한 뒤 <strong>실험 실행</strong>을 누르면 예상 실행 경로와 최종 상태를 계산합니다.</p><div id="timeline" class="timeline empty"></div><div id="state-grid" class="state-grid"></div><div id="result-verdict" class="verdict"></div></section>
+      </section>
+      <section id="comparison-panel" class="panel comparison-panel" hidden><div class="panel-heading compact"><div><span class="section-kicker">동일 조건의 대안 비교</span><h2>비교 결과</h2></div><button id="close-comparison" class="ghost-button" type="button">닫기</button></div><div id="comparison-grid" class="comparison-grid"></div></section>
+      <section class="panel facts-panel"><div><span class="section-kicker">근거와 한계</span><h2>실제 코드·테스트와 모델을 구분합니다</h2></div><div id="facts" class="facts"></div></section>
+      <section class="future-note">검색 실행 계획과 인덱스 후보는 동일 데이터·동일 쿼리에서 실제 측정 예정 · Redis는 DB 병목이 확인된 경우에만 도입 검토 · TTL·무효화·장애 fallback 검증 전에는 개선 사례로 등록하지 않음</section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

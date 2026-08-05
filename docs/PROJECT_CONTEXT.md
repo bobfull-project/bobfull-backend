@@ -1,297 +1,216 @@
-# 밥풀(BobFull) 프로젝트 확정 컨텍스트
+# 밥풀(BobFull) 프로젝트 컨텍스트
 
-> 기준일: 2026-07-22  
-> 이 문서는 저장소에서 사용하는 프로젝트 정책의 단일 기준 문서다.  
-> 팀 결정으로 정책이 변경되면 이 문서를 먼저 수정하고 관련 플로우·API·ERD·테스트를 갱신한다.  
-> `결정 필요`로 표시된 내용은 구현 계약으로 사용하지 않는다.
+> 기준일: 2026-08-04
+> API 계약의 최우선 기준은 [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md)다. 이 문서가 API 명세와 충돌하면 API 명세를 따른다.
 
 ## 1. 프로젝트 개요
 
-- 프로젝트명: 밥풀(BobFull)
-- 팀명: 밥조
-- 기간: 2026-07-21 ~ 2026-08-24
-- 핵심 타깃: 제주 평일 저녁의 혼자 여행하는 사용자
-- 핵심 문제:
-  - 2인 이상 주문이 필요한 식당을 혼자 이용하기 어려움
-  - 함께 식사할 사람을 직접 구해야 함
-  - 빈 좌석, 취소와 노쇼로 식당 손실이 발생함
+**밥풀**은 제주 평일 저녁의 혼자 여행하는 사용자를 핵심 타깃으로, 사용자가 식당의 합석 회차를 선택해 예약하거나 기존 합석 예약에 참여하는 서비스다. OWNER는 식당·합석 테이블·합석 회차를 관리하고, MEMBER는 `partySize`를 포함해 예약 결제를 준비한다. PortOne 결제 검증 또는 웹훅 검증이 성공하면 예약·참여·결제 결과를 반영한다. 제주는 초기 운영 타깃이며 시스템적으로 제주 외 지역을 차단하지 않는다. V1에는 지역 검색·필터 기능을 제공하지 않는다.
 
-> 제주 혼자 여행객이 합석 가능한 식당의 테이블과 예약 시간을 선택하고, 개인별 예약금을 결제해 함께 식사할 사람을 모집하는 합석 예약 플랫폼이다.
+## 2. 역할과 권한
 
-## 2. 사용자와 권한
+역할은 `MEMBER`, `OWNER`, `ADMIN`이다.
 
-### 일반 사용자
+### MEMBER
 
-- 식당·날짜·시간·테이블을 조회한다.
-- 새로운 합석 예약을 시작하거나 기존 예약에 참여한다.
-- 본인 1명분 예약금만 결제한다.
-- 자신의 예약·결제 내역을 조회한다.
-- v2부터 취소·환불과 예약 참여자 전용 채팅을 사용한다.
+- 인증 없이 사용자용 식당·예약 가능 회차·참여 가능한 예약을 조회한다.
+- 인증 후 본인 정보·예약·참여·결제·환불을 조회하고 예약 결제를 준비한다.
+- 최초 예약자는 본인 예약의 모집 상태를 `CLOSED`로 변경한다.
+- V2에서 서버 시간 기준 식사 시작 2시간 전까지 본인 참여 전체를 취소한다. 부분 `partySize` 취소와 2시간 이내 MEMBER 취소는 지원하지 않는다.
+- 결제 완료 검증은 해당 Payment를 생성한 당사자만 호출한다. `Payment.memberId`와 인증 사용자 ID가 일치해야 한다.
+- V1은 참여자 상세 목록 대신 예약 집계 정보만 조회한다. V2에서는 해당 예약의 유효 참여자만 `name`, `partySize` 목록을 조회한다.
 
-### 식당 사장님
+### OWNER
 
-- 본인 식당과 합석 테이블·예약 회차를 관리한다.
-- 테이블 정원을 `2인·4인·8인` 중 하나로 정한다.
-- 본인 식당 예약의 참여 현황을 조회한다.
-- v2부터 참여자별 방문·노쇼 상태와 지급 예정 예약금을 관리·조회한다.
-- 다른 사장님의 식당과 예약은 관리할 수 없다.
+- 본인 식당의 식당·합석 테이블·합석 회차를 등록·조회·수정·삭제한다.
+- 본인 식당 이미지를 S3 Presigned URL로 업로드하고 식당 등록·수정에 연결한다.
+- 식당·테이블 생성 시 서버가 `ACTIVE`를 기본 적용한다. 등록·수정 Request에 `status`는 없다.
+- 본인 식당의 예약·참여자 정보를 조회한다.
+- V1에서 지급 예정 금액과 예약별 지급 예정 내역·상세를 조회한다.
+- V2에서 식당 귀책 예약 취소와 식사 종료 후 노쇼 처리·해제·이력 조회를 수행한다.
 
-### 관리자
+#### 식당 이미지
 
-- v2 최소 조회 기능만 구현한다.
-- 회원·식당·예약·결제·환불과 시스템 오류 현황을 조회한다.
-- 상세 제재·승인 정책은 결정 필요 항목이다.
+- V1 식당 이미지는 S3 Presigned PUT URL로 클라이언트가 직접 업로드한다.
+- 업로드 허용 형식은 `jpg`, `jpeg`, `png`이며 `webp`는 허용하지 않는다. 파일 크기는 최대 5MB다.
+- 임시 업로드 경로는 `temp/restaurants/{ownerId}/{uuid}.{extension}`, 최종 경로는 `restaurants/{ownerId}/{uuid}.{extension}`다.
+- Java Lambda가 S3 임시 객체의 확장자, Content-Type, 크기, 파일 시그니처를 검증하고 성공 시 최종 경로로 이동한다.
+- 식당 등록·수정 API는 최종 경로 객체가 존재하는지 확인한 뒤 `restaurant.image_key`만 저장한다. 조회 응답은 DB 저장값이 아니라 만료 시간이 있는 Presigned GET URL을 반환한다.
 
-## 3. 테이블·회차·좌석 정책
+### ADMIN
 
-- 좌석 재고 기준은 `합석 테이블 + 예약 시작 시간`이다.
-- 하나의 테이블·시간에는 하나의 합석 예약만 존재할 수 있다.
-- 테이블 정원은 `2인·4인·8인`만 사용한다.
-- 최소 성사 인원은 서비스 공통 정책으로 2명 고정이다.
-- 사용자가 최대 참여 인원이나 선점 좌석 수를 정하지 않는다.
-- 예약 생성 시 테이블 전체 좌석을 미리 차감하지 않는다.
-- 결제에 성공한 유효 참여자 1명마다 참여 인원이 1명 증가한다.
+- V2에서 회원·식당·예약·결제·환불·노쇼 현황 및 운영 지표를 조회한다.
+- V3에서 실패 결제·환불과 정산 데이터를 재처리하거나 재집계한다.
+- 별도 ADMIN 회원가입 API는 두지 않는다. 초기 ADMIN 계정은 일반 회원가입 후 운영자가 DB에서 `role=ADMIN`으로 수동 변경한다.
 
-```text
-예약 남은 참여 가능 인원
-= 테이블 정원
-- 현재 유효한 결제 완료 참여 인원
-```
+## 3. 테이블·인원 정책
 
-## 4. 예약 생성·추가 참여·모집 마감
-
-### 최초 예약 생성
+- `capacity`는 `2`, `4`, `6`, `8`만 허용한다. 단건 테이블 등록·수정과 테이블·회차 일괄 등록에 동일하게 적용한다.
+- 합석 테이블의 `displayNumber`는 식당별 1부터 서버가 자동 발급하며, 삭제된 번호도 재사용하지 않는다.
+- 테이블 일괄 등록은 동일 `capacity`로 1회 최대 10개까지 허용한다.
+- 허용 범위 밖 `capacity`의 ErrorCode는 `INVALID_TABLE_CAPACITY`다.
+- 예약 생성(`CREATE`)은 `1 <= partySize <= table.capacity`여야 한다.
+- 추가 참여(`JOIN`)은 `1 <= partySize <= availableCapacity`여야 한다.
+- 잘못된 `partySize`는 `INVALID_PARTY_SIZE`, 추가 참여 가능 인원 초과는 `INSUFFICIENT_REMAINING_CAPACITY`다.
 
 ```text
-식당·날짜·시간·테이블 선택
-→ 본인 1명분 가상 예약금 결제
-→ 결제 성공
-→ 합석 예약과 최초 참여자 등록
-→ 참여자 RESERVED
-→ 유효 참여 인원 1명
-→ 예약 RECRUITING
+currentParticipantCount
+= PAID 상태 유효 참여자의 partySize 합계
+
+임시 선점 인원
+= 만료되지 않은 READY 결제의 partySize 합계
+
+availableCapacity
+= capacity - currentParticipantCount - 임시 선점 인원
 ```
 
-- 결제 실패 시 예약·참여자·참여 인원을 반영하지 않는다.
-- 결제 성공 후 예약·참여자 저장 실패의 보상 방식은 결정 필요다.
+- V1 예약 상세는 `currentParticipantCount`, `availableCapacity`, `confirmationThreshold`, `reservationStatus`, `recruitmentStatus`의 집계 정보를 제공한다.
 
-### 추가 참여
+## 4. 예약·모집 상태
 
-다음 조건을 모두 만족할 때만 참여할 수 있다.
+### 상태 enum
 
 ```text
-예약 상태가 RECRUITING 또는 CONFIRMED
-AND 식사 시작 2시간 전보다 이전
-AND 유효 참여 인원 < 테이블 정원
+ReservationStatus: RECRUITING, CONFIRMED, CANCELLING, CANCELLED, CLOSED
+RecruitmentStatus: OPEN, CLOSED
+ParticipationStatus: RESERVED, NO_SHOW, CANCEL_REQUESTED, CANCELLED
+PaymentStatus: READY, PAID, EXPIRED, FAILED, REFUNDED
+RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ```
 
-- 추가 참여자도 본인 1명분 예약금을 결제한다.
-- 결제 성공 후 참여자를 `RESERVED`로 등록하고 참여 인원을 증가시킨다.
-- 유효 참여 인원이 2명 이상이면 `CONFIRMED`로 전환하거나 유지한다.
-- `CONFIRMED`는 모집 종료가 아니다.
-- 잔여 자리가 있고 모집 마감 전이면 계속 참여할 수 있다.
+`CANCELLING`(Reservation)·`CANCEL_REQUESTED`(Participant)는 취소가 접수됐지만 참여자별 외부 환불이 아직 완료되지 않은 중간 상태다(#44). `isActive()`는 `RECRUITING`·`CONFIRMED`만 참으로 취급해 `CANCELLING`도 신규 JOIN·결제 확정 대상에서 제외한다.
 
-### 모집 마감
+**2026-08-05 Human 확정**: Issue #44 완료 조건은 원래 `RefundStatus.UNKNOWN` 추가를 요구했으나, `UNKNOWN`처럼 애매한 상태를 늘리지 않기로 확정했다. timeout·connection reset 등 결과 불명확은 `REQUESTED` 유지로 표현하는 것이 최종 정책이다.
 
-- 식사 시작 2시간 전에 추가 참여 모집을 종료한다.
-- 마감 시 유효 참여자가 1명이면 예약 전체를 취소하고 전액 환불한다.
-- 마감 시 유효 참여자가 2명 이상이면 `CONFIRMED`를 유지한다.
-- 마감 이후 취소로 빈자리가 생겨도 재모집하지 않는다.
-- 모집 마감의 기술 구현 방식은 기능 Issue에서 결정한다.
+### 확정 기준과 흐름
 
-## 5. 상태 정책
+| 테이블 정원 | confirmationThreshold |
+|---:|---:|
+| 2 | 2 |
+| 4 | 3 |
+| 6 | 5 |
+| 8 | 7 |
 
-### 예약 상태
+1. 최초 결제 완료 시 예약은 `RECRUITING + OPEN`으로 시작한다.
+2. 확정 기준 도달 시 `CONFIRMED + OPEN`이 된다.
+3. 정원 도달 시 `CONFIRMED + CLOSED`가 된다.
+4. 식사 시작 2시간 전에 모집은 `CLOSED`가 된다.
+5. 모집 마감 시 확정 기준 미달이면 예약은 `CANCELLED`가 되고 참여자 전액을 환불한다.
 
-```text
-RECRUITING
-CONFIRMED
-CANCELLED
-CLOSED
-```
+`CONFIRMED`는 모집 종료를 의미하지 않는다.
 
-- `RECRUITING`: 유효 참여자 1명
-- `CONFIRMED`: 유효 참여자 2명 이상
-- `CANCELLED`: 예약 전체 취소
-- `CLOSED`: 식사 회차와 참여자 처리가 종료된 예약
+### 최초 예약자 수동 모집 마감
 
-`CLOSED` 전환 시점과 미처리 참여자의 기본 처리 방식은 결정 필요다.
+- 최초 예약자만 `reservationStatus=CONFIRMED`와 `recruitmentStatus=OPEN`을 모두 만족할 때 모집을 `CLOSED`로 변경할 수 있다.
+- `RECRUITING` 예약은 수동 마감할 수 없고, 이미 `CLOSED`인 모집을 중복 마감하거나 다시 `OPEN`으로 변경할 수 없다.
+- 수동 마감 자체는 TimeSlot을 복구하지 않는다. TimeSlot 재사용은 Reservation 전체가 `CANCELLED`된 뒤에만 판단한다.
 
-### 참여자 상태
+## 5. 예약·결제·환불
 
-```text
-RESERVED
-CANCELLED
-VISITED
-NO_SHOW
-```
+### 예약 결제 준비
 
-- `RESERVED`: 예약금 결제 성공 후 유효 참여 중
-- `CANCELLED`: 본인 참여 취소 또는 예약 전체 취소
-- `VISITED`: 사장님이 정상 방문으로 처리
-- `NO_SHOW`: 사장님이 노쇼로 처리
+1. 클라이언트는 `/api/reservations/prepare`에 `type`, `targetId`, `partySize`를 전송한다.
+2. `CREATE`의 `targetId`는 `sessionId`, `JOIN`의 `targetId`는 `reservationId`다.
+3. 서버는 좌석을 10분간 임시 선점하고 `PaymentStatus.READY`와 PortOne `paymentId`를 생성한다.
+4. 결제 성공 전에는 예약 또는 참여자를 생성하지 않는다. 검증 실패는 `FAILED`, 시간 만료는 `EXPIRED`로 구분한다. 좌석은 만료된 `READY`를 `expiresAt` 계산에서 제외해 즉시 반환한다.
 
-### 결제 상태
+### 결제 완료와 웹훅
 
-```text
-PAID
-FAILED
-REFUNDED
-```
+- 결제 당사자는 `/api/payments/{paymentId}/complete`로 결제 완료를 검증한다.
+- 당사자가 아니면 `PAYMENT_ACCESS_DENIED`, 대상 결제가 없으면 `PAYMENT_NOT_FOUND`, 내부 `EXPIRED` 또는 만료된 `READY`면 `409 PAYMENT_EXPIRED`를 반환한다. 이미 완료 처리된 Payment는 기존 완료 결과를 담아 멱등 응답한다.
+- PortOne 웹훅은 `/api/webhooks/portone`의 `permitAll`·JWT 필터 우회와 별개로, JSON 해석 전 원본 Body 및 `webhook-id`·`webhook-signature`·`webhook-timestamp`를 공식 SDK로 검증한다.
+- 완료 API와 웹훅은 입구 인증·검증만 분리하고 PortOne 재조회, 상태·금액·통화 검증, 동일 Payment 행 비관적 락, 결과 반영을 공통 처리로 수렴한다. PAID 전환과 Reservation·ReservationParticipant 생성은 하나의 트랜잭션이다.
+- 웹훅의 서명 실패는 `400`, 알려진 영구 업무 실패는 오류 로그 후 `200`, PortOne 네트워크·DB·예상하지 못한 오류는 `5xx`다.
+- 외부 PAID인데 내부가 `EXPIRED` 또는 만료 `READY`면 `event=PAYMENT_COMPENSATION_REQUIRED`와 `paymentId`, `externalStatus`, `internalStatus`, `expiresAt`, `reason`을 기록하고 예약 확정은 하지 않는다. 자동 취소·환불·보상 트랜잭션은 이번 범위에서 제외한다.
 
-결제 상태는 예약 전체가 아니라 참여자별 결제 건에 적용한다.
+### READY 만료 정규화
 
-## 6. 취소·환불 정책 — v2
+- `Payment.expireIfNeeded(now)`는 `READY && expiresAt <= now`일 때만 멱등적으로 `EXPIRED`로 전이한다. `PAID`, `FAILED`, `REFUNDED`, `EXPIRED` 또는 만료 전 `READY`는 변경하지 않는다.
+- 스케줄러는 `application-local.yml` 또는 배포 환경변수의 `fixedDelay=60s`, `batchSize=100`으로 local·운영에서 활성화하고 test에서는 비활성화한다. 후보는 `READY && expiresAt <= cutoff`을 `expiresAt ASC, paymentId(내부 PK) ASC`로 최대 100건 조회한다.
+- Processor는 각 내부 PK를 같은 Payment 행 비관적 락으로 다시 읽어 별도 REQUIRED 트랜잭션에서 정규화한다. 스케줄러는 예약 확정·외부 취소·환불을 호출하지 않는다.
 
-### 식사 시작 2시간 전까지
+### 취소·환불
 
-- 사용자는 본인 예약 참여를 취소할 수 있다.
-- 취소 사용자의 예약금은 전액 환불하고 참여자 상태를 `CANCELLED`로 변경한다.
-- 최초 예약자가 취소하면 예약 전체를 `CANCELLED`로 변경한다.
-- 귀책 없는 나머지 참여자는 전액 환불한다.
-- 예약 전체가 취소되면 테이블·시간을 다시 예약 가능 상태로 복구한다.
-- 추가 참여자 취소 후 2명 이상이면 `CONFIRMED`를 유지한다.
-- 1명만 남으면 `RECRUITING`으로 전환하고 모집 마감 전까지 재모집한다.
+- V2에서 MEMBER는 서버 시간 기준 식사 시작 2시간 전까지만 본인 `ReservationParticipant`의 신청 인원 전체를 취소한다. 부분 취소·부분 환불·마감 이후 무환불 취소는 이번 범위에 없다.
+- 취소는 접수·외부 환불 실행·완료 확정 세 단계로 나뉜다(#44, #45). **접수(짧은 트랜잭션)**: 최초 예약자 취소는 예약을 `CANCELLING`으로, 유효 참여자를 모두 `CANCEL_REQUESTED`로 전환해 커밋한다. 추가 참여자 취소는 해당 `ReservationParticipant`만 `CANCEL_REQUESTED`로 전환한다. 이 시점의 좌석은 계속 점유한 것으로 계산한다. **외부 실행(트랜잭션 밖)**: 접수 커밋 뒤 참여자별로 Payment 전체 금액의 Refund를 생성해 PortOne 환불을 요청한다. **완료 확정(짧은 트랜잭션)**: 환불이 완료되면 해당 참여자만 `CANCEL_REQUESTED → CANCELLED`로 확정한다.
+- 최초 예약자 취소는 모든 유효 참여자의 환불이 각각 완료될 때마다 그 참여자만 `CANCELLED`로 확정되고, 남은 `CANCEL_REQUESTED`가 없어야 예약 전체가 `CANCELLED`로 확정된다. 예약이 `CANCELLED`로 확정되고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없을 때만 TimeSlot을 새 예약 가능 상태로 복구한다.
+- 추가 참여자 취소는 본인 환불이 완료되면 해당 `ReservationParticipant`만 `CANCELLED`로 확정한다. `currentParticipantCount`와 `availableCapacity`를 재계산하며, 모집이 `OPEN`일 때 확정 기준 미달이면 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다.
+- 수동 마감된 `CONFIRMED + CLOSED` 예약에서 추가 참여자 취소 확정 후 기준 이상이면 `CONFIRMED + CLOSED`를 유지한다. 기준 미달이면 남은 유효 참여자도 같은 접수·실행·확정 절차로 전체 취소한다. 모집은 다시 `OPEN`으로 변경하지 않으며, `CANCELLING` 전환 시점부터 ChatRoom 신규 메시지 전송을 종료한다.
+- 모집 마감은 정원 도달 또는 식사 시작 2시간 전에 `CLOSED`가 된다. 마감 시 확정 기준 미달이면 예약 전체를 같은 절차로 취소하며, 취소 좌석을 재모집하지 않는다.
+- V2에서 OWNER 또는 시스템 귀책으로 예약을 진행할 수 없으면 예약 전체를 같은 접수·실행·확정 절차로 취소한다. 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot 재사용은 예약이 `CANCELLED`로 확정되고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없는 경우만 가능하다.
+- MEMBER 취소는 `NO_SHOW`, `CANCEL_REQUESTED` 또는 이미 `CANCELLED`인 참여자에게 허용되지 않는다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
+- Refund는 Payment 전체 금액을 대상으로 하며 Payment당 하나만 생성한다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.REFUNDED`를 반영한다. 결과가 불명확하면(timeout·connection reset 등) `RefundStatus.REQUESTED`를 유지하고 자동으로 재환불하지 않는다(#45). READY 결제의 명시적 사용자 취소는 현재 범위에 없다.
+- 사용자는 환불 처리 API를 직접 호출하지 않으며, V1에서 본인 환불 목록·상세를 조회한다.
 
-### 식사 시작 2시간 이후
+### TimeSlot 활성 예약 정합성
 
-- 추가 참여자를 모집하지 않는다.
-- 일반 참여자는 개인 사유로 취소할 수 있지만 예약금은 환불하지 않는다.
-- 미환불 예약금은 지급 예정 예약금에 포함한다.
-- 취소 후 2명 이상이면 예약을 유지한다.
-- 2명 미만이 되어 식사를 진행할 수 없으면 예약 전체를 취소하고 귀책 없는 참여자는 전액 환불한다.
-- **2시간 이후 최초 예약자 취소의 세부 처리는 결정 필요다.**
+- TimeSlot은 취소 이력을 포함해 여러 Reservation을 연결할 수 있지만, `RECRUITING` 또는 `CONFIRMED` 활성 Reservation은 동시에 최대 1건이다.
+- `reservation.time_slot_id` 단순 UNIQUE는 사용하지 않는다. 새 최초 예약 또는 READY Payment 생성은 대상 TimeSlot 행을 비관적 락으로 조회하고, 활성 Reservation 존재 여부를 확인한 뒤 트랜잭션 종료까지 잠금을 유지한다.
+- `CREATE` 결제 준비는 활성 Reservation뿐 아니라 동일 TimeSlot의 만료되지 않은 `paymentPurpose=CREATE`, `paymentStatus=READY` Payment도 확인한다. 둘 다 없을 때만 새 CREATE READY를 생성하며, 유효한 CREATE READY는 TimeSlot당 최대 1건이다.
+- 유효한 CREATE READY가 있으면 `409 ACTIVE_RESERVATION_ALREADY_EXISTS`로 거절한다. 해당 Payment가 만료되거나 `FAILED`가 된 뒤에는 새 CREATE 요청을 허용한다. 기존 Reservation에 대한 `JOIN READY`는 `availableCapacity`를 기준으로 별도 처리한다.
+- 실제 구현 Issue에서는 동일 TimeSlot에 대한 동시 최초 예약 생성 시 활성 Reservation 또는 유효한 CREATE READY의 성공이 최대 1건인지 검증한다.
 
-### 식당·시스템 귀책
+## 6. 노쇼·지급 예정 금액
 
-- 정상 진행이 불가능하면 예약 전체를 취소한다.
-- 참여자 전원에게 예약금을 전액 환불한다.
-- 사용자 노쇼율에 반영하지 않는다.
-- 테이블·시간을 다시 예약 가능 상태로 복구한다.
+- V2에서 OWNER는 식사 종료 후 노쇼 처리 대상 참여자를 조회하고, 참여자를 노쇼 처리·해제하며 이력을 조회한다.
+- V1 지급 예정 금액은 `paidAt`이 존재하는 결제 완료 이력의 금액 합계에서 `COMPLETED` 환불 금액 합계를 뺀 조회 계산값이다. 완료 환불로 Payment의 현재 상태가 `REFUNDED`여도 원결제 금액은 결제 완료액에 포함한다.
 
-## 7. 방문·노쇼 정책 — v2
+## 7. 채팅
 
-- 방문 코드를 사용하지 않는다.
-- 사용자가 직접 체크인하거나 노쇼를 확정하지 않는다.
-- 자동 노쇼 처리를 확정 정책으로 사용하지 않는다.
-- 사장님이 본인 식당 예약의 참여자별 상태를 처리한다.
+- V2에서 최초 예약 결제 완료 시 예약당 채팅방 1개를 생성한다. 별도 생성 API는 없다.
+- 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료되고 OWNER와 ADMIN은 참여하지 않는다.
+- 예약이 `CANCELLED` 또는 `CLOSED`면 새 메시지 전송을 종료하고, 기존 메시지는 조회할 수 있다.
+- 메시지는 DB에 저장하며 과거 메시지는 cursor 기반으로 조회한다.
+- WebSocket 연결 Endpoint는 `/ws`다.
+- STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
+- HTTP 조회 경로는 `GET /api/chat/rooms/{chatRoomId}/messages`다.
+- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
 
-```text
-RESERVED → VISITED
-RESERVED → NO_SHOW
-```
+## 8. 버전 범위
 
-- `NO_SHOW` 예약금은 환불하지 않고 지급 예정 예약금에 포함한다.
-- 식당·시스템 귀책으로 취소된 참여자는 노쇼 처리하지 않는다.
-- 처리 시작·마감 시간, 상태 정정, 미처리 참여자 처리와 `CLOSED` 전환 방식은 결정 필요다.
+### V1
 
-## 8. 채팅 정책 — v2
+- 회원·인증, 식당·테이블·회차 관리 및 사용자 조회
+- 식당 이미지 Presigned URL 업로드와 조회용 Presigned GET URL 반환
+- 예약 가능 여부, 결제 준비, 예약·참여 집계 조회, 모집 마감
+- PortOne 결제 완료 검증·웹훅, 결제·환불 조회
+- 지급 예정 금액·예약별 지급 예정 내역·상세
 
-- 해당 예약의 최초 예약자와 유효한 참여자만 접근한다.
-- 사장님은 참여하지 않는다.
-- 관리자는 참여하지 않는다.
-- 비참여자는 입장·조회·전송할 수 없다.
-- 메시지 조회와 전송 시 예약 참여 관계를 서버에서 검증한다.
-- 채팅 장애가 예약·결제 흐름에 영향을 주면 안 된다.
+### V2
 
-다음은 결정 필요다.
+- 로그아웃·토큰 재발급
+- 참여 취소·식당 귀책 취소·모집 마감/실패/환불/회차 복구 내부 처리
+- 유효 참여자 최소 목록, 노쇼, 관리자 현황·통계
+- 예약 참여자 채팅과 API·비즈니스 로그, 소프트 딜리트·배포 운영 정책
 
-- 채팅방 생성 시점
-- `RECRUITING` 상태의 접근 허용 여부
-- 취소 참여자의 읽기·쓰기 권한
-- 회차 종료 후 읽기·쓰기 권한
-- 메시지 저장·보관 기간
-- 구체적인 실시간 통신 방식
+### V3
 
-## 9. 지급 예정 예약금 — v2
+- Actuator 모니터링·헬스 체크
+- 실패 결제·환불 재처리, 정산 데이터 재집계
+- 부하 테스트, 검색 성능·이벤트 처리·모니터링·배포 고도화
 
-밥풀은 식사대금이 아니라 예약금만 처리한다.
+Redis는 현재 확정 기능·ERD 선행 계약에 포함하지 않으며, 채팅에는 Redis Pub/Sub나 Kafka를 사용하지 않는다. Kafka는 V3 확정 기술로, 좌석 차감·예약 확정·결제 검증·환불 상태 변경은 동기 트랜잭션 안에서 완료하고, 트랜잭션 완료 후 알림·운영 지표 집계·정산 후속 처리·실패 이벤트 재처리에 사용한다. Consumer는 중복 수신을 고려해 멱등성을 보장한다.
 
-```text
-지급 예정 예약금
-= PAID 금액 합계
-- REFUNDED 금액 합계
-```
+## 9. API 공통 계약
 
-포함:
+- 일반 서비스 API는 `/api/**`를 사용하며 URL에 버전을 넣지 않는다.
+- Actuator는 `/actuator/**`, WebSocket 연결 Endpoint는 `/ws`다.
+- 성공 응답은 `success`, `message`, `data`를, 실패 응답은 `success`, `code`, `message`를 사용한다.
+- OWNER·ADMIN API는 `/api/owner`, `/api/admin`으로 분리한다.
 
-- 정상 방문자의 예약금
-- 노쇼 예약금
-- 식사 시작 2시간 이후 개인 취소로 환불되지 않은 예약금
-
-제외:
-
-- 모집 실패 환불
-- 식당·시스템 귀책 환불
-- 다른 참여자의 취소로 식사가 무산되어 귀책 없는 참여자에게 환불한 금액
-
-실제 PG, POS 연동, 식사대금 결제, 계좌 송금, 수수료·세금과 재정산 시스템은 구현하지 않는다.
-
-## 10. 버전 범위
-
-### v1 — 핵심 예약 거래 흐름
-
-- 회원가입·로그인과 사용자·사장님 권한
-- 식당·합석 테이블·예약 회차 등록과 조회
-- 테이블 정원 `2·4·8`
-- 예약 생성·추가 참여
-- 개인별 가상 예약금 결제
-- `RECRUITING/CONFIRMED`와 참여 인원 반영
-- 기본 테스트·CI/CD·AWS 배포
-
-### v2 — 운영 안정화
-
-- 취소·환불과 모집 실패 자동 취소
-- 사장님의 참여자별 `VISITED/NO_SHOW` 처리
-- 지급 예정 예약금 조회
-- 예약 참여자 전용 채팅
-- 동시성·검색·관리자 최소 조회
-- 로그·모니터링
-
-### v3 — 측정 기반 확장
-
-- K6와 쿼리·인덱스 개선
-- 병목이 확인된 경우 Redis
-- AI 검색 후보
-- 알림 고도화
-- 필요성이 확인된 경우 Kafka와 배포 고도화
-
-v1 완료 전에 v3 기술을 우선 구현하지 않는다.
-
-## 11. 역할 분배
+## 10. 역할 분배
 
 | 이름 | 핵심 도메인 | 공통·도전 기술 |
 |---|---|---|
 | 김현승 | 예약금 결제·환불·지급 예정 예약금 | AI·채팅 |
 | 김홍기 | 합석 테이블·예약 시간·검색 | AWS·CI/CD·로그·모니터링 |
-| 배지현 | 예약·가용 인원·좌석 재고·동시성 | 프론트엔드·Kafka |
-| 정용태 | 회원·인증·사장님·식당·관리자·예약 완료·취소 | 캐시·조회 성능·K6 |
+| 배지현 | 예약·참여·좌석 재고·동시성 | 프론트엔드·Kafka |
+| 정용태 | 회원·인증·사장님·식당·관리자 | 캐시·조회 성능·K6 |
 
-여러 영역이 연결되는 기능은 [`DOMAIN_DEPENDENCIES.md`](./DOMAIN_DEPENDENCIES.md)의 공동 작업 경계를 따른다.
+## 11. 관련 문서
 
-## 12. 현재 결정 필요
-
-- 식사 시작 2시간 이후 최초 예약자 취소
-- 결제 성공 후 예약·참여자 저장 실패 보상
-- 마지막 자리 동시 결제 결과
-- 동일 사용자의 동일 시간대 중복 참여 제한
-- 방문·노쇼 처리 시작·마감 시간
-- 잘못된 방문·노쇼 상태 정정
-- 미처리 참여자와 `CLOSED` 전환 방식
-- 채팅방 생성 시점과 `RECRUITING` 접근
-- 취소·종료 후 채팅 권한
-- 채팅 메시지 저장·보관 기간
-- 실제 환불 처리 방식
-- 관리자 상세 제재·승인 범위
-- Redis·Kafka·AI 기능의 실제 도입 범위
-
-노쇼 이의 제기, 실제 계좌 송금과 재정산 시스템은 현재 범위에 추가하지 않는다.
-
-## 13. 관련 문서
-
-- 전체 사용자 흐름: [`bobfull_full_flowchart_mermaid.md`](./bobfull_full_flowchart_mermaid.md)
-- 도메인 의존성과 변경 영향: [`DOMAIN_DEPENDENCIES.md`](./DOMAIN_DEPENDENCIES.md)
-- AI 협업 절차: [`AI_WORKFLOW.md`](./AI_WORKFLOW.md)
-- GitHub 협업 규칙: [`GITHUB_RULES.md`](./GITHUB_RULES.md)
-
-정책 변경 시 이 문서와 실제 영향을 받는 문서만 수정한다. 기존 상태도·플로우·시퀀스를 새 문서에 중복 복사하지 않는다.
+- 제품 방향·초기 타깃·MVP 범위: [`PRD.md`](./PRD.md)
+- API 명세: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md)
+- 데이터 모델: [`ERD.md`](./ERD.md)
+- 논리 책임 경계: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- 도메인 변경 영향: [`DOMAIN_DEPENDENCIES.md`](./DOMAIN_DEPENDENCIES.md)

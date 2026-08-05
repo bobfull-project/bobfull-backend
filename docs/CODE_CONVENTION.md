@@ -12,6 +12,7 @@
 
 ## 1. 기본 원칙
 
+- Java 코드 스타일은 [NAVER CAMPUS HACKDAY Java 코딩 컨벤션](https://naver.github.io/hackday-conventions-java/)을 기본 기준으로 사용하며, 충돌 시 이 문서의 프로젝트별 규칙을 우선한다.
 - 기능 단위로 패키지를 나눈다.
 - 각 기능 내부는 역할에 따라 `controller`, `service`, `repository`, `dto`, `entity`로 구분한다.
 - Controller는 요청과 응답만 담당한다.
@@ -397,11 +398,13 @@ INTERNAL_SERVER_ERROR
 
 ```java
 .requestMatchers("/api/auth/**").permitAll()
-.requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+.requestMatchers(HttpMethod.GET, "/api/restaurants", "/api/restaurants/{restaurantId}").permitAll()
 .requestMatchers("/api/owner/**").hasRole("OWNER")
 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 .anyRequest().authenticated()
 ```
+
+공개 경로는 넓은 패턴 대신 API 명세에 실제로 존재하는 인증 불필요 Method·Path만 명시적으로 나열한다.
 
 ---
 

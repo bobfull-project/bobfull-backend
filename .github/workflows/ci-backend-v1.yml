@@ -1,0 +1,51 @@
+name: CI Backend V1
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/ci-backend-v1.yml'
+      - 'Dockerfile'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'lambda/**'
+      - 'scripts/aws/**'
+      - 'src/**'
+
+concurrency:
+  group: backend-v1-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Gradle check and Docker build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Gradle build and test
+        run: |
+          set -euo pipefail
+          sed -i 's/\r$//' ./gradlew
+          chmod +x ./gradlew
+          ./gradlew clean check bootJar --no-daemon
+
+      - name: Docker build
+        run: |
+          set -euo pipefail
+          docker build -t bobfull-backend-ci:${GITHUB_SHA} .

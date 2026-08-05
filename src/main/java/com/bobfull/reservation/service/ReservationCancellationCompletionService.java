@@ -1,0 +1,59 @@
+package com.bobfull.reservation.service;
+
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.reservation.entity.ParticipationStatus;
+import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.repository.ReservationParticipantRepository;
+import com.bobfull.reservation.repository.ReservationRepository;
+import java.time.Instant;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 환불 완료 후 Participant와 Reservation 상태를 마무리하는 예약 도메인 전용 서비스다.
+ * 취소 접수·환불 요청 책임은 갖지 않으며, 결제 완료 트랜잭션에 참여해 내부 상태를 함께 확정한다.
+ */
+@Service
+public class ReservationCancellationCompletionService {
+
+    private final ReservationRepository reservationRepository;
+    private final ReservationParticipantRepository reservationParticipantRepository;
+    private final ReservationCancellationTransactionService transactionService;
+
+    public ReservationCancellationCompletionService(
+            ReservationRepository reservationRepository,
+            ReservationParticipantRepository reservationParticipantRepository,
+            ReservationCancellationTransactionService transactionService
+    ) {
+        this.reservationRepository = reservationRepository;
+        this.reservationParticipantRepository = reservationParticipantRepository;
+        this.transactionService = transactionService;
+    }
+
+    /** Reservation을 먼저 잠그고 조건부 UPDATE로 참여자 완료 처리권을 하나만 허용한다. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void complete(Long reservationId, Long reservationParticipantId, Instant completedAt) {
+        Reservation reservation = reservationRepository.findWithLockById(reservationId)
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+
+        int updatedRows = reservationParticipantRepository.completeCancelIfRequested(
+                reservationParticipantId, completedAt);
+        if (updatedRows == 0) {
+            return;
+        }
+
+        if (reservation.isCancelling()) {
+            boolean hasRemainingCancellation = reservationParticipantRepository
+                    .existsByReservationIdAndParticipationStatus(
+                            reservationId, ParticipationStatus.CANCEL_REQUESTED);
+            if (!hasRemainingCancellation) {
+                reservation.cancel();
+            }
+            return;
+        }
+
+        transactionService.recalculateAfterCompletion(reservation);
+    }
+}
