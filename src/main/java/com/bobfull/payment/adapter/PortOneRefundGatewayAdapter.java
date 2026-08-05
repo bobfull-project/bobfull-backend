@@ -39,7 +39,7 @@ public class PortOneRefundGatewayAdapter implements PortOneRefundRequester {
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Authorization", "PortOne " + properties.apiSecret())
                 .header("Idempotency-Key", "\"" + idempotencyKey + "\"")
-                .body(new CancelRequest(properties.storeId(), amount, reason))
+                .body(new CancelRequest(properties.storeId(), amount.longValueExact(), reason))
                 .retrieve().body(Map.class);
         Object cancellationValue = response == null ? null : response.get("cancellation");
         Map<?, ?> cancellation = cancellationValue instanceof Map<?, ?> value ? value : null;
@@ -54,7 +54,7 @@ public class PortOneRefundGatewayAdapter implements PortOneRefundRequester {
         };
     }
 
-    private record CancelRequest(String storeId, BigDecimal amount, String reason) { }
+    private record CancelRequest(String storeId, long amount, String reason) { }
 
     static RefundResult toRefundResult(PaymentCancellation cancellation) {
         if (!(cancellation instanceof PaymentCancellation.Recognized recognized)) {

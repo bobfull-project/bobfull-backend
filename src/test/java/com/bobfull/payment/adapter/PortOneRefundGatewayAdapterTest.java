@@ -31,7 +31,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class PortOneRefundGatewayAdapterTest {
 
     private static final String PAYMENT_ID = "payment-1";
-    private static final BigDecimal REFUND_AMOUNT = BigDecimal.valueOf(10000);
+    // DB DECIMAL(19,2) 컬럼에서 조회된 실제 Refund/Payment.amount와 동일하게 scale=2로 고정한다.
+    // scale=0 값만 쓰면 REST 요청 본문에 "10000.00"처럼 소수점이 섞여 나가는 회귀를 테스트가 못 잡는다.
+    private static final BigDecimal REFUND_AMOUNT = new BigDecimal("10000.00");
     private static final Instant REFUND_REQUESTED_AT = Instant.parse("2026-08-05T00:00:00Z");
 
     @Test
