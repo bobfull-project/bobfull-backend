@@ -993,7 +993,8 @@ OWNER 응답 예시:
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "tableId": 1
+    "tableId": 1,
+    "displayNumber": 1
   }
 }
 ```
@@ -1006,6 +1007,55 @@ OWNER 응답 예시:
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
+| `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
+
+---
+
+## 4-1-1. 합석 테이블 일괄 등록 `[V1]`
+
+## 1. INFO
+
+- 설명: 동일 정원의 테이블을 한 번에 1~10개 등록한다. 표시 번호는 식당별 기존 최대 번호 다음부터 연속 발급한다.
+- Method: `POST`
+- Path: `/api/owner/restaurants/{restaurantId}/tables/bulk`
+- Auth: `OWNER`
+
+## 2. Request
+
+```json
+{
+  "capacity": 4,
+  "count": 3
+}
+```
+
+## 3. Response
+
+- Status: `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "createdTableCount": 3,
+    "tables": [
+      { "tableId": 1, "restaurantId": 1, "displayNumber": 1, "capacity": 4, "status": "ACTIVE" },
+      { "tableId": 2, "restaurantId": 1, "displayNumber": 2, "capacity": 4, "status": "ACTIVE" },
+      { "tableId": 3, "restaurantId": 1, "displayNumber": 3, "capacity": 4, "status": "ACTIVE" }
+    ]
+  }
+}
+```
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `400` | `INVALID_TABLE_CAPACITY` | capacity가 `2`, `4`, `6`, `8` 중 하나가 아님 |
+| `400` | `INVALID_INPUT_VALUE` | count가 1~10 범위를 벗어나거나 요청값 검증 실패 |
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | 본인 식당이 아님 |
 | `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
 
 ---
@@ -1043,6 +1093,7 @@ OWNER 응답 예시:
       {
         "tableId": 1,
         "restaurantId": 1,
+        "displayNumber": 1,
         "capacity": 4,
         "status": "ACTIVE"
       }
@@ -1096,6 +1147,7 @@ OWNER 응답 예시:
   "data": {
     "tableId": 1,
     "restaurantId": 1,
+    "displayNumber": 1,
     "capacity": 4,
     "status": "ACTIVE"
   }

@@ -37,6 +37,8 @@
 ## 3. 테이블·인원 정책
 
 - `capacity`는 `2`, `4`, `6`, `8`만 허용한다. 단건 테이블 등록·수정과 테이블·회차 일괄 등록에 동일하게 적용한다.
+- 합석 테이블의 `displayNumber`는 식당별 1부터 서버가 자동 발급하며, 삭제된 번호도 재사용하지 않는다.
+- 테이블 일괄 등록은 동일 `capacity`로 1회 최대 10개까지 허용한다.
 - 허용 범위 밖 `capacity`의 ErrorCode는 `INVALID_TABLE_CAPACITY`다.
 - 예약 생성(`CREATE`)은 `1 <= partySize <= table.capacity`여야 한다.
 - 추가 참여(`JOIN`)은 `1 <= partySize <= availableCapacity`여야 한다.

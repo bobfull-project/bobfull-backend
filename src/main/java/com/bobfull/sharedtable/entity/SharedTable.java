@@ -26,6 +26,9 @@ public class SharedTable extends BaseTimeEntity {
     @Column(name = "restaurant_id", nullable = false)
     private Long restaurantId;
 
+    @Column(name = "display_number", nullable = false)
+    private Integer displayNumber;
+
     @Column(nullable = false)
     private Integer capacity;
 
@@ -39,14 +42,19 @@ public class SharedTable extends BaseTimeEntity {
     protected SharedTable() {
     }
 
-    private SharedTable(Long restaurantId, Integer capacity) {
+    private SharedTable(Long restaurantId, Integer displayNumber, Integer capacity) {
         this.restaurantId = restaurantId;
+        this.displayNumber = displayNumber;
         this.capacity = capacity;
         this.status = SharedTableStatus.ACTIVE;
     }
 
     public static SharedTable create(Long restaurantId, Integer capacity) {
-        return new SharedTable(restaurantId, capacity);
+        return new SharedTable(restaurantId, 1, capacity);
+    }
+
+    public static SharedTable create(Long restaurantId, Integer displayNumber, Integer capacity) {
+        return new SharedTable(restaurantId, displayNumber, capacity);
     }
 
     public void updateCapacity(Integer capacity) {
@@ -63,6 +71,10 @@ public class SharedTable extends BaseTimeEntity {
 
     public Long getRestaurantId() {
         return restaurantId;
+    }
+
+    public Integer getDisplayNumber() {
+        return displayNumber;
     }
 
     public Integer getCapacity() {

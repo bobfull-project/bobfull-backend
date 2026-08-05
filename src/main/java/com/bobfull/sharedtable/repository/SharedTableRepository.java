@@ -7,6 +7,8 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface SharedTableRepository extends JpaRepository<SharedTable, Long> {
 
@@ -17,4 +19,7 @@ public interface SharedTableRepository extends JpaRepository<SharedTable, Long> 
     List<SharedTable> findAllByRestaurantIdAndDeletedAtIsNull(Long restaurantId);
 
     List<SharedTable> findAllByIdInAndDeletedAtIsNull(Collection<Long> ids);
+
+    @Query("select coalesce(max(t.displayNumber), 0) from SharedTable t where t.restaurantId = :restaurantId")
+    Integer findMaxDisplayNumberByRestaurantId(@Param("restaurantId") Long restaurantId);
 }
