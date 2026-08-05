@@ -64,11 +64,14 @@ public class RefundReconciliationScheduler {
                 log.warn("event=REFUND_MATCH_AMBIGUOUS refundId={} paymentId={} reason={}",
                         refund.getId(), refund.getPayment().getPaymentId(), result.detail());
             }
-        } catch (RuntimeException exception) {
+        } catch (RefundReconciliationProcessor.RefundLookupException exception) {
             lookupFailures.put(refund.getId(), now);
             log.error("event=REFUND_LOOKUP_FAILED refundId={} paymentId={} reason={}", refund.getId(),
                     refund.getPayment().getPaymentId(), exception.toString(), exception);
             logMultipleFailures(now);
+        } catch (RuntimeException exception) {
+            log.error("event=REFUND_RECONCILIATION_REQUIRED level=ERROR refundId={} paymentId={} reason={}",
+                    refund.getId(), refund.getPayment().getPaymentId(), exception.toString(), exception);
         }
     }
 

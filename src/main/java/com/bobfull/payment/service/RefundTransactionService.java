@@ -109,9 +109,9 @@ public class RefundTransactionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markPgChecked(Long refundId) {
-        Refund refund = refundRepository.findById(refundId)
-                .orElseThrow(() -> new CustomException(PaymentErrorCode.REFUND_ID_NOT_FOUND));
-        refund.markPgChecked(clock.instant());
+        if (refundRepository.updateLastPgCheckedAt(refundId, clock.instant()) == 0) {
+            throw new CustomException(PaymentErrorCode.REFUND_ID_NOT_FOUND);
+        }
     }
 
     @Transactional

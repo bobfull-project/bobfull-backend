@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface RefundRepository extends JpaRepository<Refund, Long> {
 
@@ -44,6 +45,11 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
             @org.springframework.data.repository.query.Param("updatedBefore") Instant updatedBefore,
             @org.springframework.data.repository.query.Param("checkedBefore") Instant checkedBefore,
             org.springframework.data.domain.Pageable pageable);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query("update Refund r set r.lastPgCheckedAt = :checkedAt where r.id = :refundId")
+    int updateLastPgCheckedAt(@org.springframework.data.repository.query.Param("refundId") Long refundId,
+                              @org.springframework.data.repository.query.Param("checkedAt") Instant checkedAt);
 
     @EntityGraph(attributePaths = "payment")
     Page<Refund> findAllByPayment_MemberId(Long memberId, Pageable pageable);

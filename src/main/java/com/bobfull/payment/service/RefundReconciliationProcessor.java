@@ -21,8 +21,16 @@ public class RefundReconciliationProcessor {
 
     public PortOneRefundRequester.ReconciliationResult reconcile(Refund refund) {
         try {
-            PortOneRefundRequester.ReconciliationResult result = refundRequester.reconcile(
-                    refund.getPayment().getPaymentId(), refund.getCancellationId(), refund.getAmount(), refund.getRequestedAt());
+            if (refund.getAmount().compareTo(refund.getPayment().getAmount()) != 0) {
+                return PortOneRefundRequester.ReconciliationResult.ambiguous("refund amount differs from payment amount");
+            }
+            PortOneRefundRequester.ReconciliationResult result;
+            try {
+                result = refundRequester.reconcile(refund.getPayment().getPaymentId(), refund.getCancellationId(),
+                        refund.getAmount(), refund.getRequestedAt());
+            } catch (RuntimeException exception) {
+                throw new RefundLookupException(exception);
+            }
             if (result.status() == PortOneRefundRequester.ReconciliationStatus.COMPLETED) {
                 completionService.reflectExternalResult(refund.getId(), result.cancellationId(), true);
             } else if (result.status() == PortOneRefundRequester.ReconciliationStatus.PROCESSING
@@ -34,5 +42,9 @@ public class RefundReconciliationProcessor {
             // 조회 결과와 상태 변경 실패 여부와 무관하게, 실제 PG 조회 시도는 기록한다.
             transactionService.markPgChecked(refund.getId());
         }
+    }
+
+    static class RefundLookupException extends RuntimeException {
+        RefundLookupException(Throwable cause) { super(cause); }
     }
 }

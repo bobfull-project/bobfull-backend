@@ -35,6 +35,7 @@ class RefundReconciliationProcessorTest {
         given(refund.getId()).willReturn(1L);
         given(refund.getPayment()).willReturn(payment);
         given(payment.getPaymentId()).willReturn("payment-1");
+        given(payment.getAmount()).willReturn(BigDecimal.TEN);
         given(refund.getAmount()).willReturn(BigDecimal.TEN);
         given(refund.getRequestedAt()).willReturn(Instant.parse("2026-08-05T00:00:00Z"));
     }
@@ -100,7 +101,8 @@ class RefundReconciliationProcessorTest {
                 eq(Instant.parse("2026-08-05T00:00:00Z"))))
                 .willThrow(new IllegalStateException("PortOne timeout"));
 
-        assertThatThrownBy(() -> processor.reconcile(refund)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> processor.reconcile(refund))
+                .isInstanceOf(RefundReconciliationProcessor.RefundLookupException.class);
 
         verify(transactionService).markPgChecked(1L);
         verify(completionService, never()).reflectExternalResult(org.mockito.ArgumentMatchers.anyLong(),
