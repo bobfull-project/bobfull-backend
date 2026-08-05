@@ -48,7 +48,9 @@ class RestaurantControllerWebTest {
     void 인증_없이_식당_목록을_검색할_수_있다() throws Exception {
         // given
         PageResponse<RestaurantSearchResponse> page = new PageResponse<>(
-                List.of(new RestaurantSearchResponse(1L, "밥풀식당", "제주시 애월읍 1", "한식", "흑돼지,혼밥", 10000)),
+                List.of(new RestaurantSearchResponse(
+                        1L, "밥풀식당", "제주시 애월읍 1", "한식", "흑돼지,혼밥", 10000,
+                        "https://image.example")),
                 0, 20, 1, 1);
         given(restaurantService.searchRestaurants(any(RestaurantSearchRequest.class), any(Pageable.class)))
                 .willReturn(page);
@@ -64,6 +66,7 @@ class RestaurantControllerWebTest {
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].restaurantId", is(1)))
                 .andExpect(jsonPath("$.data.content[0].keyword", is("흑돼지,혼밥")))
+                .andExpect(jsonPath("$.data.content[0].imageUrl", is("https://image.example")))
                 .andExpect(jsonPath("$.data.totalElements", is(1)));
     }
 
@@ -71,7 +74,9 @@ class RestaurantControllerWebTest {
     void 인증_없이_식당_상세를_조회할_수_있다() throws Exception {
         // given
         given(restaurantService.getRestaurantDetail(1L)).willReturn(
-                new RestaurantDetailResponse(1L, "밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000));
+                new RestaurantDetailResponse(
+                        1L, "밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000,
+                        "https://detail-image.example"));
 
         // when
         ResultActions result = mockMvc.perform(get("/api/restaurants/1"));
@@ -79,7 +84,8 @@ class RestaurantControllerWebTest {
         // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.restaurantId", is(1)))
-                .andExpect(jsonPath("$.data.name", is("밥풀식당")));
+                .andExpect(jsonPath("$.data.name", is("밥풀식당")))
+                .andExpect(jsonPath("$.data.imageUrl", is("https://detail-image.example")));
     }
 
     @Test

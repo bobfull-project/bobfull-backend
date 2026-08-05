@@ -11,9 +11,14 @@ public record OwnerRestaurantDetailResponse(
         String description,
         String keyword,
         Integer depositPerPerson,
-        RestaurantStatus status
+        RestaurantStatus status,
+        String imageUrl
 ) {
     public static OwnerRestaurantDetailResponse from(Restaurant restaurant) {
+        return from(restaurant, null);
+    }
+
+    public static OwnerRestaurantDetailResponse from(Restaurant restaurant, String imageUrl) {
         return new OwnerRestaurantDetailResponse(
                 restaurant.getId(),
                 restaurant.getName(),
@@ -22,7 +27,8 @@ public record OwnerRestaurantDetailResponse(
                 restaurant.getDescription(),
                 restaurant.getKeyword(),
                 restaurant.getDepositPerPerson(),
-                restaurant.getStatus()
+                restaurant.getStatus(),
+                imageUrl
         );
     }
 }

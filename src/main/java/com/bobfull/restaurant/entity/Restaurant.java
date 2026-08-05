@@ -48,6 +48,9 @@ public class Restaurant extends BaseTimeEntity {
     @Column(name = "deposit_per_person", nullable = false)
     private Integer depositPerPerson;
 
+    @Column(name = "image_key", length = 500)
+    private String imageKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private RestaurantStatus status;
@@ -65,7 +68,8 @@ public class Restaurant extends BaseTimeEntity {
             String category,
             String description,
             String keyword,
-            Integer depositPerPerson
+            Integer depositPerPerson,
+            String imageKey
     ) {
         this.ownerMemberId = ownerMemberId;
         this.name = name;
@@ -74,6 +78,7 @@ public class Restaurant extends BaseTimeEntity {
         this.description = description;
         this.keyword = keyword;
         this.depositPerPerson = depositPerPerson;
+        this.imageKey = imageKey;
         this.status = RestaurantStatus.ACTIVE;
     }
 
@@ -86,7 +91,20 @@ public class Restaurant extends BaseTimeEntity {
             String keyword,
             Integer depositPerPerson
     ) {
-        return new Restaurant(ownerMemberId, name, address, category, description, keyword, depositPerPerson);
+        return create(ownerMemberId, name, address, category, description, keyword, depositPerPerson, null);
+    }
+
+    public static Restaurant create(
+            Long ownerMemberId,
+            String name,
+            String address,
+            String category,
+            String description,
+            String keyword,
+            Integer depositPerPerson,
+            String imageKey
+    ) {
+        return new Restaurant(ownerMemberId, name, address, category, description, keyword, depositPerPerson, imageKey);
     }
 
     public void update(String name, String description, String keyword, Integer depositPerPerson) {
@@ -94,6 +112,10 @@ public class Restaurant extends BaseTimeEntity {
         this.description = description;
         this.keyword = keyword;
         this.depositPerPerson = depositPerPerson;
+    }
+
+    public void updateImageKey(String imageKey) {
+        this.imageKey = imageKey;
     }
 
     public void softDelete(Instant deletedAt) {
@@ -134,6 +156,10 @@ public class Restaurant extends BaseTimeEntity {
 
     public Integer getDepositPerPerson() {
         return depositPerPerson;
+    }
+
+    public String getImageKey() {
+        return imageKey;
     }
 
     public RestaurantStatus getStatus() {

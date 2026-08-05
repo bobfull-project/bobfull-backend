@@ -1,6 +1,6 @@
 # 밥풀(BobFull) 프로젝트 컨텍스트
 
-> 기준일: 2026-07-23
+> 기준일: 2026-08-04
 > API 계약의 최우선 기준은 [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md)다. 이 문서가 API 명세와 충돌하면 API 명세를 따른다.
 
 ## 1. 프로젝트 개요
@@ -23,10 +23,19 @@
 ### OWNER
 
 - 본인 식당의 식당·합석 테이블·합석 회차를 등록·조회·수정·삭제한다.
+- 본인 식당 이미지를 S3 Presigned URL로 업로드하고 식당 등록·수정에 연결한다.
 - 식당·테이블 생성 시 서버가 `ACTIVE`를 기본 적용한다. 등록·수정 Request에 `status`는 없다.
 - 본인 식당의 예약·참여자 정보를 조회한다.
 - V1에서 지급 예정 금액과 예약별 지급 예정 내역·상세를 조회한다.
 - V2에서 식당 귀책 예약 취소와 식사 종료 후 노쇼 처리·해제·이력 조회를 수행한다.
+
+#### 식당 이미지
+
+- V1 식당 이미지는 S3 Presigned PUT URL로 클라이언트가 직접 업로드한다.
+- 업로드 허용 형식은 `jpg`, `jpeg`, `png`이며 `webp`는 허용하지 않는다. 파일 크기는 최대 5MB다.
+- 임시 업로드 경로는 `temp/restaurants/{ownerId}/{uuid}.{extension}`, 최종 경로는 `restaurants/{ownerId}/{uuid}.{extension}`다.
+- Java Lambda가 S3 임시 객체의 확장자, Content-Type, 크기, 파일 시그니처를 검증하고 성공 시 최종 경로로 이동한다.
+- 식당 등록·수정 API는 최종 경로 객체가 존재하는지 확인한 뒤 `restaurant.image_key`만 저장한다. 조회 응답은 DB 저장값이 아니라 만료 시간이 있는 Presigned GET URL을 반환한다.
 
 ### ADMIN
 
@@ -162,6 +171,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ### V1
 
 - 회원·인증, 식당·테이블·회차 관리 및 사용자 조회
+- 식당 이미지 Presigned URL 업로드와 조회용 Presigned GET URL 반환
 - 예약 가능 여부, 결제 준비, 예약·참여 집계 조회, 모집 마감
 - PortOne 결제 완료 검증·웹훅, 결제·환불 조회
 - 지급 예정 금액·예약별 지급 예정 내역·상세

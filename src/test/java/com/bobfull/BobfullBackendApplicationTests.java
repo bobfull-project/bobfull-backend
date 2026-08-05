@@ -13,7 +13,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 		"jwt.access-token-expiration-seconds=3600",
 		"portone.api-secret=portone-context-load-test-api-secret",
 		"portone.store-id=portone-context-load-test-store-id",
-		"portone.webhook-secret=d2hzZWNfY29udGV4dC10ZXN0"
+		"portone.webhook-secret=d2hzZWNfY29udGV4dC10ZXN0",
+		"aws.region=ap-northeast-2",
+		"aws.s3.image-bucket=bobfull-test-image-bucket"
 })
 class BobfullBackendApplicationTests {
 
