@@ -31,6 +31,11 @@ append_parameter() {
   local required="$3"
   local value
 
+  if [ -n "${!env_key:-}" ]; then
+    append_env_value "${env_key}" "${!env_key}"
+    return
+  fi
+
   if value="$(fetch_parameter "${parameter_name}" 2>/dev/null)"; then
     append_env_value "${env_key}" "${value}"
     return
@@ -76,12 +81,16 @@ required_parameters=(
   "DB_URL:db-url"
   "DB_USERNAME:db-username"
   "DB_PASSWORD:db-password"
+  "REDIS_HOST:redis-host"
   "JWT_SECRET:jwt-secret"
   "PORTONE_API_SECRET:portone-api-secret"
   "PORTONE_STORE_ID:portone-store-id"
+  "S3_IMAGE_BUCKET:s3-image-bucket"
 )
 
 optional_parameters=(
+  "REDIS_PORT:redis-port"
+  "AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS:auth-refresh-token-expiration-seconds"
   "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
   "JPA_DDL_AUTO:jpa-ddl-auto"
   "CORS_ALLOWED_ORIGINS:cors-allowed-origins"
@@ -90,6 +99,11 @@ optional_parameters=(
   "PAYMENT_EXPIRATION_ENABLED:payment-expiration-enabled"
   "PAYMENT_EXPIRATION_FIXED_DELAY:payment-expiration-fixed-delay"
   "PAYMENT_EXPIRATION_BATCH_SIZE:payment-expiration-batch-size"
+  "PAYMENT_REFUND_RECONCILIATION_ENABLED:payment-refund-reconciliation-enabled"
+  "PAYMENT_REFUND_RECONCILIATION_FIXED_DELAY:payment-refund-reconciliation-fixed-delay"
+  "PAYMENT_REFUND_RECONCILIATION_MINIMUM_AGE:payment-refund-reconciliation-minimum-age"
+  "PAYMENT_REFUND_RECONCILIATION_RECHECK_DELAY:payment-refund-reconciliation-recheck-delay"
+  "PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE:payment-refund-reconciliation-batch-size"
 )
 
 for item in "${required_parameters[@]}"; do
@@ -100,12 +114,6 @@ for item in "${optional_parameters[@]}"; do
   append_parameter "${item%%:*}" "${item#*:}" false
 done
 
-if [ -n "${S3_IMAGE_BUCKET:-}" ]; then
-  append_env_value S3_IMAGE_BUCKET "${S3_IMAGE_BUCKET}"
-else
-  append_parameter S3_IMAGE_BUCKET s3-image-bucket false
-fi
-
 if ! grep -q '^JPA_DDL_AUTO=' "${APP_ENV_FILE}"; then
   append_env_value JPA_DDL_AUTO update
 fi
@@ -114,10 +122,12 @@ if ! grep -q '^JWT_ACCESS_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
   append_env_value JWT_ACCESS_TOKEN_EXPIRATION_SECONDS 3600
 fi
 
-s3_bucket="$(awk -F= '$1 == "S3_IMAGE_BUCKET" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
-if [ -n "${s3_bucket}" ]; then
-  aws s3api head-bucket --region "${AWS_REGION}" --bucket "${s3_bucket}" >/dev/null
+if ! grep -q '^AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
+  append_env_value AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS 1209600
 fi
+
+s3_bucket="$(awk -F= '$1 == "S3_IMAGE_BUCKET" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
+aws s3api head-bucket --region "${AWS_REGION}" --bucket "${s3_bucket}" >/dev/null
 
 aws logs create-log-group \
   --region "${AWS_REGION}" \
@@ -156,3 +166,4 @@ if ! docker ps --filter "name=${CONTAINER_NAME}" --filter "status=running" --for
 fi
 
 docker ps --filter "name=${CONTAINER_NAME}"
+docker inspect --format='Container image: {{ index .Config.Image }} | State: {{ .State.Status }}' "${CONTAINER_NAME}"

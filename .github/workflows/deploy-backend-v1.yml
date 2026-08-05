@@ -1,12 +1,29 @@
 name: Deploy Backend V1
 
 on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/deploy-backend-v1.yml'
+      - 'Dockerfile'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'lambda/**'
+      - 'scripts/aws/**'
+      - 'src/**'
   workflow_dispatch:
     inputs:
       image_tag:
         description: Docker image tag to push and deploy. Defaults to the commit SHA.
         required: false
         type: string
+
+concurrency:
+  group: backend-v1-deploy
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -47,7 +64,6 @@ jobs:
             BACKEND_EC2_USER
             BACKEND_PARAMETER_PREFIX
             BACKEND_PUBLIC_BASE_URL
-            S3_IMAGE_BUCKET
             AWS_ROLE_TO_ASSUME
             EC2_SSH_PRIVATE_KEY
           )
@@ -70,13 +86,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Test
+      - name: Gradle build and test
         run: |
           set -euo pipefail
           sed -i 's/\r$//' ./gradlew
           chmod +x ./gradlew
-          ./gradlew test --no-daemon
+          ./gradlew clean check bootJar --no-daemon
 
       - name: Resolve image URI
         id: image
@@ -154,12 +171,21 @@ jobs:
             S3_IMAGE_BUCKET='${S3_IMAGE_BUCKET}' \
             bash ~/deploy-backend-v1.sh"
 
-      - name: Verify public API
+      - name: Verify backend deployment
+        env:
+          BASE_URL: ${{ env.BACKEND_PUBLIC_BASE_URL }}
+          CONTAINER_NAME: ${{ env.BACKEND_CONTAINER_NAME }}
+          PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
+          CLOUDWATCH_LOG_GROUP: ${{ env.BACKEND_CLOUDWATCH_LOG_GROUP }}
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          bash scripts/aws/verify-backend-v1.sh
+
+      - name: Verify deployed image on EC2
         run: |
           set -euo pipefail
 
-          curl --fail --silent --show-error \
-            "${BACKEND_PUBLIC_BASE_URL%/}/api/restaurants" \
-            >/tmp/bobfull-api-response.json
-
-          test -s /tmp/bobfull-api-response.json
+          ssh -i ~/.ssh/bobfull-v1.pem "${BACKEND_EC2_USER}@${BACKEND_EC2_HOST}" \
+            "test \"\$(docker inspect --format='{{ index .Config.Image }}' '${BACKEND_CONTAINER_NAME}')\" = '${{ steps.image.outputs.image_uri }}' && \
+            docker ps --filter 'name=${BACKEND_CONTAINER_NAME}' --filter 'status=running' --format '{{.Names}}' | grep -Fx '${BACKEND_CONTAINER_NAME}'"

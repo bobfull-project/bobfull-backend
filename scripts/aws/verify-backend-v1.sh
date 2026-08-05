@@ -15,6 +15,18 @@ curl --fail --silent --show-error "${BASE_URL%/}/api/restaurants" >/tmp/bobfull-
 test -s /tmp/bobfull-restaurants-response.json
 echo "API /api/restaurants: PASS"
 
+fetch_parameter_if_available() {
+  local parameter_name="$1"
+  if command -v aws >/dev/null 2>&1 && [ -n "${AWS_REGION:-}" ] && [ -n "${PARAMETER_PREFIX:-}" ]; then
+    aws ssm get-parameter \
+      --region "${AWS_REGION}" \
+      --name "${PARAMETER_PREFIX%/}/${parameter_name}" \
+      --with-decryption \
+      --query 'Parameter.Value' \
+      --output text 2>/dev/null || true
+  fi
+}
+
 if command -v docker >/dev/null 2>&1; then
   container_name="${CONTAINER_NAME:-bobfull-backend}"
   if docker ps --filter "name=${container_name}" --filter "status=running" --format '{{.Names}}' \
@@ -37,8 +49,9 @@ if command -v aws >/dev/null 2>&1 && [ -n "${AWS_REGION:-}" ]; then
     echo "Parameter Store parameter names: PASS"
   fi
 
-  if [ -n "${S3_IMAGE_BUCKET:-}" ]; then
-    aws s3api head-bucket --region "${AWS_REGION}" --bucket "${S3_IMAGE_BUCKET}" >/dev/null
+  s3_image_bucket="${S3_IMAGE_BUCKET:-$(fetch_parameter_if_available s3-image-bucket)}"
+  if [ -n "${s3_image_bucket}" ]; then
+    aws s3api head-bucket --region "${AWS_REGION}" --bucket "${s3_image_bucket}" >/dev/null
     echo "S3 image bucket access: PASS"
   fi
 
@@ -48,5 +61,18 @@ if command -v aws >/dev/null 2>&1 && [ -n "${AWS_REGION:-}" ]; then
       --log-group-name "${CLOUDWATCH_LOG_GROUP}" \
       --max-items 1 >/dev/null
     echo "CloudWatch log group access: PASS"
+  fi
+
+  if [ -n "${IMAGE_URI:-}" ]; then
+    image_path="${IMAGE_URI#*/}"
+    ecr_repository="${image_path%%:*}"
+    image_tag="${image_path##*:}"
+
+    aws ecr describe-images \
+      --region "${AWS_REGION}" \
+      --repository-name "${ecr_repository}" \
+      --image-ids imageTag="${image_tag}" \
+      >/dev/null
+    echo "ECR image ${ecr_repository}:${image_tag}: PASS"
   fi
 fi
