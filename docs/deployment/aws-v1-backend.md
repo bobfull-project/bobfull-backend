@@ -101,6 +101,8 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 - `.github/workflows/ci-backend-v1.yml`: `develop` push에서 Gradle 검증과 Docker build만 수행한다.
 - `.github/workflows/deploy-backend-v1.yml`: `main` push에서 CI 성공 후 ECR push, SSM Run Command 기반 EC2 컨테이너 교체, 배포 후 검증을 수행한다.
 
+ECR repository는 AWS에 미리 생성되어 있어야 한다. 배포 workflow와 ECR push 스크립트는 `aws ecr describe-repositories`로 존재 여부만 확인하며, 없으면 실패하고 자동 생성하지 않는다.
+
 feature 브랜치와 `pull_request` 이벤트에서는 백엔드 V1 CI/CD workflow를 실행하지 않는다.
 
 CI 흐름:
@@ -151,7 +153,6 @@ GitHub Actions OIDC Role에는 최소한 다음 권한이 필요하다.
 sts:GetCallerIdentity
 ecr:GetAuthorizationToken
 ecr:DescribeRepositories
-ecr:CreateRepository
 ecr:BatchCheckLayerAvailability
 ecr:InitiateLayerUpload
 ecr:UploadLayerPart

@@ -107,16 +107,20 @@ jobs:
           echo "image_uri=${image_uri}" >> "${GITHUB_OUTPUT}"
           echo "latest_image_uri=${latest_image_uri}" >> "${GITHUB_OUTPUT}"
 
-      - name: Ensure ECR repository exists
+      - name: Verify ECR repository exists
         run: |
           set -euo pipefail
 
-          if ! aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" >/dev/null 2>&1; then
-            aws ecr create-repository \
-              --repository-name "${ECR_REPOSITORY}" \
-              --image-scanning-configuration scanOnPush=true \
-              >/dev/null
+          if ! repository_check_output="$(aws ecr describe-repositories \
+            --region "${AWS_REGION}" \
+            --repository-names "${ECR_REPOSITORY}" 2>&1)"; then
+            echo "${repository_check_output}" >&2
+            echo "ECR repository '${ECR_REPOSITORY}' does not exist or cannot be described in region '${AWS_REGION}'." >&2
+            echo "Create the ECR repository before deployment. This workflow intentionally does not create repositories automatically." >&2
+            exit 1
           fi
+
+          echo "ECR repository '${ECR_REPOSITORY}' exists."
 
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
