@@ -22,15 +22,18 @@ public class RefundTransactionService {
     private final PaymentRepository paymentRepository;
     private final RefundRepository refundRepository;
     private final Clock clock;
+    private final RefundIdempotencyKeyGenerator keyGenerator;
 
-    public RefundTransactionService(PaymentRepository paymentRepository, RefundRepository refundRepository, Clock clock) {
+    public RefundTransactionService(PaymentRepository paymentRepository, RefundRepository refundRepository, Clock clock,
+                                    RefundIdempotencyKeyGenerator keyGenerator) {
         this.paymentRepository = paymentRepository;
         this.refundRepository = refundRepository;
         this.clock = clock;
+        this.keyGenerator = keyGenerator;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public RefundPreparation createRequested(Long reservationId, Long participantId) {
+    public RefundPreparation createRequested(Long reservationId, Long participantId, String cancelReason) {
         Payment payment = paymentRepository.findByReservationIdAndReservationParticipantId(reservationId, participantId)
                 .orElseThrow(() -> new CustomException(PaymentErrorCode.PAYMENT_NOT_FOUND));
         // Payment 행 락으로 동시 요청을 직렬화한다 — 락 없이 findByPayment_Id만으로 존재 여부를
@@ -54,7 +57,8 @@ public class RefundTransactionService {
             throw new CustomException(PaymentErrorCode.PAYMENT_NOT_REFUNDABLE);
         }
         Refund refund = refundRepository.saveAndFlush(
-                Refund.create(payment, payment.getAmount(), RefundStatus.REQUESTED, clock.instant(), null));
+                Refund.create(payment, payment.getAmount(), RefundStatus.REQUESTED, clock.instant(), null,
+                        keyGenerator.generate(), cancelReason));
         return new RefundPreparation(refund, true);
     }
 

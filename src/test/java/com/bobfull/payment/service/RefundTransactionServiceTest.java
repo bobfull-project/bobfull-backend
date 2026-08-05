@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 래핑을 꺼야 한다.
  */
 @DataJpaTest
-@Import({JpaAuditingConfig.class, ClockConfig.class, RefundTransactionService.class})
+@Import({JpaAuditingConfig.class, ClockConfig.class, RefundTransactionService.class, UuidRefundIdempotencyKeyGenerator.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RefundTransactionServiceTest {
 
@@ -42,7 +42,7 @@ class RefundTransactionServiceTest {
         // given
         Payment payment = paymentRepository.saveAndFlush(payment("payment-mark-checked"));
         Refund refund = refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
-                Instant.parse("2026-07-30T00:00:00Z"), null));
+                Instant.parse("2026-07-30T00:00:00Z"), null, "test-key-mark-pg-checked", "test reason"));
         Long refundId = refund.getId();
         Instant updatedAtBefore = refundRepository.findById(refundId).orElseThrow().getUpdatedAt();
         Thread.sleep(1100); // updatedAt이 초 단위로도 흔들리면 잡히도록 충분한 간격을 둔다.
