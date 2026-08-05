@@ -1,11 +1,14 @@
 package com.bobfull.reservation.service;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
@@ -85,5 +88,17 @@ class ReservationCancellationCompletionServiceTest {
         service().complete(1L, 2L, now);
 
         verify(transactionService).recalculateAfterCompletion(reservation);
+    }
+
+    @Test
+    void 존재하지_않는_Reservation이면_예외를_던진다() {
+        Instant now = Instant.now();
+        when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().complete(1L, 2L, now))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ReservationErrorCode.RESERVATION_ID_NOT_FOUND);
+
+        verifyNoInteractions(participantRepository, transactionService);
     }
 }
