@@ -2,50 +2,59 @@ package com.bobfull.payment.adapter;
 
 import com.bobfull.payment.port.PortOneRefundRequester;
 import io.portone.sdk.server.PortOneClient;
-import io.portone.sdk.server.payment.CancelPaymentResponse;
 import io.portone.sdk.server.payment.PaymentCancellation;
 import io.portone.sdk.server.payment.PaidPayment;
 import io.portone.sdk.server.payment.CancelledPayment;
-import io.portone.sdk.server.errors.CancelPaymentException;
+import com.bobfull.payment.config.PortOneProperties;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.CompletionException;
+import java.util.Map;
+import org.springframework.http.MediaType;
+import org.springframework.web.client.RestClient;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Component
-public class PortOneSdkRefundRequester implements PortOneRefundRequester {
+public class PortOneRefundGatewayAdapter implements PortOneRefundRequester {
     private final PortOneClient portOneClient;
+    private final RestClient restClient;
+    private final PortOneProperties properties;
 
-    public PortOneSdkRefundRequester(PortOneClient portOneClient) {
+    @Autowired
+    public PortOneRefundGatewayAdapter(PortOneClient portOneClient, RestClient portOneRestClient, PortOneProperties properties) {
         this.portOneClient = portOneClient;
+        this.restClient = portOneRestClient;
+        this.properties = properties;
+    }
+
+    PortOneRefundGatewayAdapter(PortOneClient portOneClient) {
+        this(portOneClient, null, null);
     }
 
     @Override
-    public RefundResult request(String paymentId, BigDecimal amount, String reason) {
-        try {
-            CancelPaymentResponse response = portOneClient.getPayment()
-                    .cancelPayment(paymentId, amount.longValueExact(), null, null, reason,
-                            null, null, null, null, null, null)
-                    .join();
-            return toRefundResult(response.getCancellation());
-        } catch (CompletionException exception) {
-            if (containsExplicitCancelFailure(exception)) {
-                throw new ExplicitRefundFailureException("PortOne explicitly rejected the refund", exception);
-            }
-            throw exception;
-        }
+    public RefundResult request(String paymentId, BigDecimal amount, String reason, String idempotencyKey) {
+        Map<?, ?> response = restClient.post().uri("/payments/{paymentId}/cancel", paymentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "PortOne " + properties.apiSecret())
+                .header("Idempotency-Key", "\"" + idempotencyKey + "\"")
+                .body(new CancelRequest(properties.storeId(), amount, reason))
+                .retrieve().body(Map.class);
+        Object cancellationValue = response == null ? null : response.get("cancellation");
+        Map<?, ?> cancellation = cancellationValue instanceof Map<?, ?> value ? value : null;
+        String cancellationId = cancellation == null ? null : (String) cancellation.get("id");
+        String status = cancellation == null ? null : (String) cancellation.get("status");
+        if (cancellationId == null || status == null) throw new IllegalStateException("PortOne cancellation response is incomplete");
+        return switch (status) {
+            case "SUCCEEDED" -> new RefundResult(cancellationId, true);
+            case "REQUESTED" -> new RefundResult(cancellationId, false);
+            case "FAILED" -> throw new ExplicitRefundFailureException("PortOne explicitly rejected the refund");
+            default -> throw new IllegalStateException("PortOne cancellation response is unrecognized");
+        };
     }
 
-    private boolean containsExplicitCancelFailure(Throwable exception) {
-        Throwable current = exception;
-        while (current != null) {
-            if (current instanceof CancelPaymentException) return true;
-            current = current.getCause();
-        }
-        return false;
-    }
+    private record CancelRequest(String storeId, BigDecimal amount, String reason) { }
 
     static RefundResult toRefundResult(PaymentCancellation cancellation) {
         if (!(cancellation instanceof PaymentCancellation.Recognized recognized)) {

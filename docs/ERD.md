@@ -305,6 +305,8 @@ erDiagram
 | `refund_status` | VARCHAR(20) | N | 앱 Enum | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` |
 | `requested_at`, `completed_at` | DATETIME | Y |  | 요청·완료 시각 |
 | `cancellation_id` | VARCHAR(64) | Y | UNIQUE | PortOne 취소(cancellation) 식별자. 요청 접수 시점에는 비어 있고, PortOne 응답·웹훅으로 확인되면 저장한다(#45) |
+| `idempotency_key` | VARCHAR(256) | N | UNIQUE, 변경 불가 | PortOne 환불 POST 전에 생성하는 외부 요청 식별자. DB에는 따옴표 없는 원본 값을 저장한다(#145) |
+| `request_reason` | VARCHAR | N | 변경 불가 | 최초 환불 요청 사유. amount·paymentId·idempotencyKey와 함께 동일 외부 요청 본문으로 고정한다(#145) |
 | `last_pg_checked_at` | DATETIME | Y |  | 외부 PG 조회를 실제로 시도한 시각. `updated_at`과 분리해 재확인 후보를 공정하게 순환한다(#141) |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 

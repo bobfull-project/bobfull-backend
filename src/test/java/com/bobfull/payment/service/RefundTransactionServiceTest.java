@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 래핑을 꺼야 한다.
  */
 @DataJpaTest
-@Import({JpaAuditingConfig.class, ClockConfig.class, RefundTransactionService.class})
+@Import({JpaAuditingConfig.class, ClockConfig.class, RefundTransactionService.class, UuidRefundIdempotencyKeyGenerator.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RefundTransactionServiceTest {
 
