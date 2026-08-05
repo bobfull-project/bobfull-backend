@@ -11,11 +11,12 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.MetadataDirective;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 public class RestaurantImageValidator {
 
     private static final long DEFAULT_MAX_FILE_SIZE = 5L * 1024L * 1024L;
-    private static final int SIGNATURE_READ_SIZE = 16;
 
     private final S3Client s3Client;
     private final RestaurantImageKeyResolver keyResolver;
@@ -54,10 +55,13 @@ public class RestaurantImageValidator {
         String bucket = resolveBucket(eventBucket);
         try {
             RestaurantImageKeyResolver.RestaurantImageObject imageObject = keyResolver.resolveTempKey(key);
-            HeadObjectResponse headObject = headObject(bucket, imageObject.tempKey());
+            HeadObjectResponse headObject = headTempObjectOrReturnIfAlreadyPromoted(bucket, imageObject);
+            if (headObject == null) {
+                return;
+            }
             validateSize(headObject.contentLength());
             validateContentType(headObject.contentType(), imageObject.contentType());
-            validateSignature(bucket, imageObject);
+            validateActualImage(bucket, imageObject);
             copyToFinalKey(bucket, imageObject);
             deleteObject(bucket, imageObject.tempKey());
         } catch (InvalidRestaurantImageException exception) {
@@ -80,6 +84,37 @@ public class RestaurantImageValidator {
                 .build());
     }
 
+    private HeadObjectResponse headTempObjectOrReturnIfAlreadyPromoted(
+            String bucket,
+            RestaurantImageKeyResolver.RestaurantImageObject imageObject
+    ) {
+        try {
+            return headObject(bucket, imageObject.tempKey());
+        } catch (S3Exception exception) {
+            if (isNotFound(exception) && objectExists(bucket, imageObject.finalKey())) {
+                System.out.println("Restaurant image was already promoted. key=" + imageObject.tempKey());
+                return null;
+            }
+            throw exception;
+        }
+    }
+
+    private boolean objectExists(String bucket, String key) {
+        try {
+            headObject(bucket, key);
+            return true;
+        } catch (S3Exception exception) {
+            if (isNotFound(exception)) {
+                return false;
+            }
+            throw exception;
+        }
+    }
+
+    private boolean isNotFound(S3Exception exception) {
+        return exception instanceof NoSuchKeyException || exception.statusCode() == 404;
+    }
+
     private void validateSize(Long contentLength) {
         if (contentLength == null || contentLength <= 0 || contentLength > maxFileSize) {
             throw new InvalidRestaurantImageException("invalid image size");
@@ -93,24 +128,23 @@ public class RestaurantImageValidator {
         }
     }
 
-    private void validateSignature(
+    private void validateActualImage(
             String bucket,
             RestaurantImageKeyResolver.RestaurantImageObject imageObject
     ) {
         GetObjectRequest request = GetObjectRequest.builder()
                 .bucket(bucket)
                 .key(imageObject.tempKey())
-                .range("bytes=0-" + (SIGNATURE_READ_SIZE - 1))
                 .build();
         try (ResponseInputStream<GetObjectResponse> objectStream = s3Client.getObject(request)) {
-            byte[] header = objectStream.readNBytes(SIGNATURE_READ_SIZE);
-            String detectedContentType = signatureDetector.detect(header)
-                    .orElseThrow(() -> new InvalidRestaurantImageException("unknown image signature"));
+            byte[] imageBytes = objectStream.readAllBytes();
+            String detectedContentType = signatureDetector.detect(imageBytes)
+                    .orElseThrow(() -> new InvalidRestaurantImageException("invalid image file"));
             if (!detectedContentType.equals(imageObject.contentType())) {
                 throw new InvalidRestaurantImageException("image signature mismatch");
             }
         } catch (IOException exception) {
-            throw new IllegalStateException("failed to read image signature", exception);
+            throw new IllegalStateException("failed to read image file", exception);
         }
     }
 

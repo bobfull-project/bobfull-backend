@@ -2,6 +2,7 @@ package com.bobfull.restaurant.service;
 
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.ImageErrorCode;
 import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.response.PageResponse;
 import com.bobfull.restaurant.dto.OwnerRestaurantDetailResponse;
@@ -98,7 +99,12 @@ public class RestaurantService {
         validateOwnership(restaurant, ownerMemberId);
 
         String previousImageKey = restaurant.getImageKey();
-        String newImageKey = resolveUpdatedImageKey(ownerMemberId, previousImageKey, request.imageKey());
+        String newImageKey = resolveUpdatedImageKey(
+                ownerMemberId,
+                restaurant.getId(),
+                previousImageKey,
+                request.imageKey()
+        );
         restaurant.update(request.name(), request.description(), request.keyword(), request.depositPerPerson());
         if (request.imageKey() != null) {
             restaurant.updateImageKey(newImageKey);
@@ -140,15 +146,34 @@ public class RestaurantService {
             return null;
         }
         restaurantImageService.validateFinalImage(ownerMemberId, imageKey);
+        validateUnusedImageKey(imageKey);
         return imageKey;
     }
 
-    private String resolveUpdatedImageKey(Long ownerMemberId, String previousImageKey, String requestedImageKey) {
+    private String resolveUpdatedImageKey(
+            Long ownerMemberId,
+            Long restaurantId,
+            String previousImageKey,
+            String requestedImageKey
+    ) {
         if (requestedImageKey == null) {
             return previousImageKey;
         }
         restaurantImageService.validateFinalImage(ownerMemberId, requestedImageKey);
+        validateUnusedImageKeyForUpdate(requestedImageKey, restaurantId);
         return requestedImageKey;
+    }
+
+    private void validateUnusedImageKey(String imageKey) {
+        if (restaurantRepository.existsByImageKeyAndDeletedAtIsNull(imageKey)) {
+            throw new CustomException(ImageErrorCode.RESTAURANT_IMAGE_ALREADY_USED);
+        }
+    }
+
+    private void validateUnusedImageKeyForUpdate(String imageKey, Long restaurantId) {
+        if (restaurantRepository.existsByImageKeyAndIdNotAndDeletedAtIsNull(imageKey, restaurantId)) {
+            throw new CustomException(ImageErrorCode.RESTAURANT_IMAGE_ALREADY_USED);
+        }
     }
 
     private String createImageUrl(Restaurant restaurant) {
@@ -172,6 +197,10 @@ public class RestaurantService {
     }
 
     private void deletePreviousImage(String previousImageKey) {
+        if (restaurantRepository.existsByImageKeyAndDeletedAtIsNull(previousImageKey)) {
+            log.info("다른 식당이 참조 중인 기존 이미지는 삭제하지 않습니다. imageKey={}", previousImageKey);
+            return;
+        }
         try {
             restaurantImageService.delete(previousImageKey);
         } catch (RuntimeException exception) {

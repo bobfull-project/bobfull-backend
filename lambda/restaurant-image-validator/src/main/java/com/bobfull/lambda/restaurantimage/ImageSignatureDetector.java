@@ -1,14 +1,18 @@
 package com.bobfull.lambda.restaurantimage;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Optional;
+import javax.imageio.ImageIO;
 
 public class ImageSignatureDetector {
 
-    public Optional<String> detect(byte[] header) {
-        if (isJpeg(header)) {
+    public Optional<String> detect(byte[] imageBytes) {
+        if (isJpeg(imageBytes) && canDecode(imageBytes)) {
             return Optional.of("image/jpeg");
         }
-        if (isPng(header)) {
+        if (isPng(imageBytes) && canDecode(imageBytes)) {
             return Optional.of("image/png");
         }
         return Optional.empty();
@@ -31,6 +35,16 @@ public class ImageSignatureDetector {
                 && unsigned(header[5]) == 0x0A
                 && unsigned(header[6]) == 0x1A
                 && unsigned(header[7]) == 0x0A;
+    }
+
+    private boolean canDecode(byte[] imageBytes) {
+        try {
+            ImageIO.setUseCache(false);
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(imageBytes));
+            return image != null;
+        } catch (IOException exception) {
+            return false;
+        }
     }
 
     private int unsigned(byte value) {

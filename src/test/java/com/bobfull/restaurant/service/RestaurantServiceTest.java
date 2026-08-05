@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.exception.ImageErrorCode;
 import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.response.PageResponse;
 import com.bobfull.restaurant.dto.OwnerRestaurantDetailResponse;
@@ -36,6 +38,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 식당 등록·조회·수정·삭제의 소유권 검증과 상태 변경을 검증한다.
@@ -68,6 +73,12 @@ class RestaurantServiceTest {
                 ownerMemberId, "밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, imageKey);
     }
 
+    private Restaurant restaurantOwnedByWithIdAndImage(Long restaurantId, Long ownerMemberId, String imageKey) {
+        Restaurant restaurant = restaurantOwnedByWithImage(ownerMemberId, imageKey);
+        ReflectionTestUtils.setField(restaurant, "id", restaurantId);
+        return restaurant;
+    }
+
     @Test
     void 식당을_등록하면_등록한_회원을_소유자로_저장한다() {
         // given
@@ -96,6 +107,22 @@ class RestaurantServiceTest {
         // then
         assertThat(response).isNotNull();
         verify(restaurantImageService).validateFinalImage(1L, imageKey);
+    }
+
+    @Test
+    void 식당을_등록할_때_이미_사용중인_이미지_key이면_예외가_발생한다() {
+        // given
+        RestaurantCreateRequest request =
+                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, IMAGE_KEY);
+        given(restaurantRepository.existsByImageKeyAndDeletedAtIsNull(IMAGE_KEY)).willReturn(true);
+
+        // when
+        Throwable result = catchThrowable(() -> restaurantService.register(1L, request));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ImageErrorCode.RESTAURANT_IMAGE_ALREADY_USED);
+        verify(restaurantRepository, never()).save(any(Restaurant.class));
     }
 
     @Test
@@ -198,7 +225,7 @@ class RestaurantServiceTest {
     @Test
     void 본인_식당을_수정할_때_이미지_key가_있으면_검증하고_교체한다() {
         // given
-        Restaurant restaurant = restaurantOwnedByWithImage(1L, OLD_IMAGE_KEY);
+        Restaurant restaurant = restaurantOwnedByWithIdAndImage(10L, 1L, OLD_IMAGE_KEY);
         RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, NEW_IMAGE_KEY);
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
 
@@ -209,6 +236,80 @@ class RestaurantServiceTest {
         assertThat(restaurant.getImageKey()).isEqualTo(NEW_IMAGE_KEY);
         verify(restaurantImageService).validateFinalImage(1L, NEW_IMAGE_KEY);
         verify(restaurantImageService).delete(OLD_IMAGE_KEY);
+    }
+
+    @Test
+    void 본인_식당을_수정할_때_이미_사용중인_이미지_key이면_예외가_발생한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedByWithIdAndImage(10L, 1L, OLD_IMAGE_KEY);
+        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, NEW_IMAGE_KEY);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(restaurantRepository.existsByImageKeyAndIdNotAndDeletedAtIsNull(NEW_IMAGE_KEY, 10L)).willReturn(true);
+
+        // when
+        Throwable result = catchThrowable(() -> restaurantService.update(1L, 10L, request));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ImageErrorCode.RESTAURANT_IMAGE_ALREADY_USED);
+        assertThat(restaurant.getImageKey()).isEqualTo(OLD_IMAGE_KEY);
+        verify(restaurantImageService, never()).delete(any());
+    }
+
+    @Test
+    void 기존_이미지를_다른_식당이_참조중이면_수정해도_s3_객체를_삭제하지_않는다() {
+        // given
+        Restaurant restaurant = restaurantOwnedByWithIdAndImage(10L, 1L, OLD_IMAGE_KEY);
+        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, NEW_IMAGE_KEY);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(restaurantRepository.existsByImageKeyAndDeletedAtIsNull(OLD_IMAGE_KEY)).willReturn(true);
+
+        // when
+        restaurantService.update(1L, 10L, request);
+
+        // then
+        assertThat(restaurant.getImageKey()).isEqualTo(NEW_IMAGE_KEY);
+        verify(restaurantImageService, never()).delete(OLD_IMAGE_KEY);
+    }
+
+    @Test
+    void 기존_이미지_삭제는_트랜잭션_커밋_이후에_실행된다() {
+        // given
+        Restaurant restaurant = restaurantOwnedByWithIdAndImage(10L, 1L, OLD_IMAGE_KEY);
+        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, NEW_IMAGE_KEY);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        // when
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            restaurantService.update(1L, 10L, request);
+            verify(restaurantImageService, never()).delete(OLD_IMAGE_KEY);
+
+            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCommit();
+            }
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        // then
+        verify(restaurantImageService).delete(OLD_IMAGE_KEY);
+    }
+
+    @Test
+    void 기존_이미지_삭제가_실패해도_식당_수정은_성공한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedByWithIdAndImage(10L, 1L, OLD_IMAGE_KEY);
+        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, NEW_IMAGE_KEY);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        willThrow(new RuntimeException("delete failed")).given(restaurantImageService).delete(OLD_IMAGE_KEY);
+
+        // when
+        RestaurantIdResponse response = restaurantService.update(1L, 10L, request);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(restaurant.getImageKey()).isEqualTo(NEW_IMAGE_KEY);
     }
 
     @Test
