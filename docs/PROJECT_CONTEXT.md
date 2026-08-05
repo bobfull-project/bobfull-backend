@@ -69,7 +69,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 
 `CANCELLING`(Reservation)·`CANCEL_REQUESTED`(Participant)는 취소가 접수됐지만 참여자별 외부 환불이 아직 완료되지 않은 중간 상태다(#44). `isActive()`는 `RECRUITING`·`CONFIRMED`만 참으로 취급해 `CANCELLING`도 신규 JOIN·결제 확정 대상에서 제외한다.
 
-**Human 결정 필요**: Issue #44 완료 조건은 결과 불명확 환불을 표현하기 위해 `RefundStatus.UNKNOWN` 추가를 요구하지만, Issue #45 최종 계약과 실제 구현은 `UNKNOWN`을 추가하지 않고 timeout·connection reset 등 결과 불명확을 `REQUESTED` 유지로 표현한다. 위 목록은 실제 코드를 기준으로 작성했으며, 두 계약을 어느 쪽으로 단일화할지는 아직 확정되지 않았다.
+**2026-08-05 Human 확정**: Issue #44 완료 조건은 원래 `RefundStatus.UNKNOWN` 추가를 요구했으나, `UNKNOWN`처럼 애매한 상태를 늘리지 않기로 확정했다. timeout·connection reset 등 결과 불명확은 `REQUESTED` 유지로 표현하는 것이 최종 정책이다.
 
 ### 확정 기준과 흐름
 

@@ -146,7 +146,7 @@
 → CANCELLING 전환 시점부터 ChatRoom 신규 메시지 전송 종료, 지급 예정금은 환불 COMPLETED 반영 시점에 갱신
 ```
 
-(#44, #45) 취소는 접수·외부 환불 실행·완료 확정 세 단계로 나뉜다. `RefundStatus`의 결과 불명확 표현(`REQUESTED` 유지 vs `UNKNOWN` 신규 도입)은 Issue #44 완료 조건과 실제 구현이 다르며 Human 확정이 필요하다(자세한 내용은 [PROJECT_CONTEXT](./PROJECT_CONTEXT.md), [ERD](./ERD.md) 참고).
+(#44, #45) 취소는 접수·외부 환불 실행·완료 확정 세 단계로 나뉜다. `RefundStatus`의 결과 불명확 표현은 `UNKNOWN`을 새로 도입하지 않고 `REQUESTED` 유지로 표현하는 것으로 2026-08-05 확정됐다(자세한 내용은 [PROJECT_CONTEXT](./PROJECT_CONTEXT.md), [ERD](./ERD.md) 참고).
 
 필수 공동 검토:
 

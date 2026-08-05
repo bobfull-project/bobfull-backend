@@ -306,7 +306,7 @@ erDiagram
 
 한 사용자의 `partySize` 결제 전체만 환불하므로 결제당 환불은 0..1건으로 모델링한다. 실패 재시도는 새 환불 행이 아니라 같은 환불의 상태 전이로 처리한다.
 
-**Human 결정 필요**: Issue #44는 완료 조건에 `Refund=UNKNOWN` 상태 추가를 명시하지만, 실제 구현(PR #144)은 `RefundStatus`에 `UNKNOWN`을 추가하지 않고 결과 불명확(timeout·connection reset 등)을 `REQUESTED` 유지로 표현한다. 이 표는 실제 코드를 기준으로 작성했으며, 두 계약 중 무엇이 최종 정책인지는 아직 확정되지 않았다.
+**2026-08-05 Human 확정**: Issue #44 완료 조건은 원래 `Refund=UNKNOWN` 상태 추가를 명시했으나, `UNKNOWN`처럼 애매한 상태를 추가로 늘리지 않기로 확정했다. 결과 불명확(timeout·connection reset 등)은 `REQUESTED` 유지로 표현하는 것이 최종 정책이며, 이 표는 그 확정된 정책을 반영한다.
 
 ### 4.9 `no_show_history`
 
@@ -418,7 +418,7 @@ erDiagram
 | 모집 상태 | `OPEN`, `CLOSED` | `reservation.recruitment_status` |
 | 참여자 상태 | `RESERVED`, `NO_SHOW`, `CANCEL_REQUESTED`, `CANCELLED` | `reservation_participant.participation_status`; `CANCEL_REQUESTED`는 취소 접수 후 본인 환불 완료를 기다리는 중간 상태(#44) |
 | 결제 상태 | `READY`, `PAID`, `FAILED`, `EXPIRED`, `REFUNDED` | `payment.payment_status`; `REFUNDED`는 Payment 전체 환불 완료 |
-| 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status`; Issue #44 완료 조건은 `UNKNOWN` 추가를 요구하지만 실제 구현은 결과 불명확을 `REQUESTED` 유지로 표현함 — Human 확정 필요 |
+| 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status`; 결과 불명확은 `REQUESTED` 유지로 표현하며 `UNKNOWN`은 도입하지 않는다(2026-08-05 Human 확정, #44) |
 
 `no_show_history.is_marked`는 상태 Enum이 아니라 처리·해제 이력을 구분하는 boolean 값이다. `TRUE`는 노쇼 처리, `FALSE`는 노쇼 해제를 뜻한다.
 
@@ -495,7 +495,6 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | 웹훅 원문 이력 | `WebhookEvent` 미생성 | Payment 외부 식별자 UNIQUE와 상태 검증으로 멱등 처리; 원문 감사가 필요하면 후속 별도 테이블 검토 |
 | 환불 재시도 이력 | Refund 1건의 상태 전이 | 시도별 감사가 필요하면 별도 이력 테이블 검토 |
 | 채팅 보관 기간 | `chat_message` 삭제 시점 미정 | 기간·CLOSED 이후 조회 기간 결정 필요 |
-| `Refund` 결과 불명확 상태 표현 | `refund_status`에 `UNKNOWN` 없음, 결과 불명확은 `REQUESTED` 유지(#45 실제 구현) | Issue #44 완료 조건은 `Refund=UNKNOWN` 추가를 명시함 — 두 계약 중 하나로 단일화 필요 |
 | 동일 사용자의 동일 시간대 다른 예약 제한 | 제약 미설정 | 시간 겹침 제한 정책이 기준 문서에 없음 |
 | 합석 회차 상태 변경 API | TimeSlot 상태 Enum 미추가 | 보류된 `PATCH /api/owner/dining-sessions/{sessionId}/status` 필요성 결정 후 반영 |
 

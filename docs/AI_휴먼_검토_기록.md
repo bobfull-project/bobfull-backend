@@ -63,6 +63,16 @@ AI 제안·설계·Issue 계약을 Human이 검토하면서 발견한 누락과 
 - V3 후속 판단: 이 동기 구조가 실제로 병목이 되는지는 k6로 실측(웹훅 응답 p95·p99, Reservation 락 대기, DB 커넥션 점유)한 뒤에만 Spring Event 전환을 검토한다. PortOne 외부 API 지연은 이미 트랜잭션·락 밖에서 처리하므로 이 판단의 근거로 쓰지 않는다.
 - 관련 기술 검토: [예약 트러블슈팅](troubleshooting/예약_트러블슈팅.md)
 
+### 7. 결과 불명확 Refund 상태 표현 — `UNKNOWN` 미도입 (V2)
+
+- 관련 Issue: #44, #45, #141
+- 관련 PR: #144
+- 배경: 외부 코덱스 리뷰가 `PROJECT_CONTEXT`·`ERD`·API 명세·`DOMAIN_DEPENDENCIES`를 실제 코드와 대조하다가, Issue #44 완료 조건("`Refund=UNKNOWN` 상태가 반영된다")과 실제 구현(`RefundStatus`에 `UNKNOWN` 없이 결과 불명확을 `REQUESTED` 유지로 표현)이 서로 다르다는 것을 발견했다. 담당자 AI는 이를 임의로 해결하지 않고 4개 문서에 "Human 결정 필요"로만 표시했다.
+- AI 보완 설명: `REQUESTED`는 Refund 생성과 PortOne 응답 처리가 같은 호출 안에서 거의 즉시 다음 상태로 넘어가는 구조라, `REQUESTED`가 일정 시간 이상 머문다는 사실 자체가 이미 결과 불명확 신호와 동일하다. `UNKNOWN`을 추가해도 correctness상 새로 얻는 것은 없고, 재조회 대상 조회 조건("오래 머문 REQUESTED/PROCESSING")도 동일하게 동작한다. 다만 상태 이름만으로 운영자가 "이건 확인이 필요한 상태다"를 바로 알 수 있다는 가독성 이점은 있다.
+- Human 판단: 애매한 상태(`UNKNOWN`)를 별도로 늘리지 않는다. 결과 불명확은 `REQUESTED` 유지로 표현하는 현재 구현을 최종 정책으로 확정한다.
+- 반영: Issue #44 완료 조건·상태 모델·필수 테스트 항목의 `UNKNOWN` 언급을 "`REQUESTED` 유지, `UNKNOWN` 미도입"으로 수정하고 관련 완료 조건 2건을 체크 완료로 표시했다. Issue #141(아직 미구현)의 재조회 대상 조회 조건에서도 `UNKNOWN`을 제거해 `REQUESTED/PROCESSING`만 남겼다. `PROJECT_CONTEXT`·`ERD`·`DOMAIN_DEPENDENCIES`의 "Human 결정 필요" 각주를 확정된 정책 설명으로 교체했다.
+- 관련 기술 검토: [예약 트러블슈팅](troubleshooting/예약_트러블슈팅.md)
+
 ## 새 기록 작성
 
 [AI Human 검토 양식](templates/AI_휴먼_검토_양식.md)을 복사해 사용한다.
