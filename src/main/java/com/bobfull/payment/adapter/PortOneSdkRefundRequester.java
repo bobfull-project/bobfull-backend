@@ -8,6 +8,9 @@ import io.portone.sdk.server.payment.PaidPayment;
 import io.portone.sdk.server.payment.CancelledPayment;
 import io.portone.sdk.server.errors.CancelPaymentException;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.CompletionException;
 import org.springframework.stereotype.Component;
 
@@ -59,6 +62,72 @@ public class PortOneSdkRefundRequester implements PortOneRefundRequester {
         return cancellations.stream().filter(PaymentCancellation.Recognized.class::isInstance)
                 .map(PaymentCancellation.Recognized.class::cast)
                 .anyMatch(cancellation -> isCompletedCancellation(cancellation, cancellationId));
+    }
+
+    @Override
+    public ReconciliationResult reconcile(String paymentId, String cancellationId, BigDecimal refundAmount,
+                                          Instant refundRequestedAt) {
+        io.portone.sdk.server.payment.Payment payment = portOneClient.getPayment().getPayment(paymentId).join();
+        List<PaymentCancellation.Recognized> cancellations = cancellations(payment);
+        if (cancellationId != null) {
+            return reconcileKnownCancellation(cancellations, cancellationId, refundAmount);
+        }
+        if (!(payment instanceof CancelledPayment)) {
+            return cancellations.isEmpty()
+                    ? ReconciliationResult.notCompleted()
+                    : ReconciliationResult.ambiguous("payment is not fully cancelled");
+        }
+        List<PaymentCancellation.Recognized> candidates = cancellations.stream()
+                .filter(cancellation -> matchesUnknownCancellation(cancellation, refundAmount, refundRequestedAt))
+                .toList();
+        if (candidates.size() == 1 && cancellations.size() == 1) {
+            PaymentCancellation.Recognized candidate = candidates.get(0);
+            return ReconciliationResult.completed(candidate.getId(), candidate.getCancelledAt());
+        }
+        if (candidates.size() > 1 || (candidates.size() == 1 && cancellations.size() > 1)) {
+            return ReconciliationResult.ambiguous("multiple or mixed cancellations");
+        }
+        return ReconciliationResult.notCompleted();
+    }
+
+    private ReconciliationResult reconcileKnownCancellation(List<PaymentCancellation.Recognized> cancellations,
+                                                            String cancellationId, BigDecimal refundAmount) {
+        return cancellations.stream().filter(cancellation -> cancellationId.equals(cancellation.getId())).findFirst()
+                .map(cancellation -> {
+                    if (BigDecimal.valueOf(cancellation.getTotalAmount()).compareTo(refundAmount) != 0) {
+                        return ReconciliationResult.ambiguous("stored cancellation amount differs");
+                    }
+                    return cancellation.getCancelledAt() == null
+                            ? ReconciliationResult.processing(cancellationId)
+                            : ReconciliationResult.completed(cancellationId, cancellation.getCancelledAt());
+                })
+                .orElseGet(ReconciliationResult::notCompleted);
+    }
+
+    private List<PaymentCancellation.Recognized> cancellations(io.portone.sdk.server.payment.Payment payment) {
+        if (payment instanceof PaidPayment paid) {
+            return recognizedCancellations(paid.getCancellations());
+        }
+        if (payment instanceof CancelledPayment cancelled) {
+            return recognizedCancellations(cancelled.getCancellations());
+        }
+        return List.of();
+    }
+
+    private List<PaymentCancellation.Recognized> recognizedCancellations(List<? extends PaymentCancellation> cancellations) {
+        return cancellations.stream().filter(PaymentCancellation.Recognized.class::isInstance)
+                .map(PaymentCancellation.Recognized.class::cast).toList();
+    }
+
+    private boolean matchesUnknownCancellation(PaymentCancellation.Recognized cancellation, BigDecimal refundAmount,
+                                               Instant refundRequestedAt) {
+        if (cancellation.getCancelledAt() == null
+                || BigDecimal.valueOf(cancellation.getTotalAmount()).compareTo(refundAmount) != 0
+                || cancellation.getRequestedAt() == null
+                || cancellation.getRequestedAt().isBefore(refundRequestedAt.minus(Duration.ofMinutes(1)))) {
+            return false;
+        }
+        return cancellation.getTrigger() == null || "API".equals(cancellation.getTrigger().getValue());
     }
 
     static boolean isCompletedCancellation(PaymentCancellation.Recognized cancellation, String cancellationId) {

@@ -4,6 +4,8 @@ import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.entity.RefundStatus;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
+import java.time.Instant;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -31,6 +33,17 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Refund> findWithLockByPayment_Id(Long paymentId);
+
+    @EntityGraph(attributePaths = "payment")
+    @org.springframework.data.jpa.repository.Query("select r from Refund r "
+            + "where r.status in :statuses and r.updatedAt <= :updatedBefore "
+            + "and (r.lastPgCheckedAt is null or r.lastPgCheckedAt <= :checkedBefore) "
+            + "order by coalesce(r.lastPgCheckedAt, r.updatedAt) asc, r.id asc")
+    List<Refund> findReconciliationCandidates(
+            @org.springframework.data.repository.query.Param("statuses") List<RefundStatus> statuses,
+            @org.springframework.data.repository.query.Param("updatedBefore") Instant updatedBefore,
+            @org.springframework.data.repository.query.Param("checkedBefore") Instant checkedBefore,
+            org.springframework.data.domain.Pageable pageable);
 
     @EntityGraph(attributePaths = "payment")
     Page<Refund> findAllByPayment_MemberId(Long memberId, Pageable pageable);
