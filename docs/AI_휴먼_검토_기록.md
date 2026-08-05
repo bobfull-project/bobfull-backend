@@ -52,6 +52,17 @@ AI 제안·설계·Issue 계약을 Human이 검토하면서 발견한 누락과 
 - 반영: `ReservationStatus.CANCELLING`, `ParticipationStatus.CANCEL_REQUESTED`, `ReservationCancellationTransactionService.accept()`(짧은 접수 트랜잭션), `RefundCompletionService`(공통 완료 경로), `completeCancelIfRequested()`(조건부 UPDATE 기반 멱등 처리), Issue #141(정합성 확인 스케줄러 후속 분리), PR #135·#144, ADR 0001.
 - 관련 기술 검토: [예약 트러블슈팅](troubleshooting/예약_트러블슈팅.md)
 
+### 6. 취소 완료 확정 경로의 Bean 순환 의존 (V2)
+
+- 관련 Issue: #45
+- 관련 PR: #144
+- 배경: 5번 기록에서 확정한 공통 완료 경로(`RefundCompletionService` → `completeParticipantCancellation`)를 구현하는 과정에서, 취소 시작을 담당하는 `ReservationCancellationService`가 완료 확정까지 함께 담당하고 있었다. 그 결과 `ReservationCancellationService → ReservationCancellationRefundPort → (결제 Adapter) → RefundCompletionService → ReservationCancellationService`로 이어지는 Spring Bean 생성자 의존 그래프가 자기 자신으로 돌아와, 정상적으로 생성자 주입하면 애플리케이션 Context가 기동하지 못했다. `ObjectProvider<ReservationCancellationService>`로 Bean 조회 시점을 늦추는 임시 우회가 들어갔다.
+- Human 발견: `ObjectProvider` 우회는 순환을 없앤 것이 아니라 Bean 조회 시점만 늦춘 것이며, 최종 계약으로 유지할 수 없다. 원인은 "결제가 예약을 아는 것" 자체가 아니라, 취소 시작과 완료 확정이라는 서로 다른 두 책임이 한 클래스(`ReservationCancellationService`)에 있어 그 클래스가 결제→예약 호출의 시작점이자 도착점을 동시에 겸했기 때문이다.
+- Human 판단: Spring Event나 두 도메인 위에 별도 상위 조정 계층(오케스트레이터)을 새로 두지 않는다. 대신 완료 확정 책임만 `ReservationCancellationCompletionService`로 분리하고, 결제 도메인이 소유한 좁은 계약 `ReservationCancellationCompletionPort`(구현체 `ReservationCancellationCompletionAdapter`)로 연결한다. 이는 기존 결제 확정 흐름(`ReservationConfirmationPort`/`Adapter`)과 동일한 패턴이며, `docs/ARCHITECTURE.md`가 이미 예약↔결제를 양방향으로 문서화하고 있어 새 컴포넌트를 추가하지 않아도 된다.
+- 반영: `ReservationCancellationCompletionPort`(payment 소유), `ReservationCancellationCompletionAdapter`, `ReservationCancellationCompletionService`(예약 소유, `Propagation.MANDATORY`로 결제 완료 트랜잭션 참여를 강제) 신규 추가. `RefundCompletionService`에서 `ObjectProvider`와 `ReservationCancellationService` 직접 참조 제거. `ReservationCancellationService`는 취소 시작·환불 요청 Port 호출만 담당하도록 축소. 내부 네 상태(Refund·Payment·Participant·Reservation)는 여전히 하나의 `REQUIRES_NEW` 완료 트랜잭션으로 반영해, 5번 기록의 정합성 계약을 그대로 유지했다.
+- V3 후속 판단: 이 동기 구조가 실제로 병목이 되는지는 k6로 실측(웹훅 응답 p95·p99, Reservation 락 대기, DB 커넥션 점유)한 뒤에만 Spring Event 전환을 검토한다. PortOne 외부 API 지연은 이미 트랜잭션·락 밖에서 처리하므로 이 판단의 근거로 쓰지 않는다.
+- 관련 기술 검토: [예약 트러블슈팅](troubleshooting/예약_트러블슈팅.md)
+
 ## 새 기록 작성
 
 [AI Human 검토 양식](templates/AI_휴먼_검토_양식.md)을 복사해 사용한다.
