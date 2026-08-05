@@ -90,12 +90,21 @@ with open(payload_path, "w", encoding="utf-8") as output:
     json.dump({"commands": commands}, output)
 PY
 
+if [ -n "${GITHUB_SHA:-}" ]; then
+  ssm_comment_sha="${GITHUB_SHA:0:7}"
+else
+  image_tag="${ECR_IMAGE_URI##*:}"
+  ssm_comment_sha="${image_tag:0:7}"
+fi
+ssm_comment="Deploy bobfull backend ${ssm_comment_sha}"
+ssm_comment="${ssm_comment:0:100}"
+
 command_id="$(
   aws ssm send-command \
     --region "${AWS_REGION}" \
     --instance-ids "${BACKEND_EC2_INSTANCE_ID}" \
     --document-name "${SSM_DOCUMENT_NAME}" \
-    --comment "Deploy bobfull backend ${ECR_IMAGE_URI}" \
+    --comment "${ssm_comment}" \
     --parameters "file://${command_payload}" \
     --query 'Command.CommandId' \
     --output text
