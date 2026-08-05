@@ -42,7 +42,7 @@ class RefundTransactionServiceTest {
         // given
         Payment payment = paymentRepository.saveAndFlush(payment("payment-mark-checked"));
         Refund refund = refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
-                Instant.parse("2026-07-30T00:00:00Z"), null));
+                Instant.parse("2026-07-30T00:00:00Z"), null, "test-key-mark-pg-checked", "test reason"));
         Instant updatedAtBefore = refund.getUpdatedAt();
         Long refundId = refund.getId();
         Thread.sleep(1100); // updatedAt이 초 단위로도 흔들리면 잡히도록 충분한 간격을 둔다.

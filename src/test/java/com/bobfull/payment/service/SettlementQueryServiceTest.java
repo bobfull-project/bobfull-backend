@@ -123,7 +123,8 @@ class SettlementQueryServiceTest {
         payment.complete(Instant.parse("2026-08-01T08:01:00Z"));
         payment.markRefunded();
         Refund refund = Refund.create(payment, BigDecimal.valueOf(30000), RefundStatus.COMPLETED,
-                Instant.parse("2026-08-01T08:02:00Z"), Instant.parse("2026-08-01T08:03:00Z"));
+                Instant.parse("2026-08-01T08:02:00Z"), Instant.parse("2026-08-01T08:03:00Z"),
+                "test-key-detail", "test reason");
         slot.softDelete(Instant.parse("2026-08-02T00:00:00Z"));
         ReflectionTestUtils.setField(reservation, "id", 1L);
         ReflectionTestUtils.setField(slot, "id", 2L);
@@ -160,7 +161,8 @@ class SettlementQueryServiceTest {
         payment.complete(Instant.parse("2026-08-01T08:01:00Z"));
         payment.markRefunded();
         Refund refund = Refund.create(payment, BigDecimal.valueOf(30000), RefundStatus.COMPLETED,
-                Instant.parse("2026-08-01T08:02:00Z"), Instant.parse("2026-08-01T08:03:00Z"));
+                Instant.parse("2026-08-01T08:02:00Z"), Instant.parse("2026-08-01T08:03:00Z"),
+                "test-key-list", "test reason");
         slot.softDelete(Instant.parse("2026-08-02T00:00:00Z"));
         ReflectionTestUtils.setField(reservation, "id", 1L);
         ReflectionTestUtils.setField(slot, "id", 2L);

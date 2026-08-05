@@ -69,11 +69,6 @@ public class Refund extends BaseTimeEntity {
         this.requestReason = requestReason;
     }
 
-    public static Refund create(Payment payment, BigDecimal amount, RefundStatus status, Instant requestedAt, Instant completedAt) {
-        return create(payment, amount, status, requestedAt, completedAt,
-                "legacy-" + java.util.UUID.randomUUID(), "legacy refund");
-    }
-
     public static Refund create(Payment payment, BigDecimal amount, RefundStatus status, Instant requestedAt, Instant completedAt,
                                 String idempotencyKey, String requestReason) {
         if (payment == null || amount == null || amount.signum() <= 0 || status == null) {
