@@ -29,7 +29,6 @@ public class PortOneWebhookController {
     private final PortOneWebhookVerifier webhookVerifier;
     private final PaymentCompletionService paymentCompletionService;
     private final RefundWebhookService refundWebhookService;
-    PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService) { this(webhookVerifier, paymentCompletionService, null); }
     @Autowired
     public PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService, RefundWebhookService refundWebhookService) { this.webhookVerifier = webhookVerifier; this.paymentCompletionService = paymentCompletionService; this.refundWebhookService = refundWebhookService; }
 

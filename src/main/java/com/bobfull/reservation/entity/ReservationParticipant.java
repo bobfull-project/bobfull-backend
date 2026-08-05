@@ -79,8 +79,8 @@ public class ReservationParticipant extends BaseTimeEntity {
 
     /**
      * 취소 접수(CANCEL_REQUESTED)에 대한 환불이 완료되어 CANCELLED로 확정한다
-     * (Issue #44 완료 경로, PR #137이 호출). 웹훅 중복 전달에 대비해 이미 CANCELLED면 아무 일도
-     * 하지 않는다.
+     * (Issue #44 완료 경로, {@code ReservationCancellationCompletionService}가 호출, V2, #45/PR #144).
+     * 웹훅 중복 전달에 대비해 이미 CANCELLED면 아무 일도 하지 않는다.
      */
     public void completeCancel(Instant cancelledAt) {
         if (participationStatus == ParticipationStatus.CANCELLED) {

@@ -25,8 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 예약 취소 접수를 짧은 잠금 트랜잭션으로 처리한다(Issue #44 최종 계약). 환불 outbound port 호출은
  * 이 트랜잭션 밖에서 {@link ReservationCancellationService}가 수행하도록, 이 서비스는 권한·기한·상태를
  * 검증하고 CANCELLING/CANCEL_REQUESTED로 전이해 커밋하는 것까지만 책임진다. 실제 CANCELLED 확정은
- * 환불 완료 후 {@link ReservationCancellationService#completeParticipantCancellation}(PR #137이 호출)이
- * 담당한다.
+ * 환불 완료 후 결제 도메인의 공통 완료 경로({@code RefundCompletionService})가 자신이 소유한
+ * {@code ReservationCancellationCompletionPort}를 통해 호출하는
+ * {@code ReservationCancellationCompletionService#complete}(V2, #45/PR #144)가 담당한다.
  */
 @Service
 public class ReservationCancellationTransactionService {
@@ -131,8 +132,8 @@ public class ReservationCancellationTransactionService {
 
     /**
      * 취소 접수(CANCEL_REQUESTED)된 참여자의 환불이 완료된 뒤 남은 유효 인원을 다시 계산해
-     * RECRUITING/CONFIRMED를 재계산한다({@link ReservationCancellationService#completeParticipantCancellation}
-     * 이 호출). 예약 전체가 CANCELLING인 경로에서는 호출하지 않는다.
+     * RECRUITING/CONFIRMED를 재계산한다({@code ReservationCancellationCompletionService#complete}이
+     * 호출, V2, #45/PR #144). 예약 전체가 CANCELLING인 경로에서는 호출하지 않는다.
      */
     void recalculateAfterCompletion(Reservation reservation) {
         int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
