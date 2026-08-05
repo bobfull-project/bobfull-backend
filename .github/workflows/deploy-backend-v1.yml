@@ -120,15 +120,48 @@ jobs:
 
           echo "ECR repository '${ECR_REPOSITORY}' exists."
 
+      - name: Check ECR image tag
+        id: ecr_image
+        run: |
+          set -euo pipefail
+
+          image_uri="${{ steps.image.outputs.image_uri }}"
+          if image_check_output="$(aws ecr describe-images \
+            --region "${AWS_REGION}" \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${GITHUB_SHA}" 2>&1)"; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "ECR image '${image_uri}' already exists. Reusing existing immutable SHA image."
+            exit 0
+          fi
+
+          if printf '%s\n' "${image_check_output}" | grep -q 'ImageNotFoundException'; then
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            echo "ECR image '${image_uri}' does not exist. Building and pushing SHA image."
+            exit 0
+          fi
+
+          echo "${image_check_output}" >&2
+          echo "Failed to describe ECR image tag '${GITHUB_SHA}' in repository '${ECR_REPOSITORY}'." >&2
+          exit 1
+
       - name: Login to ECR
+        if: steps.ecr_image.outputs.exists != 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push Docker image
+        if: steps.ecr_image.outputs.exists != 'true'
         run: |
           set -euo pipefail
 
           docker build -t "${{ steps.image.outputs.image_uri }}" .
           docker push "${{ steps.image.outputs.image_uri }}"
+
+      - name: Reuse existing Docker image
+        if: steps.ecr_image.outputs.exists == 'true'
+        run: |
+          set -euo pipefail
+          echo "Using existing ECR image '${{ steps.image.outputs.image_uri }}' for SSM deployment."
 
       - name: Deploy on EC2 with SSM Run Command
         env:
