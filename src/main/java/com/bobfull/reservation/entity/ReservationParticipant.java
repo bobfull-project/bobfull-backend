@@ -79,8 +79,8 @@ public class ReservationParticipant extends BaseTimeEntity {
 
     /**
      * 취소 접수(CANCEL_REQUESTED)에 대한 환불이 완료되어 CANCELLED로 확정한다
-     * (Issue #44 완료 경로, PR #137이 호출). 웹훅 중복 전달에 대비해 이미 CANCELLED면 아무 일도
-     * 하지 않는다.
+     * (Issue #44 완료 경로, {@code ReservationCancellationCompletionService}가 호출, V2, #45/PR #144).
+     * 웹훅 중복 전달에 대비해 이미 CANCELLED면 아무 일도 하지 않는다.
      */
     public void completeCancel(Instant cancelledAt) {
         if (participationStatus == ParticipationStatus.CANCELLED) {
@@ -117,6 +117,14 @@ public class ReservationParticipant extends BaseTimeEntity {
         return participationStatus;
     }
 
+    public Instant getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
+    }
+
     public void markNoShow() {
         if (participationStatus != ParticipationStatus.RESERVED) {
             throw new IllegalStateException("RESERVED 상태만 노쇼 처리할 수 있습니다.");
@@ -131,11 +139,4 @@ public class ReservationParticipant extends BaseTimeEntity {
         this.participationStatus = ParticipationStatus.RESERVED;
     }
 
-    public Instant getCancelledAt() {
-        return cancelledAt;
-    }
-
-    public String getCancelReason() {
-        return cancelReason;
-    }
 }

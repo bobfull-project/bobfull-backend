@@ -79,8 +79,9 @@ public class Reservation extends BaseTimeEntity {
 
     /**
      * 취소 접수(CANCELLING)로 시작된 모든 참여자의 환불이 완료되어 예약 전체 취소를 확정한다
-     * (Issue #44 완료 경로, PR #137이 호출). TimeSlot 복구는 별도 상태 컬럼이 아니라 이 상태 전이만으로
-     * 파생된다 — 활성 Reservation 조회(`existsByTimeSlotIdAndReservationStatusIn`)가 곧바로 false가 된다.
+     * (Issue #44 완료 경로, {@code ReservationCancellationCompletionService}가 호출, V2, #45/PR #144).
+     * TimeSlot 복구는 별도 상태 컬럼이 아니라 이 상태 전이만으로 파생된다 — 활성 Reservation
+     * 조회(`existsByTimeSlotIdAndReservationStatusIn`)가 곧바로 false가 된다.
      */
     public void cancel() {
         this.reservationStatus = ReservationStatus.CANCELLED;
@@ -92,8 +93,7 @@ public class Reservation extends BaseTimeEntity {
 
     public boolean isCancelling() {
         return reservationStatus == ReservationStatus.CANCELLING;
-    }
-
+}
     /**
      * 추가 참여자 취소로 확정 기준 미달이 되면 모집이 OPEN인 동안 CONFIRMED에서 RECRUITING으로
      * 되돌린다(Issue #131). 이미 RECRUITING이면 그대로 둔다.

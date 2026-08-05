@@ -20,9 +20,10 @@ public interface ReservationCancellationRefundPort {
      *
      * <p>이 메서드가 예외를 던지거나 참여자별 환불 중 일부만 성공해도 이미 커밋된
      * CANCELLING/CANCEL_REQUESTED 상태는 롤백되지 않는다. 각 참여자의 실제 CANCELLED 확정은
-     * 환불이 개별적으로 완료될 때마다 {@code ReservationCancellationService.completeParticipantCancellation}
-     * (PR #137의 공통 완료 Service가 호출)을 통해 이뤄지며, 완료되지 않은 채 남은 건은 #141의
-     * 정합성 확인 스케줄러가 재확인한다.</p>
+     * 환불이 개별적으로 완료될 때마다 결제 도메인의 공통 완료 경로({@code RefundCompletionService})가
+     * 자신이 소유한 {@code ReservationCancellationCompletionPort}를 통해 예약 도메인의
+     * {@code ReservationCancellationCompletionService}를 호출해 이뤄지며(V2, #45), 완료되지 않은 채
+     * 남은 건은 #141의 정합성 확인 스케줄러가 재확인한다.</p>
      */
     List<RefundRequestResult> requestRefunds(RefundRequestCommand command);
 

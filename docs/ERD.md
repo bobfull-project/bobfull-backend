@@ -80,7 +80,7 @@ erDiagram
         bigint reservation_id PK "예약 식별자"
         bigint time_slot_id FK "대상 회차"
         bigint creator_member_id FK "최초 예약자"
-        varchar(20) reservation_status "RECRUITING, CONFIRMED, CANCELLED, CLOSED"
+        varchar(20) reservation_status "RECRUITING, CONFIRMED, CANCELLING, CANCELLED, CLOSED"
         varchar(20) recruitment_status "OPEN, CLOSED"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
@@ -90,7 +90,7 @@ erDiagram
         bigint reservation_id FK "대상 예약"
         bigint member_id FK "신청 회원"
         integer party_size "신청 인원"
-        varchar(20) participation_status "RESERVED, NO_SHOW, CANCELLED"
+        varchar(20) participation_status "RESERVED, NO_SHOW, CANCEL_REQUESTED, CANCELLED"
         datetime cancelled_at "전체 참여 취소 시각"
         varchar(255) cancel_reason "취소 사유. 노쇼는 저장하지 않음"
         datetime created_at "생성 시각"
@@ -243,11 +243,11 @@ erDiagram
 | `reservation_id` | BIGINT | N | PK | 예약 식별자 |
 | `time_slot_id` | BIGINT | N | FK → `time_slot.time_slot_id`, INDEX | 대상 회차 |
 | `creator_member_id` | BIGINT | N | FK → `member.member_id`, INDEX | 최초 예약자 |
-| `reservation_status` | VARCHAR(20) | N | 앱 Enum | `RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED` |
+| `reservation_status` | VARCHAR(20) | N | 앱 Enum | `RECRUITING`, `CONFIRMED`, `CANCELLING`, `CANCELLED`, `CLOSED` |
 | `recruitment_status` | VARCHAR(20) | N | 앱 Enum | `OPEN`, `CLOSED` |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
-최초 예약자는 `reservation_participant`에도 존재한다. `creator_member_id`는 최초 예약자만 가능한 모집 마감·취소 권한을 빠르고 명확하게 검증하기 위한 중복 저장이다. 결제 완료 시 최초 참여자와 동일 회원인지 같은 트랜잭션에서 보장해야 한다. `CANCELLED` 예약은 이력을 위해 TimeSlot 연결을 유지하고, 해당 회차의 다음 예약 생성은 활성 Reservation 유무를 트랜잭션에서 확인한다.
+최초 예약자는 `reservation_participant`에도 존재한다. `creator_member_id`는 최초 예약자만 가능한 모집 마감·취소 권한을 빠르고 명확하게 검증하기 위한 중복 저장이다. 결제 완료 시 최초 참여자와 동일 회원인지 같은 트랜잭션에서 보장해야 한다. `CANCELLED` 예약은 이력을 위해 TimeSlot 연결을 유지하고, 해당 회차의 다음 예약 생성은 활성 Reservation 유무를 트랜잭션에서 확인한다. `CANCELLING`은 취소가 접수돼 외부 환불을 기다리는 중간 상태이며(#44), `isActive()`는 `RECRUITING`·`CONFIRMED`만 참으로 취급해 `CANCELLING`도 신규 JOIN·결제 확정 대상에서 제외한다.
 
 ### 4.6 `reservation_participant`
 
@@ -259,12 +259,12 @@ erDiagram
 | `reservation_id` | BIGINT | N | FK → `reservation.reservation_id`, INDEX | 대상 예약 |
 | `member_id` | BIGINT | N | FK → `member.member_id`, INDEX | 신청 회원 |
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 신청 인원 |
-| `participation_status` | VARCHAR(20) | N | 앱 Enum | `RESERVED`, `NO_SHOW`, `CANCELLED` |
+| `participation_status` | VARCHAR(20) | N | 앱 Enum | `RESERVED`, `NO_SHOW`, `CANCEL_REQUESTED`, `CANCELLED` |
 | `cancelled_at` | DATETIME | Y |  | 전체 참여 취소 시각 |
 | `cancel_reason` | VARCHAR(255) | Y |  | 취소 사유(MEMBER 본인 취소·식당 귀책 취소 공통). 노쇼는 사유를 저장하지 않는다 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
-`(reservation_id, member_id)`는 유니크다. 최초 참여자는 `reservation.creator_member_id`와 같은 회원으로 판별한다. 부분 인원 변경·부분 취소·부분 노쇼는 모델 범위에 없다. MEMBER 취소는 서버 시간 기준 식사 시작 2시간 전의 `RESERVED → CANCELLED` 전체 참여 단위 전이만 허용한다.
+`(reservation_id, member_id)`는 유니크다. 최초 참여자는 `reservation.creator_member_id`와 같은 회원으로 판별한다. 부분 인원 변경·부분 취소·부분 노쇼는 모델 범위에 없다. MEMBER 취소는 서버 시간 기준 식사 시작 2시간 전에 접수되며, `RESERVED → CANCEL_REQUESTED`로 즉시 전이해 취소 접수를 커밋하고, 연결된 Payment 전체 금액의 외부 환불이 완료된 뒤에야 `CANCEL_REQUESTED → CANCELLED`로 확정된다(#44, #45). `cancelled_at`은 이 최종 확정 시각을 기록한다.
 예약 전체 취소 사유도 각 유효 `reservation_participant.cancel_reason`에 동일하게 기록한다. `reservation`에는 별도 취소 사유 컬럼을 두지 않는다.
 
 ### 4.7 `payment`
@@ -301,9 +301,12 @@ erDiagram
 | `amount` | DECIMAL | N |  | 환불 금액 |
 | `refund_status` | VARCHAR(20) | N | 앱 Enum | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` |
 | `requested_at`, `completed_at` | DATETIME | Y |  | 요청·완료 시각 |
+| `cancellation_id` | VARCHAR(64) | Y | UNIQUE | PortOne 취소(cancellation) 식별자. 요청 접수 시점에는 비어 있고, PortOne 응답·웹훅으로 확인되면 저장한다(#45) |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
 한 사용자의 `partySize` 결제 전체만 환불하므로 결제당 환불은 0..1건으로 모델링한다. 실패 재시도는 새 환불 행이 아니라 같은 환불의 상태 전이로 처리한다.
+
+**2026-08-05 Human 확정**: Issue #44 완료 조건은 원래 `Refund=UNKNOWN` 상태 추가를 명시했으나, `UNKNOWN`처럼 애매한 상태를 추가로 늘리지 않기로 확정했다. 결과 불명확(timeout·connection reset 등)은 `REQUESTED` 유지로 표현하는 것이 최종 정책이며, 이 표는 그 확정된 정책을 반영한다.
 
 ### 4.9 `no_show_history`
 
@@ -411,11 +414,11 @@ erDiagram
 | 회원 역할 | `MEMBER`, `OWNER`, `ADMIN` | `member.role` |
 | 식당 상태 | `ACTIVE` | 생성 시 서버 적용, 상태 변경 API 없음 |
 | 테이블 상태 | `ACTIVE` | 생성 시 서버 적용, 상태 변경 API 없음 |
-| 예약 상태 | `RECRUITING`, `CONFIRMED`, `CANCELLED`, `CLOSED` | `reservation.reservation_status` |
+| 예약 상태 | `RECRUITING`, `CONFIRMED`, `CANCELLING`, `CANCELLED`, `CLOSED` | `reservation.reservation_status`; `CANCELLING`은 취소 접수 후 외부 환불 완료를 기다리는 중간 상태(#44) |
 | 모집 상태 | `OPEN`, `CLOSED` | `reservation.recruitment_status` |
-| 참여자 상태 | `RESERVED`, `NO_SHOW`, `CANCELLED` | `reservation_participant.participation_status` |
+| 참여자 상태 | `RESERVED`, `NO_SHOW`, `CANCEL_REQUESTED`, `CANCELLED` | `reservation_participant.participation_status`; `CANCEL_REQUESTED`는 취소 접수 후 본인 환불 완료를 기다리는 중간 상태(#44) |
 | 결제 상태 | `READY`, `PAID`, `FAILED`, `EXPIRED`, `REFUNDED` | `payment.payment_status`; `REFUNDED`는 Payment 전체 환불 완료 |
-| 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status` |
+| 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status`; 결과 불명확은 `REQUESTED` 유지로 표현하며 `UNKNOWN`은 도입하지 않는다(2026-08-05 Human 확정, #44) |
 
 `no_show_history.is_marked`는 상태 Enum이 아니라 처리·해제 이력을 구분하는 boolean 값이다. `TRUE`는 노쇼 처리, `FALSE`는 노쇼 해제를 뜻한다.
 
@@ -446,10 +449,11 @@ erDiagram
 ### MEMBER 취소·환불
 
 1. 인증 MEMBER의 `reservation_participant.member_id`를 확인하고, 서버 시간 기준 `time_slot.start_at` 2시간 전까지이며 참여 상태가 `RESERVED`인지 검증한다. 부분 `party_size` 취소는 허용하지 않는다.
-2. 추가 참여자 취소는 해당 `reservation_participant`만 `CANCELLED`로 전환하고 연결된 Payment 전체 금액의 Refund를 생성한다. `refund.payment_id` UNIQUE로 중복 환불 행을 막고, PAID 참여 인원과 `availableCapacity`를 재계산한다.
-3. 추가 참여자 취소 후 `recruitment_status=OPEN`이면 확정 기준 미달 시에만 Reservation을 `RECRUITING`으로 전환하고, 기준 이상이면 `CONFIRMED`를 유지한다. `CONFIRMED + CLOSED` 수동 마감 예약은 기준 이상이면 그대로 유지하고, 기준 미달이면 Reservation 전체를 `CANCELLED`로 전환해 유효 Participant의 Payment 전체 금액을 환불한다. CLOSED 모집을 다시 OPEN하지 않는다.
-4. 최초 예약자 취소는 Reservation을 `CANCELLED`로 전환하고 모든 유효 Participant의 Payment 전체 금액에 대한 Refund를 생성한다. Reservation과 Payment·Refund 행은 보존하며, 기존 Reservation이 `CANCELLED`, 현재 시간이 식사 시작 2시간 전보다 이전, 다른 활성 Reservation 및 OWNER·시스템 사용 제한이 없을 때만 TimeSlot에 새 Reservation을 생성할 수 있다.
-5. Reservation이 `CANCELLED` 또는 `CLOSED`이면 ChatRoom 신규 메시지 전송은 종료되고 기존 ChatMessage는 유지한다. OWNER·시스템 귀책 및 모집 실패 전체 취소도 동일한 Payment·Refund·이력 보존 원칙을 따른다.
+2. **접수(짧은 트랜잭션)**: 추가 참여자 취소는 해당 `reservation_participant`를 `CANCEL_REQUESTED`로, 최초 예약자 취소는 Reservation을 `CANCELLING`으로 전환하고 유효 Participant를 모두 `CANCEL_REQUESTED`로 전환해 커밋한다(#44). 이 시점에는 아직 `CANCELLED`가 아니며, 좌석은 계속 점유한 것으로 계산한다.
+3. **외부 환불 실행(트랜잭션 밖)**: 접수 커밋·Reservation 락 해제 뒤 참여자별로 `refund.payment_id` UNIQUE 제약으로 중복을 막으며 Refund를 생성하고 PortOne 환불을 요청한다(#45).
+4. **완료 확정(짧은 트랜잭션)**: 환불이 완료되면 해당 `reservation_participant`만 `CANCEL_REQUESTED → CANCELLED`로 조건부 전이한다. 남은 `CANCEL_REQUESTED`가 없으면 Reservation을 `CANCELLED`로 확정하고, 추가 참여자 단건 취소면 `currentParticipantCount`·`availableCapacity`를 재계산해 확정 기준 미달 시 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다. `CONFIRMED + CLOSED` 수동 마감 예약은 기준 이상이면 그대로 유지하고, 기준 미달이면 남은 유효 Participant를 마저 취소 접수한다. CLOSED 모집을 다시 OPEN하지 않는다.
+5. 최초 예약자 취소로 Reservation이 `CANCELLED`로 확정되면, 현재 시간이 식사 시작 2시간 전보다 이전이고 다른 활성 Reservation 및 OWNER·시스템 사용 제한이 없을 때만 TimeSlot에 새 Reservation을 생성할 수 있다. Reservation과 Payment·Refund 행은 보존한다.
+6. Reservation이 `CANCELLING`·`CANCELLED` 또는 `CLOSED`이면 ChatRoom 신규 메시지 전송은 종료되고 기존 ChatMessage는 유지한다. OWNER·시스템 귀책 및 모집 실패 전체 취소도 동일한 접수·외부 실행·완료 확정과 Payment·Refund·이력 보존 원칙을 따른다.
 
 ### 노쇼
 
