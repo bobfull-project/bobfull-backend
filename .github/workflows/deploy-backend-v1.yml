@@ -28,7 +28,6 @@ env:
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
   BACKEND_EC2_INSTANCE_ID: ${{ vars.BACKEND_EC2_INSTANCE_ID }}
   BACKEND_PARAMETER_PREFIX: ${{ vars.BACKEND_PARAMETER_PREFIX }}
-  BACKEND_PUBLIC_BASE_URL: ${{ vars.BACKEND_PUBLIC_BASE_URL }}
 
 jobs:
   ci:
@@ -78,7 +77,6 @@ jobs:
             ECR_REPOSITORY
             BACKEND_EC2_INSTANCE_ID
             BACKEND_PARAMETER_PREFIX
-            BACKEND_PUBLIC_BASE_URL
             AWS_ROLE_TO_ASSUME
           )
 
@@ -143,7 +141,6 @@ jobs:
 
       - name: Verify backend deployment
         env:
-          BASE_URL: ${{ env.BACKEND_PUBLIC_BASE_URL }}
           AWS_REGION: ${{ env.AWS_REGION }}
           PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
           CLOUDWATCH_LOG_GROUP: /bobfull/backend

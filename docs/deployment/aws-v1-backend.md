@@ -121,8 +121,9 @@ main push
 → SSM Run Command로 EC2 배포 명령 실행
 → Parameter Store 값으로 env-file 생성
 → 기존 컨테이너 교체
+→ EC2 localhost health check
 → SSM 명령 Success polling
-→ 컨테이너 running 상태와 외부 API 응답 확인
+→ ECR, Parameter Store, S3, CloudWatch 확인
 ```
 
 GitHub Actions의 AWS 인증은 장기 Access Key를 저장하지 않고 OIDC로 IAM Role을 assume한다. EC2 22번 포트를 열거나 PEM Private Key를 GitHub Secret에 저장하지 않는다.
@@ -134,7 +135,6 @@ AWS_REGION
 ECR_REPOSITORY
 BACKEND_EC2_INSTANCE_ID
 BACKEND_PARAMETER_PREFIX
-BACKEND_PUBLIC_BASE_URL
 ```
 
 필수 GitHub Secrets:
@@ -193,7 +193,7 @@ CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 - Docker image build와 ECR push 성공
 - `aws ssm send-command` 명령 완료 상태가 `Success`
 - EC2 내부 배포 스크립트의 컨테이너 `running` 확인 성공
-- 외부 `GET /api/restaurants` smoke 확인 성공
+- EC2 내부 `localhost` 기준 `GET /api/restaurants` health check 성공
 - Parameter Store 경로 조회, S3 이미지 버킷 접근, CloudWatch Log Group 접근 확인
 - EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
 

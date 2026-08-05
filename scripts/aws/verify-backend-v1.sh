@@ -9,12 +9,6 @@ required_env() {
   fi
 }
 
-required_env BASE_URL
-
-curl --fail --silent --show-error "${BASE_URL%/}/api/restaurants" >/tmp/bobfull-restaurants-response.json
-test -s /tmp/bobfull-restaurants-response.json
-echo "API /api/restaurants: PASS"
-
 fetch_parameter_if_available() {
   local parameter_name="$1"
   if command -v aws >/dev/null 2>&1 && [ -n "${AWS_REGION:-}" ] && [ -n "${PARAMETER_PREFIX:-}" ]; then

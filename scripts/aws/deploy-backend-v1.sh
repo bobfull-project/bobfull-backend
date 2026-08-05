@@ -73,6 +73,11 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl is required on EC2." >&2
+  exit 1
+fi
+
 sudo mkdir -p "$(dirname "${APP_ENV_FILE}")"
 sudo chown "$USER":"$USER" "$(dirname "${APP_ENV_FILE}")"
 umask 077
@@ -208,6 +213,26 @@ if [ "${deployed_image}" != "${ECR_IMAGE_URI}" ]; then
   echo "Container image mismatch. expected=${ECR_IMAGE_URI} actual=${deployed_image}" >&2
   exit 1
 fi
+
+health_check_url="${HEALTH_CHECK_URL:-http://127.0.0.1:${HOST_PORT}/api/restaurants}"
+health_check_attempts="${HEALTH_CHECK_ATTEMPTS:-12}"
+health_check_delay_seconds="${HEALTH_CHECK_DELAY_SECONDS:-5}"
+health_response_file="/tmp/bobfull-local-health-response.json"
+
+for attempt in $(seq 1 "${health_check_attempts}"); do
+  if curl --fail --silent --show-error "${health_check_url}" > "${health_response_file}"; then
+    test -s "${health_response_file}"
+    echo "Local health check ${health_check_url}: PASS"
+    break
+  fi
+
+  if [ "${attempt}" -eq "${health_check_attempts}" ]; then
+    echo "Local health check failed after ${health_check_attempts} attempts: ${health_check_url}" >&2
+    exit 1
+  fi
+
+  sleep "${health_check_delay_seconds}"
+done
 
 docker ps --filter "name=${CONTAINER_NAME}"
 docker inspect --format='Container image: {{ index .Config.Image }} | State: {{ .State.Status }}' "${CONTAINER_NAME}"
