@@ -41,7 +41,6 @@ public class S3RestaurantImageStorageAdapter implements RestaurantImageStoragePo
                 .bucket(properties.imageBucket())
                 .key(imageKey)
                 .contentType(contentType)
-                .contentLength(contentLength)
                 .build();
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
                 .signatureDuration(expiration)
