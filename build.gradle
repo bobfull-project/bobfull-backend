@@ -46,4 +46,8 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// 테스트 클래스가 필요로 하는 서로 다른 Spring TestContext 설정 수가 기본 캐시 한도(32)를
+	// 넘어서면 LRU로 아직 필요한 컨텍스트가 강제 종료돼 이후 테스트가 무작위로 실패한다(#152).
+	// 실측상 40부터 안정적으로 통과해, 여유를 두고 48로 설정한다.
+	systemProperty 'spring.test.context.cache.maxSize', '48'
 }
