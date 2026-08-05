@@ -9,6 +9,23 @@ required_env() {
   fi
 }
 
+require_commands() {
+  local missing_commands=()
+  local command_name
+
+  for command_name in "$@"; do
+    if ! command -v "${command_name}" >/dev/null 2>&1; then
+      missing_commands+=("${command_name}")
+    fi
+  done
+
+  if [ "${#missing_commands[@]}" -gt 0 ]; then
+    echo "Missing required commands on the GitHub Actions runner:" >&2
+    printf '  - %s\n' "${missing_commands[@]}" >&2
+    exit 1
+  fi
+}
+
 required_env AWS_REGION
 required_env BACKEND_EC2_INSTANCE_ID
 required_env ECR_IMAGE_URI
@@ -19,15 +36,7 @@ SSM_DOCUMENT_NAME="${SSM_DOCUMENT_NAME:-AWS-RunShellScript}"
 SSM_POLL_INTERVAL_SECONDS="${SSM_POLL_INTERVAL_SECONDS:-10}"
 SSM_POLL_TIMEOUT_SECONDS="${SSM_POLL_TIMEOUT_SECONDS:-900}"
 
-if ! command -v aws >/dev/null 2>&1; then
-  echo "AWS CLI is required on the GitHub Actions runner." >&2
-  exit 1
-fi
-
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is required on the GitHub Actions runner." >&2
-  exit 1
-fi
+require_commands aws python3 base64 mktemp tr
 
 if [ ! -f "${DEPLOY_SCRIPT_PATH}" ]; then
   echo "Deploy script not found: ${DEPLOY_SCRIPT_PATH}" >&2
@@ -78,13 +87,18 @@ env_prefix = " ".join(
 )
 
 commands = [
+    "trap 'rm -f /tmp/bobfull-deploy-backend-v1.sh.b64 /tmp/bobfull-deploy-backend-v1.sh' EXIT",
     "cat > /tmp/bobfull-deploy-backend-v1.sh.b64 <<'BOBFULL_DEPLOY_SCRIPT_B64'\n"
     f"{deploy_script_b64}\n"
     "BOBFULL_DEPLOY_SCRIPT_B64",
     "base64 -d /tmp/bobfull-deploy-backend-v1.sh.b64 > /tmp/bobfull-deploy-backend-v1.sh",
     "chmod 700 /tmp/bobfull-deploy-backend-v1.sh",
-    f"{env_prefix} bash /tmp/bobfull-deploy-backend-v1.sh",
 ]
+
+deploy_command = "bash /tmp/bobfull-deploy-backend-v1.sh"
+if env_prefix:
+    deploy_command = f"{env_prefix} {deploy_command}"
+commands.append(deploy_command)
 
 with open(payload_path, "w", encoding="utf-8") as output:
     json.dump({"commands": commands}, output)
