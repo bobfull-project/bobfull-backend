@@ -141,12 +141,17 @@ public class OwnerReservationQueryService {
         }
     }
 
+    /**
+     * TimeSlot·SharedTable은 소프트 삭제 후에도 조회한다. 목록 조회(§6-11)가 deletedAt을 걸러내지
+     * 않으므로, 여기서 걸러내면 목록에는 보이지만 상세·참여자 조회는 404가 되는 불일치가 생긴다
+     * (예: 취소된 예약만 남은 회차·테이블을 사장님이 나중에 삭제한 경우).
+     */
     private OwnershipContext resolveOwnership(Long reservationId, Long ownerMemberId) {
         Reservation reservation = reservationRepository.findById(reservationId)
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
-        TimeSlot timeSlot = timeSlotRepository.findByIdAndDeletedAtIsNull(reservation.getTimeSlotId())
+        TimeSlot timeSlot = timeSlotRepository.findById(reservation.getTimeSlotId())
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
-        SharedTable sharedTable = sharedTableRepository.findByIdAndDeletedAtIsNull(timeSlot.getSharedTableId())
+        SharedTable sharedTable = sharedTableRepository.findById(timeSlot.getSharedTableId())
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
         Restaurant restaurant = restaurantRepository.findByIdAndDeletedAtIsNull(sharedTable.getRestaurantId())
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
@@ -156,12 +161,17 @@ public class OwnerReservationQueryService {
         return new OwnershipContext(reservation, timeSlot, sharedTable, restaurant);
     }
 
+    /** API 명세 §6-11이 문서화한 값(RECRUITING/CONFIRMED/CANCELLED/CLOSED)만 허용한다. */
     private ReservationStatus parseStatus(String reservationStatus) {
         if (reservationStatus == null || reservationStatus.isBlank()) {
             return null;
         }
         try {
-            return ReservationStatus.valueOf(reservationStatus);
+            ReservationStatus status = ReservationStatus.valueOf(reservationStatus);
+            if (status == ReservationStatus.CANCELLING) {
+                throw new CustomException(CommonErrorCode.INVALID_INPUT_VALUE);
+            }
+            return status;
         } catch (IllegalArgumentException exception) {
             throw new CustomException(CommonErrorCode.INVALID_INPUT_VALUE);
         }

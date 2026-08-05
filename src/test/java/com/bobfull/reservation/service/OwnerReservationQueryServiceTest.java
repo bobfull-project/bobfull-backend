@@ -84,8 +84,8 @@ class OwnerReservationQueryServiceTest {
         ReflectionTestUtils.setField(restaurant, "id", 1000L);
 
         given(reservationRepository.findById(reservation.getId())).willReturn(Optional.of(reservation));
-        given(timeSlotRepository.findByIdAndDeletedAtIsNull(timeSlot.getId())).willReturn(Optional.of(timeSlot));
-        given(sharedTableRepository.findByIdAndDeletedAtIsNull(sharedTable.getId())).willReturn(Optional.of(sharedTable));
+        given(timeSlotRepository.findById(timeSlot.getId())).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findById(sharedTable.getId())).willReturn(Optional.of(sharedTable));
         given(restaurantRepository.findByIdAndDeletedAtIsNull(restaurant.getId())).willReturn(Optional.of(restaurant));
     }
 
@@ -246,5 +246,56 @@ class OwnerReservationQueryServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    void 존재하지_않는_예약의_참여자_목록_조회는_404() {
+        // given
+        setUp();
+        given(reservationRepository.findById(1L)).willReturn(Optional.empty());
+
+        // when
+        Throwable result = catchThrowable(
+                () -> service.getParticipants(ownerMemberId, 1L, PageRequest.of(0, 20)));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.RESERVATION_ID_NOT_FOUND);
+    }
+
+    @Test
+    void 회차나_테이블이_삭제됐어도_본인_식당_예약_상세는_조회된다() {
+        // given: 사장님이 취소된 예약만 남은 회차·테이블을 나중에 삭제한 상황이다.
+        // 목록 조회(§6-11)는 deletedAt을 걸러내지 않으므로, 상세·참여자 조회도 같은 예약을
+        // 404로 숨기면 "목록에는 보이는데 눌러보면 404"가 되는 불일치가 생긴다.
+        setUp();
+        setUpOwnershipChain(ownerMemberId);
+        ReflectionTestUtils.setField(timeSlot, "deletedAt", Instant.parse("2026-08-01T12:00:00Z"));
+        ReflectionTestUtils.setField(sharedTable, "deletedAt", Instant.parse("2026-08-01T12:00:00Z"));
+        given(reservationParticipantRepository.sumPartySizeByStatuses(anyLong(), any())).willReturn(0);
+        given(paymentHoldReader.sumActiveReadyPartySize(timeSlot.getId())).willReturn(0);
+
+        // when
+        OwnerReservationDetailResponse response = service.getReservationDetail(ownerMemberId, reservation.getId());
+
+        // then
+        assertThat(response.reservationId()).isEqualTo(reservation.getId());
+    }
+
+    @Test
+    void CANCELLING_상태값으로_목록을_조회하면_400() {
+        // given
+        setUp();
+        Restaurant myRestaurant = Restaurant.create(ownerMemberId, "밥풀식당", "제주시", "한식", "설명", "키워드", 10000);
+        ReflectionTestUtils.setField(myRestaurant, "id", 1000L);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(1000L)).willReturn(Optional.of(myRestaurant));
+
+        // when
+        Throwable result = catchThrowable(() ->
+                service.getRestaurantReservations(ownerMemberId, 1000L, "CANCELLING", null, PageRequest.of(0, 20)));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
     }
 }
