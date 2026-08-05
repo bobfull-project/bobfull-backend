@@ -84,10 +84,11 @@ public class PortOneSdkRefundRequester implements PortOneRefundRequester {
             PaymentCancellation.Recognized candidate = candidates.get(0);
             return ReconciliationResult.completed(candidate.getId(), candidate.getCancelledAt());
         }
-        if (candidates.size() > 1 || (candidates.size() == 1 && cancellations.size() > 1)) {
-            return ReconciliationResult.ambiguous("multiple or mixed cancellations");
-        }
-        return ReconciliationResult.notCompleted();
+        // Payment는 이미 전액 취소로 확정됐으므로, 단일 매칭 후보가 아니면(0건 포함) 이후 재요청·자동
+        // 완료 없이도 사람이 즉시 원인을 확인할 수 있게 AMBIGUOUS로 남긴다(#148 리뷰 반영, #141 계약 수정).
+        return ReconciliationResult.ambiguous(candidates.isEmpty()
+                ? "cancelled payment has no matching candidate"
+                : "multiple or mixed cancellations");
     }
 
     private ReconciliationResult reconcileKnownCancellation(List<PaymentCancellation.Recognized> cancellations,
