@@ -3,7 +3,7 @@ name: Deploy Backend V1
 on:
   push:
     branches:
-      - develop
+      - main
     paths:
       - '.github/workflows/deploy-backend-v1.yml'
       - 'Dockerfile'

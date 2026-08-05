@@ -10,7 +10,7 @@
 - Docker 이미지 빌드 기준
 - 로컬 Docker app 검증용 Compose 설정
 - ECR push, EC2 bootstrap, EC2 deploy, 배포 verify 스크립트
-- GitHub Actions 기반 백엔드 자동 배포 workflow 파일
+- GitHub Actions 기반 백엔드 CI workflow와 자동 배포 workflow 파일
 - 운영 환경변수 이름과 Parameter Store 이름 기준
 - 이미지 저장용 S3 버킷 이름 환경변수 기준
 - CloudWatch Logs log group 이름 기준
@@ -90,12 +90,27 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 
 비밀번호, JWT Secret, PortOne Secret처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
 
-## GitHub Actions 백엔드 자동 배포
+## GitHub Actions 백엔드 CI와 CD
 
-`.github/workflows/deploy-backend-v1.yml`은 `develop` 브랜치의 백엔드 코드·빌드 설정·배포 스크립트 변경이 반영되면 자동 실행된다. 긴급 재배포나 운영 확인용으로 `workflow_dispatch`도 유지한다.
+백엔드는 검증 단계와 운영 배포 단계를 분리한다.
+
+- `.github/workflows/ci-backend-v1.yml`: `develop` 대상 PR과 `develop` push에서 Gradle 검증과 Docker build만 수행한다.
+- `.github/workflows/deploy-backend-v1.yml`: `main` push에서 ECR push, EC2 컨테이너 교체, 배포 후 검증을 수행한다.
+
+긴급 재실행이나 운영 확인용으로 두 workflow 모두 `workflow_dispatch`를 유지한다.
+
+CI 흐름:
 
 ```text
-develop push
+pull_request to develop 또는 develop push
+→ Gradle clean check bootJar
+→ Docker image build
+```
+
+CD 흐름:
+
+```text
+main push
 → Gradle clean check bootJar
 → Docker image build
 → ECR push
@@ -129,7 +144,12 @@ S3_IMAGE_BUCKET
 
 `S3_IMAGE_BUCKET`은 GitHub Variable로 넘길 수 있지만 기본 기준은 Parameter Store의 `s3-image-bucket` 값이다.
 
-배포 성공 여부는 다음을 모두 통과해야 한다.
+CI 성공 여부는 다음을 모두 통과해야 한다.
+
+- Gradle `clean check bootJar` 성공
+- Docker image build 성공
+
+CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 
 - Gradle `clean check bootJar` 성공
 - Docker image build와 ECR push 성공
