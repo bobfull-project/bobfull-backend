@@ -101,11 +101,9 @@ jobs:
           account_id="$(aws sts get-caller-identity --query Account --output text)"
           ecr_registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           image_uri="${ecr_registry}/${ECR_REPOSITORY}:${GITHUB_SHA}"
-          latest_image_uri="${ecr_registry}/${ECR_REPOSITORY}:latest"
 
           echo "ecr_registry=${ecr_registry}" >> "${GITHUB_OUTPUT}"
           echo "image_uri=${image_uri}" >> "${GITHUB_OUTPUT}"
-          echo "latest_image_uri=${latest_image_uri}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify ECR repository exists
         run: |
@@ -130,9 +128,7 @@ jobs:
           set -euo pipefail
 
           docker build -t "${{ steps.image.outputs.image_uri }}" .
-          docker tag "${{ steps.image.outputs.image_uri }}" "${{ steps.image.outputs.latest_image_uri }}"
           docker push "${{ steps.image.outputs.image_uri }}"
-          docker push "${{ steps.image.outputs.latest_image_uri }}"
 
       - name: Deploy on EC2 with SSM Run Command
         env:
