@@ -107,6 +107,13 @@ public class RefundTransactionService {
         });
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPgChecked(Long refundId) {
+        if (refundRepository.updateLastPgCheckedAt(refundId, clock.instant()) == 0) {
+            throw new CustomException(PaymentErrorCode.REFUND_ID_NOT_FOUND);
+        }
+    }
+
     @Transactional
     public java.util.Optional<RefundCompletion> completeFromWebhook(String paymentId, String cancellationId) {
         return findRefundForWebhook(paymentId, cancellationId).map(refund -> {

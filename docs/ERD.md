@@ -121,6 +121,7 @@ erDiagram
         varchar(20) refund_status "REQUESTED, PROCESSING, COMPLETED, FAILED"
         datetime requested_at "요청 시각"
         datetime completed_at "완료 시각"
+        datetime last_pg_checked_at "마지막 PG 조회 시각"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
     }
@@ -304,6 +305,7 @@ erDiagram
 | `refund_status` | VARCHAR(20) | N | 앱 Enum | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` |
 | `requested_at`, `completed_at` | DATETIME | Y |  | 요청·완료 시각 |
 | `cancellation_id` | VARCHAR(64) | Y | UNIQUE | PortOne 취소(cancellation) 식별자. 요청 접수 시점에는 비어 있고, PortOne 응답·웹훅으로 확인되면 저장한다(#45) |
+| `last_pg_checked_at` | DATETIME | Y |  | 외부 PG 조회를 실제로 시도한 시각. `updated_at`과 분리해 재확인 후보를 공정하게 순환한다(#141) |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
 한 사용자의 `partySize` 결제 전체만 환불하므로 결제당 환불은 0..1건으로 모델링한다. 실패 재시도는 새 환불 행이 아니라 같은 환불의 상태 전이로 처리한다.

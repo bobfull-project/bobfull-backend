@@ -1,6 +1,8 @@
 payment:
   expiration:
     enabled: false
+  refund-reconciliation:
+    enabled: false
 
 cors:
   allowed-origins: http://localhost:5173

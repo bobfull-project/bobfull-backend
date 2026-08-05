@@ -45,6 +45,10 @@ public class Refund extends BaseTimeEntity {
     @Column(name = "cancellation_id", unique = true, length = 64)
     private String cancellationId;
 
+    /** 마지막 PortOne 조회 시각이다. 상태 변경 시각(updatedAt)과 분리해 후보를 순환한다. */
+    @Column(name = "last_pg_checked_at")
+    private Instant lastPgCheckedAt;
+
     protected Refund() {
     }
 
@@ -71,6 +75,14 @@ public class Refund extends BaseTimeEntity {
     public Instant getCompletedAt() { return completedAt; }
 
     public String getCancellationId() { return cancellationId; }
+    public Instant getLastPgCheckedAt() { return lastPgCheckedAt; }
+
+    public void markPgChecked(Instant checkedAt) {
+        if (checkedAt == null) {
+            throw new IllegalArgumentException("PG 조회 시각은 필수입니다.");
+        }
+        this.lastPgCheckedAt = checkedAt;
+    }
 
     /**
      * 상태 전이는 단조롭게만 허용한다: REQUESTED/PROCESSING → PROCESSING. COMPLETED·FAILED는
