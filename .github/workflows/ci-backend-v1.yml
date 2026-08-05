@@ -1,19 +1,6 @@
 name: CI Backend V1
 
 on:
-  pull_request:
-    branches:
-      - develop
-    paths:
-      - '.github/workflows/ci-backend-v1.yml'
-      - 'Dockerfile'
-      - 'build.gradle'
-      - 'settings.gradle'
-      - 'gradle/**'
-      - 'gradlew'
-      - 'lambda/**'
-      - 'scripts/aws/**'
-      - 'src/**'
   push:
     branches:
       - develop
@@ -27,7 +14,6 @@ on:
       - 'lambda/**'
       - 'scripts/aws/**'
       - 'src/**'
-  workflow_dispatch:
 
 concurrency:
   group: backend-v1-ci-${{ github.ref }}

@@ -203,5 +203,11 @@ if ! docker ps --filter "name=${CONTAINER_NAME}" --filter "status=running" --for
   exit 1
 fi
 
+deployed_image="$(docker inspect --format='{{ index .Config.Image }}' "${CONTAINER_NAME}")"
+if [ "${deployed_image}" != "${ECR_IMAGE_URI}" ]; then
+  echo "Container image mismatch. expected=${ECR_IMAGE_URI} actual=${deployed_image}" >&2
+  exit 1
+fi
+
 docker ps --filter "name=${CONTAINER_NAME}"
 docker inspect --format='Container image: {{ index .Config.Image }} | State: {{ .State.Status }}' "${CONTAINER_NAME}"

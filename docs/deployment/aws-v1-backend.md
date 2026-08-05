@@ -15,7 +15,6 @@
 - 이미지 저장용 S3 버킷 이름 환경변수 기준
 - 식당 이미지 검증용 Java Lambda 수동 설정 기준
 - CloudWatch Logs log group 이름 기준
-- 프론트엔드 별도 저장소의 Vite build와 S3 정적 웹 호스팅 자동 배포 기준
 
 ## 운영 Profile 환경변수
 
@@ -99,15 +98,15 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 
 백엔드는 검증 단계와 운영 배포 단계를 분리한다.
 
-- `.github/workflows/ci-backend-v1.yml`: `develop` 대상 PR과 `develop` push에서 Gradle 검증과 Docker build만 수행한다.
-- `.github/workflows/deploy-backend-v1.yml`: `main` push에서 ECR push, EC2 컨테이너 교체, 배포 후 검증을 수행한다.
+- `.github/workflows/ci-backend-v1.yml`: `develop` push에서 Gradle 검증과 Docker build만 수행한다.
+- `.github/workflows/deploy-backend-v1.yml`: `main` push에서 CI 성공 후 ECR push, SSM Run Command 기반 EC2 컨테이너 교체, 배포 후 검증을 수행한다.
 
-긴급 재실행이나 운영 확인용으로 두 workflow 모두 `workflow_dispatch`를 유지한다.
+feature 브랜치와 `pull_request` 이벤트에서는 백엔드 V1 CI/CD workflow를 실행하지 않는다.
 
 CI 흐름:
 
 ```text
-pull_request to develop 또는 develop push
+develop push
 → Gradle clean check bootJar
 → Docker image build
 ```
@@ -119,35 +118,69 @@ main push
 → Gradle clean check bootJar
 → Docker image build
 → ECR push
-→ EC2 SSH 접속
+→ SSM Run Command로 EC2 배포 명령 실행
 → Parameter Store 값으로 env-file 생성
 → 기존 컨테이너 교체
+→ SSM 명령 Success polling
 → 컨테이너 running 상태와 외부 API 응답 확인
 ```
 
-GitHub Actions의 AWS 인증은 장기 Access Key를 저장하지 않고 OIDC로 IAM Role을 assume한다. 따라서 저장소 Secret에는 `AWS_ROLE_TO_ASSUME`와 EC2 SSH 접속용 `EC2_SSH_PRIVATE_KEY`만 둔다.
+GitHub Actions의 AWS 인증은 장기 Access Key를 저장하지 않고 OIDC로 IAM Role을 assume한다. EC2 22번 포트를 열거나 PEM Private Key를 GitHub Secret에 저장하지 않는다.
 
 필수 GitHub Variables:
 
 ```text
 AWS_REGION
 ECR_REPOSITORY
-BACKEND_EC2_HOST
+BACKEND_EC2_INSTANCE_ID
 BACKEND_PARAMETER_PREFIX
 BACKEND_PUBLIC_BASE_URL
 ```
 
-선택 GitHub Variables:
+필수 GitHub Secrets:
 
 ```text
-BACKEND_EC2_USER
-BACKEND_HOST_PORT
-BACKEND_CONTAINER_NAME
-BACKEND_CLOUDWATCH_LOG_GROUP
-S3_IMAGE_BUCKET
+AWS_ROLE_TO_ASSUME
 ```
 
-`S3_IMAGE_BUCKET`은 GitHub Variable로 넘길 수 있지만 기본 기준은 Parameter Store의 `s3-image-bucket` 값이다.
+`S3_IMAGE_BUCKET`은 GitHub Variable로 넘기지 않고 Parameter Store의 `/bobfull/prod/s3-image-bucket` 값을 사용한다.
+
+GitHub Actions OIDC Role에는 최소한 다음 권한이 필요하다.
+
+```text
+sts:GetCallerIdentity
+ecr:GetAuthorizationToken
+ecr:DescribeRepositories
+ecr:CreateRepository
+ecr:BatchCheckLayerAvailability
+ecr:InitiateLayerUpload
+ecr:UploadLayerPart
+ecr:CompleteLayerUpload
+ecr:PutImage
+ecr:BatchGetImage
+ecr:DescribeImages
+ssm:SendCommand
+ssm:GetCommandInvocation
+ssm:GetParameter
+ssm:GetParametersByPath
+s3:ListBucket
+logs:DescribeLogStreams
+```
+
+대상 EC2는 SSM managed instance로 등록되어 있어야 하며, EC2 instance profile에는 SSM Agent 동작과 EC2 내부 배포 스크립트 실행에 필요한 권한이 필요하다.
+
+```text
+AmazonSSMManagedInstanceCore
+ecr:GetAuthorizationToken
+ecr:BatchGetImage
+ecr:GetDownloadUrlForLayer
+ssm:GetParameter
+ssm:GetParameters
+ssm:GetParametersByPath
+kms:Decrypt
+s3:ListBucket
+logs:CreateLogGroup
+```
 
 CI 성공 여부는 다음을 모두 통과해야 한다.
 
@@ -158,54 +191,13 @@ CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 
 - Gradle `clean check bootJar` 성공
 - Docker image build와 ECR push 성공
-- EC2 배포 스크립트의 컨테이너 `running` 확인 성공
+- `aws ssm send-command` 명령 완료 상태가 `Success`
+- EC2 내부 배포 스크립트의 컨테이너 `running` 확인 성공
 - 외부 `GET /api/restaurants` smoke 확인 성공
 - Parameter Store 경로 조회, S3 이미지 버킷 접근, CloudWatch Log Group 접근 확인
 - EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
 
 자동 롤백과 Blue-Green 배포는 V1 제외 범위다. 새 컨테이너 실행 실패 시 workflow를 실패 처리하고 EC2 Docker/CloudWatch Logs에서 원인을 확인한다.
-
-## GitHub Actions 프론트엔드 자동 배포
-
-프론트엔드는 `bobfull-project/bobfull-frontend` 저장소의 `main` 브랜치에 직접 반영되는 운영 방식이다. 해당 저장소의 `Deploy Frontend V1` workflow는 다음 흐름을 가진다.
-
-```text
-main push
-→ Parameter Store 공개값 조회
-→ .env.production 생성
-→ npm ci
-→ Vite production build
-→ S3 sync --delete
-→ 정적 웹 사이트 URL 접속 확인
-```
-
-프론트 workflow도 OIDC 기반 `AWS_ROLE_TO_ASSUME`를 사용한다. 빌드 시 주입하는 값은 브라우저에 노출 가능한 공개 식별값만 사용한다.
-
-필수 GitHub Variables:
-
-```text
-AWS_REGION
-FRONTEND_S3_BUCKET
-FRONTEND_PUBLIC_BASE_URL
-FRONTEND_PARAMETER_PREFIX
-```
-
-프론트 빌드 Parameter Store:
-
-```text
-/bobfull/prod/frontend-api-base-url
-/bobfull/prod/portone-store-id
-/bobfull/prod/portone-channel-key
-```
-
-생성되는 Vite 환경변수:
-
-```text
-VITE_API_BASE_URL
-VITE_USE_MOCK=false
-VITE_PORTONE_STORE_ID
-VITE_PORTONE_CHANNEL_KEY
-```
 
 ## CORS와 S3 프론트엔드 Origin
 
