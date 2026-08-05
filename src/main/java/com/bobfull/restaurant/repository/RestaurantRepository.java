@@ -16,6 +16,10 @@ public interface RestaurantRepository
 
     Optional<Restaurant> findByIdAndDeletedAtIsNull(Long id);
 
+    boolean existsByImageKeyAndDeletedAtIsNull(String imageKey);
+
+    boolean existsByImageKeyAndIdNotAndDeletedAtIsNull(String imageKey, Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Restaurant r where r.id = :id and r.deletedAt is null")
     Optional<Restaurant> findByIdAndDeletedAtIsNullForUpdate(@Param("id") Long id);

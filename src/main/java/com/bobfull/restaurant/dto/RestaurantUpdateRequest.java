@@ -7,6 +7,7 @@ public record RestaurantUpdateRequest(
         @NotBlank String name,
         @NotBlank String description,
         @NotBlank String keyword,
-        @NotNull Integer depositPerPerson
+        @NotNull Integer depositPerPerson,
+        String imageKey
 ) {
 }

@@ -9,6 +9,7 @@ public record RestaurantCreateRequest(
         @NotBlank String category,
         @NotBlank String description,
         @NotBlank String keyword,
-        @NotNull Integer depositPerPerson
+        @NotNull Integer depositPerPerson,
+        String imageKey
 ) {
 }

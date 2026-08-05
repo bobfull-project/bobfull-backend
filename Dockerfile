@@ -7,6 +7,8 @@ COPY gradle ./gradle
 RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew
 
 COPY src ./src
+COPY lambda ./lambda
+
 RUN ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:17-jre

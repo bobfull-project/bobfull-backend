@@ -52,6 +52,10 @@ CONTAINER_PORT="${CONTAINER_PORT:-8080}"
 APP_ENV_FILE="${APP_ENV_FILE:-/opt/bobfull/backend.env}"
 CLOUDWATCH_LOG_GROUP="${CLOUDWATCH_LOG_GROUP:-/bobfull/backend}"
 CLOUDWATCH_LOG_STREAM="${CLOUDWATCH_LOG_STREAM:-${CONTAINER_NAME}}"
+DOCKER_NETWORK="${DOCKER_NETWORK:-bobfull-network}"
+REDIS_CONTAINER_NAME="${REDIS_CONTAINER_NAME:-bobfull-redis}"
+REDIS_IMAGE="${REDIS_IMAGE:-redis:7-alpine}"
+REDIS_VOLUME="${REDIS_VOLUME:-bobfull-redis-data}"
 PARAMETER_PREFIX="${PARAMETER_PREFIX%/}"
 
 if ! command -v aws >/dev/null 2>&1; then
@@ -79,10 +83,13 @@ required_parameters=(
   "JWT_SECRET:jwt-secret"
   "PORTONE_API_SECRET:portone-api-secret"
   "PORTONE_STORE_ID:portone-store-id"
+  "REDIS_HOST:redis-host"
 )
 
 optional_parameters=(
   "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
+  "REDIS_PORT:redis-port"
+  "AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS:auth-refresh-token-expiration-seconds"
   "JPA_DDL_AUTO:jpa-ddl-auto"
   "CORS_ALLOWED_ORIGINS:cors-allowed-origins"
   "PORTONE_CHANNEL_KEY:portone-channel-key"
@@ -90,6 +97,8 @@ optional_parameters=(
   "PAYMENT_EXPIRATION_ENABLED:payment-expiration-enabled"
   "PAYMENT_EXPIRATION_FIXED_DELAY:payment-expiration-fixed-delay"
   "PAYMENT_EXPIRATION_BATCH_SIZE:payment-expiration-batch-size"
+  "S3_IMAGE_UPLOAD_URL_EXPIRATION:s3-image-upload-url-expiration"
+  "S3_IMAGE_GET_URL_EXPIRATION:s3-image-get-url-expiration"
 )
 
 for item in "${required_parameters[@]}"; do
@@ -103,7 +112,7 @@ done
 if [ -n "${S3_IMAGE_BUCKET:-}" ]; then
   append_env_value S3_IMAGE_BUCKET "${S3_IMAGE_BUCKET}"
 else
-  append_parameter S3_IMAGE_BUCKET s3-image-bucket false
+  append_parameter S3_IMAGE_BUCKET s3-image-bucket true
 fi
 
 if ! grep -q '^JPA_DDL_AUTO=' "${APP_ENV_FILE}"; then
@@ -112,6 +121,14 @@ fi
 
 if ! grep -q '^JWT_ACCESS_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
   append_env_value JWT_ACCESS_TOKEN_EXPIRATION_SECONDS 3600
+fi
+
+if ! grep -q '^REDIS_PORT=' "${APP_ENV_FILE}"; then
+  append_env_value REDIS_PORT 6379
+fi
+
+if ! grep -q '^AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
+  append_env_value AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS 1209600
 fi
 
 s3_bucket="$(awk -F= '$1 == "S3_IMAGE_BUCKET" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
@@ -130,6 +147,33 @@ aws ecr get-login-password --region "${AWS_REGION}" \
 
 docker pull "${ECR_IMAGE_URI}"
 
+redis_host="$(awk -F= '$1 == "REDIS_HOST" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
+redis_port="$(awk -F= '$1 == "REDIS_PORT" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
+
+docker network create "${DOCKER_NETWORK}" >/dev/null 2>&1 || true
+docker volume create "${REDIS_VOLUME}" >/dev/null
+
+if docker ps -a --format '{{.Names}}' | grep -Fx "${REDIS_CONTAINER_NAME}" >/dev/null 2>&1; then
+  docker stop "${REDIS_CONTAINER_NAME}" >/dev/null 2>&1 || true
+  docker rm "${REDIS_CONTAINER_NAME}" >/dev/null 2>&1 || true
+fi
+
+docker run -d \
+  --name "${REDIS_CONTAINER_NAME}" \
+  --restart unless-stopped \
+  --network "${DOCKER_NETWORK}" \
+  --network-alias "${redis_host}" \
+  -v "${REDIS_VOLUME}:/data" \
+  "${REDIS_IMAGE}" \
+  redis-server --port "${redis_port}" --appendonly yes
+
+sleep 2
+
+if ! docker exec "${REDIS_CONTAINER_NAME}" redis-cli -p "${redis_port}" ping | grep -Fx PONG >/dev/null; then
+  echo "Redis did not respond to ping. Check docker logs on EC2." >&2
+  exit 1
+fi
+
 if docker ps -a --format '{{.Names}}' | grep -Fx "${CONTAINER_NAME}" >/dev/null 2>&1; then
   docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
   docker rm "${CONTAINER_NAME}" >/dev/null 2>&1 || true
@@ -138,6 +182,7 @@ fi
 docker run -d \
   --name "${CONTAINER_NAME}" \
   --restart unless-stopped \
+  --network "${DOCKER_NETWORK}" \
   --env-file "${APP_ENV_FILE}" \
   -p "${HOST_PORT}:${CONTAINER_PORT}" \
   --log-driver=awslogs \
