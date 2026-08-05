@@ -39,8 +39,12 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:refund-transaction-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=refund-transaction-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=3600", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
 @ContextConfiguration(classes = RefundTransactionIntegrationTest.Config.class)
@@ -56,6 +60,7 @@ class RefundTransactionIntegrationTest {
     @Autowired private ReservationRepository reservationRepository;
     @Autowired private ReservationParticipantRepository reservationParticipantRepository;
     @Autowired private DelayedCompletionProbe delayedCompletionProbe;
+    @MockitoSpyBean private RefundIdempotencyKeyGenerator keyGenerator;
     private Reservation activeReservation;
     private final Map<Long, Long> participantIds = new ConcurrentHashMap<>();
 
@@ -95,8 +100,8 @@ class RefundTransactionIntegrationTest {
         int successCount = 0;
         Exception rejected = null;
         try {
-            var first = executor.submit(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)));
-            var second = executor.submit(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)));
+            var first = executor.submit(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test"));
+            var second = executor.submit(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test"));
             for (var future : List.of(first, second)) {
                 try {
                     future.get(5, TimeUnit.SECONDS);
@@ -113,6 +118,31 @@ class RefundTransactionIntegrationTest {
         assertThat(((CustomException) rejected).getErrorCode()).isEqualTo(PaymentErrorCode.REFUND_PROCESSING);
         assertThat(refundRepository.findByPayment_Id(payment.getId())).isPresent();
         assertThat(refundRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 서로_다른_Refund는_서로_다른_idempotencyKey를_가진다() {
+        paid(1L);
+        paid(2L);
+
+        Refund first = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
+        Refund second = transactionService.createRequested(activeReservation.getId(), participantIds.get(2L), "test").refund();
+
+        assertThat(first.getIdempotencyKey()).isNotBlank();
+        assertThat(second.getIdempotencyKey()).isNotBlank();
+        assertThat(first.getIdempotencyKey()).isNotEqualTo(second.getIdempotencyKey());
+    }
+
+    @Test
+    void 키_생성기는_신규_Refund_생성시에만_정확히_한번_호출되고_기존_Refund_재조회시_재호출되지_않는다() {
+        paid(1L);
+
+        transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test");
+        verify(keyGenerator, times(1)).generate();
+
+        assertThatThrownBy(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test again"))
+                .isInstanceOf(CustomException.class);
+        verify(keyGenerator, times(1)).generate();
     }
 
     @Test
@@ -151,27 +181,51 @@ class RefundTransactionIntegrationTest {
     @Test
     void 타임아웃은_실패로_확정하지_않고_자동_재호출하지_않는다() {
         Payment payment = paid(1L); requester.timeoutNextCall();
-        assertThatThrownBy(() -> adapter.requestRefunds(new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test")))
-                .isInstanceOf(CustomException.class);
-        assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        RefundRequestCommand command = new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test");
+        assertThatThrownBy(() -> adapter.requestRefunds(command)).isInstanceOf(CustomException.class);
+
+        Refund refund = refundRepository.findByPayment_Id(payment.getId()).orElseThrow();
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(requester.calls()).isEqualTo(1);
+        String idempotencyKey = refund.getIdempotencyKey();
+        String requestReason = refund.getRequestReason();
+
+        assertThatThrownBy(() -> adapter.requestRefunds(command)).isInstanceOf(CustomException.class);
+
+        assertThat(refundRepository.count()).isEqualTo(1);
+        assertThat(requester.calls()).isEqualTo(1);
+        Refund refundAfterRetry = refundRepository.findByPayment_Id(payment.getId()).orElseThrow();
+        assertThat(refundAfterRetry.getIdempotencyKey()).isEqualTo(idempotencyKey);
+        assertThat(refundAfterRetry.getRequestReason()).isEqualTo(requestReason);
     }
 
     @Test
     void 결과불명확_통신오류는_실패로_확정하지_않고_자동_재호출하지_않는다() {
         Payment payment = paid(1L); requester.connectionResetNextCall();
-        assertThatThrownBy(() -> adapter.requestRefunds(new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test")))
-                .isInstanceOf(CustomException.class);
-        assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        RefundRequestCommand command = new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test");
+        assertThatThrownBy(() -> adapter.requestRefunds(command)).isInstanceOf(CustomException.class);
+
+        Refund refund = refundRepository.findByPayment_Id(payment.getId()).orElseThrow();
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(requester.calls()).isEqualTo(1);
+        String idempotencyKey = refund.getIdempotencyKey();
+        String requestReason = refund.getRequestReason();
+
+        assertThatThrownBy(() -> adapter.requestRefunds(command)).isInstanceOf(CustomException.class);
+
+        assertThat(refundRepository.count()).isEqualTo(1);
+        assertThat(requester.calls()).isEqualTo(1);
+        Refund refundAfterRetry = refundRepository.findByPayment_Id(payment.getId()).orElseThrow();
+        assertThat(refundAfterRetry.getIdempotencyKey()).isEqualTo(idempotencyKey);
+        assertThat(refundAfterRetry.getRequestReason()).isEqualTo(requestReason);
     }
 
     @Test
     void Cancelled_웹훅_완료는_Refund_Payment_Participant_Reservation까지_반영한다() {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
         refundCompletionService.reflectExternalResult(refund.getId(), "cancel-webhook", false);
         refundWebhookService.complete(payment.getPaymentId(), "cancel-webhook");
         assertThat(refundRepository.findByPayment_Id(payment.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.COMPLETED);
@@ -198,7 +252,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void 웹훅과_즉시응답_동시완료도_Participant를_한번만_완료한다() throws Exception {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
         refundCompletionService.reflectExternalResult(refund.getId(), "cancel-race", false);
         var executor = Executors.newFixedThreadPool(2);
         try {
@@ -218,7 +272,7 @@ class RefundTransactionIntegrationTest {
     void 다른_CANCEL_REQUESTED가_남으면_웹훅_완료후에도_CANCELLING을_유지한다() {
         Payment first = paid(1L);
         paid(2L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
         refundCompletionService.reflectExternalResult(refund.getId(), "cancel-first", false);
         refundWebhookService.complete(first.getPaymentId(), "cancel-first");
         assertThat(reservationParticipantRepository.findById(participantIds.get(1L)).orElseThrow().getParticipationStatus())
@@ -260,7 +314,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void 다른_cancellationId_웹훅은_이미_추적중인_Refund를_바꾸지_않는다() {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
         refundCompletionService.reflectExternalResult(refund.getId(), "cancel-A", false);
 
         refundWebhookService.complete(payment.getPaymentId(), "cancel-B");
@@ -276,7 +330,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void 완료_트랜잭션이_Refund_락을_쥔_동안_뒤늦은_CancelPending은_대기했다가_완료상태를_덮지_못한다() throws Exception {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
 
         CountDownLatch lockAcquired = new CountDownLatch(1);
         CountDownLatch releaseCommit = new CountDownLatch(1);
@@ -309,7 +363,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void 완료_트랜잭션이_Refund_락을_쥔_동안_뒤늦은_실패처리는_대기했다가_완료상태를_덮지_못한다() throws Exception {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
 
         CountDownLatch lockAcquired = new CountDownLatch(1);
         CountDownLatch releaseCommit = new CountDownLatch(1);
@@ -339,7 +393,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void 완료_이후_같은_cancellationId의_뒤늦은_CancelPending은_순차적으로도_완료상태를_유지한다() {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
         refundWebhookService.complete(payment.getPaymentId(), "cancel-final");
 
         refundWebhookService.markProcessing(payment.getPaymentId(), "cancel-final");
@@ -353,7 +407,7 @@ class RefundTransactionIntegrationTest {
     @Test
     void FAILED_Refund에_늦은_Cancelled_웹훅이와도_Payment와_예약완료상태를_바꾸지않는다() {
         Payment payment = paid(1L);
-        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L)).refund();
+        var refund = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
         transactionService.markFailed(refund.getId());
 
         refundWebhookService.complete(payment.getPaymentId(), "cancel-after-failure");
@@ -373,7 +427,7 @@ class RefundTransactionIntegrationTest {
         payment.complete(Instant.parse("2026-08-01T00:00:00Z"));
         payment.attachReservationConfirmation(999L, 888L);
         payment = paymentRepository.saveAndFlush(payment);
-        Refund refund = transactionService.createRequested(999L, 888L).refund();
+        Refund refund = transactionService.createRequested(999L, 888L, "test").refund();
 
         assertThatThrownBy(() -> refundCompletionService.reflectExternalResult(refund.getId(), "cancel-rollback", true))
                 .isInstanceOf(CustomException.class);
@@ -449,7 +503,7 @@ class RefundTransactionIntegrationTest {
         private volatile CountDownLatch releaseFirstCall;
         private volatile boolean timeoutNext;
         private volatile boolean connectionResetNext;
-        public RefundResult request(String paymentId, BigDecimal amount, String reason) {
+        public RefundResult request(String paymentId, BigDecimal amount, String reason, String idempotencyKey) {
             int call = calls.incrementAndGet();
             if (timeoutNext) { timeoutNext = false; throw new java.util.concurrent.CompletionException(new java.util.concurrent.TimeoutException("timeout")); }
             if (connectionResetNext) { connectionResetNext = false; throw new java.util.concurrent.CompletionException(new java.io.IOException("connection reset")); }

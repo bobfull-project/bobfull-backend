@@ -45,7 +45,8 @@ class SettlementAmountRepositoryTest {
         paid.markRefunded();
         paymentRepository.save(paid);
         refundRepository.save(Refund.create(paid, BigDecimal.valueOf(30000), RefundStatus.COMPLETED,
-                Instant.parse("2026-08-01T08:02:00Z"), Instant.parse("2026-08-01T08:03:00Z")));
+                Instant.parse("2026-08-01T08:02:00Z"), Instant.parse("2026-08-01T08:03:00Z"),
+                "test-key-settlement-completed", "test reason"));
         slot.softDelete(Instant.parse("2026-08-02T00:00:00Z"));
         timeSlotRepository.saveAndFlush(slot);
 
@@ -75,7 +76,8 @@ class SettlementAmountRepositoryTest {
         paid.complete(Instant.parse("2026-08-01T08:01:00Z"));
         paymentRepository.save(paid);
         refundRepository.save(Refund.create(paid, BigDecimal.valueOf(10000), RefundStatus.PROCESSING,
-                Instant.parse("2026-08-01T08:02:00Z"), null));
+                Instant.parse("2026-08-01T08:02:00Z"), null,
+                "test-key-settlement-processing", "test reason"));
 
         Object[] amounts = paymentRepository.sumSettlementAmounts(restaurant.getId(), RefundStatus.COMPLETED,
                 Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-02T00:00:00Z")).get(0);

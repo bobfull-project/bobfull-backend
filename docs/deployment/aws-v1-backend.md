@@ -13,6 +13,7 @@
 - GitHub Actions 기반 백엔드 CI workflow와 자동 배포 workflow 파일
 - 운영 환경변수 이름과 Parameter Store 이름 기준
 - 이미지 저장용 S3 버킷 이름 환경변수 기준
+- 식당 이미지 검증용 Java Lambda 수동 설정 기준
 - CloudWatch Logs log group 이름 기준
 - 프론트엔드 별도 저장소의 Vite build와 S3 정적 웹 호스팅 자동 배포 기준
 
@@ -46,6 +47,8 @@
 | `PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE` | 환불 재조정 배치 크기 | 선택 |
 | `AWS_REGION` | AWS Region | 선택 |
 | `S3_IMAGE_BUCKET` | 식당 이미지 S3 버킷 이름 | 필수 |
+| `S3_IMAGE_UPLOAD_URL_EXPIRATION` | 식당 이미지 Presigned PUT URL 만료 시간 | 선택 |
+| `S3_IMAGE_GET_URL_EXPIRATION` | 식당 이미지 Presigned GET URL 만료 시간 | 선택 |
 
 기본값이 있는 선택 환경변수는 운영에서 명시하지 않아도 애플리케이션 기본값으로 동작한다.
 
@@ -84,6 +87,8 @@
 /bobfull/prod/payment-refund-reconciliation-minimum-age
 /bobfull/prod/payment-refund-reconciliation-recheck-delay
 /bobfull/prod/payment-refund-reconciliation-batch-size
+/bobfull/prod/s3-image-upload-url-expiration
+/bobfull/prod/s3-image-get-url-expiration
 ```
 
 Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backend-v1.sh`가 컨테이너 실행 시 `DB_URL`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `S3_IMAGE_BUCKET` 같은 대문자 환경변수 이름으로 변환한다.
@@ -245,13 +250,79 @@ Origin에는 path를 넣지 않고 scheme, host, port까지만 기록한다. 값
 | Parameter Store prefix | `/bobfull/prod` |
 | CloudWatch Log Group | `/bobfull/backend` |
 | S3 이미지 버킷 | Parameter Store `s3-image-bucket` 또는 `S3_IMAGE_BUCKET` 환경변수로 주입 |
+| 식당 이미지 검증 Lambda | `bobfull-restaurant-image-validator` |
+| Lambda CloudWatch Log Group | `/aws/lambda/bobfull-restaurant-image-validator` |
 | 컨테이너 이름 | `bobfull-backend` |
 | 애플리케이션 포트 | `8080` |
+
+## 식당 이미지 S3·Lambda 수동 설정
+
+식당 이미지는 백엔드가 바이너리를 직접 받지 않고 S3 Presigned URL로 처리한다. Spring Boot는 `uploadUrl`, `tempImageKey`, `finalImageKey`를 발급하고, Java Lambda가 임시 객체를 검증해 최종 경로로 복사한다.
+
+### S3 버킷
+
+- 버킷 이름은 `S3_IMAGE_BUCKET`과 `/bobfull/prod/s3-image-bucket`에 동일하게 기록한다.
+- S3 Event Notification은 `ObjectCreated:*`, prefix `temp/restaurants/`로 Lambda를 호출한다.
+- temp 객체는 lifecycle rule로 prefix `temp/`를 1일 후 만료한다.
+- 프론트엔드 Origin에서 Presigned PUT/GET을 사용할 수 있도록 CORS를 설정한다.
+- 백엔드가 Presigned URL을 서명하고 최종 객체 존재 확인·기존 객체 삭제를 수행하므로 EC2 애플리케이션 역할에도 S3 권한이 필요하다.
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://<frontend-origin>"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 300
+  }
+]
+```
+
+### Lambda
+
+- Runtime: Java 17
+- Handler: `com.bobfull.lambda.restaurantimage.RestaurantImageValidationHandler::handleRequest`
+- Memory: 256MB
+- Timeout: 10s
+- Environment: `S3_IMAGE_BUCKET=<image-bucket-name>`
+- 실패 재시도는 AWS Lambda 기본 비동기 재시도를 사용한다. DLQ는 후속 운영 고도화에서 별도 결정한다.
+- 로그는 CloudWatch Logs 기본 로그 그룹(`/aws/lambda/<function-name>`)을 사용한다.
+
+Lambda 실행 역할에는 최소한 다음 권한이 필요하다.
+
+```text
+s3:GetObject    arn:aws:s3:::<image-bucket>/temp/restaurants/*
+s3:DeleteObject arn:aws:s3:::<image-bucket>/temp/restaurants/*
+s3:PutObject    arn:aws:s3:::<image-bucket>/restaurants/*
+logs:CreateLogGroup
+logs:CreateLogStream
+logs:PutLogEvents
+```
+
+백엔드 실행 역할에는 최소한 다음 권한이 필요하다.
+
+```text
+s3:PutObject    arn:aws:s3:::<image-bucket>/temp/restaurants/*
+s3:GetObject    arn:aws:s3:::<image-bucket>/restaurants/*
+s3:DeleteObject arn:aws:s3:::<image-bucket>/restaurants/*
+```
+
+Lambda 배포용 fat jar는 다음 Gradle task로 생성한다.
+
+```bash
+./gradlew :lambda:restaurant-image-validator:jar
+```
+
+생성 산출물 기준 경로:
+
+```text
+lambda/restaurant-image-validator/build/libs/restaurant-image-validator-0.0.1-SNAPSHOT-aws.jar
+```
 
 ## 제외 범위
 
 다음 항목은 이번 PR에 포함하지 않는다.
 
-- S3 Presigned URL API 또는 이미지 업로드 API 구현
-- Presigned URL 구현 이후의 S3 이미지 업로드 연동
 - ALB, Auto Scaling, Route 53, ACM HTTPS, CloudFront, Blue-Green 배포, 자동 롤백
+- main 반영 이후의 백엔드 운영 CD 실제 실행 결과

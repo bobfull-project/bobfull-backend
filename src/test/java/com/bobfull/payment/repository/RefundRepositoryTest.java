@@ -33,7 +33,8 @@ class RefundRepositoryTest {
         // given
         Payment payment = paymentRepository.saveAndFlush(payment("payment-id", 1L));
         Refund refund = refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.COMPLETED,
-                Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:01:00Z")));
+                Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:01:00Z"),
+                "test-key-owner-lookup", "test reason"));
 
         // when & then
         assertThat(refundRepository.findByIdAndPayment_MemberId(refund.getId(), 1L)).isPresent();
@@ -45,11 +46,25 @@ class RefundRepositoryTest {
         // given
         Payment payment = paymentRepository.saveAndFlush(payment("payment-id", 1L));
         refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
-                Instant.parse("2026-07-30T00:00:00Z"), null));
+                Instant.parse("2026-07-30T00:00:00Z"), null, "test-key-single-refund-1", "test reason"));
 
         // when & then
         assertThatThrownBy(() -> refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
-                Instant.parse("2026-07-30T00:00:01Z"), null)))
+                Instant.parse("2026-07-30T00:00:01Z"), null, "test-key-single-refund-2", "test reason")))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 서로_다른_결제여도_동일한_idempotencyKey는_저장할_수_없다() {
+        // given
+        Payment first = paymentRepository.saveAndFlush(payment("payment-first", 1L));
+        Payment second = paymentRepository.saveAndFlush(payment("payment-second", 1L));
+        refundRepository.saveAndFlush(Refund.create(first, BigDecimal.TEN, RefundStatus.REQUESTED,
+                Instant.parse("2026-07-30T00:00:00Z"), null, "dup-key", "first reason"));
+
+        // when & then
+        assertThatThrownBy(() -> refundRepository.saveAndFlush(Refund.create(second, BigDecimal.TEN, RefundStatus.REQUESTED,
+                Instant.parse("2026-07-30T00:00:01Z"), null, "dup-key", "second reason")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -60,11 +75,14 @@ class RefundRepositoryTest {
         Payment processingPayment = paymentRepository.saveAndFlush(payment("payment-processing", 1L));
         Payment completedPayment = paymentRepository.saveAndFlush(payment("payment-completed", 1L));
         Refund requested = refundRepository.saveAndFlush(Refund.create(requestedPayment, BigDecimal.TEN,
-                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null,
+                "test-key-candidates-requested", "test reason"));
         refundRepository.saveAndFlush(Refund.create(processingPayment, BigDecimal.TEN,
-                RefundStatus.PROCESSING, Instant.parse("2026-07-30T00:00:00Z"), null));
+                RefundStatus.PROCESSING, Instant.parse("2026-07-30T00:00:00Z"), null,
+                "test-key-candidates-processing", "test reason"));
         refundRepository.saveAndFlush(Refund.create(completedPayment, BigDecimal.TEN,
-                RefundStatus.COMPLETED, Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:01:00Z")));
+                RefundStatus.COMPLETED, Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:01:00Z"),
+                "test-key-candidates-completed", "test reason"));
         Instant now = Instant.now();
 
         // when
@@ -80,7 +98,7 @@ class RefundRepositoryTest {
         // given
         Payment payment = paymentRepository.saveAndFlush(payment("payment-fresh", 1L));
         refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
-                Instant.parse("2026-07-30T00:00:00Z"), null));
+                Instant.parse("2026-07-30T00:00:00Z"), null, "test-key-fresh", "test reason"));
         Instant now = Instant.now();
 
         // when
@@ -98,12 +116,14 @@ class RefundRepositoryTest {
         Payment recentlyCheckedPayment = paymentRepository.saveAndFlush(payment("payment-recently-checked", 1L));
         Payment neverCheckedPayment = paymentRepository.saveAndFlush(payment("payment-never-checked", 1L));
         Refund recentlyChecked = refundRepository.saveAndFlush(Refund.create(recentlyCheckedPayment, BigDecimal.TEN,
-                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null,
+                "test-key-recently-checked", "test reason"));
         Instant now = Instant.now();
         recentlyChecked.markPgChecked(now);
         refundRepository.saveAndFlush(recentlyChecked);
         Refund neverChecked = refundRepository.saveAndFlush(Refund.create(neverCheckedPayment, BigDecimal.TEN,
-                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null,
+                "test-key-never-checked", "test reason"));
 
         // when
         List<Refund> candidates = refundRepository.findReconciliationCandidates(
@@ -121,11 +141,14 @@ class RefundRepositoryTest {
         Payment middlePayment = paymentRepository.saveAndFlush(payment("payment-middle", 1L));
         Payment newestPayment = paymentRepository.saveAndFlush(payment("payment-newest", 1L));
         Refund oldest = refundRepository.saveAndFlush(Refund.create(oldestPayment, BigDecimal.TEN,
-                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null,
+                "test-key-oldest", "test reason"));
         Refund middle = refundRepository.saveAndFlush(Refund.create(middlePayment, BigDecimal.TEN,
-                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null,
+                "test-key-middle", "test reason"));
         Refund newest = refundRepository.saveAndFlush(Refund.create(newestPayment, BigDecimal.TEN,
-                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null,
+                "test-key-newest", "test reason"));
         Instant now = Instant.now();
         oldest.markPgChecked(now.minus(java.time.Duration.ofMinutes(30)));
         middle.markPgChecked(now.minus(java.time.Duration.ofMinutes(20)));

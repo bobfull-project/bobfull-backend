@@ -52,6 +52,7 @@ erDiagram
         varchar(1000) description "식당 소개"
         varchar(100) keyword "사장님 입력 식당 키워드"
         integer deposit_per_person "1인당 예약금"
+        varchar(500) image_key "S3 최종 Object Key"
         varchar(20) status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
         datetime deleted_at "소프트 삭제 시각"
         datetime created_at "생성 시각"
@@ -202,6 +203,7 @@ erDiagram
 | `description` | VARCHAR(1000) | N |  | 식당 소개 |
 | `keyword` | VARCHAR(100) | N |  | 사장님이 직접 입력하는 식당 키워드 |
 | `deposit_per_person` | DECIMAL | N |  | 1인당 예약금 |
+| `image_key` | VARCHAR(500) | Y |  | S3 최종 Object Key. `restaurants/{ownerId}/{uuid}.{extension}` 형식만 저장하며 URL은 저장하지 않음 |
 | `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -305,6 +307,8 @@ erDiagram
 | `refund_status` | VARCHAR(20) | N | 앱 Enum | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` |
 | `requested_at`, `completed_at` | DATETIME | Y |  | 요청·완료 시각 |
 | `cancellation_id` | VARCHAR(64) | Y | UNIQUE | PortOne 취소(cancellation) 식별자. 요청 접수 시점에는 비어 있고, PortOne 응답·웹훅으로 확인되면 저장한다(#45) |
+| `idempotency_key` | VARCHAR(256) | N | UNIQUE, 변경 불가 | PortOne 환불 POST 전에 생성하는 외부 요청 식별자. DB에는 따옴표 없는 원본 값을 저장한다(#145) |
+| `request_reason` | VARCHAR | N | 변경 불가 | 최초 환불 요청 사유. amount·paymentId·idempotencyKey와 함께 동일 외부 요청 본문으로 고정한다(#145) |
 | `last_pg_checked_at` | DATETIME | Y |  | 외부 PG 조회를 실제로 시도한 시각. `updated_at`과 분리해 재확인 후보를 공정하게 순환한다(#141) |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
@@ -403,11 +407,12 @@ erDiagram
 | `payableAmount` | 계산값 | 식당 또는 예약의 `paid_at`이 존재하는 Payment 금액 합계에서 `COMPLETED` Refund 금액 합계 차감 |
 | `expectedSettlementAmount`, `expectedAmount` | 계산값 | `paid_at`이 존재하는 결제 완료 이력 금액 합계에서 환불 완료 금액 합계를 차감 |
 | `totalPaidAmount`, `totalRefundedAmount` | 계산값 | 기간·식당·예약 조건에 맞는 Payment·Refund 금액 합계 |
+| `imageUrl` | 계산값 | `restaurant.image_key`가 있을 때 S3 Presigned GET URL로 생성 |
 | `noShowCount` | 계산값 | 회원의 `participation_status=NO_SHOW` 참여 건수 |
 | `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |
 | `reservationConfirmationRate`, `confirmationRate` | 계산값 | 전체 예약 수 대비 확정 예약 수 비율 |
 | `totalReservationCount`, `confirmedReservationCount`, `reservationCount`, `refundCount` | 계산값 | 조건에 맞는 예약·환불 건수 집계 |
-| `party_size`, `amount`, `expires_at`, 상태값 | 저장값 | 결제·참여 이력과 임시 선점·환불·정산 조회의 원천 데이터 |
+| `party_size`, `amount`, `expires_at`, `restaurant.image_key`, 상태값 | 저장값 | 결제·참여 이력, 식당 이미지 Object Key, 임시 선점·환불·정산 조회의 원천 데이터 |
 
 위 집계값은 API 응답에 포함되더라도 중복 컬럼으로 저장하지 않는다. 성능·동시성 문제로 별도 저장이 필요해지면 갱신 책임과 정합성 전략을 별도 결정해야 한다.
 

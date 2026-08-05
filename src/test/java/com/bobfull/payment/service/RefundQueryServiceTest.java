@@ -85,7 +85,8 @@ class RefundQueryServiceTest {
         Payment payment = Payment.createReady(paymentId, memberId, 2L, null, PaymentPurpose.CREATE, 1,
                 BigDecimal.TEN, Instant.parse("2026-07-30T00:10:00Z"));
         Refund refund = Refund.create(payment, BigDecimal.TEN, RefundStatus.COMPLETED,
-                Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:01:00Z"));
+                Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:01:00Z"),
+                "test-key-my-refund", "test reason");
         ReflectionTestUtils.setField(refund, "id", id);
         return refund;
     }

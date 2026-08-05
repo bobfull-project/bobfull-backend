@@ -74,7 +74,7 @@ class OwnerRestaurantControllerWebTest {
     void 인증_없이_식당을_등록하면_401을_반환한다() throws Exception {
         // given
         RestaurantCreateRequest request =
-                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000);
+                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, null);
 
         // when
         ResultActions result = mockMvc.perform(post("/api/owner/restaurants")
@@ -89,7 +89,7 @@ class OwnerRestaurantControllerWebTest {
     void OWNER_권한이_없는_회원이_식당을_등록하면_403을_반환한다() throws Exception {
         // given
         RestaurantCreateRequest request =
-                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000);
+                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, null);
 
         // when
         ResultActions result = mockMvc.perform(post("/api/owner/restaurants")
@@ -106,7 +106,7 @@ class OwnerRestaurantControllerWebTest {
     void OWNER가_식당을_등록하면_201과_restaurantId를_반환한다() throws Exception {
         // given
         RestaurantCreateRequest request =
-                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000);
+                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, null);
         given(restaurantService.register(1L, request)).willReturn(new RestaurantIdResponse(1L));
 
         // when
@@ -142,7 +142,9 @@ class OwnerRestaurantControllerWebTest {
     void 내_식당_목록을_조회하면_페이징_형식으로_반환한다() throws Exception {
         // given
         OwnerRestaurantListResponse item =
-                new OwnerRestaurantListResponse(1L, "밥풀식당", "제주시 애월읍 1", "한식", 10000, RestaurantStatus.ACTIVE);
+                new OwnerRestaurantListResponse(
+                        1L, "밥풀식당", "제주시 애월읍 1", "한식", 10000, RestaurantStatus.ACTIVE,
+                        "https://image.example");
         PageResponse<OwnerRestaurantListResponse> page = new PageResponse<>(List.of(item), 0, 20, 1, 1);
         given(restaurantService.getMyRestaurants(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(Pageable.class)))
                 .willReturn(page);
@@ -154,6 +156,7 @@ class OwnerRestaurantControllerWebTest {
         // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].restaurantId", is(1)))
+                .andExpect(jsonPath("$.data.content[0].imageUrl", is("https://image.example")))
                 .andExpect(jsonPath("$.data.totalElements", is(1)));
     }
 
@@ -161,7 +164,8 @@ class OwnerRestaurantControllerWebTest {
     void 내_식당_상세를_조회한다() throws Exception {
         // given
         given(restaurantService.getMyRestaurant(1L, 10L)).willReturn(new OwnerRestaurantDetailResponse(
-                10L, "밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, RestaurantStatus.ACTIVE));
+                10L, "밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000,
+                RestaurantStatus.ACTIVE, "https://detail-image.example"));
 
         // when
         ResultActions result = mockMvc.perform(
@@ -169,13 +173,14 @@ class OwnerRestaurantControllerWebTest {
 
         // then
         result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status", is("ACTIVE")));
+                .andExpect(jsonPath("$.data.status", is("ACTIVE")))
+                .andExpect(jsonPath("$.data.imageUrl", is("https://detail-image.example")));
     }
 
     @Test
     void 식당_정보를_수정한다() throws Exception {
         // given
-        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000);
+        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, null);
         given(restaurantService.update(1L, 10L, request)).willReturn(new RestaurantIdResponse(10L));
 
         // when

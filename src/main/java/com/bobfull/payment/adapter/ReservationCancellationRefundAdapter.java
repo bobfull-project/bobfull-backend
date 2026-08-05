@@ -50,12 +50,12 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
     }
 
     private RefundRequestResult request(RefundRequestCommand command, Long participantId) {
-        var preparation = transactionService.createRequested(command.reservationId(), participantId);
+        var preparation = transactionService.createRequested(command.reservationId(), participantId, command.cancelReason());
         Refund refund = preparation.refund();
         if (!preparation.externalCallRequired()) {
             return new RefundRequestResult(participantId, refund.getStatus().name());
         }
-        var result = requestFromPortOne(refund, command.cancelReason());
+        var result = requestFromPortOne(refund);
         try {
             var completion = completionService.reflectExternalResult(refund.getId(), result.cancellationId(), result.completed());
             return new RefundRequestResult(participantId, completion.refundStatus().name());
@@ -74,9 +74,10 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
         }
     }
 
-    private PortOneRefundRequester.RefundResult requestFromPortOne(Refund refund, String cancelReason) {
+    private PortOneRefundRequester.RefundResult requestFromPortOne(Refund refund) {
         try {
-            return refundRequester.request(refund.getPayment().getPaymentId(), refund.getAmount(), cancelReason);
+            return refundRequester.request(refund.getPayment().getPaymentId(), refund.getAmount(),
+                    refund.getRequestReason(), refund.getIdempotencyKey());
         } catch (RuntimeException exception) {
             if (exception instanceof PortOneRefundRequester.ExplicitRefundFailureException) {
                 transactionService.markFailed(refund.getId());

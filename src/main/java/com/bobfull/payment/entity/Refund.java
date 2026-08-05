@@ -45,6 +45,12 @@ public class Refund extends BaseTimeEntity {
     @Column(name = "cancellation_id", unique = true, length = 64)
     private String cancellationId;
 
+    @Column(name = "idempotency_key", nullable = false, unique = true, updatable = false, length = 256)
+    private String idempotencyKey;
+
+    @Column(name = "request_reason", nullable = false, updatable = false)
+    private String requestReason;
+
     /** 마지막 PortOne 조회 시각이다. 상태 변경 시각(updatedAt)과 분리해 후보를 순환한다. */
     @Column(name = "last_pg_checked_at")
     private Instant lastPgCheckedAt;
@@ -52,19 +58,26 @@ public class Refund extends BaseTimeEntity {
     protected Refund() {
     }
 
-    private Refund(Payment payment, BigDecimal amount, RefundStatus status, Instant requestedAt, Instant completedAt) {
+    private Refund(Payment payment, BigDecimal amount, RefundStatus status, Instant requestedAt, Instant completedAt,
+                   String idempotencyKey, String requestReason) {
         this.payment = payment;
         this.amount = amount;
         this.status = status;
         this.requestedAt = requestedAt;
         this.completedAt = completedAt;
+        this.idempotencyKey = idempotencyKey;
+        this.requestReason = requestReason;
     }
 
-    public static Refund create(Payment payment, BigDecimal amount, RefundStatus status, Instant requestedAt, Instant completedAt) {
+    public static Refund create(Payment payment, BigDecimal amount, RefundStatus status, Instant requestedAt, Instant completedAt,
+                                String idempotencyKey, String requestReason) {
         if (payment == null || amount == null || amount.signum() <= 0 || status == null) {
             throw new IllegalArgumentException("환불 결제, 금액, 상태는 필수입니다.");
         }
-        return new Refund(payment, amount, status, requestedAt, completedAt);
+        if (idempotencyKey == null || idempotencyKey.isBlank() || requestReason == null || requestReason.isBlank()) {
+            throw new IllegalArgumentException("환불 멱등성 키와 사유는 필수입니다.");
+        }
+        return new Refund(payment, amount, status, requestedAt, completedAt, idempotencyKey, requestReason);
     }
 
     public Long getId() { return id; }
@@ -75,6 +88,8 @@ public class Refund extends BaseTimeEntity {
     public Instant getCompletedAt() { return completedAt; }
 
     public String getCancellationId() { return cancellationId; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public String getRequestReason() { return requestReason; }
     public Instant getLastPgCheckedAt() { return lastPgCheckedAt; }
 
     public void markPgChecked(Instant checkedAt) {
