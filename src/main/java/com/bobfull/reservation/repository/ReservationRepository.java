@@ -15,7 +15,8 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
 public interface ReservationRepository
-        extends JpaRepository<Reservation, Long>, ReservationSearchRepository, AdminReservationRepository {
+        extends JpaRepository<Reservation, Long>, ReservationSearchRepository, AdminReservationRepository,
+        OwnerReservationRepository {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Reservation> findWithLockById(Long reservationId);

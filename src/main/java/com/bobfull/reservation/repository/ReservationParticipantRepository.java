@@ -43,6 +43,9 @@ public interface ReservationParticipantRepository extends JpaRepository<Reservat
     Page<ReservationParticipant> findAllByReservationIdAndParticipationStatus(
             Long reservationId, ParticipationStatus status, Pageable pageable);
 
+    /** §6-13 사장님용 참여자 목록 조회용이다. 상태 제한 없이 신청 이력 전체를 조회한다(Issue #147). */
+    Page<ReservationParticipant> findAllByReservationId(Long reservationId, Pageable pageable);
+
     /**
      * CANCEL_REQUESTED인 참여자만 CANCELLED로 조건부 전환하는 원자적 UPDATE다(Issue #44 최종 계약).
      * 즉시 응답·웹훅·재확인 스케줄러가 같은 참여자를 동시에 완료 처리하려 해도, 이 조건절 덕분에
