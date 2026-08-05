@@ -1,12 +1,23 @@
 name: Deploy Backend V1
 
 on:
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: Docker image tag to push and deploy. Defaults to the commit SHA.
-        required: false
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-backend-v1.yml'
+      - 'Dockerfile'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'lambda/**'
+      - 'scripts/aws/**'
+      - 'src/**'
+
+concurrency:
+  group: backend-v1-deploy
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -15,18 +26,40 @@ permissions:
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  BACKEND_EC2_HOST: ${{ vars.BACKEND_EC2_HOST }}
-  BACKEND_EC2_USER: ${{ vars.BACKEND_EC2_USER || 'ec2-user' }}
+  BACKEND_EC2_INSTANCE_ID: ${{ vars.BACKEND_EC2_INSTANCE_ID }}
   BACKEND_PARAMETER_PREFIX: ${{ vars.BACKEND_PARAMETER_PREFIX }}
-  BACKEND_PUBLIC_BASE_URL: ${{ vars.BACKEND_PUBLIC_BASE_URL }}
-  BACKEND_HOST_PORT: ${{ vars.BACKEND_HOST_PORT || '8080' }}
-  BACKEND_CONTAINER_NAME: ${{ vars.BACKEND_CONTAINER_NAME || 'bobfull-backend' }}
-  BACKEND_CLOUDWATCH_LOG_GROUP: ${{ vars.BACKEND_CLOUDWATCH_LOG_GROUP || '/bobfull/backend' }}
-  S3_IMAGE_BUCKET: ${{ vars.S3_IMAGE_BUCKET }}
 
 jobs:
+  ci:
+    name: Gradle check and Docker build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Gradle build and test
+        run: |
+          set -euo pipefail
+          sed -i 's/\r$//' ./gradlew
+          chmod +x ./gradlew
+          ./gradlew clean check bootJar --no-daemon
+
+      - name: Docker build
+        run: |
+          set -euo pipefail
+          docker build -t bobfull-backend-ci:${GITHUB_SHA} .
+
   deploy:
-    name: Build, push to ECR, and deploy to EC2
+    name: Push to ECR and deploy with SSM
+    needs: ci
     runs-on: ubuntu-latest
 
     steps:
@@ -36,20 +69,15 @@ jobs:
       - name: Validate deployment settings
         env:
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
 
           required_values=(
             AWS_REGION
             ECR_REPOSITORY
-            BACKEND_EC2_HOST
-            BACKEND_EC2_USER
+            BACKEND_EC2_INSTANCE_ID
             BACKEND_PARAMETER_PREFIX
-            BACKEND_PUBLIC_BASE_URL
-            S3_IMAGE_BUCKET
             AWS_ROLE_TO_ASSUME
-            EC2_SSH_PRIVATE_KEY
           )
 
           for key in "${required_values[@]}"; do
@@ -65,35 +93,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Test
-        run: |
-          set -euo pipefail
-          sed -i 's/\r$//' ./gradlew
-          chmod +x ./gradlew
-          ./gradlew test --no-daemon
-
       - name: Resolve image URI
         id: image
         run: |
           set -euo pipefail
 
-          image_tag="${{ inputs.image_tag }}"
-          if [ -z "${image_tag}" ]; then
-            image_tag="${GITHUB_SHA}"
-          fi
-
           account_id="$(aws sts get-caller-identity --query Account --output text)"
           ecr_registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          image_uri="${ecr_registry}/${ECR_REPOSITORY}:${image_tag}"
+          image_uri="${ecr_registry}/${ECR_REPOSITORY}:${GITHUB_SHA}"
           latest_image_uri="${ecr_registry}/${ECR_REPOSITORY}:latest"
 
-          echo "image_tag=${image_tag}" >> "${GITHUB_OUTPUT}"
           echo "ecr_registry=${ecr_registry}" >> "${GITHUB_OUTPUT}"
           echo "image_uri=${image_uri}" >> "${GITHUB_OUTPUT}"
           echo "latest_image_uri=${latest_image_uri}" >> "${GITHUB_OUTPUT}"
@@ -121,45 +130,21 @@ jobs:
           docker push "${{ steps.image.outputs.image_uri }}"
           docker push "${{ steps.image.outputs.latest_image_uri }}"
 
-      - name: Configure SSH
+      - name: Deploy on EC2 with SSM Run Command
         env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          BACKEND_EC2_INSTANCE_ID: ${{ env.BACKEND_EC2_INSTANCE_ID }}
+          ECR_IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+          PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
         run: |
           set -euo pipefail
+          bash scripts/aws/run-ssm-backend-deploy-v1.sh
 
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/bobfull-v1.pem
-          chmod 600 ~/.ssh/bobfull-v1.pem
-          ssh-keyscan -H "${BACKEND_EC2_HOST}" >> ~/.ssh/known_hosts
-
-      - name: Copy deploy script to EC2
+      - name: Verify backend deployment
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
+          CLOUDWATCH_LOG_GROUP: /bobfull/backend
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
         run: |
           set -euo pipefail
-
-          scp -i ~/.ssh/bobfull-v1.pem \
-            scripts/aws/deploy-backend-v1.sh \
-            "${BACKEND_EC2_USER}@${BACKEND_EC2_HOST}:~/deploy-backend-v1.sh"
-
-      - name: Deploy on EC2
-        run: |
-          set -euo pipefail
-
-          ssh -i ~/.ssh/bobfull-v1.pem "${BACKEND_EC2_USER}@${BACKEND_EC2_HOST}" \
-            "AWS_REGION='${AWS_REGION}' \
-            ECR_IMAGE_URI='${{ steps.image.outputs.image_uri }}' \
-            PARAMETER_PREFIX='${BACKEND_PARAMETER_PREFIX}' \
-            CONTAINER_NAME='${BACKEND_CONTAINER_NAME}' \
-            HOST_PORT='${BACKEND_HOST_PORT}' \
-            CLOUDWATCH_LOG_GROUP='${BACKEND_CLOUDWATCH_LOG_GROUP}' \
-            S3_IMAGE_BUCKET='${S3_IMAGE_BUCKET}' \
-            bash ~/deploy-backend-v1.sh"
-
-      - name: Verify public API
-        run: |
-          set -euo pipefail
-
-          curl --fail --silent --show-error \
-            "${BACKEND_PUBLIC_BASE_URL%/}/api/restaurants" \
-            >/tmp/bobfull-api-response.json
-
-          test -s /tmp/bobfull-api-response.json
+          bash scripts/aws/verify-backend-v1.sh

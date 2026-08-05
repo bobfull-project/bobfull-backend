@@ -10,7 +10,7 @@
 - Docker 이미지 빌드 기준
 - 로컬 Docker app 검증용 Compose 설정
 - ECR push, EC2 bootstrap, EC2 deploy, 배포 verify 스크립트
-- GitHub Actions 수동 실행 workflow 파일
+- GitHub Actions 기반 백엔드 CI workflow와 자동 배포 workflow 파일
 - 운영 환경변수 이름과 Parameter Store 이름 기준
 - 이미지 저장용 S3 버킷 이름 환경변수 기준
 - 식당 이미지 검증용 Java Lambda 수동 설정 기준
@@ -26,8 +26,11 @@
 | `DB_URL` | RDS MySQL JDBC URL | 필수 |
 | `DB_USERNAME` | RDS DB 사용자 이름 | 필수 |
 | `DB_PASSWORD` | RDS DB 비밀번호 | 필수 |
+| `REDIS_HOST` | Redis Host | 필수 |
+| `REDIS_PORT` | Redis Port | 선택 |
 | `JWT_SECRET` | JWT 서명 Secret | 필수 |
 | `JWT_ACCESS_TOKEN_EXPIRATION_SECONDS` | Access Token 만료 초 | 선택 |
+| `AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS` | Refresh Token 만료 초 | 선택 |
 | `CORS_ALLOWED_ORIGINS` | 허용 Origin 목록 | 선택 |
 | `PORTONE_API_SECRET` | PortOne API Secret | 필수 |
 | `PORTONE_CHANNEL_KEY` | PortOne Channel Key | 선택 |
@@ -36,6 +39,11 @@
 | `PAYMENT_EXPIRATION_ENABLED` | 결제 만료 스케줄러 활성화 | 선택 |
 | `PAYMENT_EXPIRATION_FIXED_DELAY` | 결제 만료 스케줄러 주기 | 선택 |
 | `PAYMENT_EXPIRATION_BATCH_SIZE` | 결제 만료 배치 크기 | 선택 |
+| `PAYMENT_REFUND_RECONCILIATION_ENABLED` | 환불 재조정 스케줄러 활성화 | 선택 |
+| `PAYMENT_REFUND_RECONCILIATION_FIXED_DELAY` | 환불 재조정 스케줄러 주기 | 선택 |
+| `PAYMENT_REFUND_RECONCILIATION_MINIMUM_AGE` | 재조회 대상 최소 경과 시간 | 선택 |
+| `PAYMENT_REFUND_RECONCILIATION_RECHECK_DELAY` | 재조회 간격 | 선택 |
+| `PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE` | 환불 재조정 배치 크기 | 선택 |
 | `AWS_REGION` | AWS Region | 선택 |
 | `S3_IMAGE_BUCKET` | 식당 이미지 S3 버킷 이름 | 필수 |
 | `S3_IMAGE_UPLOAD_URL_EXPIRATION` | 식당 이미지 Presigned PUT URL 만료 시간 | 선택 |
@@ -53,6 +61,7 @@
 /bobfull/prod/db-url
 /bobfull/prod/db-username
 /bobfull/prod/db-password
+/bobfull/prod/redis-host
 /bobfull/prod/jwt-secret
 /bobfull/prod/portone-api-secret
 /bobfull/prod/portone-store-id
@@ -62,7 +71,9 @@
 선택 Parameter:
 
 ```text
+/bobfull/prod/redis-port
 /bobfull/prod/jwt-access-token-expiration-seconds
+/bobfull/prod/auth-refresh-token-expiration-seconds
 /bobfull/prod/jpa-ddl-auto
 /bobfull/prod/cors-allowed-origins
 /bobfull/prod/portone-channel-key
@@ -70,6 +81,11 @@
 /bobfull/prod/payment-expiration-enabled
 /bobfull/prod/payment-expiration-fixed-delay
 /bobfull/prod/payment-expiration-batch-size
+/bobfull/prod/payment-refund-reconciliation-enabled
+/bobfull/prod/payment-refund-reconciliation-fixed-delay
+/bobfull/prod/payment-refund-reconciliation-minimum-age
+/bobfull/prod/payment-refund-reconciliation-recheck-delay
+/bobfull/prod/payment-refund-reconciliation-batch-size
 /bobfull/prod/s3-image-upload-url-expiration
 /bobfull/prod/s3-image-get-url-expiration
 ```
@@ -77,6 +93,111 @@
 Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backend-v1.sh`가 컨테이너 실행 시 `DB_URL`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `S3_IMAGE_BUCKET` 같은 대문자 환경변수 이름으로 변환한다.
 
 비밀번호, JWT Secret, PortOne Secret처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
+
+## GitHub Actions 백엔드 CI와 CD
+
+백엔드는 검증 단계와 운영 배포 단계를 분리한다.
+
+- `.github/workflows/ci-backend-v1.yml`: `develop` push에서 Gradle 검증과 Docker build만 수행한다.
+- `.github/workflows/deploy-backend-v1.yml`: `main` push에서 CI 성공 후 ECR push, SSM Run Command 기반 EC2 컨테이너 교체, 배포 후 검증을 수행한다.
+
+feature 브랜치와 `pull_request` 이벤트에서는 백엔드 V1 CI/CD workflow를 실행하지 않는다.
+
+CI 흐름:
+
+```text
+develop push
+→ Gradle clean check bootJar
+→ Docker image build
+```
+
+CD 흐름:
+
+```text
+main push
+→ Gradle clean check bootJar
+→ Docker image build
+→ ECR push
+→ SSM Run Command로 EC2 배포 명령 실행
+→ Parameter Store 값으로 env-file 생성
+→ 기존 컨테이너 교체
+→ EC2 localhost health check
+→ SSM 명령 Success polling
+→ ECR, Parameter Store, S3, CloudWatch 확인
+```
+
+GitHub Actions의 AWS 인증은 장기 Access Key를 저장하지 않고 OIDC로 IAM Role을 assume한다. EC2 22번 포트를 열거나 PEM Private Key를 GitHub Secret에 저장하지 않는다.
+
+필수 GitHub Variables:
+
+```text
+AWS_REGION
+ECR_REPOSITORY
+BACKEND_EC2_INSTANCE_ID
+BACKEND_PARAMETER_PREFIX
+```
+
+필수 GitHub Secrets:
+
+```text
+AWS_ROLE_TO_ASSUME
+```
+
+`S3_IMAGE_BUCKET`은 GitHub Variable로 넘기지 않고 Parameter Store의 `/bobfull/prod/s3-image-bucket` 값을 사용한다.
+
+GitHub Actions OIDC Role에는 최소한 다음 권한이 필요하다.
+
+```text
+sts:GetCallerIdentity
+ecr:GetAuthorizationToken
+ecr:DescribeRepositories
+ecr:CreateRepository
+ecr:BatchCheckLayerAvailability
+ecr:InitiateLayerUpload
+ecr:UploadLayerPart
+ecr:CompleteLayerUpload
+ecr:PutImage
+ecr:BatchGetImage
+ecr:DescribeImages
+ssm:SendCommand
+ssm:GetCommandInvocation
+ssm:GetParameter
+ssm:GetParametersByPath
+s3:ListBucket
+logs:DescribeLogStreams
+```
+
+대상 EC2는 SSM managed instance로 등록되어 있어야 하며, EC2 instance profile에는 SSM Agent 동작과 EC2 내부 배포 스크립트 실행에 필요한 권한이 필요하다.
+
+```text
+AmazonSSMManagedInstanceCore
+ecr:GetAuthorizationToken
+ecr:BatchGetImage
+ecr:GetDownloadUrlForLayer
+ssm:GetParameter
+ssm:GetParameters
+ssm:GetParametersByPath
+kms:Decrypt
+s3:ListBucket
+logs:CreateLogGroup
+```
+
+CI 성공 여부는 다음을 모두 통과해야 한다.
+
+- Gradle `clean check bootJar` 성공
+- Docker image build 성공
+
+CD 배포 성공 여부는 다음을 모두 통과해야 한다.
+
+- Gradle `clean check bootJar` 성공
+- Docker image build와 ECR push 성공
+- `aws ssm send-command` 명령 완료 상태가 `Success`
+- EC2 내부 배포 스크립트의 컨테이너 `running` 확인 성공
+- EC2 내부 `localhost` 기준 `GET /api/restaurants` health check 성공
+- Parameter Store 경로 조회, S3 이미지 버킷 접근, CloudWatch Log Group 접근 확인
+- EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
+
+자동 롤백과 Blue-Green 배포는 V1 제외 범위다. 새 컨테이너 실행 실패 시 workflow를 실패 처리하고 EC2 Docker/CloudWatch Logs에서 원인을 확인한다.
 
 ## CORS와 S3 프론트엔드 Origin
 
@@ -120,7 +241,7 @@ Origin에는 path를 넣지 않고 scheme, host, port까지만 기록한다. 값
 |---|---|
 | Parameter Store prefix | `/bobfull/prod` |
 | CloudWatch Log Group | `/bobfull/backend` |
-| S3 이미지 버킷 | `S3_IMAGE_BUCKET` 환경변수로 주입 |
+| S3 이미지 버킷 | Parameter Store `s3-image-bucket` 또는 `S3_IMAGE_BUCKET` 환경변수로 주입 |
 | 식당 이미지 검증 Lambda | `bobfull-restaurant-image-validator` |
 | Lambda CloudWatch Log Group | `/aws/lambda/bobfull-restaurant-image-validator` |
 | 컨테이너 이름 | `bobfull-backend` |
@@ -195,6 +316,5 @@ lambda/restaurant-image-validator/build/libs/restaurant-image-validator-0.0.1-SN
 
 다음 항목은 이번 PR에 포함하지 않는다.
 
-- 프론트엔드 S3 정적 호스팅
-- 프론트엔드 운영 API URL 설정
-- GitHub Actions workflow 실제 실행 결과
+- ALB, Auto Scaling, Route 53, ACM HTTPS, CloudFront, Blue-Green 배포, 자동 롤백
+- main 반영 이후의 백엔드 운영 CD 실제 실행 결과

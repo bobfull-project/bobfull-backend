@@ -31,6 +31,11 @@ append_parameter() {
   local required="$3"
   local value
 
+  if [ -n "${!env_key:-}" ]; then
+    append_env_value "${env_key}" "${!env_key}"
+    return
+  fi
+
   if value="$(fetch_parameter "${parameter_name}" 2>/dev/null)"; then
     append_env_value "${env_key}" "${value}"
     return
@@ -68,6 +73,11 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl is required on EC2." >&2
+  exit 1
+fi
+
 sudo mkdir -p "$(dirname "${APP_ENV_FILE}")"
 sudo chown "$USER":"$USER" "$(dirname "${APP_ENV_FILE}")"
 umask 077
@@ -80,16 +90,17 @@ required_parameters=(
   "DB_URL:db-url"
   "DB_USERNAME:db-username"
   "DB_PASSWORD:db-password"
+  "REDIS_HOST:redis-host"
   "JWT_SECRET:jwt-secret"
   "PORTONE_API_SECRET:portone-api-secret"
   "PORTONE_STORE_ID:portone-store-id"
-  "REDIS_HOST:redis-host"
+  "S3_IMAGE_BUCKET:s3-image-bucket"
 )
 
 optional_parameters=(
-  "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
   "REDIS_PORT:redis-port"
   "AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS:auth-refresh-token-expiration-seconds"
+  "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
   "JPA_DDL_AUTO:jpa-ddl-auto"
   "CORS_ALLOWED_ORIGINS:cors-allowed-origins"
   "PORTONE_CHANNEL_KEY:portone-channel-key"
@@ -97,6 +108,11 @@ optional_parameters=(
   "PAYMENT_EXPIRATION_ENABLED:payment-expiration-enabled"
   "PAYMENT_EXPIRATION_FIXED_DELAY:payment-expiration-fixed-delay"
   "PAYMENT_EXPIRATION_BATCH_SIZE:payment-expiration-batch-size"
+  "PAYMENT_REFUND_RECONCILIATION_ENABLED:payment-refund-reconciliation-enabled"
+  "PAYMENT_REFUND_RECONCILIATION_FIXED_DELAY:payment-refund-reconciliation-fixed-delay"
+  "PAYMENT_REFUND_RECONCILIATION_MINIMUM_AGE:payment-refund-reconciliation-minimum-age"
+  "PAYMENT_REFUND_RECONCILIATION_RECHECK_DELAY:payment-refund-reconciliation-recheck-delay"
+  "PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE:payment-refund-reconciliation-batch-size"
   "S3_IMAGE_UPLOAD_URL_EXPIRATION:s3-image-upload-url-expiration"
   "S3_IMAGE_GET_URL_EXPIRATION:s3-image-get-url-expiration"
 )
@@ -108,12 +124,6 @@ done
 for item in "${optional_parameters[@]}"; do
   append_parameter "${item%%:*}" "${item#*:}" false
 done
-
-if [ -n "${S3_IMAGE_BUCKET:-}" ]; then
-  append_env_value S3_IMAGE_BUCKET "${S3_IMAGE_BUCKET}"
-else
-  append_parameter S3_IMAGE_BUCKET s3-image-bucket true
-fi
 
 if ! grep -q '^JPA_DDL_AUTO=' "${APP_ENV_FILE}"; then
   append_env_value JPA_DDL_AUTO update
@@ -132,9 +142,7 @@ if ! grep -q '^AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
 fi
 
 s3_bucket="$(awk -F= '$1 == "S3_IMAGE_BUCKET" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
-if [ -n "${s3_bucket}" ]; then
-  aws s3api head-bucket --region "${AWS_REGION}" --bucket "${s3_bucket}" >/dev/null
-fi
+aws s3api head-bucket --region "${AWS_REGION}" --bucket "${s3_bucket}" >/dev/null
 
 aws logs create-log-group \
   --region "${AWS_REGION}" \
@@ -200,4 +208,31 @@ if ! docker ps --filter "name=${CONTAINER_NAME}" --filter "status=running" --for
   exit 1
 fi
 
+deployed_image="$(docker inspect --format='{{ index .Config.Image }}' "${CONTAINER_NAME}")"
+if [ "${deployed_image}" != "${ECR_IMAGE_URI}" ]; then
+  echo "Container image mismatch. expected=${ECR_IMAGE_URI} actual=${deployed_image}" >&2
+  exit 1
+fi
+
+health_check_url="${HEALTH_CHECK_URL:-http://127.0.0.1:${HOST_PORT}/api/restaurants}"
+health_check_attempts="${HEALTH_CHECK_ATTEMPTS:-12}"
+health_check_delay_seconds="${HEALTH_CHECK_DELAY_SECONDS:-5}"
+health_response_file="/tmp/bobfull-local-health-response.json"
+
+for attempt in $(seq 1 "${health_check_attempts}"); do
+  if curl --fail --silent --show-error "${health_check_url}" > "${health_response_file}"; then
+    test -s "${health_response_file}"
+    echo "Local health check ${health_check_url}: PASS"
+    break
+  fi
+
+  if [ "${attempt}" -eq "${health_check_attempts}" ]; then
+    echo "Local health check failed after ${health_check_attempts} attempts: ${health_check_url}" >&2
+    exit 1
+  fi
+
+  sleep "${health_check_delay_seconds}"
+done
+
 docker ps --filter "name=${CONTAINER_NAME}"
+docker inspect --format='Container image: {{ index .Config.Image }} | State: {{ .State.Status }}' "${CONTAINER_NAME}"

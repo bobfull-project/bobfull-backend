@@ -12,6 +12,7 @@ import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.entity.RefundStatus;
 import com.bobfull.payment.repository.PaymentRepository;
 import com.bobfull.payment.repository.RefundRepository;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ class RefundTransactionServiceTest {
     @Autowired private PaymentRepository paymentRepository;
     @Autowired private RefundRepository refundRepository;
     @Autowired private RefundTransactionService transactionService;
+    @Autowired private EntityManager entityManager;
 
     @Test
     void markPgChecked은_updatedAt은_보존한_채_lastPgCheckedAt만_갱신한다() throws InterruptedException {
@@ -44,6 +46,7 @@ class RefundTransactionServiceTest {
         Refund refund = refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
                 Instant.parse("2026-07-30T00:00:00Z"), null, "test-key-mark-pg-checked", "test reason"));
         Long refundId = refund.getId();
+        entityManager.clear();
         Instant updatedAtBefore = refundRepository.findById(refundId).orElseThrow().getUpdatedAt();
         Thread.sleep(1100); // updatedAt이 초 단위로도 흔들리면 잡히도록 충분한 간격을 둔다.
 
@@ -51,6 +54,7 @@ class RefundTransactionServiceTest {
         transactionService.markPgChecked(refundId);
 
         // then
+        entityManager.clear();
         Refund reloaded = refundRepository.findById(refundId).orElseThrow();
         assertThat(reloaded.getUpdatedAt()).isEqualTo(updatedAtBefore);
         assertThat(reloaded.getLastPgCheckedAt()).isNotNull().isAfter(updatedAtBefore);
