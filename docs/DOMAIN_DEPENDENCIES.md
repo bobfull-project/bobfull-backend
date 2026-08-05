@@ -135,13 +135,18 @@
 인증 MEMBER와 본인 ReservationParticipant 확인
 → 서버 시간 기준 식사 시작 2시간 전인지 확인
 → 최초 예약자 여부 분기
-→ 최초 예약자: Reservation CANCELLED·모든 유효 참여자 Payment 전액 환불·조건부 TimeSlot 복구
-→ 추가 참여자: 본인 ReservationParticipant CANCELLED·본인 Payment 전액 환불
-→ currentParticipantCount와 availableCapacity 재계산
+→ [접수, 짧은 트랜잭션] 최초 예약자: Reservation CANCELLING·모든 유효 참여자 CANCEL_REQUESTED
+→ [접수, 짧은 트랜잭션] 추가 참여자: 본인 ReservationParticipant CANCEL_REQUESTED
+→ [외부 실행, 트랜잭션 밖] 참여자별 Payment 전액 PortOne 환불 요청
+→ [완료 확정, 짧은 트랜잭션] 참여자별 환불 완료 시 CANCEL_REQUESTED → CANCELLED 확정
+→ 최초 예약자: 남은 CANCEL_REQUESTED 없어야 Reservation CANCELLED 확정·조건부 TimeSlot 복구
+→ 추가 참여자: 확정 시점에 currentParticipantCount와 availableCapacity 재계산
 → 모집 OPEN이면 confirmationThreshold 기준으로 RECRUITING 또는 CONFIRMED 계산
-→ 수동 마감 CLOSED면 기준 이상은 CONFIRMED + CLOSED 유지, 기준 미달은 전체 CANCELLED·남은 유효 참여자 전액 환불
-→ ChatRoom 신규 메시지 전송 규칙과 지급 예정금 반영
+→ 수동 마감 CLOSED면 기준 이상은 CONFIRMED + CLOSED 유지, 기준 미달은 남은 유효 참여자도 같은 접수·실행·확정 절차로 전체 취소
+→ CANCELLING 전환 시점부터 ChatRoom 신규 메시지 전송 종료, 지급 예정금은 환불 COMPLETED 반영 시점에 갱신
 ```
+
+(#44, #45) 취소는 접수·외부 환불 실행·완료 확정 세 단계로 나뉜다. `RefundStatus`의 결과 불명확 표현(`REQUESTED` 유지 vs `UNKNOWN` 신규 도입)은 Issue #44 완료 조건과 실제 구현이 다르며 Human 확정이 필요하다(자세한 내용은 [PROJECT_CONTEXT](./PROJECT_CONTEXT.md), [ERD](./ERD.md) 참고).
 
 필수 공동 검토:
 

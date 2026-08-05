@@ -60,12 +60,16 @@ availableCapacity
 ### 상태 enum
 
 ```text
-ReservationStatus: RECRUITING, CONFIRMED, CANCELLED, CLOSED
+ReservationStatus: RECRUITING, CONFIRMED, CANCELLING, CANCELLED, CLOSED
 RecruitmentStatus: OPEN, CLOSED
-ParticipationStatus: RESERVED, NO_SHOW, CANCELLED
+ParticipationStatus: RESERVED, NO_SHOW, CANCEL_REQUESTED, CANCELLED
 PaymentStatus: READY, PAID, EXPIRED, FAILED, REFUNDED
 RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ```
+
+`CANCELLING`(Reservation)·`CANCEL_REQUESTED`(Participant)는 취소가 접수됐지만 참여자별 외부 환불이 아직 완료되지 않은 중간 상태다(#44). `isActive()`는 `RECRUITING`·`CONFIRMED`만 참으로 취급해 `CANCELLING`도 신규 JOIN·결제 확정 대상에서 제외한다.
+
+**Human 결정 필요**: Issue #44 완료 조건은 결과 불명확 환불을 표현하기 위해 `RefundStatus.UNKNOWN` 추가를 요구하지만, Issue #45 최종 계약과 실제 구현은 `UNKNOWN`을 추가하지 않고 timeout·connection reset 등 결과 불명확을 `REQUESTED` 유지로 표현한다. 위 목록은 실제 코드를 기준으로 작성했으며, 두 계약을 어느 쪽으로 단일화할지는 아직 확정되지 않았다.
 
 ### 확정 기준과 흐름
 
@@ -117,13 +121,14 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 ### 취소·환불
 
 - V2에서 MEMBER는 서버 시간 기준 식사 시작 2시간 전까지만 본인 `ReservationParticipant`의 신청 인원 전체를 취소한다. 부분 취소·부분 환불·마감 이후 무환불 취소는 이번 범위에 없다.
-- 최초 예약자 취소는 예약 전체를 `CANCELLED`로 변경하고, 다른 유효 참여자를 포함해 전액 환불한다. 기존 예약이 `CANCELLED`이고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없을 때만 TimeSlot을 새 예약 가능 상태로 복구한다.
-- 추가 참여자 취소는 해당 `ReservationParticipant`만 `CANCELLED`로 변경하고 본인 Payment 전체를 환불한다. `currentParticipantCount`와 `availableCapacity`를 재계산하며, 모집이 `OPEN`일 때 확정 기준 미달이면 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다.
-- 수동 마감된 `CONFIRMED + CLOSED` 예약에서 추가 참여자 취소 후 확정 기준 이상이면 `CONFIRMED + CLOSED`를 유지한다. 기준 미달이면 Reservation 전체를 `CANCELLED`로 변경하고 남은 유효 참여자를 전액 환불한다. 모집은 다시 `OPEN`으로 변경하지 않으며, ChatRoom 신규 메시지 전송을 종료한다.
-- 모집 마감은 정원 도달 또는 식사 시작 2시간 전에 `CLOSED`가 된다. 마감 시 확정 기준 미달이면 예약 전체를 `CANCELLED`로 변경하고 남은 유효 참여자를 전액 환불하며, 취소 좌석을 재모집하지 않는다.
-- V2에서 OWNER 또는 시스템 귀책으로 예약을 진행할 수 없으면 예약 전체를 `CANCELLED`로 변경하고 모든 유효 참여자를 전액 환불한다. 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot 재사용은 기존 예약이 `CANCELLED`이고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없는 경우만 가능하다.
-- MEMBER 취소는 `NO_SHOW` 또는 이미 `CANCELLED`인 참여자에게 허용되지 않는다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
-- Refund는 Payment 전체 금액을 대상으로 하며 Payment당 하나만 생성한다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.REFUNDED`를 반영한다. READY 결제의 명시적 사용자 취소는 현재 범위에 없으며, 필요할 때 별도 CANCELLED 상태를 도입한다.
+- 취소는 접수·외부 환불 실행·완료 확정 세 단계로 나뉜다(#44, #45). **접수(짧은 트랜잭션)**: 최초 예약자 취소는 예약을 `CANCELLING`으로, 유효 참여자를 모두 `CANCEL_REQUESTED`로 전환해 커밋한다. 추가 참여자 취소는 해당 `ReservationParticipant`만 `CANCEL_REQUESTED`로 전환한다. 이 시점의 좌석은 계속 점유한 것으로 계산한다. **외부 실행(트랜잭션 밖)**: 접수 커밋 뒤 참여자별로 Payment 전체 금액의 Refund를 생성해 PortOne 환불을 요청한다. **완료 확정(짧은 트랜잭션)**: 환불이 완료되면 해당 참여자만 `CANCEL_REQUESTED → CANCELLED`로 확정한다.
+- 최초 예약자 취소는 모든 유효 참여자의 환불이 각각 완료될 때마다 그 참여자만 `CANCELLED`로 확정되고, 남은 `CANCEL_REQUESTED`가 없어야 예약 전체가 `CANCELLED`로 확정된다. 예약이 `CANCELLED`로 확정되고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없을 때만 TimeSlot을 새 예약 가능 상태로 복구한다.
+- 추가 참여자 취소는 본인 환불이 완료되면 해당 `ReservationParticipant`만 `CANCELLED`로 확정한다. `currentParticipantCount`와 `availableCapacity`를 재계산하며, 모집이 `OPEN`일 때 확정 기준 미달이면 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다.
+- 수동 마감된 `CONFIRMED + CLOSED` 예약에서 추가 참여자 취소 확정 후 기준 이상이면 `CONFIRMED + CLOSED`를 유지한다. 기준 미달이면 남은 유효 참여자도 같은 접수·실행·확정 절차로 전체 취소한다. 모집은 다시 `OPEN`으로 변경하지 않으며, `CANCELLING` 전환 시점부터 ChatRoom 신규 메시지 전송을 종료한다.
+- 모집 마감은 정원 도달 또는 식사 시작 2시간 전에 `CLOSED`가 된다. 마감 시 확정 기준 미달이면 예약 전체를 같은 절차로 취소하며, 취소 좌석을 재모집하지 않는다.
+- V2에서 OWNER 또는 시스템 귀책으로 예약을 진행할 수 없으면 예약 전체를 같은 접수·실행·확정 절차로 취소한다. 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot 재사용은 예약이 `CANCELLED`로 확정되고 현재 시간이 식사 시작 2시간 전보다 이전이며 다른 활성 예약 또는 OWNER·시스템 사용 제한이 없는 경우만 가능하다.
+- MEMBER 취소는 `NO_SHOW`, `CANCEL_REQUESTED` 또는 이미 `CANCELLED`인 참여자에게 허용되지 않는다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
+- Refund는 Payment 전체 금액을 대상으로 하며 Payment당 하나만 생성한다. 환불 완료 시 `RefundStatus.COMPLETED`와 `PaymentStatus.REFUNDED`를 반영한다. 결과가 불명확하면(timeout·connection reset 등) `RefundStatus.REQUESTED`를 유지하고 자동으로 재환불하지 않는다(#45). READY 결제의 명시적 사용자 취소는 현재 범위에 없다.
 - 사용자는 환불 처리 API를 직접 호출하지 않으며, V1에서 본인 환불 목록·상세를 조회한다.
 
 ### TimeSlot 활성 예약 정합성
