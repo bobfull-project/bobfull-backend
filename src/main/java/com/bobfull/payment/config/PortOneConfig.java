@@ -21,6 +21,7 @@ public class PortOneConfig {
     @Bean
     public RestClient portOneRestClient() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(5));
         factory.setReadTimeout(Duration.ofSeconds(60));
         return RestClient.builder().baseUrl("https://api.portone.io").requestFactory(factory).build();
     }

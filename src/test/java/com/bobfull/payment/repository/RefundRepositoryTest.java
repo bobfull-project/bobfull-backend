@@ -54,6 +54,20 @@ class RefundRepositoryTest {
     }
 
     @Test
+    void 서로_다른_결제여도_동일한_idempotencyKey는_저장할_수_없다() {
+        // given
+        Payment first = paymentRepository.saveAndFlush(payment("payment-first", 1L));
+        Payment second = paymentRepository.saveAndFlush(payment("payment-second", 1L));
+        refundRepository.saveAndFlush(Refund.create(first, BigDecimal.TEN, RefundStatus.REQUESTED,
+                Instant.parse("2026-07-30T00:00:00Z"), null, "dup-key", "first reason"));
+
+        // when & then
+        assertThatThrownBy(() -> refundRepository.saveAndFlush(Refund.create(second, BigDecimal.TEN, RefundStatus.REQUESTED,
+                Instant.parse("2026-07-30T00:00:01Z"), null, "dup-key", "second reason")))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void 지정한_상태의_환불만_재확인_후보로_조회한다() {
         // given
         Payment requestedPayment = paymentRepository.saveAndFlush(payment("payment-requested", 1L));

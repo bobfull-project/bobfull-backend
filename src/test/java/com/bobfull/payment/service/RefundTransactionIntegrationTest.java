@@ -39,8 +39,12 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:refund-transaction-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=refund-transaction-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=3600", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
 @ContextConfiguration(classes = RefundTransactionIntegrationTest.Config.class)
@@ -56,6 +60,7 @@ class RefundTransactionIntegrationTest {
     @Autowired private ReservationRepository reservationRepository;
     @Autowired private ReservationParticipantRepository reservationParticipantRepository;
     @Autowired private DelayedCompletionProbe delayedCompletionProbe;
+    @MockitoSpyBean private RefundIdempotencyKeyGenerator keyGenerator;
     private Reservation activeReservation;
     private final Map<Long, Long> participantIds = new ConcurrentHashMap<>();
 
@@ -113,6 +118,31 @@ class RefundTransactionIntegrationTest {
         assertThat(((CustomException) rejected).getErrorCode()).isEqualTo(PaymentErrorCode.REFUND_PROCESSING);
         assertThat(refundRepository.findByPayment_Id(payment.getId())).isPresent();
         assertThat(refundRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 서로_다른_Refund는_서로_다른_idempotencyKey를_가진다() {
+        paid(1L);
+        paid(2L);
+
+        Refund first = transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test").refund();
+        Refund second = transactionService.createRequested(activeReservation.getId(), participantIds.get(2L), "test").refund();
+
+        assertThat(first.getIdempotencyKey()).isNotBlank();
+        assertThat(second.getIdempotencyKey()).isNotBlank();
+        assertThat(first.getIdempotencyKey()).isNotEqualTo(second.getIdempotencyKey());
+    }
+
+    @Test
+    void 키_생성기는_신규_Refund_생성시에만_정확히_한번_호출되고_기존_Refund_재조회시_재호출되지_않는다() {
+        paid(1L);
+
+        transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test");
+        verify(keyGenerator, times(1)).generate();
+
+        assertThatThrownBy(() -> transactionService.createRequested(activeReservation.getId(), participantIds.get(1L), "test again"))
+                .isInstanceOf(CustomException.class);
+        verify(keyGenerator, times(1)).generate();
     }
 
     @Test
