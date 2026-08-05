@@ -1,8 +1,7 @@
 package com.bobfull.payment.service;
 
 import com.bobfull.payment.entity.RefundStatus;
-import com.bobfull.reservation.service.ReservationCancellationService;
-import org.springframework.beans.factory.ObjectProvider;
+import com.bobfull.payment.port.ReservationCancellationCompletionPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,12 +10,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RefundCompletionService {
     private final RefundTransactionService transactionService;
-    private final ObjectProvider<ReservationCancellationService> cancellationServiceProvider;
+    private final ReservationCancellationCompletionPort cancellationCompletionPort;
 
-    public RefundCompletionService(RefundTransactionService transactionService,
-            ObjectProvider<ReservationCancellationService> cancellationServiceProvider) {
+    public RefundCompletionService(
+            RefundTransactionService transactionService,
+            ReservationCancellationCompletionPort cancellationCompletionPort
+    ) {
         this.transactionService = transactionService;
-        this.cancellationServiceProvider = cancellationServiceProvider;
+        this.cancellationCompletionPort = cancellationCompletionPort;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -30,7 +31,8 @@ public class RefundCompletionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void completeFromWebhook(String paymentId, String cancellationId) {
-        transactionService.completeFromWebhook(paymentId, cancellationId).ifPresent(this::completeParticipantIfCompleted);
+        transactionService.completeFromWebhook(paymentId, cancellationId)
+                .ifPresent(this::completeParticipantIfCompleted);
     }
 
     public void markProcessingFromWebhook(String paymentId, String cancellationId) {
@@ -38,8 +40,12 @@ public class RefundCompletionService {
     }
 
     private void completeParticipantIfCompleted(RefundTransactionService.RefundCompletion completion) {
-        if (completion.refundStatus() != RefundStatus.COMPLETED) return;
-        cancellationServiceProvider.getObject().completeParticipantCancellation(
-                completion.reservationId(), completion.reservationParticipantId(), completion.completedAt());
+        if (completion.refundStatus() != RefundStatus.COMPLETED) {
+            return;
+        }
+        cancellationCompletionPort.complete(
+                completion.reservationId(),
+                completion.reservationParticipantId(),
+                completion.completedAt());
     }
 }
