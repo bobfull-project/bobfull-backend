@@ -1080,7 +1080,8 @@ OWNER 응답 예시:
   "success": true,
   "message": "요청이 성공했습니다.",
   "data": {
-    "tableId": 1
+    "tableId": 1,
+    "displayNumber": 1
   }
 }
 ```
@@ -1093,6 +1094,55 @@ OWNER 응답 예시:
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
 | `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
+| `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
+
+---
+
+## 4-1-1. 합석 테이블 일괄 등록 `[V1]`
+
+## 1. INFO
+
+- 설명: 동일 정원의 테이블을 한 번에 1~10개 등록한다. 표시 번호는 식당별 기존 최대 번호 다음부터 연속 발급한다.
+- Method: `POST`
+- Path: `/api/owner/restaurants/{restaurantId}/tables/bulk`
+- Auth: `OWNER`
+
+## 2. Request
+
+```json
+{
+  "capacity": 4,
+  "count": 3
+}
+```
+
+## 3. Response
+
+- Status: `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "createdTableCount": 3,
+    "tables": [
+      { "tableId": 1, "restaurantId": 1, "displayNumber": 1, "capacity": 4, "status": "ACTIVE" },
+      { "tableId": 2, "restaurantId": 1, "displayNumber": 2, "capacity": 4, "status": "ACTIVE" },
+      { "tableId": 3, "restaurantId": 1, "displayNumber": 3, "capacity": 4, "status": "ACTIVE" }
+    ]
+  }
+}
+```
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `400` | `INVALID_TABLE_CAPACITY` | capacity가 `2`, `4`, `6`, `8` 중 하나가 아님 |
+| `400` | `INVALID_INPUT_VALUE` | count가 1~10 범위를 벗어나거나 요청값 검증 실패 |
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | 본인 식당이 아님 |
 | `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
 
 ---
@@ -1130,6 +1180,7 @@ OWNER 응답 예시:
       {
         "tableId": 1,
         "restaurantId": 1,
+        "displayNumber": 1,
         "capacity": 4,
         "status": "ACTIVE"
       }
@@ -1183,6 +1234,7 @@ OWNER 응답 예시:
   "data": {
     "tableId": 1,
     "restaurantId": 1,
+    "displayNumber": 1,
     "capacity": 4,
     "status": "ACTIVE"
   }
@@ -2194,10 +2246,11 @@ OWNER 응답 예시:
 - 담당자: 배지현
 
 - 서버 시간 기준 식사 시작 2시간 전까지만 취소할 수 있다. 2시간 이내에는 `CANCELLATION_DEADLINE_PASSED`를 반환한다.
-- 대상 참여자가 최초 예약자면 예약 전체를 `CANCELLED`로 변경하고, 모든 유효 참여자의 Payment 전체 금액에 대해 환불을 요청한 뒤 TimeSlot을 새 예약 가능 상태로 복구한다. 기존 채팅방은 신규 메시지 전송을 종료하며 기존 메시지 조회는 유지한다.
-- 대상 참여자가 추가 참여자면 해당 `ReservationParticipant`만 `CANCELLED`로 변경하고 본인 Payment 전체 금액을 환불한다. `currentParticipantCount`와 `availableCapacity`를 다시 계산하며, 모집이 `OPEN`이고 확정 기준 미달이면 Reservation은 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다.
-- `NO_SHOW` 또는 이미 `CANCELLED`인 참여자는 MEMBER 취소 대상이 아니다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
-- 동일 Payment에는 Refund를 한 건만 생성한다. 기존 환불이 있으면 새 환불을 만들지 않고 `REFUND_ALREADY_REQUESTED`를 반환한다.
+- 이 API는 취소를 **접수**만 하고 즉시 `CANCELLED`로 확정하지 않는다(#44, #45). 대상 참여자가 최초 예약자면 예약을 `CANCELLING`으로, 모든 유효 참여자를 `CANCEL_REQUESTED`로 전환해 커밋하고, 응답 반환 뒤 참여자별로 Payment 전체 금액의 PortOne 환불을 요청한다. 대상 참여자가 추가 참여자면 해당 `ReservationParticipant`만 `CANCEL_REQUESTED`로 전환하고 본인 Payment 전체 금액을 환불 요청한다.
+- 참여자별 환불이 실제로 완료돼야 그 참여자가 `CANCEL_REQUESTED → CANCELLED`로 확정된다. 최초 예약자 취소는 모든 유효 참여자의 환불이 완료된 뒤에야 예약 전체가 `CANCELLED`로 확정되고, 그때 TimeSlot이 새 예약 가능 상태로 복구된다. 추가 참여자 취소는 본인 확정 시점에 `currentParticipantCount`·`availableCapacity`를 재계산하며, 모집이 `OPEN`이고 확정 기준 미달이면 Reservation은 `RECRUITING`, 기준 이상이면 `CONFIRMED`를 유지한다. 기존 채팅방은 `CANCELLING` 전환 시점부터 신규 메시지 전송을 종료하며 기존 메시지 조회는 유지한다.
+- 이 API의 응답은 접수 결과(`CANCEL_REQUESTED`)만 나타내며, 최종 `CANCELLED` 확정은 이 응답 이후 비동기로 반영된다. 확정 여부는 예약·참여 조회 API로 확인한다.
+- `NO_SHOW`, `CANCEL_REQUESTED` 또는 이미 `CANCELLED`인 참여자는 MEMBER 취소 대상이 아니다. 현재 ParticipationStatus에는 `VISITED` 상태가 없다.
+- 동일 Payment에는 Refund를 한 건만 생성한다. 기존 환불이 있으면 새 환불을 만들지 않고 `REFUND_ALREADY_REQUESTED`를 반환한다. 환불 결과가 불명확하면(timeout 등) `Refund`는 `REQUESTED`를 유지하고 자동으로 재환불하지 않는다.
 - 최초 예약자 취소로 예약 전체가 취소되는 경우 요청 사유는 각 유효 참여자의 `cancelReason`에 동일하게 기록한다. Reservation에는 별도 취소 사유 컬럼을 두지 않는다.
 
 ## 2. Request
@@ -2233,15 +2286,16 @@ OWNER 응답 예시:
   "data": {
     "reservationId": 1,
     "participationId": 10,
-    "participationStatus": "CANCELLED",
+    "participationStatus": "CANCEL_REQUESTED",
     "cancellationScope": "PARTICIPATION",
     "refundStatus": "REQUESTED"
   }
 }
 ```
 
+- `participationStatus`는 이 응답 시점의 접수 상태 `CANCEL_REQUESTED`를 나타낸다. 실제 `CANCELLED` 확정은 환불 완료 후 비동기로 반영되며 이 API 응답에는 나타나지 않는다(#44, #45).
 - `cancellationScope`는 추가 참여자 취소 시 `PARTICIPATION`, 최초 예약자 취소 시 `RESERVATION`이다.
-- 최초 예약자 취소의 Response `refundStatus`는 최초 예약자 Payment의 환불 요청 상태다. 다른 유효 참여자 Payment의 환불도 같은 트랜잭션에서 요청한다.
+- 최초 예약자 취소의 Response `refundStatus`는 최초 예약자 Payment의 환불 요청 상태다. 다른 유효 참여자 Payment의 환불도 참여자별로 요청한다.
 
 ## 4. Error
 
@@ -2249,12 +2303,12 @@ OWNER 응답 예시:
 |---:|---|---|
 | `400` | `INVALID_INPUT_VALUE` | 요청값 검증 실패 |
 | `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
-| `403` | `CANCELLATION_NOT_ALLOWED` | 본인 참여가 아니거나 `NO_SHOW` 상태 등 MEMBER 취소가 허용되지 않음 |
+| `403` | `CANCELLATION_NOT_ALLOWED` | 본인 참여가 아니거나 `NO_SHOW`·`CANCEL_REQUESTED` 상태 등 MEMBER 취소가 허용되지 않음 |
 | `404` | `RESERVATION_ID_NOT_FOUND` | reservationId에 해당하는 대상을 찾을 수 없음 |
 | `404` | `PARTICIPATION_NOT_FOUND` | 본인 ReservationParticipant를 찾을 수 없음 |
 | `409` | `CANCELLATION_DEADLINE_PASSED` | 서버 시간 기준 식사 시작 2시간 이내임 |
 | `409` | `PARTICIPATION_ALREADY_CANCELLED` | 대상 참여자가 이미 `CANCELLED` 상태임 |
-| `409` | `RESERVATION_ALREADY_CANCELLED` | 대상 Reservation이 이미 `CANCELLED` 상태임 |
+| `409` | `RESERVATION_ALREADY_CANCELLED` | 대상 Reservation이 이미 `CANCELLED` 또는 `CANCELLING`(취소 접수·환불 대기 중) 상태임 |
 | `409` | `REFUND_ALREADY_REQUESTED` | 대상 Payment에 대한 Refund가 이미 존재함 |
 
 ---

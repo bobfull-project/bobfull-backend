@@ -14,7 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PortOneWebhookControllerTest {
  @Mock PortOneWebhookVerifier verifier; @Mock PaymentCompletionService completion;
- PortOneWebhookController controller(){ return new PortOneWebhookController(verifier, completion); }
+ PortOneWebhookController controller(){ return new PortOneWebhookController(verifier, completion, null); }
  @Test void 서명_실패는_400이고_완료서비스를_호출하지_않는다() throws Exception { when(verifier.verify(any(),any(),any(),any())).thenThrow(mock(WebhookVerificationException.class)); assertThat(controller().receive("{}","id","signature","timestamp").getStatusCode().value()).isEqualTo(400); verifyNoInteractions(completion); }
  @Test void 미지원_이벤트는_200이다() throws Exception { when(verifier.verify(any(),any(),any(),any())).thenReturn(new PortOneWebhookVerifier.WebhookEvent(null)); assertThat(controller().receive("{}","id","sig","ts").getStatusCode().value()).isEqualTo(200); verifyNoInteractions(completion); }
  @Test void 결제이벤트는_공통처리를_호출한다() throws Exception { when(verifier.verify(any(),any(),any(),any())).thenReturn(new PortOneWebhookVerifier.WebhookEvent("p")); assertThat(controller().receive("{}","id","sig","ts").getStatusCode().value()).isEqualTo(200); verify(completion).completeFromWebhook("p"); }

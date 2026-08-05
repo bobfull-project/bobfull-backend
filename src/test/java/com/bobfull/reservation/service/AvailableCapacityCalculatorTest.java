@@ -21,7 +21,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 class AvailableCapacityCalculatorTest {
 
     private static final List<ReservationStatus> ACTIVE_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED);
+            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
+    private static final List<ParticipationStatus> OCCUPYING_STATUSES =
+            List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
     @Mock
     private ReservationRepository reservationRepository;
@@ -56,7 +58,7 @@ class AvailableCapacityCalculatorTest {
         Reservation reservation = reservation(10L);
         given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(200L, ACTIVE_STATUSES))
                 .willReturn(Optional.of(reservation));
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(2);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
         given(paymentHoldReader.sumActiveReadyPartySize(200L)).willReturn(1);
 
         // when
@@ -72,7 +74,7 @@ class AvailableCapacityCalculatorTest {
         Reservation reservation = reservation(10L);
         given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(200L, ACTIVE_STATUSES))
                 .willReturn(Optional.of(reservation));
-        given(reservationParticipantRepository.sumPartySize(10L, ParticipationStatus.RESERVED)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(4);
         given(paymentHoldReader.sumActiveReadyPartySize(200L)).willReturn(2);
 
         // when

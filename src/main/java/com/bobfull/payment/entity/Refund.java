@@ -42,6 +42,13 @@ public class Refund extends BaseTimeEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "cancellation_id", unique = true, length = 64)
+    private String cancellationId;
+
+    /** 마지막 PortOne 조회 시각이다. 상태 변경 시각(updatedAt)과 분리해 후보를 순환한다. */
+    @Column(name = "last_pg_checked_at")
+    private Instant lastPgCheckedAt;
+
     protected Refund() {
     }
 
@@ -66,4 +73,43 @@ public class Refund extends BaseTimeEntity {
     public RefundStatus getStatus() { return status; }
     public Instant getRequestedAt() { return requestedAt; }
     public Instant getCompletedAt() { return completedAt; }
+
+    public String getCancellationId() { return cancellationId; }
+    public Instant getLastPgCheckedAt() { return lastPgCheckedAt; }
+
+    public void markPgChecked(Instant checkedAt) {
+        if (checkedAt == null) {
+            throw new IllegalArgumentException("PG 조회 시각은 필수입니다.");
+        }
+        this.lastPgCheckedAt = checkedAt;
+    }
+
+    /**
+     * 상태 전이는 단조롭게만 허용한다: REQUESTED/PROCESSING → PROCESSING. COMPLETED·FAILED는
+     * 종료 상태라 이후 PROCESSING 전이를 무시한다(호출자가 호출 전후 상태를 비교해 역행 시도를
+     * 로그로 남긴다).
+     */
+    public void markProcessing(String cancellationId) {
+        if (status == RefundStatus.COMPLETED || status == RefundStatus.FAILED) return;
+        this.cancellationId = cancellationId;
+        this.status = RefundStatus.PROCESSING;
+    }
+
+    /**
+     * REQUESTED/PROCESSING → COMPLETED만 허용한다. FAILED → COMPLETED는 PortOne이 명시적으로
+     * 실패를 확정한 뒤 뒤늦은 Cancelled 웹훅이 도착하는 경우인데, 이를 자동으로 완료로 뒤집을지는
+     * 정책 근거가 없어 이번에는 차단한다(호출자 로그로 남김). COMPLETED → COMPLETED는 중복 완료
+     * 웹훅·즉시 응답 경쟁에 대비한 멱등 종료다.
+     */
+    public void complete(String cancellationId, Instant completedAt) {
+        if (status == RefundStatus.COMPLETED || status == RefundStatus.FAILED) return;
+        this.cancellationId = cancellationId;
+        this.status = RefundStatus.COMPLETED;
+        this.completedAt = completedAt;
+    }
+
+    /** COMPLETED는 종료 상태라 FAILED로 되돌리지 않는다. */
+    public void fail() {
+        if (status != RefundStatus.COMPLETED) this.status = RefundStatus.FAILED;
+    }
 }

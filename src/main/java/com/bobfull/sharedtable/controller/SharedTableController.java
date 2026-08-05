@@ -4,6 +4,8 @@ import com.bobfull.common.response.ApiResponse;
 import com.bobfull.common.response.PageResponse;
 import com.bobfull.common.security.AuthMember;
 import com.bobfull.sharedtable.dto.SharedTableIdResponse;
+import com.bobfull.sharedtable.dto.SharedTableBulkRequest;
+import com.bobfull.sharedtable.dto.SharedTableBulkResponse;
 import com.bobfull.sharedtable.dto.SharedTableRequest;
 import com.bobfull.sharedtable.dto.SharedTableResponse;
 import com.bobfull.sharedtable.service.SharedTableService;
@@ -39,6 +41,16 @@ public class SharedTableController {
             @Valid @RequestBody SharedTableRequest request
     ) {
         SharedTableIdResponse response = sharedTableService.register(authMember.id(), restaurantId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @PostMapping("/restaurants/{restaurantId}/tables/bulk")
+    public ResponseEntity<ApiResponse<SharedTableBulkResponse>> registerBulk(
+            @AuthenticationPrincipal AuthMember authMember,
+            @PathVariable Long restaurantId,
+            @Valid @RequestBody SharedTableBulkRequest request
+    ) {
+        SharedTableBulkResponse response = sharedTableService.registerBulk(authMember.id(), restaurantId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 

@@ -15,6 +15,8 @@ import com.bobfull.common.response.PageResponse;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.dto.SharedTableIdResponse;
+import com.bobfull.sharedtable.dto.SharedTableBulkRequest;
+import com.bobfull.sharedtable.dto.SharedTableBulkResponse;
 import com.bobfull.sharedtable.dto.SharedTableRequest;
 import com.bobfull.sharedtable.dto.SharedTableResponse;
 import com.bobfull.sharedtable.entity.SharedTable;
@@ -61,7 +63,7 @@ class SharedTableServiceTest {
     }
 
     private SharedTable sharedTable(Long tableId, Long restaurantId, Integer capacity) {
-        SharedTable sharedTable = SharedTable.create(restaurantId, capacity);
+        SharedTable sharedTable = SharedTable.create(restaurantId, 1, capacity);
         ReflectionTestUtils.setField(sharedTable, "id", tableId);
         return sharedTable;
     }
@@ -71,7 +73,8 @@ class SharedTableServiceTest {
         // given
         Restaurant restaurant = restaurantOwnedBy(1L);
         ArgumentCaptor<SharedTable> captor = ArgumentCaptor.forClass(SharedTable.class);
-        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(10L)).willReturn(Optional.of(restaurant));
+        given(sharedTableRepository.findMaxDisplayNumberByRestaurantId(10L)).willReturn(0);
         given(sharedTableRepository.save(any(SharedTable.class))).willAnswer(invocation -> {
             SharedTable table = invocation.getArgument(0);
             ReflectionTestUtils.setField(table, "id", 1L);
@@ -83,17 +86,59 @@ class SharedTableServiceTest {
 
         // then
         assertThat(response.tableId()).isEqualTo(1L);
+        assertThat(response.displayNumber()).isEqualTo(1);
         verify(sharedTableRepository).save(captor.capture());
         assertThat(captor.getValue().getRestaurantId()).isEqualTo(10L);
         assertThat(captor.getValue().getCapacity()).isEqualTo(4);
+        assertThat(captor.getValue().getDisplayNumber()).isEqualTo(1);
         assertThat(captor.getValue().getStatus()).isEqualTo(SharedTableStatus.ACTIVE);
+    }
+
+    @Test
+    void 합석_테이블을_일괄_등록하면_기존_최대_표시번호_다음부터_연속으로_발급한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        given(restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(10L)).willReturn(Optional.of(restaurant));
+        given(sharedTableRepository.findMaxDisplayNumberByRestaurantId(10L)).willReturn(2);
+        given(sharedTableRepository.saveAll(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        SharedTableBulkResponse response = sharedTableService().registerBulk(
+                1L,
+                10L,
+                new SharedTableBulkRequest(4, 3)
+        );
+
+        // then
+        assertThat(response.createdTableCount()).isEqualTo(3);
+        assertThat(response.tables()).extracting(SharedTableResponse::displayNumber).containsExactly(3, 4, 5);
+        assertThat(response.tables()).extracting(SharedTableResponse::capacity).containsOnly(4);
+    }
+
+    @Test
+    void 일괄_등록_개수가_10개를_초과하면_400_예외가_발생하고_저장하지_않는다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        given(restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(10L)).willReturn(Optional.of(restaurant));
+
+        // when
+        Throwable result = catchThrowable(() -> sharedTableService().registerBulk(
+                1L,
+                10L,
+                new SharedTableBulkRequest(4, 11)
+        ));
+
+        // then
+        assertThat(result).isInstanceOf(CustomException.class);
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
+        verify(sharedTableRepository, never()).saveAll(any());
     }
 
     @Test
     void 허용되지_않는_capacity로_등록하면_400_예외가_발생하고_저장하지_않는다() {
         // given
         Restaurant restaurant = restaurantOwnedBy(1L);
-        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(10L)).willReturn(Optional.of(restaurant));
 
         // when
         Throwable result = catchThrowable(() -> sharedTableService().register(1L, 10L, new SharedTableRequest(3)));
@@ -108,7 +153,7 @@ class SharedTableServiceTest {
     void capacity가_null이면_서비스에서도_400_예외가_발생한다() {
         // given
         Restaurant restaurant = restaurantOwnedBy(1L);
-        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(10L)).willReturn(Optional.of(restaurant));
 
         // when
         Throwable result = catchThrowable(() -> sharedTableService().register(1L, 10L, new SharedTableRequest(null)));
@@ -122,7 +167,7 @@ class SharedTableServiceTest {
     @Test
     void 존재하지_않는_식당에_등록하면_404_예외가_발생한다() {
         // given
-        given(restaurantRepository.findByIdAndDeletedAtIsNull(999L)).willReturn(Optional.empty());
+        given(restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(999L)).willReturn(Optional.empty());
 
         // when
         Throwable result = catchThrowable(() -> sharedTableService().register(1L, 999L, new SharedTableRequest(4)));
@@ -136,7 +181,7 @@ class SharedTableServiceTest {
     void 타인_식당에_등록하면_403_예외가_발생한다() {
         // given
         Restaurant restaurant = restaurantOwnedBy(2L);
-        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(10L)).willReturn(Optional.of(restaurant));
 
         // when
         Throwable result = catchThrowable(() -> sharedTableService().register(1L, 10L, new SharedTableRequest(4)));

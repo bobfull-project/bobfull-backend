@@ -8,12 +8,16 @@ import com.bobfull.common.response.PageResponse;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.dto.SharedTableIdResponse;
+import com.bobfull.sharedtable.dto.SharedTableBulkRequest;
+import com.bobfull.sharedtable.dto.SharedTableBulkResponse;
 import com.bobfull.sharedtable.dto.SharedTableRequest;
 import com.bobfull.sharedtable.dto.SharedTableResponse;
 import com.bobfull.sharedtable.entity.SharedTable;
 import com.bobfull.sharedtable.repository.SharedTableRepository;
 import java.time.Clock;
 import java.util.Set;
+import java.util.List;
+import java.util.stream.IntStream;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -46,13 +50,37 @@ public class SharedTableService {
 
     @Transactional
     public SharedTableIdResponse register(Long ownerMemberId, Long restaurantId, SharedTableRequest request) {
-        Restaurant restaurant = findActiveRestaurantOrThrow(restaurantId);
+        Restaurant restaurant = findActiveRestaurantForUpdateOrThrow(restaurantId);
         validateOwnership(restaurant, ownerMemberId);
         validateCapacity(request.capacity());
 
-        SharedTable sharedTable = SharedTable.create(restaurantId, request.capacity());
+        int nextDisplayNumber = findNextDisplayNumber(restaurantId);
+        SharedTable sharedTable = SharedTable.create(restaurantId, nextDisplayNumber, request.capacity());
         SharedTable savedTable = sharedTableRepository.save(sharedTable);
         return SharedTableIdResponse.from(savedTable);
+    }
+
+    @Transactional
+    public SharedTableBulkResponse registerBulk(
+            Long ownerMemberId,
+            Long restaurantId,
+            SharedTableBulkRequest request
+    ) {
+        Restaurant restaurant = findActiveRestaurantForUpdateOrThrow(restaurantId);
+        validateOwnership(restaurant, ownerMemberId);
+        validateCapacity(request.capacity());
+        validateCount(request.count());
+
+        int firstDisplayNumber = findNextDisplayNumber(restaurantId);
+        List<SharedTable> tables = IntStream.range(0, request.count())
+                .mapToObj(offset -> SharedTable.create(
+                        restaurantId,
+                        firstDisplayNumber + offset,
+                        request.capacity()
+                ))
+                .toList();
+
+        return SharedTableBulkResponse.from(sharedTableRepository.saveAll(tables));
     }
 
     @Transactional(readOnly = true)
@@ -107,6 +135,15 @@ public class SharedTableService {
                 .orElseThrow(() -> new CustomException(RestaurantErrorCode.RESTAURANT_ID_NOT_FOUND));
     }
 
+    private Restaurant findActiveRestaurantForUpdateOrThrow(Long restaurantId) {
+        return restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(restaurantId)
+                .orElseThrow(() -> new CustomException(RestaurantErrorCode.RESTAURANT_ID_NOT_FOUND));
+    }
+
+    private int findNextDisplayNumber(Long restaurantId) {
+        return sharedTableRepository.findMaxDisplayNumberByRestaurantId(restaurantId) + 1;
+    }
+
     private void validateOwnership(Restaurant restaurant, Long ownerMemberId) {
         if (!restaurant.isOwnedBy(ownerMemberId)) {
             throw new CustomException(CommonErrorCode.ACCESS_DENIED);
@@ -116,6 +153,12 @@ public class SharedTableService {
     private void validateCapacity(Integer capacity) {
         if (capacity == null || !ALLOWED_CAPACITIES.contains(capacity)) {
             throw new CustomException(SharedTableErrorCode.INVALID_TABLE_CAPACITY);
+        }
+    }
+
+    private void validateCount(Integer count) {
+        if (count == null || count < 1 || count > 10) {
+            throw new CustomException(CommonErrorCode.INVALID_INPUT_VALUE);
         }
     }
 }

@@ -40,6 +40,12 @@ payment:
     enabled: ${PAYMENT_EXPIRATION_ENABLED:true}
     fixed-delay: ${PAYMENT_EXPIRATION_FIXED_DELAY:60s}
     batch-size: ${PAYMENT_EXPIRATION_BATCH_SIZE:100}
+  refund-reconciliation:
+    enabled: ${PAYMENT_REFUND_RECONCILIATION_ENABLED:true}
+    fixed-delay: ${PAYMENT_REFUND_RECONCILIATION_FIXED_DELAY:5m}
+    minimum-age: ${PAYMENT_REFUND_RECONCILIATION_MINIMUM_AGE:10m}
+    recheck-delay: ${PAYMENT_REFUND_RECONCILIATION_RECHECK_DELAY:5m}
+    batch-size: ${PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE:20}
 
 aws:
   region: ${AWS_REGION:ap-northeast-2}

@@ -7,6 +7,7 @@ import com.bobfull.sharedtable.entity.SharedTable;
 import com.bobfull.sharedtable.repository.SharedTableRepository;
 import com.bobfull.timeslot.entity.TimeSlot;
 import com.bobfull.timeslot.repository.TimeSlotRepository;
+import java.time.Instant;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,10 +29,19 @@ public class ReservationCapacityReaderAdapter implements ReservationCapacityRead
 
     @Override
     public int readTableCapacity(Long timeSlotId) {
-        TimeSlot timeSlot = timeSlotRepository.findByIdAndDeletedAtIsNull(timeSlotId)
-                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
+        TimeSlot timeSlot = findTimeSlotOrThrow(timeSlotId);
         SharedTable sharedTable = sharedTableRepository.findByIdAndDeletedAtIsNull(timeSlot.getSharedTableId())
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
         return sharedTable.getCapacity();
+    }
+
+    @Override
+    public Instant readTimeSlotStartAt(Long timeSlotId) {
+        return findTimeSlotOrThrow(timeSlotId).getStartAt();
+    }
+
+    private TimeSlot findTimeSlotOrThrow(Long timeSlotId) {
+        return timeSlotRepository.findByIdAndDeletedAtIsNull(timeSlotId)
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESOURCE_NOT_FOUND));
     }
 }

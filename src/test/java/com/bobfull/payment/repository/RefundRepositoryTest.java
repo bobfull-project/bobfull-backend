@@ -3,18 +3,26 @@ package com.bobfull.payment.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.bobfull.common.config.ClockConfig;
+import com.bobfull.common.config.JpaAuditingConfig;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.entity.RefundStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 
+/** findReconciliationCandidates는 @LastModifiedDate(updatedAt) 기준으로 필터링하므로,
+ * @DataJpaTest 슬라이스에는 기본 포함되지 않는 Auditing 설정을 명시적으로 가져온다. */
 @DataJpaTest
+@Import({JpaAuditingConfig.class, ClockConfig.class})
 class RefundRepositoryTest {
 
     @Autowired private PaymentRepository paymentRepository;
@@ -43,6 +51,95 @@ class RefundRepositoryTest {
         assertThatThrownBy(() -> refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
                 Instant.parse("2026-07-30T00:00:01Z"), null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 지정한_상태의_환불만_재확인_후보로_조회한다() {
+        // given
+        Payment requestedPayment = paymentRepository.saveAndFlush(payment("payment-requested", 1L));
+        Payment processingPayment = paymentRepository.saveAndFlush(payment("payment-processing", 1L));
+        Payment completedPayment = paymentRepository.saveAndFlush(payment("payment-completed", 1L));
+        Refund requested = refundRepository.saveAndFlush(Refund.create(requestedPayment, BigDecimal.TEN,
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+        refundRepository.saveAndFlush(Refund.create(processingPayment, BigDecimal.TEN,
+                RefundStatus.PROCESSING, Instant.parse("2026-07-30T00:00:00Z"), null));
+        refundRepository.saveAndFlush(Refund.create(completedPayment, BigDecimal.TEN,
+                RefundStatus.COMPLETED, Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:01:00Z")));
+        Instant now = Instant.now();
+
+        // when
+        List<Refund> candidates = refundRepository.findReconciliationCandidates(
+                List.of(RefundStatus.REQUESTED), now.plusSeconds(3600), now.plusSeconds(3600), PageRequest.of(0, 20));
+
+        // then
+        assertThat(candidates).extracting(Refund::getId).containsExactly(requested.getId());
+    }
+
+    @Test
+    void 경과시간_기준에_아직_미달한_환불은_후보에서_제외한다() {
+        // given
+        Payment payment = paymentRepository.saveAndFlush(payment("payment-fresh", 1L));
+        refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
+                Instant.parse("2026-07-30T00:00:00Z"), null));
+        Instant now = Instant.now();
+
+        // when
+        List<Refund> candidates = refundRepository.findReconciliationCandidates(
+                List.of(RefundStatus.REQUESTED, RefundStatus.PROCESSING),
+                now.minusSeconds(3600), now.plusSeconds(3600), PageRequest.of(0, 20));
+
+        // then
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void 최근에_PG_조회를_마친_환불은_재확인_지연시간이_지나기_전까지_후보에서_제외한다() {
+        // given
+        Payment recentlyCheckedPayment = paymentRepository.saveAndFlush(payment("payment-recently-checked", 1L));
+        Payment neverCheckedPayment = paymentRepository.saveAndFlush(payment("payment-never-checked", 1L));
+        Refund recentlyChecked = refundRepository.saveAndFlush(Refund.create(recentlyCheckedPayment, BigDecimal.TEN,
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+        Instant now = Instant.now();
+        recentlyChecked.markPgChecked(now);
+        refundRepository.saveAndFlush(recentlyChecked);
+        Refund neverChecked = refundRepository.saveAndFlush(Refund.create(neverCheckedPayment, BigDecimal.TEN,
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+
+        // when
+        List<Refund> candidates = refundRepository.findReconciliationCandidates(
+                List.of(RefundStatus.REQUESTED, RefundStatus.PROCESSING),
+                now.plusSeconds(3600), now.minusSeconds(60), PageRequest.of(0, 20));
+
+        // then
+        assertThat(candidates).extracting(Refund::getId).containsExactly(neverChecked.getId());
+    }
+
+    @Test
+    void 조회시각_오름차순으로_정렬해_배치개수만큼만_조회한다() {
+        // given
+        Payment oldestPayment = paymentRepository.saveAndFlush(payment("payment-oldest", 1L));
+        Payment middlePayment = paymentRepository.saveAndFlush(payment("payment-middle", 1L));
+        Payment newestPayment = paymentRepository.saveAndFlush(payment("payment-newest", 1L));
+        Refund oldest = refundRepository.saveAndFlush(Refund.create(oldestPayment, BigDecimal.TEN,
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+        Refund middle = refundRepository.saveAndFlush(Refund.create(middlePayment, BigDecimal.TEN,
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+        Refund newest = refundRepository.saveAndFlush(Refund.create(newestPayment, BigDecimal.TEN,
+                RefundStatus.REQUESTED, Instant.parse("2026-07-30T00:00:00Z"), null));
+        Instant now = Instant.now();
+        oldest.markPgChecked(now.minus(java.time.Duration.ofMinutes(30)));
+        middle.markPgChecked(now.minus(java.time.Duration.ofMinutes(20)));
+        newest.markPgChecked(now.minus(java.time.Duration.ofMinutes(10)));
+        refundRepository.saveAndFlush(oldest);
+        refundRepository.saveAndFlush(middle);
+        refundRepository.saveAndFlush(newest);
+
+        // when
+        List<Refund> candidates = refundRepository.findReconciliationCandidates(
+                List.of(RefundStatus.REQUESTED), now.plusSeconds(3600), now, PageRequest.of(0, 2));
+
+        // then
+        assertThat(candidates).extracting(Refund::getId).containsExactly(oldest.getId(), middle.getId());
     }
 
     private Payment payment(String paymentId, Long memberId) {
