@@ -141,6 +141,25 @@ class PortOneSdkRefundRequesterTest {
         assertThat(result.status()).isEqualTo(ReconciliationStatus.AMBIGUOUS);
     }
 
+    /** #148 재검토 반영: 매칭 기준(조건 1~5)을 만족하는 후보가 정확히 1개면, 같은 Payment에 다른
+     * 인식된 취소 내역(트리거 불일치 등으로 매칭에서 제외된 내역)이 더 있어도 완료로 인정해야 한다.
+     * Issue #141 확정 계약은 "조건을 만족하는 후보"의 개수만 기준으로 삼으며, Payment의 전체
+     * 인식된 취소 건수를 별도로 제한하지 않는다. */
+    @Test
+    void 전액취소인데_매칭되지않는_다른_취소내역이_있어도_단일후보면_COMPLETED를_반환한다() {
+        Instant cancelledAt = Instant.parse("2026-08-05T00:01:00Z");
+        PaymentCancellation.Recognized matching = cancellation("cancel-1", 10000L, cancelledAt,
+                Instant.parse("2026-08-05T00:00:10Z"), Trigger.Api.INSTANCE);
+        PaymentCancellation.Recognized nonMatching = cancellation("cancel-2", 10000L,
+                Instant.parse("2026-08-05T00:02:00Z"), Instant.parse("2026-08-05T00:00:20Z"), Trigger.Console.INSTANCE);
+        PortOneSdkRefundRequester adapter = adapterFor(cancelledPayment(matching, nonMatching));
+
+        var result = adapter.reconcile(PAYMENT_ID, null, REFUND_AMOUNT, REFUND_REQUESTED_AT);
+
+        assertThat(result.status()).isEqualTo(ReconciliationStatus.COMPLETED);
+        assertThat(result.cancellationId()).isEqualTo("cancel-1");
+    }
+
     @Test
     void 아직_전액취소가_아니고_취소내역도_없으면_NOT_COMPLETED를_반환한다() {
         PortOneSdkRefundRequester adapter = adapterFor(paidPayment());

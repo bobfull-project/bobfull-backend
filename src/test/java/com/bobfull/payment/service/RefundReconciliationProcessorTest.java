@@ -34,10 +34,11 @@ class RefundReconciliationProcessorTest {
         processor = new RefundReconciliationProcessor(refundRequester, transactionService, completionService);
         given(refund.getId()).willReturn(1L);
         given(refund.getPayment()).willReturn(payment);
-        given(payment.getPaymentId()).willReturn("payment-1");
         given(payment.getAmount()).willReturn(BigDecimal.TEN);
         given(refund.getAmount()).willReturn(BigDecimal.TEN);
-        given(refund.getRequestedAt()).willReturn(Instant.parse("2026-08-05T00:00:00Z"));
+        // Payment.amount 불일치로 조회 전에 반환되는 테스트는 아래 두 stub을 쓰지 않으므로 lenient로 둔다.
+        org.mockito.Mockito.lenient().when(payment.getPaymentId()).thenReturn("payment-1");
+        org.mockito.Mockito.lenient().when(refund.getRequestedAt()).thenReturn(Instant.parse("2026-08-05T00:00:00Z"));
     }
 
     @Test
@@ -107,5 +108,38 @@ class RefundReconciliationProcessorTest {
         verify(transactionService).markPgChecked(1L);
         verify(completionService, never()).reflectExternalResult(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    /** #148 재검토 반영: Issue #141 확정 계약은 PaymentCancellation.totalAmount가 Refund.amount와
+     * Payment.amount에 모두 일치해야 완료로 인정한다고 명시한다. Refund.amount와 Payment.amount가
+     * 어긋난 비정상 데이터에서는 외부 조회 자체를 시도하지 않고 AMBIGUOUS로 즉시 상태를 유지해야
+     * 한다(MAJOR 리뷰 반영 항목의 회귀 방지). */
+    @Test
+    void Refund금액과_Payment금액이_다르면_외부조회없이_AMBIGUOUS를_반환한다() {
+        given(payment.getAmount()).willReturn(BigDecimal.valueOf(9000));
+
+        var result = processor.reconcile(refund);
+
+        assertThat(result.status()).isEqualTo(PortOneRefundRequester.ReconciliationStatus.AMBIGUOUS);
+        verify(refundRequester, never()).reconcile(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(completionService, never()).reflectExternalResult(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(transactionService).markPgChecked(1L);
+    }
+
+    /** #148 재검토 반영: 조회 실패(RefundLookupException)와 markPgChecked 실패가 겹치면, 기존
+     * try/finally 구조는 finally의 예외가 try의 예외를 완전히 덮어써 조회 실패 원인이 사라졌다.
+     * 먼저 발생한 실패(조회 실패)가 그대로 전파되어야 한다. */
+    @Test
+    void 조회실패와_PG조회시각_기록실패가_겹치면_먼저_발생한_조회실패가_전파된다() {
+        given(refund.getCancellationId()).willReturn(null);
+        given(refundRequester.reconcile(eq("payment-1"), eq((String) null), eq(BigDecimal.TEN),
+                eq(Instant.parse("2026-08-05T00:00:00Z"))))
+                .willThrow(new IllegalStateException("PortOne timeout"));
+        org.mockito.Mockito.doThrow(new RuntimeException("DB unavailable")).when(transactionService).markPgChecked(1L);
+
+        assertThatThrownBy(() -> processor.reconcile(refund))
+                .isInstanceOf(RefundReconciliationProcessor.RefundLookupException.class);
     }
 }

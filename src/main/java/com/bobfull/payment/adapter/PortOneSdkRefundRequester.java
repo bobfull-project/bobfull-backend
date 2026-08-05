@@ -80,7 +80,7 @@ public class PortOneSdkRefundRequester implements PortOneRefundRequester {
         List<PaymentCancellation.Recognized> candidates = cancellations.stream()
                 .filter(cancellation -> matchesUnknownCancellation(cancellation, refundAmount, refundRequestedAt))
                 .toList();
-        if (candidates.size() == 1 && cancellations.size() == 1) {
+        if (candidates.size() == 1) {
             PaymentCancellation.Recognized candidate = candidates.get(0);
             return ReconciliationResult.completed(candidate.getId(), candidate.getCancelledAt());
         }
