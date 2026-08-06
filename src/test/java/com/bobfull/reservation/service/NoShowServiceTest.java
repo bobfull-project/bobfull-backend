@@ -125,6 +125,22 @@ class NoShowServiceTest {
     }
 
     @Test
+    void 식사_종료_시각과_같으면_노쇼_후보_조회를_허용한다() {
+        // given: now == TimeSlot.endAt (Issue #175 Q1 경계)
+        setUpOwnershipChain(FIXED_CLOCK.instant());
+        given(reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(
+                reservation.getId(), ParticipationStatus.RESERVED, PageRequest.of(0, 20)))
+                .willReturn(new PageImpl<>(List.of()));
+
+        // when
+        Throwable result = catchThrowable(
+                () -> service.getCandidates(ownerMemberId, reservation.getId(), PageRequest.of(0, 20)));
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
     void 존재하지_않는_예약은_404() {
         // given
         service = new NoShowService(
@@ -221,6 +237,23 @@ class NoShowServiceTest {
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
         verify(reservationParticipantRepository, never()).findWithLockByIdAndReservationId(any(), any());
+    }
+
+    @Test
+    void 식사_종료_시각과_같으면_노쇼_처리를_허용한다() {
+        // given: now == TimeSlot.endAt (Issue #175 Q1·Q4 경계, 채팅 SEND 차단과 동일 기준)
+        setUpOwnershipChain(FIXED_CLOCK.instant());
+        ReservationParticipant participant = ReservationParticipant.create(reservation.getId(), 20L, 2);
+        ReflectionTestUtils.setField(participant, "id", 500L);
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(500L, reservation.getId()))
+                .willReturn(Optional.of(participant));
+
+        // when
+        NoShowProcessResponse result = service.markNoShow(ownerMemberId, reservation.getId(), 500L);
+
+        // then
+        assertThat(result.participationId()).isEqualTo(500L);
+        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.NO_SHOW);
     }
 
     @Test

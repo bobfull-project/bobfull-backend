@@ -433,6 +433,24 @@ class ReservationCancellationTransactionServiceTest {
     }
 
     @Test
+    void acceptByOwner_CLOSED_예약이면_INVALID_STATE를_반환하고_참여자_전이나_환불_명령을_만들지_않는다() {
+        // given: 식사 종료(Issue #175)로 CLOSED된 예약은 OWNER 취소로도 다시 CANCELLING될 수 없다
+        Reservation reservation = reservation(10L, 5L);
+        reservation.confirm();
+        reservation.close();
+        givenOwnedChain(reservation, 1L);
+
+        // when
+        Throwable result = catchThrowable(() -> service().acceptByOwner(1L, 10L, "식당 내부 사정"));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CLOSED);
+        verify(reservationParticipantRepository, never())
+                .findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED);
+    }
+
+    @Test
     void acceptByOwner가_성공하면_예약이_CANCELLING되고_유효_참여자_전원이_CANCEL_REQUESTED되며_NO_SHOW는_제외된다() {
         // given
         Reservation reservation = reservation(10L, 5L);

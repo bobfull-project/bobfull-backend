@@ -3018,7 +3018,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 식사 종료 후에만 조회 가능
+- 설명: 식사 종료 후에만 조회 가능. 종료 경계는 `now >= TimeSlot.endAt`이며(Issue #175), 채팅 신규 메시지 전송 차단과 동일한 경계를 사용한다.
 - Method: `GET`
 - Path: `/api/owner/reservations/{reservationId}/participations/no-show-candidates`
 - Auth: `OWNER`
@@ -4327,6 +4327,7 @@ OWNER 응답 예시:
 - 최초 예약 결제 완료 시 예약당 채팅방 1개를 생성한다. 별도 채팅방 생성 API는 없다.
 - 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료된다. OWNER와 ADMIN은 참여하지 않는다.
 - 예약이 `CANCELLED` 또는 `CLOSED`가 되면 신규 메시지 전송은 종료하지만 기존 메시지는 조회할 수 있다.
+- `now >= TimeSlot.endAt`(노쇼 처리 허용과 동일한 경계, Issue #175)부터는 예약 상태가 아직 `CONFIRMED`여도 신규 메시지 전송을 즉시 차단한다. CLOSED 전이 스케줄러의 처리 지연과 무관하게 이 시간 비교가 우선 적용된다.
 - 메시지는 DB에 저장한다.
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
