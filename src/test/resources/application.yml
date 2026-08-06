@@ -4,6 +4,15 @@ payment:
   refund-reconciliation:
     enabled: false
 
+spring:
+  mail:
+    host: localhost
+    port: 1025
+
+notification:
+  email:
+    from-address: no-reply@bobfull-test.com
+
 cors:
   allowed-origins: http://localhost:5173
 

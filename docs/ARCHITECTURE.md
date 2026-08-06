@@ -51,6 +51,7 @@ flowchart TB
     image["이미지 저장·검증"]
     noshow["노쇼"]
     chat["채팅"]
+    notification["알림"]
 
     auth --> restaurant
     auth --> image
@@ -62,6 +63,7 @@ flowchart TB
     payment --> noshow
     reservation --> chat
     payment --> chat
+    reservation --> notification
 ```
 
 | 구성 요소 | 책임 | 기준 데이터·경계 |
@@ -73,6 +75,7 @@ flowchart TB
 | 결제·환불 | 임시 선점, PortOne 검증, 결제·환불 상태 반영 | `Payment`, `Refund` |
 | 노쇼 | 식사 종료 후 OWNER의 참여자 단위 처리·해제 이력 | `NoShowHistory` |
 | 채팅 | 예약당 채팅방, 유효 참여자 접근, 메시지 저장·조회 | `ChatRoom`, `ChatMessage` |
+| 알림 | 모집 마감 처리 결과(확정·인원 미달 취소)를 유효 참여자에게 이메일로 안내 | 신규 저장 엔티티 없음, `Reservation`/`ReservationParticipant` 조회 결과만 사용 |
 
 ## 4. 인증·인가와 소유권 검증
 
@@ -121,6 +124,16 @@ sequenceDiagram
 - OWNER는 식사 종료 후 `RESERVED` 참여자를 노쇼 처리·해제하며, `NoShowHistory`에 처리 이력을 남긴다. 노쇼는 취소나 환불을 대신하지 않는다.
 
 취소 가능 시점, 전체·참여자 단위 환불, 상태 전이와 TimeSlot 재사용 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를, 환불·노쇼 데이터 관계는 [ERD](./ERD.md)를 따른다.
+
+## 6-1. 예약 결과 이메일 알림
+
+식사 시작 2시간 전 모집 마감 처리(§5 `RecruitmentDeadlineScheduler`, Issue #47)가 유효 참여자 전원을 대상으로 확정 또는 인원 미달 취소를 이메일로 안내한다(Issue #168). `ReservationCancellationTransactionService#acceptRecruitmentDeadline`의 상태 전이 트랜잭션이 커밋된 뒤, 논-트랜잭션인 `RecruitmentDeadlineCancellationService`가 결과(`CLOSED_ONLY`/`CANCELLED`)에 따라 `ReservationNotificationService`를 호출하고, 이 서비스가 outbound port(`ReservationNotificationPort`)로 실제 발송을 요청한다. 별도 알림 이력 테이블은 두지 않으며, `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 멱등 가드를 그대로 이용해 중복 발송을 방지한다.
+
+발송은 참여자별로 독립적으로 최대 3회까지 즉시 재시도하며, 재시도를 모두 소진해도 예외를 전파하지 않고 실패만 로그로 남긴다 — 예약 확정·취소 결과 자체는 이미 커밋되어 있어 이메일 실패로 롤백되지 않는다.
+
+**알려진 한계**: 재시도는 같은 스케줄러 실행 안에서만 이뤄진다. 서버 프로세스가 이메일 발송 도중 종료되면 그 시도는 유실될 수 있고, 다음 스케줄러 실행에서도 `acceptRecruitmentDeadline`은 이미 상태가 전이된 예약을 `ALREADY_PROCESSED`로만 응답하므로 이메일이 다시 발송되지 않는다. 발송 이력을 별도로 저장해 재시작 후에도 재처리를 보장하는 방식은 이번 Issue 범위 밖이며, 필요해지면 별도 Notification 이력 테이블 도입을 후속 검토한다(Issue #168 Q2).
+
+정원이 2시간 마감 이전에 이미 다 차 스케줄러 후보에서 제외되는 예약(모집이 결제 완료 시점에 조기 마감된 경우)은 이 이메일 알림 대상이 아니다 — 해당 경우는 프런트엔드 화면(모달·팝업) 안내로 대체하며 이번 Issue 범위에 포함하지 않는다.
 
 ## 7. 채팅
 
