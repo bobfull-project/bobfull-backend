@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bobfull.payment.entity.Payment;
+import com.bobfull.chat.repository.ChatRoomRepository;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.port.ReservationConfirmationPort;
@@ -56,11 +57,13 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     @Autowired private TimeSlotRepository timeSlotRepository;
     @Autowired private SharedTableRepository sharedTableRepository;
     @Autowired private FailureMode failureMode;
+    @Autowired private ChatRoomRepository chatRoomRepository;
 
     @AfterEach
     void cleanUp() {
         failureMode.reset();
         paymentRepository.deleteAll();
+        chatRoomRepository.deleteAll();
         reservationParticipantRepository.deleteAll();
         reservationRepository.deleteAll();
         timeSlotRepository.deleteAll();
@@ -78,6 +81,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(completed.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(reservationRepository.count()).isEqualTo(1);
         assertThat(reservationParticipantRepository.count()).isEqualTo(1);
+        assertThat(chatRoomRepository.count()).isEqualTo(1);
         assertThat(completed.getReservationId()).isNotNull();
         assertThat(completed.getReservationParticipantId()).isNotNull();
         Reservation reservation = reservationRepository.findById(completed.getReservationId()).orElseThrow();
@@ -86,6 +90,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         ReservationParticipant participant = reservationParticipantRepository
                 .findById(completed.getReservationParticipantId()).orElseThrow();
         assertThat(participant.getReservationId()).isEqualTo(reservation.getId());
+        assertThat(chatRoomRepository.findByReservationId(reservation.getId())).isPresent();
     }
 
     @Test
@@ -98,6 +103,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         paymentCompletionTransactionService.complete(payment.getPaymentId(), payment.getMemberId());
 
         assertThat(reservationParticipantRepository.count()).isEqualTo(2);
+        assertThat(chatRoomRepository.count()).isZero();
         Reservation updated = reservationRepository.findById(reservation.getId()).orElseThrow();
         assertThat(updated.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(updated.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);

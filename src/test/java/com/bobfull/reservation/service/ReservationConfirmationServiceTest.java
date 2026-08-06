@@ -18,6 +18,7 @@ import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.port.ReservationCapacityReader;
+import com.bobfull.reservation.port.ChatRoomCreationPort;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -41,9 +42,12 @@ class ReservationConfirmationServiceTest {
     @Mock
     private ReservationCapacityReader reservationCapacityReader;
 
+    @Mock
+    private ChatRoomCreationPort chatRoomCreationPort;
+
     private ReservationConfirmationService service() {
         return new ReservationConfirmationService(
-                reservationRepository, reservationParticipantRepository, reservationCapacityReader);
+                reservationRepository, reservationParticipantRepository, reservationCapacityReader, chatRoomCreationPort);
     }
 
     @Test
@@ -70,6 +74,7 @@ class ReservationConfirmationServiceTest {
         assertThat(result.reservationId()).isEqualTo(10L);
         assertThat(result.reservationParticipantId()).isEqualTo(20L);
         verify(reservationRepository).save(any(Reservation.class));
+        verify(chatRoomCreationPort).createForReservation(10L);
     }
 
     @Test
@@ -91,6 +96,7 @@ class ReservationConfirmationServiceTest {
         // then
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
+        verify(chatRoomCreationPort, never()).createForReservation(any());
     }
 
     @Test

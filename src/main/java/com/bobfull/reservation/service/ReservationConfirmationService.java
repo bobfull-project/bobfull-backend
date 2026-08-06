@@ -8,6 +8,7 @@ import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.port.ReservationCapacityReader;
+import com.bobfull.reservation.port.ChatRoomCreationPort;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.util.List;
@@ -31,15 +32,17 @@ public class ReservationConfirmationService {
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCapacityReader reservationCapacityReader;
+    private final ChatRoomCreationPort chatRoomCreationPort;
 
     public ReservationConfirmationService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            ReservationCapacityReader reservationCapacityReader
+            ReservationCapacityReader reservationCapacityReader, ChatRoomCreationPort chatRoomCreationPort
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.reservationCapacityReader = reservationCapacityReader;
+        this.chatRoomCreationPort = chatRoomCreationPort;
     }
 
     /**
@@ -61,6 +64,10 @@ public class ReservationConfirmationService {
 
         ReservationParticipant participant = reservationParticipantRepository.save(
                 ReservationParticipant.create(reservation.getId(), memberId, partySize));
+
+        if (purpose == PaymentPurpose.CREATE) {
+            chatRoomCreationPort.createForReservation(reservation.getId());
+        }
 
         updateReservationStatus(reservation, timeSlotId);
         return new ReservationConfirmationResult(reservation.getId(), participant.getId());
