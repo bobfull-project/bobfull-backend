@@ -1,6 +1,8 @@
 package com.bobfull.notification.adapter;
 
 import com.bobfull.reservation.port.ReservationNotificationPort;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -8,8 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,27 +43,43 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
     @Override
     public void notifyConfirmed(ReservationResultNotification notification) {
         send(notification, "CONFIRMED", "[밥풀] 예약이 확정되었습니다",
-                "%s에서 %s 식사 예약이 확정되었습니다. 즐거운 식사 되세요!");
+                "예약이 확정됐어요", "#2f9e44", "즐거운 식사 되세요!");
     }
 
     @Override
     public void notifyCancelledDueToInsufficientParticipants(ReservationResultNotification notification) {
         send(notification, "CANCELLED", "[밥풀] 예약이 취소되었습니다",
-                "%s의 %s 식사 예약이 최소 인원 미달로 취소되었습니다. 결제 금액은 환불 절차가 진행됩니다.");
+                "예약이 취소됐어요", "#e03131", "최소 인원 미달로 취소되었습니다. 결제 금액은 환불 절차가 진행됩니다.");
     }
 
-    private void send(ReservationResultNotification notification, String result, String subject, String bodyTemplate) {
+    private void send(
+            ReservationResultNotification notification, String result, String subject,
+            String title, String accentColor, String message
+    ) {
         String mealTime = MEAL_TIME_FORMAT.format(notification.mealStartAt());
-        String body = bodyTemplate.formatted(notification.restaurantName(), mealTime);
+        String restaurantName = escapeHtml(notification.restaurantName());
+        String htmlBody = buildHtmlBody(title, accentColor, restaurantName, mealTime, message);
+        String textBody = "%s\n식당: %s\n식사 일시: %s\n%s".formatted(
+                title, notification.restaurantName(), mealTime, message);
+
         for (Recipient recipient : notification.recipients()) {
-            sendToRecipient(notification.reservationId(), recipient, result, subject, body);
+            sendToRecipient(notification.reservationId(), recipient, result, subject, htmlBody, textBody);
         }
     }
 
-    private void sendToRecipient(Long reservationId, Recipient recipient, String result, String subject, String body) {
+    private void sendToRecipient(
+            Long reservationId, Recipient recipient, String result, String subject, String htmlBody, String textBody
+    ) {
+        MimeMessage message = buildMessage(recipient.email(), subject, htmlBody, textBody);
+        if (message == null) {
+            log.error("event=RESERVATION_NOTIFICATION_FAILED reservationId={} memberId={} result={} reason=MESSAGE_BUILD_FAILED",
+                    reservationId, recipient.memberId(), result);
+            return;
+        }
+
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                mailSender.send(buildMessage(recipient.email(), subject, body));
+                mailSender.send(message);
                 log.info("event=RESERVATION_NOTIFICATION_SENT reservationId={} memberId={} result={} attempt={}",
                         reservationId, recipient.memberId(), result, attempt);
                 return;
@@ -77,12 +95,46 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
         }
     }
 
-    private SimpleMailMessage buildMessage(String to, String subject, String body) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromAddress);
-        message.setTo(to);
-        message.setSubject(subject);
-        message.setText(body);
-        return message;
+    private MimeMessage buildMessage(String to, String subject, String htmlBody, String textBody) {
+        MimeMessage message = mailSender.createMimeMessage();
+        try {
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(textBody, htmlBody);
+            return message;
+        } catch (MessagingException exception) {
+            return null;
+        }
+    }
+
+    private String buildHtmlBody(String title, String accentColor, String restaurantName, String mealTime, String message) {
+        return """
+                <div style="font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:420px;margin:0 auto;padding:32px 24px;border:1px solid #eee;border-radius:16px;">
+                  <p style="color:#999;font-size:13px;margin:0 0 4px;">밥풀</p>
+                  <h2 style="color:%s;margin:0 0 20px;font-size:20px;">%s</h2>
+                  <table style="width:100%%;border-collapse:collapse;margin-bottom:20px;">
+                    <tr>
+                      <td style="padding:8px 0;color:#888;font-size:14px;">식당</td>
+                      <td style="padding:8px 0;text-align:right;font-weight:600;font-size:14px;">%s</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:8px 0;color:#888;font-size:14px;">식사 일시</td>
+                      <td style="padding:8px 0;text-align:right;font-weight:600;font-size:14px;">%s</td>
+                    </tr>
+                  </table>
+                  <p style="color:#555;font-size:14px;line-height:1.6;margin:0;">%s</p>
+                </div>
+                """.formatted(accentColor, title, restaurantName, mealTime, message);
+    }
+
+    private String escapeHtml(String value) {
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 }
