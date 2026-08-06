@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
- * 실제 Gmail SMTP로 확정 안내 테스트 메일 한 통을 보내 로컬 메일 설정을 수동으로 검증한다
+ * 실제 Gmail SMTP로 확정·취소 안내 테스트 메일을 보내 로컬 메일 설정을 수동으로 검증한다
  * (Issue #168 직접 검증). 평소에는 항상 비활성화돼 있고 CI·전체 테스트에서 절대 실행되지 않는다.
  *
  * Spring Context를 올리지 않고 프로젝트 루트의 {@code .env} 파일을 직접 읽어 SMTP 설정을 구성한다
@@ -27,7 +27,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
  * 실행 방법:
  * 1. 프로젝트 루트 {@code .env}에 실제 Gmail SMTP 정보(MAIL_HOST, MAIL_PORT, MAIL_USERNAME,
  *    MAIL_PASSWORD, MAIL_SMTP_AUTH, MAIL_SMTP_STARTTLS, NOTIFICATION_EMAIL_FROM_ADDRESS)를 채운다.
- * 2. 아래 {@code @Disabled} 줄을 잠시 지운 뒤 이 클래스 하나만 단독 실행한다.
+ * 2. 아래 {@code @Disabled} 줄을 잠시 지운 뒤, 확인하고 싶은 메서드 하나만(또는 클래스 전체를) 실행한다.
  *    예: ./gradlew :test --tests "com.bobfull.notification.adapter.ManualSmtpSendVerification"
  * 3. 본인 Gmail 수신함에서 실제 도착을 직접 확인한 뒤, {@code @Disabled}를 다시 복원한다.
  */
@@ -36,6 +36,21 @@ class ManualSmtpSendVerification {
 
     @Test
     void 본인_Gmail로_확정_안내_테스트_메일을_보낸다() {
+        String username = send(SmtpReservationNotificationAdapter::notifyConfirmed);
+
+        // 실제 도착 여부는 자동 검증할 수 없다 — 본인 Gmail 수신함에서 직접 확인한다.
+        assertThat(username).isNotBlank();
+    }
+
+    @Test
+    void 본인_Gmail로_취소_안내_테스트_메일을_보낸다() {
+        String username = send(SmtpReservationNotificationAdapter::notifyCancelledDueToInsufficientParticipants);
+
+        // 실제 도착 여부는 자동 검증할 수 없다 — 본인 Gmail 수신함에서 직접 확인한다.
+        assertThat(username).isNotBlank();
+    }
+
+    private String send(java.util.function.BiConsumer<SmtpReservationNotificationAdapter, ReservationResultNotification> action) {
         Map<String, String> env = readDotEnv();
 
         String username = requireEnv(env, "MAIL_USERNAME");
@@ -54,10 +69,8 @@ class ManualSmtpSendVerification {
         ReservationResultNotification notification = new ReservationResultNotification(
                 0L, "수동 검증 식당", "제주시 수동 검증로 1", Instant.now(), List.of(new Recipient(0L, username, "수동 검증")));
 
-        adapter.notifyConfirmed(notification);
-
-        // 실제 도착 여부는 자동 검증할 수 없다 — 본인 Gmail 수신함에서 직접 확인한다.
-        assertThat(username).isNotBlank();
+        action.accept(adapter, notification);
+        return username;
     }
 
     private Map<String, String> readDotEnv() {
