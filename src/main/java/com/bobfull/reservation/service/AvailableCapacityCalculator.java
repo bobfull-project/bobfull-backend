@@ -19,6 +19,7 @@ public class AvailableCapacityCalculator {
 
     private static final List<ReservationStatus> ACTIVE_STATUSES =
             List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
+    private static final List<ReservationStatus> CLOSED_STATUS = List.of(ReservationStatus.CLOSED);
     private static final List<ParticipationStatus> OCCUPYING_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
@@ -36,7 +37,15 @@ public class AvailableCapacityCalculator {
         this.paymentHoldReader = paymentHoldReader;
     }
 
+    /**
+     * {@code CLOSED}(식사 종료로 생명주기가 끝난 예약)가 있으면 참여자 상태와 무관하게 0을
+     * 반환한다(PR #178 리뷰 반영, Issue #175). 노쇼 처리로 `RESERVED` 참여자가 `NO_SHOW`로
+     * 빠져 점유 합계가 줄어도, 이미 끝난 회차의 좌석이 다시 열려 재예약으로 이어지면 안 된다.
+     */
     public int calculate(Long timeSlotId, Integer tableCapacity) {
+        if (reservationRepository.existsByTimeSlotIdAndReservationStatusIn(timeSlotId, CLOSED_STATUS)) {
+            return 0;
+        }
         int currentParticipantCount = reservationRepository
                 .findByTimeSlotIdAndReservationStatusIn(timeSlotId, ACTIVE_STATUSES)
                 .map(this::activeParticipantCount)
