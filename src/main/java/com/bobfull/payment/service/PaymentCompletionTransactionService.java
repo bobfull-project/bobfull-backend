@@ -7,6 +7,8 @@ import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.exception.PaymentExpiredException;
 import com.bobfull.payment.port.ReservationConfirmationPort;
 import com.bobfull.payment.repository.PaymentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
@@ -15,6 +17,8 @@ import com.bobfull.payment.port.ReservationConfirmationPort.ReservationConfirmat
 
 @Service
 public class PaymentCompletionTransactionService {
+    private static final Logger log = LoggerFactory.getLogger(PaymentCompletionTransactionService.class);
+
     private final PaymentRepository paymentRepository;
     private final ReservationConfirmationPort reservationConfirmationPort;
     private final Clock clock;
@@ -51,6 +55,9 @@ public class PaymentCompletionTransactionService {
         payment.complete(now);
         ReservationConfirmationResult result = reservationConfirmationPort.confirm(payment);
         payment.attachReservationConfirmation(result.reservationId(), result.participationId());
+        log.info("event=PAYMENT_COMPLETED paymentId={} memberId={} reservationId={} participantId={} amount={} afterStatus={}",
+                payment.getPaymentId(), payment.getMemberId(), result.reservationId(), result.participationId(),
+                payment.getAmount(), payment.getStatus());
         return new PaymentCompletionResult(payment, result.reservationId(), result.participationId());
     }
 

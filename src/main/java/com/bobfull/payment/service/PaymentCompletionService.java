@@ -47,6 +47,8 @@ public class PaymentCompletionService {
         if (!paymentId.equals(external.paymentId()) || !external.paid() || external.amount() == null
                 || payment.getAmount().compareTo(external.amount()) != 0
                 || !Payment.CURRENCY_KRW.equals(external.currency()) || !payment.getCurrency().equals(external.currency())) {
+            log.warn("event=PAYMENT_VERIFICATION_INCONCLUSIVE paymentId={} reason=PORTONE_PAYMENT_MISMATCH",
+                    paymentId);
             throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
         }
         return completeAfterExternalPaid(paymentId, null);
@@ -61,6 +63,8 @@ public class PaymentCompletionService {
         if (!paymentId.equals(external.paymentId()) || !external.paid() || external.amount() == null
                 || payment.getAmount().compareTo(external.amount()) != 0
                 || !Payment.CURRENCY_KRW.equals(external.currency()) || !payment.getCurrency().equals(external.currency())) {
+            log.warn("event=PAYMENT_VERIFICATION_INCONCLUSIVE paymentId={} reason=PORTONE_PAYMENT_MISMATCH",
+                    paymentId);
             throw new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED);
         }
         return completeAfterExternalPaid(paymentId, memberId);
@@ -71,7 +75,12 @@ public class PaymentCompletionService {
             return memberId == null ? transactionService.complete(paymentId) : transactionService.complete(paymentId, memberId);
         } catch (PaymentExpiredException exception) {
             log.error("event=PAYMENT_COMPENSATION_REQUIRED paymentId={} externalStatus={} internalStatus={} expiresAt={} reason={}",
-                    paymentId, "PAID", exception.getInternalStatus(), exception.getExpiresAt(), exception.getErrorCode().getCode());
+                    paymentId, "PAID", exception.getInternalStatus(), exception.getExpiresAt(),
+                    exception.getErrorCode().getCode(), exception);
+            throw exception;
+        } catch (CustomException exception) {
+            log.error("event=PAYMENT_COMPENSATION_REQUIRED paymentId={} externalStatus=PAID internalStatus=UNKNOWN reason={}",
+                    paymentId, exception.getErrorCode().getCode(), exception);
             throw exception;
         }
     }

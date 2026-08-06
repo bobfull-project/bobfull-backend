@@ -1,6 +1,7 @@
 package com.bobfull.common.exception;
 
 import com.bobfull.common.response.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -44,8 +45,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-        log.error("처리되지 않은 예외가 발생했습니다.", e);
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception e, HttpServletRequest request) {
+        if ("/api/webhooks/portone".equals(request.getRequestURI())) {
+            log.error("event=PORTONE_WEBHOOK_PROCESSING_FAILED method={} path={} paymentId={} cancellationId={} reason={}",
+                    request.getMethod(), request.getRequestURI(),
+                    request.getAttribute("portonePaymentId"),
+                    request.getAttribute("portoneCancellationId"),
+                    e.getClass().getSimpleName(), e);
+        } else {
+            log.error("event=UNHANDLED_EXCEPTION method={} path={} reason={}",
+                    request.getMethod(), request.getRequestURI(), e.getClass().getSimpleName(), e);
+        }
         return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
                 .body(ApiResponse.fail(CommonErrorCode.INTERNAL_SERVER_ERROR));
     }

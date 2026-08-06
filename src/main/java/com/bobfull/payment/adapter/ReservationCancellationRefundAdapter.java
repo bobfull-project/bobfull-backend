@@ -81,10 +81,10 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
         } catch (RuntimeException exception) {
             if (exception instanceof PortOneRefundRequester.ExplicitRefundFailureException) {
                 transactionService.markFailed(refund.getId());
-                log.error("event=REFUND_FAILED paymentId={} refundId={} externalStatus=FAILED internalStatus=FAILED autoRetry=false",
+                log.warn("event=REFUND_FAILED paymentId={} refundId={} externalStatus=FAILED internalStatus=FAILED autoRetry=false",
                         refund.getPayment().getId(), refund.getId());
             } else {
-                log.error("event=REFUND_RESULT_UNKNOWN paymentId={} refundId={} externalStatus=UNKNOWN internalStatus=REQUESTED autoRetry=false",
+                log.warn("event=REFUND_RESULT_UNKNOWN paymentId={} refundId={} externalStatus=UNKNOWN internalStatus=REQUESTED autoRetry=false",
                         refund.getPayment().getId(), refund.getId());
             }
             throw new CustomException(PaymentErrorCode.PORTONE_REFUND_FAILED);

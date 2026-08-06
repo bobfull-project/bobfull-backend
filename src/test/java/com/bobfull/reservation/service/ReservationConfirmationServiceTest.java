@@ -7,6 +7,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.payment.entity.PaymentPurpose;
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -98,6 +102,41 @@ class ReservationConfirmationServiceTest {
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void 확정_기준에_처음_도달하면_RESERVATION_CONFIRMED_구조화로그를_남긴다() {
+        // given
+        Reservation reservation = reservation(10L);
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(reservationParticipantRepository.save(any(ReservationParticipant.class))).willAnswer(invocation -> {
+            ReservationParticipant participant = invocation.getArgument(0);
+            ReflectionTestUtils.setField(participant, "id", 21L);
+            return participant;
+        });
+        given(reservationCapacityReader.readTableCapacity(200L)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(3);
+        Logger logger = (Logger) LoggerFactory.getLogger(ReservationConfirmationService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=RESERVATION_CONFIRMED");
+            assertThat(event.getFormattedMessage()).contains("reservationId=10");
+            assertThat(event.getFormattedMessage()).contains("participantId=21");
+            assertThat(event.getFormattedMessage()).contains("memberId=2");
+            assertThat(event.getFormattedMessage()).contains("beforeStatus=RECRUITING");
+            assertThat(event.getFormattedMessage()).contains("afterStatus=CONFIRMED");
+        });
     }
 
     @Test

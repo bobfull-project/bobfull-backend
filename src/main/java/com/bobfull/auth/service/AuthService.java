@@ -14,6 +14,8 @@ import com.bobfull.common.exception.MemberErrorCode;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
@@ -85,9 +89,13 @@ public class AuthService {
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
         Member member = memberRepository.findByEmail(request.email())
-                .orElseThrow(() -> new CustomException(MemberErrorCode.INVALID_CREDENTIALS));
+                .orElseThrow(() -> {
+                    log.warn("event=LOGIN_FAILED reason=INVALID_CREDENTIALS");
+                    return new CustomException(MemberErrorCode.INVALID_CREDENTIALS);
+                });
 
         if (!passwordEncoder.matches(request.password(), member.getPasswordHash())) {
+            log.warn("event=LOGIN_FAILED reason=INVALID_CREDENTIALS");
             throw new CustomException(MemberErrorCode.INVALID_CREDENTIALS);
         }
 

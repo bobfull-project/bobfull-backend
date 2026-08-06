@@ -18,6 +18,8 @@ import java.time.Clock;
 import java.util.Set;
 import java.util.List;
 import java.util.stream.IntStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SharedTableService {
 
+    private static final Logger log = LoggerFactory.getLogger(SharedTableService.class);
     private static final Set<Integer> ALLOWED_CAPACITIES = Set.of(2, 4, 6, 8);
 
     private final SharedTableRepository sharedTableRepository;
@@ -106,7 +109,13 @@ public class SharedTableService {
         validateCapacity(request.capacity());
         sharedTableUsageValidator.validateCapacityChangeAllowed(sharedTable.getId());
 
+        Integer beforeCapacity = sharedTable.getCapacity();
         sharedTable.updateCapacity(request.capacity());
+        if (!beforeCapacity.equals(sharedTable.getCapacity())) {
+            log.info("event=TABLE_CAPACITY_CHANGED tableId={} restaurantId={} actorId={} beforeCapacity={} afterCapacity={}",
+                    sharedTable.getId(), sharedTable.getRestaurantId(), ownerMemberId, beforeCapacity,
+                    sharedTable.getCapacity());
+        }
         return SharedTableIdResponse.from(sharedTable);
     }
 

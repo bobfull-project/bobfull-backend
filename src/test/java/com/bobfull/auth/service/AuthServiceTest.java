@@ -7,6 +7,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.auth.dto.LoginRequest;
 import com.bobfull.auth.dto.LoginResponse;
 import com.bobfull.auth.dto.LogoutResponse;
@@ -28,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -149,6 +154,33 @@ class AuthServiceTest {
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(MemberErrorCode.INVALID_CREDENTIALS);
+    }
+
+    @Test
+    void 로그인_실패_로그는_계정_존재여부와_민감정보를_남기지_않는다() {
+        // given
+        LoginRequest request = new LoginRequest("unknown@example.com", "Password123!");
+        given(memberRepository.findByEmail(request.email())).willReturn(Optional.empty());
+        Logger logger = (Logger) LoggerFactory.getLogger(AuthService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            catchThrowable(() -> authService.login(request));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("event=LOGIN_FAILED");
+            assertThat(event.getFormattedMessage()).contains("reason=INVALID_CREDENTIALS");
+            assertThat(event.getFormattedMessage()).doesNotContain("unknown@example.com");
+            assertThat(event.getFormattedMessage()).doesNotContain("Password123!");
+        });
     }
 
     @Test

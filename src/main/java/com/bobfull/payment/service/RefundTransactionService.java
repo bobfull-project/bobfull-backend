@@ -59,6 +59,9 @@ public class RefundTransactionService {
         Refund refund = refundRepository.saveAndFlush(
                 Refund.create(payment, payment.getAmount(), RefundStatus.REQUESTED, clock.instant(), null,
                         keyGenerator.generate(), cancelReason));
+        log.info("event=REFUND_REQUESTED refundId={} paymentId={} reservationId={} participantId={} amount={} afterStatus={}",
+                refund.getId(), payment.getPaymentId(), payment.getReservationId(),
+                payment.getReservationParticipantId(), refund.getAmount(), refund.getStatus());
         return new RefundPreparation(refund, true);
     }
 
@@ -79,6 +82,12 @@ public class RefundTransactionService {
             if (refund.getStatus() == RefundStatus.COMPLETED
                     && refund.getPayment().getStatus() == PaymentStatus.PAID) {
                 refund.getPayment().markRefunded();
+            }
+            if (before != RefundStatus.COMPLETED && refund.getStatus() == RefundStatus.COMPLETED) {
+                log.info("event=REFUND_COMPLETED refundId={} paymentId={} reservationId={} participantId={} amount={} afterStatus={} paymentAfterStatus={}",
+                        refund.getId(), refund.getPayment().getPaymentId(), refund.getPayment().getReservationId(),
+                        refund.getPayment().getReservationParticipantId(), refund.getAmount(), refund.getStatus(),
+                        refund.getPayment().getStatus());
             }
         } else {
             refund.markProcessing(cancellationId);
@@ -129,6 +138,12 @@ public class RefundTransactionService {
             if (refund.getStatus() == RefundStatus.COMPLETED
                     && refund.getPayment().getStatus() == PaymentStatus.PAID) {
                 refund.getPayment().markRefunded();
+            }
+            if (before != RefundStatus.COMPLETED && refund.getStatus() == RefundStatus.COMPLETED) {
+                log.info("event=REFUND_COMPLETED refundId={} paymentId={} reservationId={} participantId={} amount={} afterStatus={} paymentAfterStatus={}",
+                        refund.getId(), refund.getPayment().getPaymentId(), refund.getPayment().getReservationId(),
+                        refund.getPayment().getReservationParticipantId(), refund.getAmount(), refund.getStatus(),
+                        refund.getPayment().getStatus());
             }
             return RefundCompletion.from(refund);
         });
