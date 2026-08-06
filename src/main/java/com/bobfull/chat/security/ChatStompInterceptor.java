@@ -16,6 +16,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -39,7 +40,8 @@ public class ChatStompInterceptor implements ChannelInterceptor {
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        if (accessor == null) throw new StompAuthenticationException(StompAuthenticationException.Reason.MISSING_AUTHORIZATION);
         StompCommand command = accessor.getCommand();
         if (command == StompCommand.CONNECT) return authenticate(message, accessor);
         if (command == StompCommand.SUBSCRIBE) authorizeSubscribe(accessor);

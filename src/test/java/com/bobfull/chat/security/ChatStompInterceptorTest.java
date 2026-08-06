@@ -1,6 +1,7 @@
 package com.bobfull.chat.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
@@ -11,13 +12,16 @@ import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.common.security.MemberRole;
+import java.security.Principal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -35,6 +39,46 @@ class ChatStompInterceptorTest {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(result);
         assertThat(accessor.getUser()).isInstanceOf(StompPrincipal.class);
         assertThat(((StompPrincipal) accessor.getUser()).authMember().id()).isEqualTo(7L);
+    }
+
+    @Test
+    void CONNECT_인증_성공시_원본_accessor의_userChangeCallback으로_Principal이_전달되어_SUBSCRIBE_SEND에서_그대로_읽힌다() {
+        // given: StompSubProtocolHandler가 실제로 하듯 원본 accessor에 callback을 등록해둔 CONNECT 메시지를 만든다
+        StompHeaderAccessor original = StompHeaderAccessor.create(StompCommand.CONNECT);
+        original.setLeaveMutable(true);
+        original.setNativeHeader("Authorization", "Bearer " + tokens.createAccessToken(7L, MemberRole.MEMBER));
+        AtomicReference<Principal> captured = new AtomicReference<>();
+        original.setUserChangeCallback(captured::set);
+        Message<?> connectMessage = MessageBuilder.createMessage(new byte[0], original.getMessageHeaders());
+
+        // when
+        interceptor.preSend(connectMessage, null);
+
+        // then: callback이 실행되어 JWT의 memberId(7)로 만든 StompPrincipal을 감지했다
+        assertThat(captured.get()).isInstanceOf(StompPrincipal.class);
+        assertThat(((StompPrincipal) captured.get()).authMember().id()).isEqualTo(7L);
+
+        // then: interceptor는 새 accessor를 만들지 않고 원본 accessor를 그대로 사용했다
+        StompHeaderAccessor sameAccessor = MessageHeaderAccessor.getAccessor(connectMessage, StompHeaderAccessor.class);
+        assertThat(sameAccessor).isSameAs(original);
+        assertThat(sameAccessor.getUser()).isEqualTo(captured.get());
+
+        // then: 세션이 채워준 Principal을 SUBSCRIBE에서 수동 재주입 없이 그대로 읽을 수 있는 구조다
+        given(rooms.findById(3L)).willReturn(Optional.of(room(3L, 10L)));
+        given(access.read(10L, 7L)).willReturn(
+                new ReservationChatAccessReader.ChatAccess(4L, com.bobfull.reservation.entity.ParticipationStatus.RESERVED));
+        StompHeaderAccessor subscribeAccessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        subscribeAccessor.setDestination("/sub/chat/rooms/3");
+        subscribeAccessor.setUser(sameAccessor.getUser());
+        Message<?> subscribeMessage = MessageBuilder.createMessage(new byte[0], subscribeAccessor.getMessageHeaders());
+
+        assertThatCode(() -> interceptor.preSend(subscribeMessage, null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void 원본_accessor를_찾을수_없는_메시지는_인증_예외로_차단한다() {
+        Message<?> withoutMutableAccessor = MessageBuilder.withPayload(new byte[0]).build();
+        assertReason(() -> interceptor.preSend(withoutMutableAccessor, null), StompAuthenticationException.Reason.MISSING_AUTHORIZATION);
     }
 
     @Test
@@ -79,7 +123,7 @@ class ChatStompInterceptorTest {
     }
 
     private void allow(ParticipationStatusCase status) { given(access.read(10L, 7L)).willReturn(new ReservationChatAccessReader.ChatAccess(4L, status.value)); }
-    private Message<?> connect(String header) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.CONNECT); if(header!=null)a.setNativeHeader("Authorization",header); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
+    private Message<?> connect(String header) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.CONNECT); a.setLeaveMutable(true); if(header!=null)a.setNativeHeader("Authorization",header); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
     private Message<?> subscribe(Long memberId, String destination) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.SUBSCRIBE); a.setDestination(destination); a.setUser(new StompPrincipal(new com.bobfull.common.security.AuthMember(memberId, MemberRole.MEMBER))); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
     private Message<?> subscribeWithoutPrincipal(String destination) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.SUBSCRIBE); a.setDestination(destination); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
     private Message<?> send(Long memberId, String destination) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.SEND); a.setDestination(destination); a.setUser(new StompPrincipal(new com.bobfull.common.security.AuthMember(memberId, MemberRole.MEMBER))); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
