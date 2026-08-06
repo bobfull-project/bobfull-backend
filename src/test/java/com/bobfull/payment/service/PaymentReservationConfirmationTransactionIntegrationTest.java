@@ -127,6 +127,23 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     }
 
     @Test
+    void ChatRoom_생성_실패는_이미_커밋된_Payment_Reservation_Participant를_되돌리지_않는다() {
+        TimeSlot timeSlot = timeSlot(4);
+        Payment payment = readyCreatePayment(timeSlot, 3);
+        failureMode.set(FailureMode.Type.CHAT_ROOM_CREATION_FAILURE);
+
+        paymentCompletionTransactionService.complete(payment.getPaymentId(), payment.getMemberId());
+
+        Payment completed = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertThat(completed.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(completed.getReservationId()).isNotNull();
+        assertThat(completed.getReservationParticipantId()).isNotNull();
+        assertThat(reservationRepository.count()).isEqualTo(1);
+        assertThat(reservationParticipantRepository.count()).isEqualTo(1);
+        assertThat(chatRoomRepository.count()).isZero();
+    }
+
+    @Test
     void Reservation_저장_실패는_Payment_PAID_전이를_롤백한다() {
         TimeSlot timeSlot = timeSlot(4);
         Payment payment = readyCreatePayment(timeSlot, 1);
@@ -180,6 +197,8 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reloaded.getReservationParticipantId()).isNull();
         assertThat(reservationRepository.count()).isZero();
         assertThat(reservationParticipantRepository.count()).isZero();
+        // 핵심 트랜잭션이 롤백되면 AFTER_COMMIT 리스너 자체가 실행되지 않아 ChatRoom도 생성되지 않는다.
+        assertThat(chatRoomRepository.count()).isZero();
     }
 
     private TimeSlot timeSlot(int capacity) {
@@ -211,6 +230,22 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
 
         @Bean
         @Primary
+        com.bobfull.chat.service.ChatRoomCreationService failureInjectingChatRoomCreationService(
+                ChatRoomRepository chatRoomRepository, FailureMode failureMode
+        ) {
+            return new com.bobfull.chat.service.ChatRoomCreationService(chatRoomRepository) {
+                @Override
+                public com.bobfull.chat.entity.ChatRoom createIfAbsent(Long reservationId) {
+                    if (failureMode.type == FailureMode.Type.CHAT_ROOM_CREATION_FAILURE) {
+                        throw new IllegalStateException("강제 ChatRoom 생성 실패(테스트)");
+                    }
+                    return super.createIfAbsent(reservationId);
+                }
+            };
+        }
+
+        @Bean
+        @Primary
         ReservationConfirmationPort failureInjectingReservationConfirmationPort(
                 ReservationConfirmationService service,
                 ReservationRepository reservationRepository,
@@ -238,7 +273,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     }
 
     static class FailureMode {
-        enum Type { NONE, RESERVATION_SAVE_FAILURE, PARTICIPANT_SAVE_FAILURE, RESULT_LINK_FAILURE }
+        enum Type { NONE, RESERVATION_SAVE_FAILURE, PARTICIPANT_SAVE_FAILURE, RESULT_LINK_FAILURE, CHAT_ROOM_CREATION_FAILURE }
         private Type type = Type.NONE;
         void set(Type type) { this.type = type; }
         void reset() { this.type = Type.NONE; }

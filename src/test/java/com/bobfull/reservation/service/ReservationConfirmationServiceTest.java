@@ -15,16 +15,17 @@ import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.event.ReservationConfirmedEvent;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.port.ReservationCapacityReader;
-import com.bobfull.reservation.port.ChatRoomCreationPort;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,11 +44,11 @@ class ReservationConfirmationServiceTest {
     private ReservationCapacityReader reservationCapacityReader;
 
     @Mock
-    private ChatRoomCreationPort chatRoomCreationPort;
+    private ApplicationEventPublisher eventPublisher;
 
     private ReservationConfirmationService service() {
         return new ReservationConfirmationService(
-                reservationRepository, reservationParticipantRepository, reservationCapacityReader, chatRoomCreationPort);
+                reservationRepository, reservationParticipantRepository, reservationCapacityReader, eventPublisher);
     }
 
     @Test
@@ -74,7 +75,7 @@ class ReservationConfirmationServiceTest {
         assertThat(result.reservationId()).isEqualTo(10L);
         assertThat(result.reservationParticipantId()).isEqualTo(20L);
         verify(reservationRepository).save(any(Reservation.class));
-        verify(chatRoomCreationPort).createForReservation(10L);
+        verify(eventPublisher).publishEvent(new ReservationConfirmedEvent(10L));
     }
 
     @Test
@@ -96,7 +97,7 @@ class ReservationConfirmationServiceTest {
         // then
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
-        verify(chatRoomCreationPort, never()).createForReservation(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
