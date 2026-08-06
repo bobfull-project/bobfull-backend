@@ -25,6 +25,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 public class ChatStompInterceptor implements ChannelInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final Pattern CHAT_ROOM_DESTINATION = Pattern.compile("^/sub/chat/rooms/(\\d+)$");
+    private static final Pattern SEND_DESTINATION = Pattern.compile("^/pub/chat/rooms/[1-9]\\d*/messages$");
     private final JwtTokenProvider jwtTokenProvider;
     private final ChatRoomRepository chatRoomRepository;
     private final ReservationChatAccessReader reservationChatAccessReader;
@@ -42,7 +43,13 @@ public class ChatStompInterceptor implements ChannelInterceptor {
         StompCommand command = accessor.getCommand();
         if (command == StompCommand.CONNECT) return authenticate(message, accessor);
         if (command == StompCommand.SUBSCRIBE) authorizeSubscribe(accessor);
+        if (command == StompCommand.SEND) authorizeSend(accessor);
         return message;
+    }
+
+    private void authorizeSend(StompHeaderAccessor accessor) {
+        if (!(accessor.getUser() instanceof StompPrincipal)) throw new StompAuthenticationException(StompAuthenticationException.Reason.MISSING_AUTHORIZATION);
+        if (accessor.getDestination() == null || !SEND_DESTINATION.matcher(accessor.getDestination()).matches()) throw new CustomException(CommonErrorCode.INVALID_INPUT_VALUE);
     }
 
     private Message<?> authenticate(Message<?> message, StompHeaderAccessor accessor) {

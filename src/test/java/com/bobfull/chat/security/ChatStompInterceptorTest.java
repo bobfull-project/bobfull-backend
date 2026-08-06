@@ -70,10 +70,20 @@ class ChatStompInterceptorTest {
         assertThatThrownBy(() -> interceptor.preSend(subscribe(7L, "/sub/other/3"), null)).isInstanceOf(CustomException.class);
     }
 
+    @Test
+    void SEND는_Principal과_정확한_pub_destination만_허용한다() {
+        interceptor.preSend(send(7L, "/pub/chat/rooms/3/messages"), null);
+        assertReason(() -> interceptor.preSend(sendWithoutPrincipal("/pub/chat/rooms/3/messages"), null), StompAuthenticationException.Reason.MISSING_AUTHORIZATION);
+        assertThatThrownBy(() -> interceptor.preSend(send(7L, "/pub/chat/rooms/0/messages"), null)).isInstanceOf(CustomException.class);
+        assertThatThrownBy(() -> interceptor.preSend(send(7L, "/pub/other"), null)).isInstanceOf(CustomException.class);
+    }
+
     private void allow(ParticipationStatusCase status) { given(access.read(10L, 7L)).willReturn(new ReservationChatAccessReader.ChatAccess(4L, status.value)); }
     private Message<?> connect(String header) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.CONNECT); if(header!=null)a.setNativeHeader("Authorization",header); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
     private Message<?> subscribe(Long memberId, String destination) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.SUBSCRIBE); a.setDestination(destination); a.setUser(new StompPrincipal(new com.bobfull.common.security.AuthMember(memberId, MemberRole.MEMBER))); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
     private Message<?> subscribeWithoutPrincipal(String destination) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.SUBSCRIBE); a.setDestination(destination); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
+    private Message<?> send(Long memberId, String destination) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.SEND); a.setDestination(destination); a.setUser(new StompPrincipal(new com.bobfull.common.security.AuthMember(memberId, MemberRole.MEMBER))); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
+    private Message<?> sendWithoutPrincipal(String destination) { StompHeaderAccessor a=StompHeaderAccessor.create(StompCommand.SEND); a.setDestination(destination); return MessageBuilder.createMessage(new byte[0],a.getMessageHeaders()); }
     private ChatRoom room(Long id, Long reservationId) { ChatRoom room=ChatRoom.create(reservationId); ReflectionTestUtils.setField(room,"id",id); return room; }
     private void assertReason(org.assertj.core.api.ThrowableAssert.ThrowingCallable action, StompAuthenticationException.Reason reason) { assertThatThrownBy(action).isInstanceOf(StompAuthenticationException.class).extracting(e -> ((StompAuthenticationException)e).getReason()).isEqualTo(reason); }
     private void assertAccessDenied(org.assertj.core.api.ThrowableAssert.ThrowingCallable action) { assertThatThrownBy(action).isInstanceOf(CustomException.class).extracting(e -> ((CustomException)e).getErrorCode()).isEqualTo(CommonErrorCode.ACCESS_DENIED); }

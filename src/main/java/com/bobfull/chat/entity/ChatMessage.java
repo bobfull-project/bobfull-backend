@@ -20,7 +20,8 @@ public class ChatMessage extends BaseTimeEntity {
     @Column(name = "sender_participant_id", nullable = false) private Long senderParticipantId;
     @Column(nullable = false, length = 1000) private String content;
     protected ChatMessage() { }
-    private ChatMessage(Long roomId, Long memberId, Long participantId, String content) { this.chatRoomId=roomId; this.senderMemberId=memberId; this.senderParticipantId=participantId; this.content=content; }
+    private ChatMessage(Long roomId, Long memberId, Long participantId, String content) { validateContent(content); this.chatRoomId=roomId; this.senderMemberId=memberId; this.senderParticipantId=participantId; this.content=content; }
     public static ChatMessage create(Long roomId, Long memberId, Long participantId, String content) { return new ChatMessage(roomId, memberId, participantId, content); }
-    public Long getId() { return id; } public Long getChatRoomId() { return chatRoomId; } public Long getSenderMemberId() { return senderMemberId; } public String getContent() { return content; }
+    private static void validateContent(String content) { if (content == null || content.isBlank() || content.length() > 1000) throw new IllegalArgumentException("메시지 내용이 올바르지 않습니다."); }
+    public Long getId() { return id; } public Long getChatRoomId() { return chatRoomId; } public Long getSenderMemberId() { return senderMemberId; } public Long getSenderParticipantId() { return senderParticipantId; } public String getContent() { return content; }
 }
