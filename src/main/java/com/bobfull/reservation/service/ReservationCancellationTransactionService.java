@@ -14,6 +14,12 @@ import com.bobfull.reservation.port.ReservationCancellationRefundPort;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
+import com.bobfull.restaurant.entity.Restaurant;
+import com.bobfull.restaurant.repository.RestaurantRepository;
+import com.bobfull.sharedtable.entity.SharedTable;
+import com.bobfull.sharedtable.repository.SharedTableRepository;
+import com.bobfull.timeslot.entity.TimeSlot;
+import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,17 +45,26 @@ public class ReservationCancellationTransactionService {
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCapacityReader reservationCapacityReader;
+    private final TimeSlotRepository timeSlotRepository;
+    private final SharedTableRepository sharedTableRepository;
+    private final RestaurantRepository restaurantRepository;
     private final Clock clock;
 
     public ReservationCancellationTransactionService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
             ReservationCapacityReader reservationCapacityReader,
+            TimeSlotRepository timeSlotRepository,
+            SharedTableRepository sharedTableRepository,
+            RestaurantRepository restaurantRepository,
             Clock clock
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.reservationCapacityReader = reservationCapacityReader;
+        this.timeSlotRepository = timeSlotRepository;
+        this.sharedTableRepository = sharedTableRepository;
+        this.restaurantRepository = restaurantRepository;
         this.clock = clock;
     }
 
@@ -82,18 +97,70 @@ public class ReservationCancellationTransactionService {
     private CancellationAcceptance acceptEntireReservationCancellation(
             Reservation reservation, ReservationParticipant actingParticipant, String reason
     ) {
-        List<ReservationParticipant> validParticipants = reservationParticipantRepository
-                .findAllByReservationIdAndParticipationStatus(reservation.getId(), ParticipationStatus.RESERVED);
-        validParticipants.forEach(participant -> participant.requestCancel(reason));
-        reservation.startCancelling();
-
-        List<Long> participantIds = validParticipants.stream().map(ReservationParticipant::getId).toList();
+        List<Long> participantIds = transitionAllValidParticipantsToCancelRequested(reservation, reason);
         ReservationCancellationRefundPort.RefundRequestCommand command =
                 new ReservationCancellationRefundPort.RefundRequestCommand(
                         reservation.getId(), participantIds, actingParticipant.getMemberId(), reason);
 
         return new CancellationAcceptance(
                 reservation.getId(), actingParticipant.getId(), CancellationScope.RESERVATION, command);
+    }
+
+    /**
+     * OWNER가 본인 식당 사유로 예약 전체 취소를 접수한다(Issue #46, #44 공통 접수·실행·확정 절차 재사용).
+     * MEMBER 취소와 달리 취소 기한(2시간)을 두지 않고, 상태 충돌은 §6-14 계약에 맞춰
+     * {@link ReservationErrorCode#INVALID_STATE}로 통일한다. 이후 트랜잭션 밖 환불 실행과
+     * 완료 확정은 MEMBER 취소와 동일한 {@link ReservationCancellationRefundPort}·완료 경로를 그대로 탄다.
+     */
+    @Transactional
+    public OwnerCancellationAcceptance acceptByOwner(Long ownerMemberId, Long reservationId, String reason) {
+        Reservation reservation = findReservationWithLockOrThrow(reservationId);
+        validateOwnership(reservation, ownerMemberId);
+        validateReservationCancellableByOwner(reservation);
+
+        List<Long> participantIds = transitionAllValidParticipantsToCancelRequested(reservation, reason);
+        ReservationCancellationRefundPort.RefundRequestCommand command =
+                new ReservationCancellationRefundPort.RefundRequestCommand(
+                        reservation.getId(), participantIds, ownerMemberId, reason);
+
+        return new OwnerCancellationAcceptance(reservation.getId(), command);
+    }
+
+    /**
+     * 예약에 속한 유효(RESERVED) 참여자 전원을 CANCEL_REQUESTED로 전환하고 예약을 CANCELLING으로
+     * 전이한 뒤, 하나의 {@code RefundRequestCommand}로 묶을 참여자 ID 목록을 반환한다. 최초 예약자
+     * 취소(MEMBER)와 OWNER 강제 취소가 이 로직을 공유한다(Issue #44, #46).
+     */
+    private List<Long> transitionAllValidParticipantsToCancelRequested(Reservation reservation, String reason) {
+        List<ReservationParticipant> validParticipants = reservationParticipantRepository
+                .findAllByReservationIdAndParticipationStatus(reservation.getId(), ParticipationStatus.RESERVED);
+        validParticipants.forEach(participant -> participant.requestCancel(reason));
+        reservation.startCancelling();
+        return validParticipants.stream().map(ReservationParticipant::getId).toList();
+    }
+
+    /**
+     * OWNER 소유권을 검증한다(Issue #48 {@code NoShowService.resolveOwnership}과 동일한 패턴, ADR 0005
+     * 원칙 7). Reservation은 이미 락으로 조회돼 있으므로 TimeSlot·SharedTable·Restaurant만 순서대로
+     * 조회하며, 그 사이 어떤 대상이 없어도 소유권 불일치와 구분하지 않고 전부 RESERVATION_ID_NOT_FOUND로
+     * 취급한다 — 실제 불일치는 마지막 소유권 비교에서만 ACCESS_DENIED로 구분한다.
+     */
+    private void validateOwnership(Reservation reservation, Long ownerMemberId) {
+        TimeSlot timeSlot = timeSlotRepository.findByIdAndDeletedAtIsNull(reservation.getTimeSlotId())
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+        SharedTable sharedTable = sharedTableRepository.findByIdAndDeletedAtIsNull(timeSlot.getSharedTableId())
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+        Restaurant restaurant = restaurantRepository.findByIdAndDeletedAtIsNull(sharedTable.getRestaurantId())
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+        if (!restaurant.isOwnedBy(ownerMemberId)) {
+            throw new CustomException(CommonErrorCode.ACCESS_DENIED);
+        }
+    }
+
+    private void validateReservationCancellableByOwner(Reservation reservation) {
+        if (reservation.isCancelled() || reservation.isCancelling()) {
+            throw new CustomException(ReservationErrorCode.INVALID_STATE);
+        }
     }
 
     /**
@@ -193,6 +260,12 @@ public class ReservationCancellationTransactionService {
             Long reservationId,
             Long actingParticipantId,
             CancellationScope scope,
+            ReservationCancellationRefundPort.RefundRequestCommand refundCommand
+    ) {
+    }
+
+    public record OwnerCancellationAcceptance(
+            Long reservationId,
             ReservationCancellationRefundPort.RefundRequestCommand refundCommand
     ) {
     }

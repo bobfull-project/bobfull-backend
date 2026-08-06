@@ -17,9 +17,16 @@ import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.port.ReservationCancellationRefundPort;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
+import com.bobfull.restaurant.entity.Restaurant;
+import com.bobfull.restaurant.repository.RestaurantRepository;
+import com.bobfull.sharedtable.entity.SharedTable;
+import com.bobfull.sharedtable.repository.SharedTableRepository;
+import com.bobfull.timeslot.entity.TimeSlot;
+import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -50,9 +57,19 @@ class ReservationCancellationTransactionServiceTest {
     @Mock
     private ReservationCapacityReader reservationCapacityReader;
 
+    @Mock
+    private TimeSlotRepository timeSlotRepository;
+
+    @Mock
+    private SharedTableRepository sharedTableRepository;
+
+    @Mock
+    private RestaurantRepository restaurantRepository;
+
     private ReservationCancellationTransactionService service() {
         return new ReservationCancellationTransactionService(
-                reservationRepository, reservationParticipantRepository, reservationCapacityReader, CLOCK);
+                reservationRepository, reservationParticipantRepository, reservationCapacityReader,
+                timeSlotRepository, sharedTableRepository, restaurantRepository, CLOCK);
     }
 
     @Test
@@ -339,6 +356,138 @@ class ReservationCancellationTransactionServiceTest {
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
         verify(reservationParticipantRepository, never())
                 .findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED);
+    }
+
+    @Test
+    void acceptByOwner_예약을_찾을_수_없으면_RESERVATION_ID_NOT_FOUND를_반환한다() {
+        // given
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.empty());
+
+        // when
+        Throwable result = catchThrowable(() -> service().acceptByOwner(1L, 10L, "식당 내부 사정"));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.RESERVATION_ID_NOT_FOUND);
+    }
+
+    @Test
+    void acceptByOwner_TimeSlot을_찾을_수_없으면_RESERVATION_ID_NOT_FOUND를_반환한다() {
+        // given
+        Reservation reservation = reservation(10L, 5L);
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(TIME_SLOT_ID)).willReturn(Optional.empty());
+
+        // when
+        Throwable result = catchThrowable(() -> service().acceptByOwner(1L, 10L, "식당 내부 사정"));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.RESERVATION_ID_NOT_FOUND);
+    }
+
+    @Test
+    void acceptByOwner_본인_식당이_아니면_ACCESS_DENIED를_반환한다() {
+        // given
+        Reservation reservation = reservation(10L, 5L);
+        TimeSlot timeSlot = timeSlot(100L);
+        SharedTable sharedTable = sharedTable(1000L);
+        Restaurant restaurant = restaurant(2000L);
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(TIME_SLOT_ID)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(1000L)).willReturn(Optional.of(restaurant));
+
+        // when
+        Throwable result = catchThrowable(() -> service().acceptByOwner(1L, 10L, "식당 내부 사정"));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    void acceptByOwner_이미_취소된_예약이면_INVALID_STATE를_반환한다() {
+        // given
+        Reservation reservation = reservation(10L, 5L);
+        reservation.startCancelling();
+        reservation.cancel();
+        givenOwnedChain(reservation, 1L);
+
+        // when
+        Throwable result = catchThrowable(() -> service().acceptByOwner(1L, 10L, "식당 내부 사정"));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
+    }
+
+    @Test
+    void acceptByOwner_이미_취소_접수된_CANCELLING_예약이면_INVALID_STATE를_반환한다() {
+        // given
+        Reservation reservation = reservation(10L, 5L);
+        reservation.startCancelling();
+        givenOwnedChain(reservation, 1L);
+
+        // when
+        Throwable result = catchThrowable(() -> service().acceptByOwner(1L, 10L, "식당 내부 사정"));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
+    }
+
+    @Test
+    void acceptByOwner가_성공하면_예약이_CANCELLING되고_유효_참여자_전원이_CANCEL_REQUESTED되며_NO_SHOW는_제외된다() {
+        // given
+        Reservation reservation = reservation(10L, 5L);
+        givenOwnedChain(reservation, 1L);
+        ReservationParticipant creator = participant(20L, 10L, 5L);
+        ReservationParticipant other = participant(21L, 10L, 6L);
+        given(reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED))
+                .willReturn(List.of(creator, other));
+
+        // when
+        ReservationCancellationTransactionService.OwnerCancellationAcceptance acceptance =
+                service().acceptByOwner(1L, 10L, "식당 내부 사정");
+
+        // then
+        assertThat(acceptance.reservationId()).isEqualTo(10L);
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CANCELLING);
+        assertThat(creator.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
+        assertThat(other.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
+        assertThat(creator.getCancelReason()).isEqualTo("식당 내부 사정");
+        assertThat(other.getCancelReason()).isEqualTo("식당 내부 사정");
+
+        ReservationCancellationRefundPort.RefundRequestCommand command = acceptance.refundCommand();
+        assertThat(command.reservationId()).isEqualTo(10L);
+        assertThat(command.reservationParticipantIds()).containsExactlyInAnyOrder(20L, 21L);
+        assertThat(command.requesterMemberId()).isEqualTo(1L);
+        assertThat(command.cancelReason()).isEqualTo("식당 내부 사정");
+        verify(reservationCapacityReader, never()).readTimeSlotStartAt(any());
+    }
+
+    private void givenOwnedChain(Reservation reservation, Long ownerMemberId) {
+        TimeSlot timeSlot = timeSlot(100L);
+        SharedTable sharedTable = sharedTable(1000L);
+        Restaurant restaurant = restaurant(ownerMemberId);
+        given(reservationRepository.findWithLockById(reservation.getId())).willReturn(Optional.of(reservation));
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(TIME_SLOT_ID)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(1000L)).willReturn(Optional.of(restaurant));
+    }
+
+    private TimeSlot timeSlot(Long sharedTableId) {
+        TimeSlot timeSlot = TimeSlot.create(sharedTableId, CANCELLABLE_START_AT.minusSeconds(3600), CANCELLABLE_START_AT);
+        ReflectionTestUtils.setField(timeSlot, "id", TIME_SLOT_ID);
+        return timeSlot;
+    }
+
+    private SharedTable sharedTable(Long restaurantId) {
+        SharedTable sharedTable = SharedTable.create(restaurantId, 4);
+        ReflectionTestUtils.setField(sharedTable, "id", 100L);
+        return sharedTable;
+    }
+
+    private Restaurant restaurant(Long ownerMemberId) {
+        Restaurant restaurant = Restaurant.create(ownerMemberId, "밥풀식당", "제주시", "한식", "설명", "키워드", 10000);
+        ReflectionTestUtils.setField(restaurant, "id", 1000L);
+        return restaurant;
     }
 
     private Reservation reservation(Long id, Long creatorMemberId) {
