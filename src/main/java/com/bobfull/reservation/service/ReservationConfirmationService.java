@@ -6,11 +6,13 @@ import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
+import com.bobfull.reservation.event.ReservationConfirmedEvent;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,21 +33,27 @@ public class ReservationConfirmationService {
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCapacityReader reservationCapacityReader;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ReservationConfirmationService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            ReservationCapacityReader reservationCapacityReader
+            ReservationCapacityReader reservationCapacityReader, ApplicationEventPublisher eventPublisher
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.reservationCapacityReader = reservationCapacityReader;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
      * CREATE는 새 Reservation과 최초 ReservationParticipant를, JOIN은 기존 Reservation에
      * ReservationParticipant를 추가로 생성한다. 확정 기준(정원 2면 2명, 그 외에는 정원-1명)
      * 도달 시 CONFIRMED로, 정원에 도달하면 추가로 모집을 CLOSED로 전이한다(§0.8).
+     * ChatRoom은 필수 결제·예약 확정 조건이 아니므로 여기서 직접 저장하지 않고
+     * {@link ReservationConfirmedEvent}만 발행한다 — 이 메서드가 MANDATORY로 합류한
+     * 호출자의 트랜잭션이 실제로 커밋된 뒤에만 별도 트랜잭션으로 생성돼야, ChatRoom 저장
+     * 실패가 이미 완료된 결제·예약을 롤백시키지 않는다(#50 PR #174 리뷰 BLOCKER).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public ReservationConfirmationResult confirm(
@@ -61,6 +69,10 @@ public class ReservationConfirmationService {
 
         ReservationParticipant participant = reservationParticipantRepository.save(
                 ReservationParticipant.create(reservation.getId(), memberId, partySize));
+
+        if (purpose == PaymentPurpose.CREATE) {
+            eventPublisher.publishEvent(new ReservationConfirmedEvent(reservation.getId()));
+        }
 
         updateReservationStatus(reservation, timeSlotId);
         return new ReservationConfirmationResult(reservation.getId(), participant.getId());

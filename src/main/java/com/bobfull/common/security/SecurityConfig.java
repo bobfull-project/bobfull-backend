@@ -81,6 +81,7 @@ public class SecurityConfig {
                                 "/api/restaurants/{restaurantId}",
                                 "/api/restaurants/{restaurantId}/dining-sessions"
                         ).permitAll()
+                        .requestMatchers("/ws").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reservations/search").permitAll()
                         .requestMatchers("/api/owner/**").hasRole("OWNER")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
