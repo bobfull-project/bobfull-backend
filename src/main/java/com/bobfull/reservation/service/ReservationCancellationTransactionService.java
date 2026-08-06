@@ -41,6 +41,7 @@ public class ReservationCancellationTransactionService {
     private static final Duration CANCELLATION_DEADLINE = Duration.ofHours(2);
     private static final List<ParticipationStatus> OCCUPYING_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
+    private static final String RECRUITMENT_FAILURE_REASON = "모집 마감 기준 인원 미달로 자동 취소되었습니다";
 
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
@@ -164,6 +165,35 @@ public class ReservationCancellationTransactionService {
     }
 
     /**
+     * 모집 마감 기한(식사 시작 2시간 전) 도달을 스케줄러 후보 하나에 대해 접수한다(Issue #47,
+     * #44 공통 접수·실행·확정 절차 재사용). 후보 조회 이후 다른 경로가 먼저 모집을 마감시켰을 수
+     * 있어 {@code recruitmentStatus}가 이미 {@code CLOSED}이거나 예약이 이미 취소 진행 중이면
+     * 아무 것도 바꾸지 않고 {@link RecruitmentDeadlineOutcome#ALREADY_PROCESSED}로 멱등 종료한다.
+     * 확정 기준 이상이면 모집만 마감하고, 미달이면 유효 참여자 전원을 MEMBER·OWNER 취소와 동일한
+     * 방식으로 취소 접수한다.
+     */
+    @Transactional
+    public RecruitmentDeadlineAcceptance acceptRecruitmentDeadline(Long reservationId) {
+        Reservation reservation = findReservationWithLockOrThrow(reservationId);
+        if (reservation.getRecruitmentStatus() != RecruitmentStatus.OPEN || !reservation.isActive()) {
+            return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.ALREADY_PROCESSED, null);
+        }
+        reservation.closeRecruitment();
+
+        int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
+        int currentCount = reservationParticipantRepository.sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES);
+        if (currentCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
+            return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.CLOSED_ONLY, null);
+        }
+
+        List<Long> participantIds = transitionAllValidParticipantsToCancelRequested(reservation, RECRUITMENT_FAILURE_REASON);
+        ReservationCancellationRefundPort.RefundRequestCommand command =
+                new ReservationCancellationRefundPort.RefundRequestCommand(
+                        reservation.getId(), participantIds, reservation.getCreatorMemberId(), RECRUITMENT_FAILURE_REASON);
+        return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.CANCELLED, command);
+    }
+
+    /**
      * 추가 참여자 취소를 접수한다. 취소로 확정 기준 미달이 될지를 먼저 계산해, 모집 CLOSED에서
      * 기준 미달이 되면 {@link #acceptEntireReservationCancellation}로 예약 전체 취소를 대신 접수한다.
      * 그 외에는 본인만 CANCEL_REQUESTED로 전환할 뿐, Reservation의 RECRUITING/CONFIRMED 상태는
@@ -266,6 +296,17 @@ public class ReservationCancellationTransactionService {
 
     public record OwnerCancellationAcceptance(
             Long reservationId,
+            ReservationCancellationRefundPort.RefundRequestCommand refundCommand
+    ) {
+    }
+
+    public enum RecruitmentDeadlineOutcome {
+        ALREADY_PROCESSED, CLOSED_ONLY, CANCELLED
+    }
+
+    public record RecruitmentDeadlineAcceptance(
+            Long reservationId,
+            RecruitmentDeadlineOutcome outcome,
             ReservationCancellationRefundPort.RefundRequestCommand refundCommand
     ) {
     }
