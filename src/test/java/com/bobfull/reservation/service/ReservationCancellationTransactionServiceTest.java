@@ -462,6 +462,94 @@ class ReservationCancellationTransactionServiceTest {
         verify(reservationCapacityReader, never()).readTimeSlotStartAt(any());
     }
 
+    @Test
+    void acceptRecruitmentDeadline_이미_모집_마감된_예약은_ALREADY_PROCESSED로_아무것도_바꾸지_않는다() {
+        // given
+        Reservation reservation = reservation(10L, 5L);
+        reservation.closeRecruitment();
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+
+        // when
+        ReservationCancellationTransactionService.RecruitmentDeadlineAcceptance acceptance =
+                service().acceptRecruitmentDeadline(10L);
+
+        // then
+        assertThat(acceptance.outcome())
+                .isEqualTo(ReservationCancellationTransactionService.RecruitmentDeadlineOutcome.ALREADY_PROCESSED);
+        assertThat(acceptance.refundCommand()).isNull();
+        verify(reservationParticipantRepository, never()).findAllByReservationIdAndParticipationStatus(any(), any());
+    }
+
+    @Test
+    void acceptRecruitmentDeadline_이미_취소_진행중인_예약은_ALREADY_PROCESSED로_아무것도_바꾸지_않는다() {
+        // given
+        Reservation reservation = reservation(10L, 5L);
+        reservation.startCancelling();
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+
+        // when
+        ReservationCancellationTransactionService.RecruitmentDeadlineAcceptance acceptance =
+                service().acceptRecruitmentDeadline(10L);
+
+        // then
+        assertThat(acceptance.outcome())
+                .isEqualTo(ReservationCancellationTransactionService.RecruitmentDeadlineOutcome.ALREADY_PROCESSED);
+        verify(reservationCapacityReader, never()).readTableCapacity(any());
+    }
+
+    @Test
+    void acceptRecruitmentDeadline_확정_기준_이상이면_모집만_마감하고_취소하지_않는다() {
+        // given: capacity 4, threshold 3, 현재 인원 3명(기준 충족)
+        Reservation reservation = reservation(10L, 5L);
+        reservation.confirm();
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(3);
+
+        // when
+        ReservationCancellationTransactionService.RecruitmentDeadlineAcceptance acceptance =
+                service().acceptRecruitmentDeadline(10L);
+
+        // then
+        assertThat(acceptance.outcome())
+                .isEqualTo(ReservationCancellationTransactionService.RecruitmentDeadlineOutcome.CLOSED_ONLY);
+        assertThat(acceptance.refundCommand()).isNull();
+        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        verify(reservationParticipantRepository, never()).findAllByReservationIdAndParticipationStatus(any(), any());
+    }
+
+    @Test
+    void acceptRecruitmentDeadline_확정_기준_미달이면_모집_마감과_동시에_유효_참여자_전원을_취소_접수한다() {
+        // given: capacity 4, threshold 3, 현재 인원 2명(기준 미달)
+        Reservation reservation = reservation(10L, 5L);
+        ReservationParticipant creator = participant(20L, 10L, 5L);
+        ReservationParticipant other = participant(21L, 10L, 6L);
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
+        given(reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(10L, ParticipationStatus.RESERVED))
+                .willReturn(List.of(creator, other));
+
+        // when
+        ReservationCancellationTransactionService.RecruitmentDeadlineAcceptance acceptance =
+                service().acceptRecruitmentDeadline(10L);
+
+        // then
+        assertThat(acceptance.outcome())
+                .isEqualTo(ReservationCancellationTransactionService.RecruitmentDeadlineOutcome.CANCELLED);
+        assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
+        assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CANCELLING);
+        assertThat(creator.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
+        assertThat(other.getParticipationStatus()).isEqualTo(ParticipationStatus.CANCEL_REQUESTED);
+
+        ReservationCancellationRefundPort.RefundRequestCommand command = acceptance.refundCommand();
+        assertThat(command.reservationId()).isEqualTo(10L);
+        assertThat(command.reservationParticipantIds()).containsExactlyInAnyOrder(20L, 21L);
+        assertThat(command.requesterMemberId()).isEqualTo(5L);
+        assertThat(command.cancelReason()).isEqualTo("모집 마감 기준 인원 미달로 자동 취소되었습니다");
+    }
+
     private void givenOwnedChain(Reservation reservation, Long ownerMemberId) {
         TimeSlot timeSlot = timeSlot(100L);
         SharedTable sharedTable = sharedTable(1000L);
