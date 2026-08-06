@@ -2505,7 +2505,8 @@ OWNER 응답 예시:
 - Auth: `OWNER`
 - 담당자: 배지현
 
-- 예약은 `CANCELLED`가 되며 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot은 예약 시작 전이며 다른 제약이 없는 경우만 새 예약 가능 상태로 복구한다.
+- 이 API는 취소를 접수만 하고 즉시 `CANCELLED`로 확정하지 않는다(#44, #45, #46). Reservation을 `CANCELLING`으로, 유효 참여자를 모두 `CANCEL_REQUESTED`로 전환하며, 참여자별 환불이 모두 완료되면 `CANCELLED`로 확정된다. 참여자를 `NO_SHOW`로 처리하지 않는다.
+- TimeSlot은 예약이 `CANCELLED`로 확정되고 다른 제약이 없는 경우만 새 예약 가능 상태로 복구된다.
 - 전체 취소 사유는 각 유효 참여자의 `cancelReason`에 동일하게 기록한다. Reservation에는 별도 취소 사유 컬럼을 두지 않는다.
 
 ## 2. Request
