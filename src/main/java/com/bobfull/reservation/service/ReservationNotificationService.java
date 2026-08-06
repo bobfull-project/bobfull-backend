@@ -117,6 +117,7 @@ public class ReservationNotificationService {
                 .map(member -> new Recipient(member.getId(), member.getEmail(), member.getName()))
                 .toList();
 
-        return new ReservationResultNotification(reservationId, restaurant.getName(), timeSlot.getStartAt(), recipients);
+        return new ReservationResultNotification(
+                reservationId, restaurant.getName(), restaurant.getAddress(), timeSlot.getStartAt(), recipients);
     }
 }

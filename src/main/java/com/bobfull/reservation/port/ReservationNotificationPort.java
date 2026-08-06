@@ -20,14 +20,16 @@ public interface ReservationNotificationPort {
     }
 
     /**
-     * @param reservationId 알림 대상 예약
-     * @param restaurantName 안내 문구에 포함할 식당명
-     * @param mealStartAt   안내 문구에 포함할 식사 시작 시각(UTC 저장값, 발송 시 KST로 변환)
-     * @param recipients    발송 대상 참여자 목록(유효 참여자만)
+     * @param reservationId    알림 대상 예약
+     * @param restaurantName   안내 문구에 포함할 식당명
+     * @param restaurantAddress 안내 문구에 포함할 식당 주소
+     * @param mealStartAt      안내 문구에 포함할 식사 시작 시각(UTC 저장값, 발송 시 KST로 변환)
+     * @param recipients       발송 대상 참여자 목록(유효 참여자만)
      */
     record ReservationResultNotification(
             Long reservationId,
             String restaurantName,
+            String restaurantAddress,
             Instant mealStartAt,
             List<Recipient> recipients
     ) {

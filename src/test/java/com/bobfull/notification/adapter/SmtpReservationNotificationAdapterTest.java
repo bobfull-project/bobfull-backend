@@ -113,6 +113,6 @@ class SmtpReservationNotificationAdapterTest {
     }
 
     private ReservationResultNotification notification(Recipient... recipients) {
-        return new ReservationResultNotification(1L, "밥풀식당", MEAL_START_AT, List.of(recipients));
+        return new ReservationResultNotification(1L, "밥풀식당", "제주시", MEAL_START_AT, List.of(recipients));
     }
 }

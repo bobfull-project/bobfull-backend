@@ -52,7 +52,7 @@ class ManualSmtpSendVerification {
         String fromAddress = env.getOrDefault("NOTIFICATION_EMAIL_FROM_ADDRESS", username);
         SmtpReservationNotificationAdapter adapter = new SmtpReservationNotificationAdapter(mailSender, fromAddress);
         ReservationResultNotification notification = new ReservationResultNotification(
-                0L, "수동 검증 식당", Instant.now(), List.of(new Recipient(0L, username, "수동 검증")));
+                0L, "수동 검증 식당", "제주시 수동 검증로 1", Instant.now(), List.of(new Recipient(0L, username, "수동 검증")));
 
         adapter.notifyConfirmed(notification);
 

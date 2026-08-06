@@ -66,6 +66,7 @@ class ReservationNotificationServiceTest {
         ReservationResultNotification notification = captor.getValue();
         assertThat(notification.reservationId()).isEqualTo(RESERVATION_ID);
         assertThat(notification.restaurantName()).isEqualTo("밥풀식당");
+        assertThat(notification.restaurantAddress()).isEqualTo("제주시");
         assertThat(notification.mealStartAt()).isEqualTo(MEAL_START_AT);
         assertThat(notification.recipients()).hasSize(1);
         assertThat(notification.recipients().get(0).email()).isEqualTo("a@bobfull.com");
