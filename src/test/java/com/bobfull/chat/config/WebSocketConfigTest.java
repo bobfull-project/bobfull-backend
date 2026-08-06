@@ -14,7 +14,7 @@ class WebSocketConfigTest {
     @Test
     void SimpleBroker와_applicationPrefix와_nativeWebSocket_endpoint를_등록한다() {
         // given
-        WebSocketConfig config = new WebSocketConfig(List.of("http://localhost:5173"));
+        WebSocketConfig config = new WebSocketConfig(List.of("http://localhost:5173"), org.mockito.Mockito.mock(com.bobfull.chat.security.ChatStompInterceptor.class));
         MessageBrokerRegistry brokerRegistry = org.mockito.Mockito.mock(MessageBrokerRegistry.class);
         StompEndpointRegistry endpointRegistry = org.mockito.Mockito.mock(StompEndpointRegistry.class);
         StompWebSocketEndpointRegistration endpoint = org.mockito.Mockito.mock(StompWebSocketEndpointRegistration.class);
