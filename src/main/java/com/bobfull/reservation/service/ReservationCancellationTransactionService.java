@@ -158,8 +158,13 @@ public class ReservationCancellationTransactionService {
         }
     }
 
+    /**
+     * {@code CLOSED}(식사 종료로 생명주기가 끝난 예약)도 여기서 차단한다(Issue #175 PR #178
+     * 리뷰 반영). OWNER 취소는 MEMBER 취소와 달리 취소 기한을 두지 않아, 이 검사가 없으면
+     * 식사가 끝난 예약도 다시 {@code CANCELLING}으로 전이되어 환불이 시작될 수 있다.
+     */
     private void validateReservationCancellableByOwner(Reservation reservation) {
-        if (reservation.isCancelled() || reservation.isCancelling()) {
+        if (reservation.isCancelled() || reservation.isCancelling() || reservation.isClosed()) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
         }
     }
