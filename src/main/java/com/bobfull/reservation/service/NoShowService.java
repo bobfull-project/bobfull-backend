@@ -150,8 +150,12 @@ public class NoShowService {
         return new OwnershipContext(reservation, timeSlot);
     }
 
+    /**
+     * 식사 종료 경계는 {@code now >= TimeSlot.endAt}이다(Issue #175 Q1·Q4). 채팅 SEND 차단과
+     * 동일한 경계를 사용해, 정확히 종료 시각인 순간부터 노쇼 처리를 허용한다.
+     */
     private void requireDiningEnded(TimeSlot timeSlot) {
-        if (!clock.instant().isAfter(timeSlot.getEndAt())) {
+        if (clock.instant().isBefore(timeSlot.getEndAt())) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
         }
     }

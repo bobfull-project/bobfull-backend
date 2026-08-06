@@ -108,6 +108,22 @@ public class Reservation extends BaseTimeEntity {
         return reservationStatus == ReservationStatus.RECRUITING || reservationStatus == ReservationStatus.CONFIRMED;
     }
 
+    /**
+     * 식사 종료(TimeSlot.endAt 도달) 후보를 스케줄러 한 건씩 처리할 때 호출한다(Issue #175).
+     * {@code CONFIRMED}에서만 {@code CLOSED}로 전이하고, 이미 {@code CLOSED}이거나
+     * {@code RECRUITING}·{@code CANCELLING}·{@code CANCELLED}면 아무 것도 바꾸지 않아 같은 후보가
+     * 여러 스케줄 주기에 걸쳐 조회돼도 중복 반영되지 않는다.
+     */
+    public void close() {
+        if (reservationStatus == ReservationStatus.CONFIRMED) {
+            this.reservationStatus = ReservationStatus.CLOSED;
+        }
+    }
+
+    public boolean isClosed() {
+        return reservationStatus == ReservationStatus.CLOSED;
+    }
+
     public boolean isCreatedBy(Long memberId) {
         return this.creatorMemberId.equals(memberId);
     }
