@@ -75,7 +75,14 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
     private void sendToRecipient(
             Long reservationId, Recipient recipient, String result, String subject, String htmlBody, String textBody
     ) {
-        MimeMessage message = buildMessage(recipient.email(), subject, htmlBody, textBody);
+        MimeMessage message;
+        try {
+            message = buildMessage(recipient.email(), subject, htmlBody, textBody);
+        } catch (RuntimeException exception) {
+            // buildMessage 자체가 (MessagingException 외의) 예상치 못한 예외를 던져도 이 참여자
+            // 건만 실패로 남기고, 나머지 참여자 발송은 계속 진행한다.
+            message = null;
+        }
         if (message == null) {
             log.error("event=RESERVATION_NOTIFICATION_FAILED reservationId={} memberId={} result={} reason=MESSAGE_BUILD_FAILED",
                     reservationId, recipient.memberId(), result);

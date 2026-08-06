@@ -99,6 +99,19 @@ class SmtpReservationNotificationAdapterTest {
     }
 
     @Test
+    void 메시지_생성_중_예외가_발생해도_다른_참여자_발송을_막지_않는다() {
+        given(mailSender.createMimeMessage())
+                .willThrow(new IllegalStateException("boom"))
+                .willReturn(new MimeMessage((Session) null));
+        ReservationResultNotification notification = notification(
+                new Recipient(1L, "broken@bobfull.com", "회원A"), new Recipient(2L, "ok@bobfull.com", "회원B"));
+
+        assertThatCode(() -> adapter().notifyConfirmed(notification)).doesNotThrowAnyException();
+
+        verify(mailSender, times(1)).send(any(MimeMessage.class));
+    }
+
+    @Test
     void 발송_실패_로그에_이메일_주소를_남기지_않는다() {
         givenMimeMessage();
         ReservationResultNotification notification = notification(new Recipient(1L, "secret@bobfull.com", "회원A"));
