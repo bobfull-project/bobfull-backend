@@ -416,7 +416,7 @@ if [ "${deployed_image}" != "${ECR_IMAGE_URI}" ]; then
   exit 1
 fi
 
-health_check_url="${HEALTH_CHECK_URL:-http://127.0.0.1:${HOST_PORT}/api/restaurants}"
+health_check_url="${HEALTH_CHECK_URL:-http://127.0.0.1:${HOST_PORT}/actuator/health}"
 health_check_attempts="${HEALTH_CHECK_ATTEMPTS:-12}"
 health_check_delay_seconds="${HEALTH_CHECK_DELAY_SECONDS:-5}"
 health_response_file="/tmp/bobfull-local-health-response.$$"
