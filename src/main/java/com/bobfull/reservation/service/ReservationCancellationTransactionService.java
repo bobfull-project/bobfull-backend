@@ -9,6 +9,8 @@ import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
+import com.bobfull.reservation.event.RecruitmentDeadlineCancelledEvent;
+import com.bobfull.reservation.event.RecruitmentDeadlineConfirmedEvent;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort;
 import com.bobfull.reservation.port.ReservationCapacityReader;
@@ -24,6 +26,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +53,7 @@ public class ReservationCancellationTransactionService {
     private final SharedTableRepository sharedTableRepository;
     private final RestaurantRepository restaurantRepository;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ReservationCancellationTransactionService(
             ReservationRepository reservationRepository,
@@ -58,7 +62,8 @@ public class ReservationCancellationTransactionService {
             TimeSlotRepository timeSlotRepository,
             SharedTableRepository sharedTableRepository,
             RestaurantRepository restaurantRepository,
-            Clock clock
+            Clock clock,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
@@ -67,6 +72,7 @@ public class ReservationCancellationTransactionService {
         this.sharedTableRepository = sharedTableRepository;
         this.restaurantRepository = restaurantRepository;
         this.clock = clock;
+        this.eventPublisher = eventPublisher;
     }
 
     // 락 순서: Reservation 단독(ADR 0001 "복수 비관적 락의 획득 순서" 참고). 환불 outbound port 호출은
@@ -171,6 +177,12 @@ public class ReservationCancellationTransactionService {
      * 아무 것도 바꾸지 않고 {@link RecruitmentDeadlineOutcome#ALREADY_PROCESSED}로 멱등 종료한다.
      * 확정 기준 이상이면 모집만 마감하고, 미달이면 유효 참여자 전원을 MEMBER·OWNER 취소와 동일한
      * 방식으로 취소 접수한다.
+     *
+     * <p>결과 이메일 안내는 {@link RecruitmentDeadlineConfirmedEvent}/{@link RecruitmentDeadlineCancelledEvent}
+     * 발행으로만 알리고 이 메서드가 직접 호출하지 않는다(Issue #168 V2) — 이벤트는 이 트랜잭션이
+     * 실제로 커밋된 뒤(AFTER_COMMIT)에만 구독자에게 전달되므로, 롤백되면 이메일도 발송되지 않는다.
+     * {@code ALREADY_PROCESSED}는 같은 예약에 대해 두 이벤트 모두 최초 1회만 발행되게 하는
+     * 멱등 가드이기도 하다.</p>
      */
     @Transactional
     public RecruitmentDeadlineAcceptance acceptRecruitmentDeadline(Long reservationId) {
@@ -183,6 +195,7 @@ public class ReservationCancellationTransactionService {
         int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
         int currentCount = reservationParticipantRepository.sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES);
         if (currentCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
+            eventPublisher.publishEvent(new RecruitmentDeadlineConfirmedEvent(reservationId));
             return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.CLOSED_ONLY, null);
         }
 
@@ -190,6 +203,7 @@ public class ReservationCancellationTransactionService {
         ReservationCancellationRefundPort.RefundRequestCommand command =
                 new ReservationCancellationRefundPort.RefundRequestCommand(
                         reservation.getId(), participantIds, reservation.getCreatorMemberId(), RECRUITMENT_FAILURE_REASON);
+        eventPublisher.publishEvent(new RecruitmentDeadlineCancelledEvent(reservation.getId(), participantIds));
         return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.CANCELLED, command);
     }
 

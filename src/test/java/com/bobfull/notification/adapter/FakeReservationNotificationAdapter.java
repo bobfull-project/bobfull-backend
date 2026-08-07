@@ -11,6 +11,8 @@ import java.util.List;
 public class FakeReservationNotificationAdapter implements ReservationNotificationPort {
     private final List<ReservationResultNotification> confirmedNotifications = new ArrayList<>();
     private final List<ReservationResultNotification> cancelledNotifications = new ArrayList<>();
+    private final List<ReservationResultNotification> reservationCreatedNotifications = new ArrayList<>();
+    private final List<ReservationResultNotification> participationCompletedNotifications = new ArrayList<>();
 
     @Override
     public void notifyConfirmed(ReservationResultNotification notification) {
@@ -22,11 +24,29 @@ public class FakeReservationNotificationAdapter implements ReservationNotificati
         cancelledNotifications.add(notification);
     }
 
+    @Override
+    public void notifyReservationCreated(ReservationResultNotification notification) {
+        reservationCreatedNotifications.add(notification);
+    }
+
+    @Override
+    public void notifyParticipationCompleted(ReservationResultNotification notification) {
+        participationCompletedNotifications.add(notification);
+    }
+
     public List<ReservationResultNotification> confirmedNotifications() {
         return confirmedNotifications;
     }
 
     public List<ReservationResultNotification> cancelledNotifications() {
         return cancelledNotifications;
+    }
+
+    public List<ReservationResultNotification> reservationCreatedNotifications() {
+        return reservationCreatedNotifications;
+    }
+
+    public List<ReservationResultNotification> participationCompletedNotifications() {
+        return participationCompletedNotifications;
     }
 }

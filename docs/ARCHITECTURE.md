@@ -125,15 +125,42 @@ sequenceDiagram
 
 취소 가능 시점, 전체·참여자 단위 환불, 상태 전이와 TimeSlot 재사용 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를, 환불·노쇼 데이터 관계는 [ERD](./ERD.md)를 따른다.
 
-## 6-1. 예약 결과 이메일 알림
+## 6-1. 예약 결과·결제 완료 이메일 알림 (V2)
 
-식사 시작 2시간 전 모집 마감 처리(§5 `RecruitmentDeadlineScheduler`, Issue #47)가 유효 참여자 전원을 대상으로 확정 또는 인원 미달 취소를 이메일로 안내한다(Issue #168). `ReservationCancellationTransactionService#acceptRecruitmentDeadline`의 상태 전이 트랜잭션이 커밋된 뒤, 논-트랜잭션인 `RecruitmentDeadlineCancellationService`가 결과(`CLOSED_ONLY`/`CANCELLED`)에 따라 `ReservationNotificationService`를 호출하고, 이 서비스가 outbound port(`ReservationNotificationPort`)로 실제 발송을 요청한다. 별도 알림 이력 테이블은 두지 않으며, `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 멱등 가드를 그대로 이용해 중복 발송을 방지한다.
+Issue #168은 예약 참여자에게 다음 네 가지 이메일을 안내한다.
 
-발송은 참여자별로 독립적으로 최대 3회까지 즉시 재시도하며, 재시도를 모두 소진해도 예외를 전파하지 않고 실패만 로그로 남긴다 — 예약 확정·취소 결과 자체는 이미 커밋되어 있어 이메일 실패로 롤백되지 않는다.
+```text
+결제 완료(CREATE) → 예약 접수 안내("모집 중입니다")
+결제 완료(JOIN)   → 참여 완료 안내("모집 중입니다")
+모집 마감 + 확정 기준 충족 → 최종 확정 안내
+모집 마감 + 확정 기준 미달 → 인원 미달 취소 안내
+```
 
-**알려진 한계**: 재시도는 같은 스케줄러 실행 안에서만 이뤄진다. 서버 프로세스가 이메일 발송 도중 종료되면 그 시도는 유실될 수 있고, 다음 스케줄러 실행에서도 `acceptRecruitmentDeadline`은 이미 상태가 전이된 예약을 `ALREADY_PROCESSED`로만 응답하므로 이메일이 다시 발송되지 않는다. 발송 이력을 별도로 저장해 재시작 후에도 재처리를 보장하는 방식은 이번 Issue 범위 밖이며, 필요해지면 별도 Notification 이력 테이블 도입을 후속 검토한다(Issue #168 Q2).
+접수·참여 완료 안내는 이 시점에 `Reservation`이 아직 `RECRUITING`일 수 있으므로 "확정"이라 표현하지 않는다. 최종 확정·취소 안내만 식사 시작 2시간 전 모집 마감 처리(§5 `RecruitmentDeadlineScheduler`, Issue #47) 결과를 반영한다.
 
-정원이 2시간 마감 이전에 이미 다 차 스케줄러 후보에서 제외되는 예약(모집이 결제 완료 시점에 조기 마감된 경우)은 이 이메일 알림 대상이 아니다 — 해당 경우는 프런트엔드 화면(모달·팝업) 안내로 대체하며 이번 Issue 범위에 포함하지 않는다.
+두 흐름 모두 같은 구조를 따른다(#50 PR #174의 ChatRoom `AFTER_COMMIT` 이벤트와 동일한 관례).
+
+```text
+핵심 트랜잭션(결제 완료 확정 또는 모집 마감 처리)
+→ 상태·데이터 변경 커밋 직전 Spring ApplicationEvent 발행
+→ 트랜잭션 COMMIT
+→ @TransactionalEventListener(AFTER_COMMIT)
+→ @Async(전용 스레드 풀 emailTaskExecutor)
+→ ReservationNotificationService → outbound port → SMTP 발송
+```
+
+- `ReservationConfirmationService#confirm`이 CREATE·JOIN 모두에서 `ReservationPaymentCompletedEvent`를 발행하면 `ReservationPaymentCompletionNotificationEventListener`가 구독해 접수·참여 완료 안내를 보낸다.
+- `ReservationCancellationTransactionService#acceptRecruitmentDeadline`이 `CLOSED_ONLY`/`CANCELLED` 결과에서 각각 `RecruitmentDeadlineConfirmedEvent`/`RecruitmentDeadlineCancelledEvent`를 발행하면 `RecruitmentDeadlineNotificationEventListener`가 구독해 최종 확정·취소 안내를 보낸다.
+- `AFTER_COMMIT`은 "커밋 이후 호출"만 보장할 뿐 비동기를 의미하지 않으므로, SMTP 통신 지연이 호출 스레드(HTTP 요청 또는 스케줄러 실행)를 막지 않도록 전용 `ThreadPoolTaskExecutor`(`emailTaskExecutor`) 기반 `@Async`를 함께 쓴다.
+- 두 리스너 모두 내부에서 예외를 잡아 로그만 남기고 다시 던지지 않는다 — 이메일 실패가 이미 커밋된 예약·결제 상태를 되돌리지 않는다.
+- 환불 요청(`ReservationCancellationRefundPort`)은 `RecruitmentDeadlineCancellationService.process`에서 여전히 직접 호출하며, 이메일 이벤트와는 완전히 독립적으로 실행된다 — 환불 요청이 실패해도 이미 트랜잭션 커밋 시점에 발행된 취소 이메일 이벤트 처리에는 영향이 없다.
+- 별도 알림 이력 테이블은 두지 않는다. `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 기존 멱등 가드를 그대로 이용해 최종 확정·취소 이메일의 중복 발송을 방지한다.
+
+발송은 참여자별로 독립적으로 최대 3회까지 즉시 재시도하며, 재시도를 모두 소진해도 예외를 전파하지 않고 실패만 로그로 남긴다.
+
+**알려진 한계**: 이벤트 발행과 `@Async` 실행은 메모리 안에서만 이뤄진다. 핵심 트랜잭션이 커밋된 직후 서버 프로세스가 종료되면 그 이메일 시도 자체가 유실될 수 있고, 재시작 후에도 재처리를 보장하는 별도 저장소가 없다. 최종 확정·취소 이메일은 재시작 후 스케줄러가 같은 예약을 다시 후보로 잡아도 `acceptRecruitmentDeadline`이 `ALREADY_PROCESSED`만 반환해 재발송되지 않는다. 이 한계는 V3 Transactional Outbox에서 해결할 예정이며(§9), 이번 V2 범위에서는 Outbox·Kafka를 도입하지 않는다.
+
+정원이 2시간 마감 이전에 이미 다 차 스케줄러 후보에서 제외되는 예약(모집이 결제 완료 시점에 조기 마감된 경우)은 최종 확정 이메일 대상이 아니다 — 해당 경우는 프런트엔드 화면(모달·팝업) 안내로 대체하며 이번 Issue 범위에 포함하지 않는다.
 
 ## 7. 채팅
 
@@ -158,6 +185,7 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 - Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
+- Transactional Outbox(이메일·이벤트 유실 방지, §6-1의 V2 알려진 한계 참고), Kafka 기반 이벤트 재처리 — V3 범위
 - 개별 ADR의 사전 생성, API·ERD 상세 복제, 클래스·패키지 구조
 
 새 기술 선택이나 중요한 구조 변경이 실제로 필요해지면 [ADR 운영 기준](./adr/README.md)에 따라 별도 ADR을 작성한다.

@@ -18,8 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
- * 실제 Gmail SMTP로 확정·취소 안내 테스트 메일을 보내 로컬 메일 설정을 수동으로 검증한다
- * (Issue #168 직접 검증). 평소에는 항상 비활성화돼 있고 CI·전체 테스트에서 절대 실행되지 않는다.
+ * 실제 Gmail SMTP로 확정·취소·접수·참여 완료 안내 테스트 메일을 보내 로컬 메일 설정을 수동으로
+ * 검증한다(Issue #168 직접 검증). 평소에는 항상 비활성화돼 있고 CI·전체 테스트에서 절대 실행되지
+ * 않는다.
  *
  * Spring Context를 올리지 않고 프로젝트 루트의 {@code .env} 파일을 직접 읽어 SMTP 설정을 구성한다
  * — DB·Redis 같은 다른 인프라 없이 메일 발송 자체만 확인하기 위해서다.
@@ -45,6 +46,22 @@ class ManualSmtpSendVerification {
     @Test
     void 본인_Gmail로_취소_안내_테스트_메일을_보낸다() {
         String username = send(SmtpReservationNotificationAdapter::notifyCancelledDueToInsufficientParticipants);
+
+        // 실제 도착 여부는 자동 검증할 수 없다 — 본인 Gmail 수신함에서 직접 확인한다.
+        assertThat(username).isNotBlank();
+    }
+
+    @Test
+    void 본인_Gmail로_예약_접수_테스트_메일을_보낸다() {
+        String username = send(SmtpReservationNotificationAdapter::notifyReservationCreated);
+
+        // 실제 도착 여부는 자동 검증할 수 없다 — 본인 Gmail 수신함에서 직접 확인한다.
+        assertThat(username).isNotBlank();
+    }
+
+    @Test
+    void 본인_Gmail로_참여_완료_테스트_메일을_보낸다() {
+        String username = send(SmtpReservationNotificationAdapter::notifyParticipationCompleted);
 
         // 실제 도착 여부는 자동 검증할 수 없다 — 본인 Gmail 수신함에서 직접 확인한다.
         assertThat(username).isNotBlank();

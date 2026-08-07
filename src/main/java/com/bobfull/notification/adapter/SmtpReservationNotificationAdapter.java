@@ -15,12 +15,13 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 /**
- * 실제 SMTP 서버로 예약 확정·인원 미달 취소 안내 메일을 발송한다(Issue #168).
- * 이 클래스가 호출되는 시점에는 예약 상태 전이 트랜잭션이 이미 커밋돼 있으므로, 재시도로
+ * 실제 SMTP 서버로 예약 결과(확정·인원 미달 취소) 및 결제 완료(접수·참여) 안내 메일을 발송한다
+ * (Issue #168). 이 클래스가 호출되는 시점에는 핵심 트랜잭션이 이미 커밋돼 있으므로, 재시도로
  * 시간이 걸려도 DB 락이나 요청 스레드를 점유하지 않는다. 참여자별로 서로 독립적으로 최대
  * {@value #MAX_ATTEMPTS}회까지 재시도하며, 한 명의 발송 실패가 다른 참여자의 발송을 막지
  * 않는다. 재시도를 모두 소진해도 예외를 던지지 않고 실패만 로그로 남긴다 — 이메일 주소·본문은
- * 로그에 남기지 않는다. 이미지 첨부 없이 CSS만으로 꾸민 HTML 본문을 사용한다.
+ * 로그에 남기지 않는다. 이미지 첨부 없이 CSS만으로 꾸민 HTML 본문을 사용한다. 접수·참여 완료
+ * 안내는 모집이 아직 진행 중일 수 있으므로 "확정"이라 표현하지 않는다.
  */
 @Component
 public class SmtpReservationNotificationAdapter implements ReservationNotificationPort {
@@ -53,6 +54,18 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
     public void notifyCancelledDueToInsufficientParticipants(ReservationResultNotification notification) {
         send(notification, "CANCELLED", "[밥풀] 예약이 취소되었습니다",
                 "예약이 취소됐어요", "#e03131", "최소 인원 미달로 취소되었습니다. 결제 금액은 환불 절차가 진행됩니다.");
+    }
+
+    @Override
+    public void notifyReservationCreated(ReservationResultNotification notification) {
+        send(notification, "CREATED", "[밥풀] 예약 접수가 완료되었습니다",
+                "예약 접수가 완료됐어요", "#1c7ed6", "현재 합석 참여자를 모집 중입니다. 모집이 마감되면 결과를 다시 안내드릴게요.");
+    }
+
+    @Override
+    public void notifyParticipationCompleted(ReservationResultNotification notification) {
+        send(notification, "JOINED", "[밥풀] 합석 참여가 완료되었습니다",
+                "참여가 완료됐어요", "#1c7ed6", "합석 예약 참여가 완료되었습니다. 모집이 마감되면 결과를 다시 안내드릴게요.");
     }
 
     private void send(

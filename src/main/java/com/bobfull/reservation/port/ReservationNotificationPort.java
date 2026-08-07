@@ -4,17 +4,23 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * #47 모집 마감 처리 결과(확정·인원 미달 취소)를 유효 참여자에게 이메일로 안내하는 outbound
- * port다(Issue #168, ADR 0005). 예약 도메인은 실제 메일 발송 방식을 알지 못하며 이 계약으로만
- * 알림을 요청한다. 호출 시점에는 이미 {@code ReservationCancellationTransactionService
- * #acceptRecruitmentDeadline}의 상태 전이 트랜잭션이 커밋된 뒤이므로, 이 메서드가 느리거나
- * 실패해도 예약·참여자 상태에는 영향을 주지 않는다.
+ * #47 모집 마감 처리 결과(확정·인원 미달 취소)와 결제 완료(접수·참여) 결과를 참여자에게 이메일로
+ * 안내하는 outbound port다(Issue #168, ADR 0005). 예약 도메인은 실제 메일 발송 방식을 알지
+ * 못하며 이 계약으로만 알림을 요청한다. 모든 메서드는 핵심 트랜잭션(모집 마감 처리 또는 결제
+ * 완료)이 커밋된 뒤 AFTER_COMMIT 이벤트 리스너에서만 호출되므로, 이 메서드가 느리거나 실패해도
+ * 예약·참여자·결제 상태에는 영향을 주지 않는다.
  */
 public interface ReservationNotificationPort {
 
     void notifyConfirmed(ReservationResultNotification notification);
 
     void notifyCancelledDueToInsufficientParticipants(ReservationResultNotification notification);
+
+    /** 최초(CREATE) 예약 접수가 완료됐음을 안내한다. 아직 모집 중일 수 있어 "확정"이라 표현하지 않는다. */
+    void notifyReservationCreated(ReservationResultNotification notification);
+
+    /** 추가(JOIN) 참여가 완료됐음을 안내한다. 아직 모집 중일 수 있어 "확정"이라 표현하지 않는다. */
+    void notifyParticipationCompleted(ReservationResultNotification notification);
 
     record Recipient(Long memberId, String email, String name) {
     }

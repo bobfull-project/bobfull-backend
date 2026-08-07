@@ -97,6 +97,36 @@ class ReservationNotificationServiceTest {
     }
 
     @Test
+    void 예약_접수_알림은_해당_참여자_ID만_조회해서_보낸다() {
+        ReservationParticipant participant = participant(4L, 40L);
+        given(reservationParticipantRepository.findAllById(List.of(4L))).willReturn(List.of(participant));
+        givenReservationChain();
+        given(memberRepository.findAllById(List.of(40L))).willReturn(List.of(member(40L, "c@bobfull.com", "회원C")));
+
+        service().notifyReservationCreated(RESERVATION_ID, 4L);
+
+        ArgumentCaptor<ReservationResultNotification> captor = ArgumentCaptor.forClass(ReservationResultNotification.class);
+        verify(notificationPort).notifyReservationCreated(captor.capture());
+        assertThat(captor.getValue().recipients()).hasSize(1);
+        assertThat(captor.getValue().recipients().get(0).email()).isEqualTo("c@bobfull.com");
+    }
+
+    @Test
+    void 참여_완료_알림은_해당_참여자_ID만_조회해서_보낸다() {
+        ReservationParticipant participant = participant(5L, 50L);
+        given(reservationParticipantRepository.findAllById(List.of(5L))).willReturn(List.of(participant));
+        givenReservationChain();
+        given(memberRepository.findAllById(List.of(50L))).willReturn(List.of(member(50L, "d@bobfull.com", "회원D")));
+
+        service().notifyParticipationCompleted(RESERVATION_ID, 5L);
+
+        ArgumentCaptor<ReservationResultNotification> captor = ArgumentCaptor.forClass(ReservationResultNotification.class);
+        verify(notificationPort).notifyParticipationCompleted(captor.capture());
+        assertThat(captor.getValue().recipients()).hasSize(1);
+        assertThat(captor.getValue().recipients().get(0).email()).isEqualTo("d@bobfull.com");
+    }
+
+    @Test
     void 조회_중_예외가_발생해도_예약_결과에는_영향을_주지_않고_알림만_생략한다() {
         ReservationParticipant participant = participant(2L, 20L);
         given_유효_참여자_조회(ParticipationStatus.RESERVED, List.of(participant));

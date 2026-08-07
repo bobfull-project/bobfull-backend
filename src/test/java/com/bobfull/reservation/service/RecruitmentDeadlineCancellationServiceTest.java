@@ -1,7 +1,9 @@
 package com.bobfull.reservation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,14 +22,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class RecruitmentDeadlineCancellationServiceTest {
     @Mock ReservationCancellationTransactionService transactionService;
     @Mock ReservationCancellationRefundPort refundPort;
-    @Mock ReservationNotificationService notificationService;
 
     private RecruitmentDeadlineCancellationService service() {
-        return new RecruitmentDeadlineCancellationService(transactionService, refundPort, notificationService);
+        return new RecruitmentDeadlineCancellationService(transactionService, refundPort);
     }
 
     @Test
-    void CANCELLED_결과면_환불Port와_취소_알림을_호출한다() {
+    void CANCELLED_결과면_환불Port를_호출한다() {
         RefundRequestCommand command = new RefundRequestCommand(1L, List.of(2L, 3L), 9L, "모집 마감 기준 인원 미달로 자동 취소되었습니다");
         when(transactionService.acceptRecruitmentDeadline(1L)).thenReturn(
                 new RecruitmentDeadlineAcceptance(1L, RecruitmentDeadlineOutcome.CANCELLED, command));
@@ -36,12 +37,10 @@ class RecruitmentDeadlineCancellationServiceTest {
 
         assertThat(outcome).isEqualTo(RecruitmentDeadlineOutcome.CANCELLED);
         verify(refundPort).requestRefunds(command);
-        verify(notificationService).notifyCancelledDueToInsufficientParticipants(1L, List.of(2L, 3L));
-        verify(notificationService, never()).notifyConfirmed(any());
     }
 
     @Test
-    void CLOSED_ONLY_결과면_확정_알림만_호출하고_환불Port는_호출하지_않는다() {
+    void CLOSED_ONLY_결과면_환불Port를_호출하지_않는다() {
         when(transactionService.acceptRecruitmentDeadline(1L)).thenReturn(
                 new RecruitmentDeadlineAcceptance(1L, RecruitmentDeadlineOutcome.CLOSED_ONLY, null));
 
@@ -49,12 +48,10 @@ class RecruitmentDeadlineCancellationServiceTest {
 
         assertThat(outcome).isEqualTo(RecruitmentDeadlineOutcome.CLOSED_ONLY);
         verify(refundPort, never()).requestRefunds(any());
-        verify(notificationService).notifyConfirmed(1L);
-        verify(notificationService, never()).notifyCancelledDueToInsufficientParticipants(any(), any());
     }
 
     @Test
-    void ALREADY_PROCESSED_결과면_환불Port와_알림_모두_호출하지_않는다() {
+    void ALREADY_PROCESSED_결과면_환불Port를_호출하지_않는다() {
         when(transactionService.acceptRecruitmentDeadline(1L)).thenReturn(
                 new RecruitmentDeadlineAcceptance(1L, RecruitmentDeadlineOutcome.ALREADY_PROCESSED, null));
 
@@ -62,7 +59,18 @@ class RecruitmentDeadlineCancellationServiceTest {
 
         assertThat(outcome).isEqualTo(RecruitmentDeadlineOutcome.ALREADY_PROCESSED);
         verify(refundPort, never()).requestRefunds(any());
-        verify(notificationService, never()).notifyConfirmed(any());
-        verify(notificationService, never()).notifyCancelledDueToInsufficientParticipants(any(), any());
+    }
+
+    @Test
+    void 환불_요청이_실패해도_예외가_그대로_호출자에게_전파된다() {
+        // 이메일 안내는 acceptRecruitmentDeadline이 발행한 이벤트로 이미 커밋 시점에 트리거되므로
+        // (Issue #168 V2), 환불 실패가 이메일 발송 자체를 막지 않는다 — 다만 환불 실패는 여전히
+        // 기존 스케줄러의 실패 로그 경로(processOne의 catch)까지 전파돼야 한다.
+        RefundRequestCommand command = new RefundRequestCommand(1L, List.of(2L), 9L, "모집 마감 기준 인원 미달로 자동 취소되었습니다");
+        when(transactionService.acceptRecruitmentDeadline(1L)).thenReturn(
+                new RecruitmentDeadlineAcceptance(1L, RecruitmentDeadlineOutcome.CANCELLED, command));
+        doThrow(new IllegalStateException("환불 실패(테스트)")).when(refundPort).requestRefunds(command);
+
+        assertThatThrownBy(() -> service().process(1L)).isInstanceOf(IllegalStateException.class);
     }
 }

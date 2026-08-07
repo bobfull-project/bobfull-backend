@@ -112,6 +112,26 @@ class SmtpReservationNotificationAdapterTest {
     }
 
     @Test
+    void 예약_접수_알림도_참여자에게_정상_발송된다() {
+        givenMimeMessage();
+        ReservationResultNotification notification = notification(new Recipient(1L, "created@bobfull.com", "회원A"));
+
+        adapter().notifyReservationCreated(notification);
+
+        verify(mailSender, times(1)).send(any(MimeMessage.class));
+    }
+
+    @Test
+    void 참여_완료_알림도_참여자에게_정상_발송된다() {
+        givenMimeMessage();
+        ReservationResultNotification notification = notification(new Recipient(1L, "joined@bobfull.com", "회원A"));
+
+        adapter().notifyParticipationCompleted(notification);
+
+        verify(mailSender, times(1)).send(any(MimeMessage.class));
+    }
+
+    @Test
     void 발송_실패_로그에_이메일_주소를_남기지_않는다() {
         givenMimeMessage();
         ReservationResultNotification notification = notification(new Recipient(1L, "secret@bobfull.com", "회원A"));

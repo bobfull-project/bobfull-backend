@@ -29,10 +29,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * #47 모집 마감 처리 결과를 유효 참여자에게 이메일로 안내한다(Issue #168). 호출자
- * ({@link RecruitmentDeadlineCancellationService})가 이미 커밋된 트랜잭션 밖에서 호출하며,
- * 이 클래스는 안내 대상 조회부터 실제 발송 요청까지의 모든 예외를 삼켜 로그만 남긴다 —
- * 여기서 발생하는 어떤 실패도 이미 확정된 예약·취소 결과에 영향을 주면 안 되기 때문이다.
+ * #47 모집 마감 처리 결과(확정·인원 미달 취소)와 결제 완료(접수·참여) 결과를 이메일로 안내한다
+ * (Issue #168 V2). 호출자(각 AFTER_COMMIT 이벤트 리스너)는 핵심 트랜잭션이 이미 커밋된 뒤에만
+ * 이 서비스를 호출하며, 이 클래스는 안내 대상 조회부터 실제 발송 요청까지의 모든 예외를 삼켜
+ * 로그만 남긴다 — 여기서 발생하는 어떤 실패도 이미 커밋된 예약·결제 결과에 영향을 주면 안 되기
+ * 때문이다.
  */
 @Service
 public class ReservationNotificationService {
@@ -77,6 +78,20 @@ public class ReservationNotificationService {
         notify(reservationId,
                 () -> reservationParticipantRepository.findAllById(participantIds),
                 notificationPort::notifyCancelledDueToInsufficientParticipants);
+    }
+
+    /** 최초(CREATE) 결제 완료로 예약이 접수된 참여자 본인에게 접수 안내를 보낸다. */
+    public void notifyReservationCreated(Long reservationId, Long participantId) {
+        notify(reservationId,
+                () -> reservationParticipantRepository.findAllById(List.of(participantId)),
+                notificationPort::notifyReservationCreated);
+    }
+
+    /** 추가(JOIN) 결제 완료로 참여가 완료된 참여자 본인에게 참여 완료 안내를 보낸다. */
+    public void notifyParticipationCompleted(Long reservationId, Long participantId) {
+        notify(reservationId,
+                () -> reservationParticipantRepository.findAllById(List.of(participantId)),
+                notificationPort::notifyParticipationCompleted);
     }
 
     private void notify(
