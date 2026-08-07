@@ -14,11 +14,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.bobfull.common.config.ClockConfig;
 import com.bobfull.common.support.TestApiController;
 import com.bobfull.auth.token.AccessTokenBlacklistStore;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.List;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -290,6 +296,31 @@ class SecurityConfigWebTest {
         // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id", is(10)));
+    }
+
+    @Test
+    void jti가_없는_배포_이전_토큰도_인증에_성공하고_Blacklist_조회는_건너뛴다() throws Exception {
+        // given: Issue #186 배포 이전에 발급된 Access Token(PR #187 리뷰) — jti가 없어도 인증은
+        // 그대로 허용하고, jti가 없으니 Blacklist 조회 자체를 시도하지 않아야 한다.
+        String secret = "security-config-web-test-secret-key-please-keep-this-long-enough";
+        SecretKey secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        Instant now = Instant.now();
+        String tokenWithoutJti = Jwts.builder()
+                .claim("memberId", 10L)
+                .claim("role", MemberRole.MEMBER.name())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(3600L)))
+                .signWith(secretKey, Jwts.SIG.HS256)
+                .compact();
+
+        // when
+        ResultActions result = mockMvc.perform(
+                get("/api/protected/hello").header("Authorization", "Bearer " + tokenWithoutJti));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id", is(10)));
+        Mockito.verifyNoInteractions(accessTokenBlacklistStore);
     }
 
     /**

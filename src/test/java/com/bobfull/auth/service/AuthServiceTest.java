@@ -309,4 +309,20 @@ class AuthServiceTest {
         verify(accessTokenBlacklistStore).blacklist("jti-1", Duration.ofSeconds(600));
         verify(refreshTokenStore).deleteByMember(1L);
     }
+
+    @Test
+    void jti가_없는_토큰으로_로그아웃하면_Blacklist_등록은_건너뛰고_RefreshToken만_삭제한다() {
+        // given: Issue #186 배포 이전에 발급된 Access Token(PR #187 리뷰) — jti가 없어 Blacklist에
+        // 등록할 방법이 없지만, 로그아웃 자체(Refresh Token 삭제)는 그대로 성공해야 한다.
+        given(jwtTokenProvider.parseAccessTokenClaims("legacy-access-token")).willReturn(
+                new JwtTokenProvider.AccessTokenClaims(new AuthMember(1L, MemberRole.MEMBER), null, Instant.now()));
+
+        // when
+        LogoutResponse response = authService.logout(1L, "legacy-access-token");
+
+        // then
+        assertThat(response.result()).isTrue();
+        verify(accessTokenBlacklistStore, org.mockito.Mockito.never()).blacklist(any(), any());
+        verify(refreshTokenStore).deleteByMember(1L);
+    }
 }

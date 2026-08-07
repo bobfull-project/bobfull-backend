@@ -57,6 +57,11 @@ public class JwtTokenProvider {
     /**
      * Access Token Blacklist 등록(로그아웃)·조회(인증 필터)에 필요한 jti·만료 시각까지
      * 함께 반환한다(Issue #186). 검증 실패 처리는 {@link #parseAccessToken}과 동일하다.
+     * jti는 필수 Claim으로 취급하지 않는다 — 이 기능 배포 이전에 발급된 Access Token(배포 시점에
+     * 로그인 중이던 회원이 들고 있는 토큰)에는 jti가 없으며, 이를 필수로 요구하면 배포 순간 그
+     * 토큰 전원이 즉시 401로 튕긴다. jti가 없는 토큰은 인증은 그대로 허용하고 Blacklist 조회·등록만
+     * 건너뛴다(호출자 책임, {@link com.bobfull.common.security.JwtAuthenticationFilter},
+     * {@code AuthService.logout} 참고). 남은 위험은 기존 만료 주기(배포 전 3600초) 안에서 자연 소멸한다.
      */
     public AccessTokenClaims parseAccessTokenClaims(String token) {
         try {
@@ -69,19 +74,19 @@ public class JwtTokenProvider {
 
             Number memberId = claims.get(CLAIM_MEMBER_ID, Number.class);
             String role = claims.get(CLAIM_ROLE, String.class);
-            String jti = claims.getId();
             Date expiration = claims.getExpiration();
-            if (memberId == null || role == null || jti == null || expiration == null) {
+            if (memberId == null || role == null || expiration == null) {
                 throw new InvalidJwtException("토큰에 필수 Claim이 없습니다.");
             }
 
             AuthMember authMember = new AuthMember(memberId.longValue(), MemberRole.valueOf(role));
-            return new AccessTokenClaims(authMember, jti, expiration.toInstant());
+            return new AccessTokenClaims(authMember, claims.getId(), expiration.toInstant());
         } catch (JwtException | IllegalArgumentException e) {
             throw new InvalidJwtException("토큰을 검증할 수 없습니다.", e);
         }
     }
 
+    /** jti는 이 기능 배포 이전에 발급된 토큰에서 null일 수 있다(위 {@link #parseAccessTokenClaims} 참고). */
     public record AccessTokenClaims(AuthMember authMember, String jti, Instant expiresAt) {
     }
 }

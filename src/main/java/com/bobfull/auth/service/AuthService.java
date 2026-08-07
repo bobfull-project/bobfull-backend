@@ -143,12 +143,16 @@ public class AuthService {
     /**
      * 현재 Access Token의 jti를 남은 유효시간만큼 Blacklist에 등록해 즉시 무효화하고,
      * 해당 회원의 Refresh Token을 삭제한다(Issue #186). accessToken은 이 요청이 인증 필터를
-     * 통과한 그 토큰이므로 서명·만료 재검증은 항상 성공한다.
+     * 통과한 그 토큰이므로 서명·만료 재검증은 항상 성공한다. jti가 없는 토큰(이 기능 배포 이전에
+     * 발급된 토큰, PR #187 리뷰)은 Blacklist에 등록할 방법이 없어 그 등록만 건너뛰고 Refresh Token
+     * 삭제는 그대로 수행한다 — 로그아웃 자체가 실패하지는 않는다.
      */
     public LogoutResponse logout(Long memberId, String accessToken) {
         JwtTokenProvider.AccessTokenClaims claims = jwtTokenProvider.parseAccessTokenClaims(accessToken);
-        Duration remaining = Duration.between(clock.instant(), claims.expiresAt());
-        accessTokenBlacklistStore.blacklist(claims.jti(), remaining);
+        if (claims.jti() != null) {
+            Duration remaining = Duration.between(clock.instant(), claims.expiresAt());
+            accessTokenBlacklistStore.blacklist(claims.jti(), remaining);
+        }
         refreshTokenStore.deleteByMember(memberId);
         return LogoutResponse.success();
     }
