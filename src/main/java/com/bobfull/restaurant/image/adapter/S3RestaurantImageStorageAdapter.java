@@ -2,6 +2,8 @@ package com.bobfull.restaurant.image.adapter;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ImageErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.restaurant.image.config.RestaurantImageS3Properties;
 import com.bobfull.restaurant.image.port.RestaurantImageStoragePort;
 import java.time.Duration;
@@ -27,15 +29,18 @@ public class S3RestaurantImageStorageAdapter implements RestaurantImageStoragePo
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final RestaurantImageS3Properties properties;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public S3RestaurantImageStorageAdapter(
             S3Client s3Client,
             S3Presigner s3Presigner,
-            RestaurantImageS3Properties properties
+            RestaurantImageS3Properties properties,
+            BusinessMetricRecorder businessMetricRecorder
     ) {
         this.s3Client = s3Client;
         this.s3Presigner = s3Presigner;
         this.properties = properties;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Override
@@ -119,6 +124,7 @@ public class S3RestaurantImageStorageAdapter implements RestaurantImageStoragePo
                 exception.statusCode(),
                 exception
         );
+        businessMetricRecorder.increment(BusinessMetricEvent.IMAGE_STORAGE_REQUEST_FAILED);
         return new CustomException(ImageErrorCode.IMAGE_STORAGE_REQUEST_FAILED);
     }
 
@@ -130,6 +136,7 @@ public class S3RestaurantImageStorageAdapter implements RestaurantImageStoragePo
                 exception.getClass().getSimpleName(),
                 exception
         );
+        businessMetricRecorder.increment(BusinessMetricEvent.IMAGE_STORAGE_REQUEST_FAILED);
         return new CustomException(ImageErrorCode.IMAGE_STORAGE_REQUEST_FAILED);
     }
 

@@ -1,0 +1,128 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: bobfull-business
+    folder: BobFull
+    interval: 1m
+    rules:
+      - uid: bobfull-critical-business-event
+        title: BobFull critical business event occurred
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: sum(increase(bobfull_business_events_total{event=~"PAYMENT_COMPENSATION_REQUIRED|REFUND_COMPENSATION_REQUIRED|PORTONE_WEBHOOK_PROCESSING_FAILED|PAYMENT_WEBHOOK_PERMANENT_FAILURE|CHAT_ROOM_CREATION_REQUIRED|UNHANDLED_EXCEPTION"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: Critical BobFull business event occurred
+          description: A compensation, webhook processing, permanent webhook failure, chat recovery, or unhandled exception event occurred. Check CloudWatch structured logs for identifiers.
+        labels:
+          severity: critical
+          category: business
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring
+
+      - uid: bobfull-login-failure-spike-test
+        title: BobFull login failure spike test threshold
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: sum(increase(bobfull_business_events_total{event="LOGIN_FAILED"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: LOGIN_FAILED crossed the initial test threshold
+          description: LOGIN_FAILED occurred at least 20 times in 5 minutes. Tune after AWS baseline measurement.
+        labels:
+          severity: warning
+          category: security
+          threshold: test
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring

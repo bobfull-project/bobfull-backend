@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.bobfull.common.config.ClockConfig;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.payment.port.PortOneWebhookVerifier;
 import com.bobfull.payment.service.PaymentCompletionService;
@@ -38,6 +39,7 @@ class PortOneWebhookControllerWebTest {
     @MockitoBean private PortOneWebhookVerifier webhookVerifier;
     @MockitoBean private PaymentCompletionService paymentCompletionService;
     @MockitoBean private RefundWebhookService refundWebhookService;
+    @MockitoBean private BusinessMetricRecorder businessMetricRecorder;
 
     @Test
     void 필수_서명헤더_누락은_400이고_결제처리를_호출하지_않는다() throws Exception {

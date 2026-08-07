@@ -2,6 +2,9 @@ package com.bobfull.reservation.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
@@ -39,16 +42,19 @@ public class ReservationConfirmationService {
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCapacityReader reservationCapacityReader;
     private final ApplicationEventPublisher eventPublisher;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public ReservationConfirmationService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            ReservationCapacityReader reservationCapacityReader, ApplicationEventPublisher eventPublisher
+            ReservationCapacityReader reservationCapacityReader, ApplicationEventPublisher eventPublisher,
+            BusinessMetricRecorder businessMetricRecorder
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.reservationCapacityReader = reservationCapacityReader;
         this.eventPublisher = eventPublisher;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     /**
@@ -88,6 +94,7 @@ public class ReservationConfirmationService {
                 && reservation.getReservationStatus() == ReservationStatus.CONFIRMED) {
             log.info("event=RESERVATION_CONFIRMED reservationId={} participantId={} memberId={} beforeStatus={} afterStatus={}",
                     reservation.getId(), participant.getId(), memberId, beforeStatus, reservation.getReservationStatus());
+            AfterCommitExecutor.run(() -> businessMetricRecorder.increment(BusinessMetricEvent.RESERVATION_CONFIRMED));
         }
         return new ReservationConfirmationResult(reservation.getId(), participant.getId());
     }

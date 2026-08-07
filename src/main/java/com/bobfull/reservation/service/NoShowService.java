@@ -4,7 +4,10 @@ import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.common.exception.RestaurantErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
 import com.bobfull.reservation.dto.NoShowCandidateResponse;
@@ -58,6 +61,7 @@ public class NoShowService {
     private final RestaurantRepository restaurantRepository;
     private final MemberRepository memberRepository;
     private final Clock clock;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public NoShowService(
             ReservationRepository reservationRepository,
@@ -68,7 +72,8 @@ public class NoShowService {
             SharedTableRepository sharedTableRepository,
             RestaurantRepository restaurantRepository,
             MemberRepository memberRepository,
-            Clock clock
+            Clock clock,
+            BusinessMetricRecorder businessMetricRecorder
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
@@ -79,6 +84,7 @@ public class NoShowService {
         this.restaurantRepository = restaurantRepository;
         this.memberRepository = memberRepository;
         this.clock = clock;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +112,7 @@ public class NoShowService {
         noShowHistoryRepository.save(NoShowHistory.marked(participant.getId(), ownerMemberId, clock.instant()));
         log.info("event=NO_SHOW_MARKED reservationId={} participantId={} actorId={} afterStatus={}",
                 reservationId, participationId, ownerMemberId, participant.getParticipationStatus());
+        AfterCommitExecutor.run(() -> businessMetricRecorder.increment(BusinessMetricEvent.NO_SHOW_MARKED));
         return new NoShowProcessResponse(reservationId, participationId);
     }
 

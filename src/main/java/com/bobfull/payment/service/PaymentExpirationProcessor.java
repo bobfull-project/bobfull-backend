@@ -1,5 +1,8 @@
 package com.bobfull.payment.service;
 
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.payment.repository.PaymentRepository;
 import java.time.Clock;
 import org.slf4j.Logger;
@@ -13,7 +16,17 @@ public class PaymentExpirationProcessor {
 
     private final PaymentRepository paymentRepository;
     private final Clock clock;
-    public PaymentExpirationProcessor(PaymentRepository paymentRepository, Clock clock) { this.paymentRepository = paymentRepository; this.clock = clock; }
+    private final BusinessMetricRecorder businessMetricRecorder;
+
+    public PaymentExpirationProcessor(
+            PaymentRepository paymentRepository,
+            Clock clock,
+            BusinessMetricRecorder businessMetricRecorder
+    ) {
+        this.paymentRepository = paymentRepository;
+        this.clock = clock;
+        this.businessMetricRecorder = businessMetricRecorder;
+    }
     // 락 순서: Payment 단독(ADR 0001 "복수 비관적 락의 획득 순서" 참고).
     @Transactional
     public void expire(Long id) {
@@ -22,6 +35,7 @@ public class PaymentExpirationProcessor {
                 log.info("event=READY_PAYMENT_EXPIRED paymentInternalId={} paymentId={} memberId={} expiresAt={} afterStatus={}",
                         payment.getId(), payment.getPaymentId(), payment.getMemberId(), payment.getExpiresAt(),
                         payment.getStatus());
+                AfterCommitExecutor.run(() -> businessMetricRecorder.increment(BusinessMetricEvent.READY_PAYMENT_EXPIRED));
             }
         });
     }

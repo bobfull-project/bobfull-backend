@@ -22,6 +22,7 @@ import com.bobfull.auth.token.RefreshTokenStore;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.member.entity.Member;
@@ -54,6 +55,9 @@ class AuthServiceTest {
 
     @Mock
     private RefreshTokenStore refreshTokenStore;
+
+    @Mock
+    private BusinessMetricRecorder businessMetricRecorder;
 
     @InjectMocks
     private AuthService authService;

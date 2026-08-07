@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 import com.bobfull.chat.service.ChatRoomCreationService;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.reservation.event.ReservationConfirmedEvent;
 import org.junit.jupiter.api.Test;
 
@@ -12,8 +13,10 @@ class ChatRoomCreationEventListenerTest {
 
     private final ChatRoomCreationService chatRoomCreationService =
             org.mockito.Mockito.mock(ChatRoomCreationService.class);
+    private final BusinessMetricRecorder businessMetricRecorder =
+            org.mockito.Mockito.mock(BusinessMetricRecorder.class);
     private final ChatRoomCreationEventListener listener =
-            new ChatRoomCreationEventListener(chatRoomCreationService);
+            new ChatRoomCreationEventListener(chatRoomCreationService, businessMetricRecorder);
 
     @Test
     void 이벤트를_받으면_해당_reservationId로_ChatRoom_생성을_시도한다() {

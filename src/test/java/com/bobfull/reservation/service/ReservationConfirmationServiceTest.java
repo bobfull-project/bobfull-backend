@@ -12,6 +12,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
@@ -51,9 +52,13 @@ class ReservationConfirmationServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private BusinessMetricRecorder businessMetricRecorder;
+
     private ReservationConfirmationService service() {
         return new ReservationConfirmationService(
-                reservationRepository, reservationParticipantRepository, reservationCapacityReader, eventPublisher);
+                reservationRepository, reservationParticipantRepository, reservationCapacityReader, eventPublisher,
+                businessMetricRecorder);
     }
 
     @Test
