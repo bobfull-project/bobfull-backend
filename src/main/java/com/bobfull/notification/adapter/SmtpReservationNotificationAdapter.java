@@ -21,7 +21,9 @@ import org.springframework.stereotype.Component;
  * {@value #MAX_ATTEMPTS}회까지 재시도하며, 한 명의 발송 실패가 다른 참여자의 발송을 막지
  * 않는다. 재시도를 모두 소진해도 예외를 던지지 않고 실패만 로그로 남긴다 — 이메일 주소·본문은
  * 로그에 남기지 않는다. 이미지 첨부 없이 CSS만으로 꾸민 HTML 본문을 사용한다. 접수·참여 완료
- * 안내는 모집이 아직 진행 중일 수 있으므로 "확정"이라 표현하지 않는다.
+ * 안내는 결제 완료 시점에 이미 정원이 차 모집이 즉시 마감(CLOSED)될 수도 있으므로, "확정"이라
+ * 표현하지 않는 것은 물론 "모집 중"이라고 단정하지도 않는다 — 실제 모집 상태와 무관하게 참인
+ * 상태 중립 문구만 사용한다.
  */
 @Component
 public class SmtpReservationNotificationAdapter implements ReservationNotificationPort {
@@ -59,13 +61,15 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
     @Override
     public void notifyReservationCreated(ReservationResultNotification notification) {
         send(notification, "CREATED", "[밥풀] 예약 접수가 완료되었습니다",
-                "예약 접수가 완료됐어요", "#1c7ed6", "현재 합석 참여자를 모집 중입니다. 모집이 마감되면 결과를 다시 안내드릴게요.");
+                "예약 접수가 완료됐어요", "#1c7ed6",
+                "최종 예약 상태는 밥풀에서 확인할 수 있으며, 모집 마감 처리 대상인 경우 결과를 별도로 안내드립니다.");
     }
 
     @Override
     public void notifyParticipationCompleted(ReservationResultNotification notification) {
         send(notification, "JOINED", "[밥풀] 합석 참여가 완료되었습니다",
-                "참여가 완료됐어요", "#1c7ed6", "합석 예약 참여가 완료되었습니다. 모집이 마감되면 결과를 다시 안내드릴게요.");
+                "참여가 완료됐어요", "#1c7ed6",
+                "최종 예약 상태는 밥풀에서 확인할 수 있으며, 모집 마감 처리 대상인 경우 결과를 별도로 안내드립니다.");
     }
 
     private void send(

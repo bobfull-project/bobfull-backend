@@ -143,6 +143,9 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         Reservation updated = reservationRepository.findById(reservation.getId()).orElseThrow();
         assertThat(updated.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(updated.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
+        // 정원 도달로 같은 트랜잭션 안에서 모집이 즉시 CLOSED돼도, 참여 완료 알림 자체는 그대로
+        // 발송된다 — 문구가 실제 상태(이미 CLOSED)와 충돌하지 않는지는 어댑터 단위 테스트에서 검증한다.
+        assertThat(notificationAdapter.participationCompletedNotifications()).hasSize(1);
     }
 
     @Test

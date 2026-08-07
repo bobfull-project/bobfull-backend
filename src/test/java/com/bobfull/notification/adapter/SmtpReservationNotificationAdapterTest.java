@@ -17,12 +17,15 @@ import com.bobfull.reservation.port.ReservationNotificationPort.ReservationResul
 import jakarta.mail.Message;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
@@ -129,6 +132,46 @@ class SmtpReservationNotificationAdapterTest {
         adapter().notifyParticipationCompleted(notification);
 
         verify(mailSender, times(1)).send(any(MimeMessage.class));
+    }
+
+    @Test
+    void 예약_접수_안내_문구는_모집_중이라고_단정하지_않는다() throws Exception {
+        assertBodyDoesNotAssertRecruiting(adapter()::notifyReservationCreated);
+    }
+
+    @Test
+    void 참여_완료_안내_문구는_모집_중이라고_단정하지_않는다() throws Exception {
+        assertBodyDoesNotAssertRecruiting(adapter()::notifyParticipationCompleted);
+    }
+
+    /**
+     * 정원 도달로 CREATE·JOIN 결제 완료와 같은 트랜잭션 안에서 모집이 즉시 CLOSED될 수 있으므로
+     * (정원 마지막 자리를 채운 JOIN 등), 접수·참여 완료 안내 문구는 실제 모집 상태와 무관하게
+     * 항상 참이어야 한다 — "모집 중"이라고 단정하면 이미 CLOSED된 예약에는 거짓 안내가 된다.
+     */
+    private void assertBodyDoesNotAssertRecruiting(Consumer<ReservationResultNotification> action) throws Exception {
+        givenMimeMessage();
+        ReservationResultNotification notification = notification(new Recipient(1L, "a@bobfull.com", "회원A"));
+        ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
+
+        action.accept(notification);
+
+        verify(mailSender).send(captor.capture());
+        String plainText = extractPlainText(captor.getValue());
+        assertThat(plainText).doesNotContain("모집 중");
+    }
+
+    /**
+     * {@code MimeMessageHelper(message, true, ...)}는 mixed multipart 안에 text/html 대체본을
+     * 담는 alternative multipart를 한 겹 더 감싸므로, 첫 번째 텍스트 파트를 찾을 때까지 재귀적으로
+     * 내려가야 한다.
+     */
+    private String extractPlainText(MimeMessage message) throws Exception {
+        Object content = message.getContent();
+        while (content instanceof MimeMultipart multipart) {
+            content = multipart.getBodyPart(0).getContent();
+        }
+        return (String) content;
     }
 
     @Test
