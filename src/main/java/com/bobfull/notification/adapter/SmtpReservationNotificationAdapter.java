@@ -147,10 +147,10 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
                   <p style="color:#999;font-size:13px;margin:0 0 4px;">밥풀</p>
                   <h2 style="color:%s;margin:0 0 8px;font-size:22px;">%s</h2>
                   <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 20px;">%s</p>
-                  <table cellpadding="0" cellspacing="0" border="0" style="width:100%%;border-collapse:collapse;background:#fafafa;border-radius:12px;">
+                  <table style="width:100%%;border-collapse:collapse;background:#fafafa;border-radius:12px;">
                     <tr>
                       <td style="padding:12px 16px;color:#888;font-size:14px;">식당명</td>
-                      <td style="padding:12px 16px;text-align:left;font-weight:600;font-size:14px;">%s</td>
+                      <td style="padding:12px 16px;text-align:right;font-weight:600;font-size:14px;">%s</td>
                     </tr>
                     <tr>
                       <td style="padding:12px 16px;color:#888;font-size:14px;">예약 날짜</td>
@@ -162,7 +162,7 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
                     </tr>
                     <tr>
                       <td style="padding:12px 16px;color:#888;font-size:14px;">주소</td>
-                      <td style="padding:12px 16px;text-align:left;font-weight:600;font-size:14px;">%s</td>
+                      <td style="padding:12px 16px;text-align:right;font-weight:600;font-size:14px;">%s</td>
                     </tr>
                   </table>
                   <p style="color:#bbb;font-size:12px;text-align:center;margin:24px 0 0;">밥풀 · 혼밥이 모여, 한 테이블이 되는 곳</p>
