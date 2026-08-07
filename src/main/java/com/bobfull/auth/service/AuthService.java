@@ -7,6 +7,7 @@ import com.bobfull.auth.dto.ReissueResponse;
 import com.bobfull.auth.dto.SignupOwnerRequest;
 import com.bobfull.auth.dto.SignupResponse;
 import com.bobfull.auth.dto.SignupUserRequest;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import com.bobfull.auth.token.RefreshTokenStore;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
@@ -14,6 +15,8 @@ import com.bobfull.common.exception.MemberErrorCode;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
+import java.time.Clock;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -23,12 +26,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 회원가입·로그인과 Refresh Token 재발급·로그아웃을 담당한다(Issue #125).
+ * 회원가입·로그인과 Refresh Token 재발급·로그아웃을 담당한다(Issue #125, #186).
  * 이메일·전화번호·사업자등록번호 중복은 저장 전 사전 검사로 우선 차단하고,
  * 동시 가입 경쟁으로 사전 검사를 통과한 뒤 DB UNIQUE 제약에 걸리면
  * DataIntegrityViolationException을 같은 중복 ErrorCode로 변환한다.
  * Refresh Token은 Redis에만 저장하며(회원당 1건, 재발급마다 회전), 재발급 중 Redis 조회 실패는
- * 무효 토큰과 동일하게 401로 거부한다(fail-closed). 로그아웃의 Redis 실패는 감추지 않고 전파한다.
+ * 무효 토큰과 동일하게 401로 거부한다(fail-closed). 로그아웃의 Redis 실패(Blacklist 등록·Refresh Token
+ * 삭제 모두)는 감추지 않고 전파한다 — 인증 필터의 매 요청 Blacklist *조회*만 Fail-open이고, 로그아웃
+ * 자체의 등록 실패를 성공으로 위장하지는 않는다(Issue #186 Q5).
  */
 @Service
 public class AuthService {
@@ -39,17 +44,23 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
+    private final AccessTokenBlacklistStore accessTokenBlacklistStore;
+    private final Clock clock;
 
     public AuthService(
             MemberRepository memberRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
-            RefreshTokenStore refreshTokenStore
+            RefreshTokenStore refreshTokenStore,
+            AccessTokenBlacklistStore accessTokenBlacklistStore,
+            Clock clock
     ) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.refreshTokenStore = refreshTokenStore;
+        this.accessTokenBlacklistStore = accessTokenBlacklistStore;
+        this.clock = clock;
     }
 
     @Transactional
@@ -129,7 +140,15 @@ public class AuthService {
         }
     }
 
-    public LogoutResponse logout(Long memberId) {
+    /**
+     * 현재 Access Token의 jti를 남은 유효시간만큼 Blacklist에 등록해 즉시 무효화하고,
+     * 해당 회원의 Refresh Token을 삭제한다(Issue #186). accessToken은 이 요청이 인증 필터를
+     * 통과한 그 토큰이므로 서명·만료 재검증은 항상 성공한다.
+     */
+    public LogoutResponse logout(Long memberId, String accessToken) {
+        JwtTokenProvider.AccessTokenClaims claims = jwtTokenProvider.parseAccessTokenClaims(accessToken);
+        Duration remaining = Duration.between(clock.instant(), claims.expiresAt());
+        accessTokenBlacklistStore.blacklist(claims.jti(), remaining);
         refreshTokenStore.deleteByMember(memberId);
         return LogoutResponse.success();
     }

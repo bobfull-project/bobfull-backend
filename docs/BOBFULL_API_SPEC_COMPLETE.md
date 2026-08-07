@@ -445,7 +445,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 인증된 회원의 Refresh Token을 Redis에서 즉시 삭제한다. Access Token은 별도로 무효화하지 않으며 자연 만료까지 유효하다.
+- 설명: 인증된 회원의 Refresh Token을 Redis Whitelist에서 즉시 삭제하고, 현재 요청에 사용된 Access Token의 `jti`를 남은 유효시간만큼 Redis Blacklist에 등록해 즉시 무효화한다(Issue #186). 이후 이 Access Token으로는 보호 API에 접근할 수 없다.
 - Method: `POST`
 - Path: `/api/auth/logout`
 - Auth: 필요

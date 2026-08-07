@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 
 /**
@@ -35,6 +36,7 @@ public class JwtTokenProvider {
         Instant expiration = now.plusSeconds(accessTokenExpirationSeconds);
 
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .claim(CLAIM_MEMBER_ID, memberId)
                 .claim(CLAIM_ROLE, role.name())
                 .issuedAt(Date.from(now))
@@ -49,6 +51,14 @@ public class JwtTokenProvider {
      * InvalidJwtException 하나로 통일해 필터가 단일 처리로 401로 이어지게 한다.
      */
     public AuthMember parseAccessToken(String token) {
+        return parseAccessTokenClaims(token).authMember();
+    }
+
+    /**
+     * Access Token Blacklist 등록(로그아웃)·조회(인증 필터)에 필요한 jti·만료 시각까지
+     * 함께 반환한다(Issue #186). 검증 실패 처리는 {@link #parseAccessToken}과 동일하다.
+     */
+    public AccessTokenClaims parseAccessTokenClaims(String token) {
         try {
             var claims = Jwts.parser()
                     .clock(() -> Date.from(clock.instant()))
@@ -59,13 +69,19 @@ public class JwtTokenProvider {
 
             Number memberId = claims.get(CLAIM_MEMBER_ID, Number.class);
             String role = claims.get(CLAIM_ROLE, String.class);
-            if (memberId == null || role == null) {
+            String jti = claims.getId();
+            Date expiration = claims.getExpiration();
+            if (memberId == null || role == null || jti == null || expiration == null) {
                 throw new InvalidJwtException("토큰에 필수 Claim이 없습니다.");
             }
 
-            return new AuthMember(memberId.longValue(), MemberRole.valueOf(role));
+            AuthMember authMember = new AuthMember(memberId.longValue(), MemberRole.valueOf(role));
+            return new AccessTokenClaims(authMember, jti, expiration.toInstant());
         } catch (JwtException | IllegalArgumentException e) {
             throw new InvalidJwtException("토큰을 검증할 수 없습니다.", e);
         }
+    }
+
+    public record AccessTokenClaims(AuthMember authMember, String jti, Instant expiresAt) {
     }
 }
