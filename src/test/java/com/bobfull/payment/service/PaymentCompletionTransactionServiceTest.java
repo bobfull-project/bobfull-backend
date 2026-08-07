@@ -5,6 +5,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -21,7 +24,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentCompletionTransactionServiceTest {
@@ -50,6 +56,46 @@ class PaymentCompletionTransactionServiceTest {
         assertThat(payment.getReservationId()).isEqualTo(10L);
         assertThat(payment.getReservationParticipantId()).isEqualTo(20L);
         verify(reservationConfirmationPort).confirm(payment);
+    }
+
+    @Test
+    void READY_Payment를_완료하면_afterCommit에서_PAYMENT_COMPLETED_구조화로그를_남긴다() {
+        // given
+        Payment payment = readyPayment();
+        given(paymentRepository.findWithLockByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        given(reservationConfirmationPort.confirm(payment))
+                .willReturn(new ReservationConfirmationPort.ReservationConfirmationResult(10L, 20L));
+        PaymentCompletionTransactionService service = new PaymentCompletionTransactionService(paymentRepository,
+                reservationConfirmationPort, Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneOffset.UTC));
+        Logger logger = (Logger) LoggerFactory.getLogger(PaymentCompletionTransactionService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
+            // when
+            service.complete("payment-id", 1L);
+            assertThat(appender.list).isEmpty();
+            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCommit();
+            }
+        } finally {
+            logger.detachAppender(appender);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=PAYMENT_COMPLETED");
+            assertThat(event.getFormattedMessage()).contains("paymentId=payment-id");
+            assertThat(event.getFormattedMessage()).contains("memberId=1");
+            assertThat(event.getFormattedMessage()).contains("reservationId=10");
+            assertThat(event.getFormattedMessage()).contains("participantId=20");
+            assertThat(event.getFormattedMessage()).contains("afterStatus=PAID");
+        });
     }
 
     @Test

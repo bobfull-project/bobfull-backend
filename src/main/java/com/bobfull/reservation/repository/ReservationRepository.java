@@ -58,4 +58,17 @@ public interface ReservationRepository
             @Param("deadline") Instant deadline,
             Pageable pageable
     );
+
+    /**
+     * 식사 종료(TimeSlot.endAt 도달) 후보를 조회한다(Issue #175 Q1·Q2). {@code CONFIRMED} 예약만
+     * 대상으로 삼아, 식사 종료 시점까지 {@code RECRUITING}으로 남은 예약은 자동 종료로 덮지 않는다.
+     */
+    @Query("select r.id from Reservation r join TimeSlot ts on r.timeSlotId = ts.id "
+            + "where r.reservationStatus = :reservationStatus and ts.endAt <= :now "
+            + "order by ts.endAt asc")
+    List<Long> findDiningEndCandidateIds(
+            @Param("reservationStatus") ReservationStatus reservationStatus,
+            @Param("now") Instant now,
+            Pageable pageable
+    );
 }

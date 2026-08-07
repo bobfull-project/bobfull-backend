@@ -72,4 +72,6 @@ notification:
 
 logging:
   level:
+    root: info
+    com.bobfull: info
     org.hibernate.SQL: info

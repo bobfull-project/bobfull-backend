@@ -3,6 +3,7 @@ package com.bobfull.reservation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,11 +21,13 @@ import com.bobfull.reservation.dto.ReservationPrepareRequest;
 import com.bobfull.reservation.dto.ReservationPrepareResponse;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.port.ReservationTargetReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -110,6 +113,23 @@ class ReservationPreparationServiceTest {
         // then
         assertThat(((CustomException) result).getErrorCode())
                 .isEqualTo(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
+    }
+
+    @Test
+    void CREATE_식사_종료로_CLOSED된_회차는_재예약이_차단된다() {
+        // given: 이 회차의 유일한 예약이 CLOSED(식사 종료)여도 재예약을 막아야 한다(Issue #175 회귀 수정)
+        given(reservationTargetReader.read(200L, false)).willReturn(target());
+        ArgumentCaptor<List<ReservationStatus>> statusesCaptor = ArgumentCaptor.forClass(List.class);
+        given(reservationRepository.existsByTimeSlotIdAndReservationStatusIn(eq(200L), statusesCaptor.capture()))
+                .willReturn(true);
+
+        // when
+        Throwable result = catchThrowable(() -> service().checkAvailability(1L, PaymentPurpose.CREATE, 200L, 2));
+
+        // then
+        assertThat(((CustomException) result).getErrorCode())
+                .isEqualTo(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
+        assertThat(statusesCaptor.getValue()).contains(ReservationStatus.CLOSED);
     }
 
     @Test

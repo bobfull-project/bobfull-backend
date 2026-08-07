@@ -2,19 +2,25 @@ package com.bobfull.payment.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.exception.PaymentExpiredException;
 import com.bobfull.payment.port.ReservationConfirmationPort;
+import com.bobfull.payment.port.ReservationConfirmationPort.ReservationConfirmationResult;
 import com.bobfull.payment.repository.PaymentRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import com.bobfull.payment.port.ReservationConfirmationPort.ReservationConfirmationResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PaymentCompletionTransactionService {
+    private static final Logger log = LoggerFactory.getLogger(PaymentCompletionTransactionService.class);
+
     private final PaymentRepository paymentRepository;
     private final ReservationConfirmationPort reservationConfirmationPort;
     private final Clock clock;
@@ -51,12 +57,26 @@ public class PaymentCompletionTransactionService {
         payment.complete(now);
         ReservationConfirmationResult result = reservationConfirmationPort.confirm(payment);
         payment.attachReservationConfirmation(result.reservationId(), result.participationId());
+        logPaymentCompletedAfterCommit(payment, result);
         return new PaymentCompletionResult(payment, result.reservationId(), result.participationId());
     }
 
     @Transactional
     public PaymentCompletionResult complete(String paymentId) {
         return complete(paymentId, null);
+    }
+
+    private void logPaymentCompletedAfterCommit(Payment payment, ReservationConfirmationResult result) {
+        String completedPaymentId = payment.getPaymentId();
+        Long completedMemberId = payment.getMemberId();
+        Long completedReservationId = result.reservationId();
+        Long completedParticipantId = result.participationId();
+        BigDecimal completedAmount = payment.getAmount();
+        PaymentStatus completedStatus = payment.getStatus();
+        AfterCommitExecutor.run(() -> log.info(
+                "event=PAYMENT_COMPLETED paymentId={} memberId={} reservationId={} participantId={} amount={} afterStatus={}",
+                completedPaymentId, completedMemberId, completedReservationId, completedParticipantId,
+                completedAmount, completedStatus));
     }
 
     public record PaymentCompletionResult(Payment payment, Long reservationId, Long participationId) { }

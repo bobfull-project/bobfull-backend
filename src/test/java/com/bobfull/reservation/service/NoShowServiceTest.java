@@ -7,6 +7,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
@@ -41,6 +44,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -125,6 +129,22 @@ class NoShowServiceTest {
     }
 
     @Test
+    void 식사_종료_시각과_같으면_노쇼_후보_조회를_허용한다() {
+        // given: now == TimeSlot.endAt (Issue #175 Q1 경계)
+        setUpOwnershipChain(FIXED_CLOCK.instant());
+        given(reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(
+                reservation.getId(), ParticipationStatus.RESERVED, PageRequest.of(0, 20)))
+                .willReturn(new PageImpl<>(List.of()));
+
+        // when
+        Throwable result = catchThrowable(
+                () -> service.getCandidates(ownerMemberId, reservation.getId(), PageRequest.of(0, 20)));
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
     void 존재하지_않는_예약은_404() {
         // given
         service = new NoShowService(
@@ -176,6 +196,36 @@ class NoShowServiceTest {
     }
 
     @Test
+    void 노쇼_처리시_NO_SHOW_MARKED_구조화로그를_남긴다() {
+        // given
+        setUpOwnershipChain(FIXED_CLOCK.instant().minusSeconds(60));
+        ReservationParticipant participant = ReservationParticipant.create(reservation.getId(), 20L, 2);
+        ReflectionTestUtils.setField(participant, "id", 500L);
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(500L, reservation.getId()))
+                .willReturn(Optional.of(participant));
+        Logger logger = (Logger) LoggerFactory.getLogger(NoShowService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            service.markNoShow(ownerMemberId, reservation.getId(), 500L);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=NO_SHOW_MARKED");
+            assertThat(event.getFormattedMessage()).contains("reservationId=1");
+            assertThat(event.getFormattedMessage()).contains("participantId=500");
+            assertThat(event.getFormattedMessage()).contains("actorId=1");
+            assertThat(event.getFormattedMessage()).contains("afterStatus=NO_SHOW");
+        });
+    }
+
+    @Test
     void 이미_처리된_참여자를_다시_노쇼_처리하면_409() {
         // given
         setUpOwnershipChain(FIXED_CLOCK.instant().minusSeconds(60));
@@ -221,6 +271,23 @@ class NoShowServiceTest {
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_STATE);
         verify(reservationParticipantRepository, never()).findWithLockByIdAndReservationId(any(), any());
+    }
+
+    @Test
+    void 식사_종료_시각과_같으면_노쇼_처리를_허용한다() {
+        // given: now == TimeSlot.endAt (Issue #175 Q1·Q4 경계, 채팅 SEND 차단과 동일 기준)
+        setUpOwnershipChain(FIXED_CLOCK.instant());
+        ReservationParticipant participant = ReservationParticipant.create(reservation.getId(), 20L, 2);
+        ReflectionTestUtils.setField(participant, "id", 500L);
+        given(reservationParticipantRepository.findWithLockByIdAndReservationId(500L, reservation.getId()))
+                .willReturn(Optional.of(participant));
+
+        // when
+        NoShowProcessResponse result = service.markNoShow(ownerMemberId, reservation.getId(), 500L);
+
+        // then
+        assertThat(result.participationId()).isEqualTo(500L);
+        assertThat(participant.getParticipationStatus()).isEqualTo(ParticipationStatus.NO_SHOW);
     }
 
     @Test

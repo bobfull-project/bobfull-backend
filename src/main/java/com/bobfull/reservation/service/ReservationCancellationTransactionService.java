@@ -27,6 +27,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReservationCancellationTransactionService {
 
+    private static final Logger log = LoggerFactory.getLogger(ReservationCancellationTransactionService.class);
     private static final Duration CANCELLATION_DEADLINE = Duration.ofHours(2);
     private static final List<ParticipationStatus> OCCUPYING_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
@@ -89,10 +92,13 @@ public class ReservationCancellationTransactionService {
         validateCancellationDeadline(reservation.getTimeSlotId());
 
         String reason = request.reason();
-        if (reservation.isCreatedBy(memberId)) {
-            return acceptEntireReservationCancellation(reservation, actingParticipant, reason);
-        }
-        return acceptParticipantCancellation(reservation, actingParticipant, reason);
+        CancellationAcceptance acceptance = reservation.isCreatedBy(memberId)
+                ? acceptEntireReservationCancellation(reservation, actingParticipant, reason)
+                : acceptParticipantCancellation(reservation, actingParticipant, reason);
+        log.info("event=RESERVATION_CANCELLATION_REQUESTED reservationId={} participantId={} memberId={} scope={} afterReservationStatus={} afterParticipantStatus={}",
+                acceptance.reservationId(), acceptance.actingParticipantId(), memberId, acceptance.scope(),
+                reservation.getReservationStatus(), actingParticipant.getParticipationStatus());
+        return acceptance;
     }
 
     /**
@@ -130,6 +136,8 @@ public class ReservationCancellationTransactionService {
                 new ReservationCancellationRefundPort.RefundRequestCommand(
                         reservation.getId(), participantIds, ownerMemberId, reason);
 
+        log.info("event=RESERVATION_CANCELLATION_REQUESTED reservationId={} actorId={} scope=RESERVATION trigger=OWNER_CANCEL participantCount={} afterReservationStatus={}",
+                reservation.getId(), ownerMemberId, participantIds.size(), reservation.getReservationStatus());
         return new OwnerCancellationAcceptance(reservation.getId(), command);
     }
 
@@ -164,8 +172,13 @@ public class ReservationCancellationTransactionService {
         }
     }
 
+    /**
+     * {@code CLOSED}(식사 종료로 생명주기가 끝난 예약)도 여기서 차단한다(Issue #175 PR #178
+     * 리뷰 반영). OWNER 취소는 MEMBER 취소와 달리 취소 기한을 두지 않아, 이 검사가 없으면
+     * 식사가 끝난 예약도 다시 {@code CANCELLING}으로 전이되어 환불이 시작될 수 있다.
+     */
     private void validateReservationCancellableByOwner(Reservation reservation) {
-        if (reservation.isCancelled() || reservation.isCancelling()) {
+        if (reservation.isCancelled() || reservation.isCancelling() || reservation.isClosed()) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
         }
     }
@@ -204,6 +217,8 @@ public class ReservationCancellationTransactionService {
                 new ReservationCancellationRefundPort.RefundRequestCommand(
                         reservation.getId(), participantIds, reservation.getCreatorMemberId(), RECRUITMENT_FAILURE_REASON);
         eventPublisher.publishEvent(new RecruitmentDeadlineCancelledEvent(reservation.getId(), participantIds));
+        log.info("event=RESERVATION_CANCELLATION_REQUESTED reservationId={} actorId=SYSTEM scope=RESERVATION trigger=RECRUITMENT_DEADLINE participantCount={} afterReservationStatus={}",
+                reservation.getId(), participantIds.size(), reservation.getReservationStatus());
         return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.CANCELLED, command);
     }
 

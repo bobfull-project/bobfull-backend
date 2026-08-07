@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.chat.entity.ChatRoom;
 import com.bobfull.chat.port.ReservationChatAccessReader;
 import com.bobfull.chat.repository.ChatRoomRepository;
@@ -14,6 +17,7 @@ import com.bobfull.common.security.MemberRole;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ChatRoomQueryServiceTest {
@@ -69,12 +73,28 @@ class ChatRoomQueryServiceTest {
         given(access.read(10L, 7L)).willReturn(new ReservationChatAccessReader.ChatAccess(4L, ParticipationStatus.RESERVED));
         given(rooms.findByReservationId(10L)).willReturn(Optional.empty());
         given(chatRoomCreationService.createIfAbsent(10L)).willThrow(new IllegalStateException("강제 실패(테스트)"));
+        Logger logger = (Logger) LoggerFactory.getLogger(ChatRoomQueryService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
 
         // when & then
-        assertThatThrownBy(() -> service.get(7L, MemberRole.MEMBER, 10L))
-                .isInstanceOf(CustomException.class)
-                .extracting(exception -> ((CustomException) exception).getErrorCode())
-                .isEqualTo(ChatErrorCode.CHAT_ROOM_NOT_READY);
+        try {
+            assertThatThrownBy(() -> service.get(7L, MemberRole.MEMBER, 10L))
+                    .isInstanceOf(CustomException.class)
+                    .extracting(exception -> ((CustomException) exception).getErrorCode())
+                    .isEqualTo(ChatErrorCode.CHAT_ROOM_NOT_READY);
+        } finally {
+            logger.detachAppender(appender);
+        }
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=CHAT_ROOM_CREATION_REQUIRED");
+            assertThat(event.getFormattedMessage()).contains("reservationId=10");
+            assertThat(event.getFormattedMessage()).contains("attemptSource=QUERY_RECOVERY");
+            assertThat(event.getFormattedMessage()).contains("autoRetry=false");
+            assertThat(event.getFormattedMessage()).contains("manualActionRequired=true");
+            assertThat(event.getThrowableProxy().getClassName()).isEqualTo(IllegalStateException.class.getName());
+        });
     }
 
     private void assertAccessDenied(org.assertj.core.api.ThrowableAssert.ThrowingCallable action) {

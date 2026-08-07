@@ -7,10 +7,14 @@ import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ChatErrorCode;
 import com.bobfull.common.security.MemberRole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ChatRoomQueryService {
+    private static final Logger log = LoggerFactory.getLogger(ChatRoomQueryService.class);
+
     private final ChatRoomRepository rooms; private final ReservationChatAccessReader access;
     private final ChatRoomCreationService chatRoomCreationService;
     public ChatRoomQueryService(ChatRoomRepository rooms, ReservationChatAccessReader access,
@@ -36,6 +40,8 @@ public class ChatRoomQueryService {
         try {
             return chatRoomCreationService.createIfAbsent(reservationId);
         } catch (RuntimeException exception) {
+            log.error("event=CHAT_ROOM_CREATION_REQUIRED reservationId={} attemptSource=QUERY_RECOVERY autoRetry=false manualActionRequired=true",
+                    reservationId, exception);
             throw new CustomException(ChatErrorCode.CHAT_ROOM_NOT_READY);
         }
     }

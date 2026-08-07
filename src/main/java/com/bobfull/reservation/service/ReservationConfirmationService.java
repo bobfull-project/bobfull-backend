@@ -6,6 +6,7 @@ import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
+import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.event.ReservationConfirmedEvent;
 import com.bobfull.reservation.event.ReservationPaymentCompletedEvent;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
@@ -13,6 +14,8 @@ import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -28,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReservationConfirmationService {
 
+    private static final Logger log = LoggerFactory.getLogger(ReservationConfirmationService.class);
     private static final List<ParticipationStatus> OCCUPYING_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
@@ -78,7 +82,13 @@ public class ReservationConfirmationService {
         }
         eventPublisher.publishEvent(new ReservationPaymentCompletedEvent(reservation.getId(), participant.getId(), purpose));
 
+        ReservationStatus beforeStatus = reservation.getReservationStatus();
         updateReservationStatus(reservation, timeSlotId);
+        if (beforeStatus != ReservationStatus.CONFIRMED
+                && reservation.getReservationStatus() == ReservationStatus.CONFIRMED) {
+            log.info("event=RESERVATION_CONFIRMED reservationId={} participantId={} memberId={} beforeStatus={} afterStatus={}",
+                    reservation.getId(), participant.getId(), memberId, beforeStatus, reservation.getReservationStatus());
+        }
         return new ReservationConfirmationResult(reservation.getId(), participant.getId());
     }
 

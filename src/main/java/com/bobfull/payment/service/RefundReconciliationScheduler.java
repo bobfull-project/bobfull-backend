@@ -66,7 +66,7 @@ public class RefundReconciliationScheduler {
             }
         } catch (RefundReconciliationProcessor.RefundLookupException exception) {
             lookupFailures.put(refund.getId(), now);
-            log.error("event=REFUND_LOOKUP_FAILED refundId={} paymentId={} reason={}", refund.getId(),
+            log.warn("event=REFUND_LOOKUP_FAILED refundId={} paymentId={} reason={}", refund.getId(),
                     refund.getPayment().getPaymentId(), exception.toString(), exception);
             logMultipleFailures(now);
         } catch (RuntimeException exception) {

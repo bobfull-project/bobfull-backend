@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class NoShowService {
 
+    private static final Logger log = LoggerFactory.getLogger(NoShowService.class);
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private final ReservationRepository reservationRepository;
@@ -101,6 +104,8 @@ public class NoShowService {
         }
         participant.markNoShow();
         noShowHistoryRepository.save(NoShowHistory.marked(participant.getId(), ownerMemberId, clock.instant()));
+        log.info("event=NO_SHOW_MARKED reservationId={} participantId={} actorId={} afterStatus={}",
+                reservationId, participationId, ownerMemberId, participant.getParticipationStatus());
         return new NoShowProcessResponse(reservationId, participationId);
     }
 
@@ -114,6 +119,8 @@ public class NoShowService {
         }
         participant.unmarkNoShow();
         noShowHistoryRepository.save(NoShowHistory.unmarked(participant.getId(), ownerMemberId, clock.instant()));
+        log.info("event=NO_SHOW_UNMARKED reservationId={} participantId={} actorId={} afterStatus={}",
+                reservationId, participationId, ownerMemberId, participant.getParticipationStatus());
         return new NoShowProcessResponse(reservationId, participationId);
     }
 
@@ -150,8 +157,12 @@ public class NoShowService {
         return new OwnershipContext(reservation, timeSlot);
     }
 
+    /**
+     * 식사 종료 경계는 {@code now >= TimeSlot.endAt}이다(Issue #175 Q1·Q4). 채팅 SEND 차단과
+     * 동일한 경계를 사용해, 정확히 종료 시각인 순간부터 노쇼 처리를 허용한다.
+     */
     private void requireDiningEnded(TimeSlot timeSlot) {
-        if (!clock.instant().isAfter(timeSlot.getEndAt())) {
+        if (clock.instant().isBefore(timeSlot.getEndAt())) {
             throw new CustomException(ReservationErrorCode.INVALID_STATE);
         }
     }

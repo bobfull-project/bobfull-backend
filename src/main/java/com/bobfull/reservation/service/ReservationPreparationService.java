@@ -31,8 +31,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReservationPreparationService {
 
-    private static final List<ReservationStatus> ACTIVE_STATUSES =
-            List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
+    /**
+     * 새 CREATE 예약을 막는 상태 목록이다(PR #178 리뷰 반영, Issue #175). {@code CLOSED}(식사 종료로
+     * 생명주기가 끝난 예약)는 참여 가능한 활성 상태는 아니지만, 같은 TimeSlot에 대한 재예약은 막아야
+     * 한다 — 그렇지 않으면 이미 식사가 끝난 회차를 다른 회원이 다시 결제 준비할 수 있다.
+     */
+    private static final List<ReservationStatus> CREATE_BLOCKING_STATUSES = List.of(
+            ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED,
+            ReservationStatus.CANCELLING, ReservationStatus.CLOSED);
 
     private final ReservationTargetReader reservationTargetReader;
     private final ReservationRepository reservationRepository;
@@ -112,10 +118,10 @@ public class ReservationPreparationService {
     }
 
     private void validateNoActiveCreate(Long timeSlotId) {
-        boolean activeReservationExists = reservationRepository.existsByTimeSlotIdAndReservationStatusIn(
-                timeSlotId, ACTIVE_STATUSES);
+        boolean blockingReservationExists = reservationRepository.existsByTimeSlotIdAndReservationStatusIn(
+                timeSlotId, CREATE_BLOCKING_STATUSES);
         boolean activeCreateReadyExists = paymentHoldReader.existsActiveReadyPayment(timeSlotId, PaymentPurpose.CREATE);
-        if (activeReservationExists || activeCreateReadyExists) {
+        if (blockingReservationExists || activeCreateReadyExists) {
             throw new CustomException(ReservationErrorCode.ACTIVE_RESERVATION_ALREADY_EXISTS);
         }
     }
