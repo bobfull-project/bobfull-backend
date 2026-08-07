@@ -14,6 +14,7 @@ import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.restaurant.image.dto.RestaurantImageUploadUrlRequest;
 import com.bobfull.restaurant.image.dto.RestaurantImageUploadUrlResponse;
 import com.bobfull.restaurant.image.service.RestaurantImageService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,13 +34,14 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=restaurant-image-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "cors.allowed-origins=http://localhost:5173"
 })
 class RestaurantImageControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private ObjectMapper objectMapper;

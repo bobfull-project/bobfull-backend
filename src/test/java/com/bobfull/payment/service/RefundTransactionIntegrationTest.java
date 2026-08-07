@@ -50,7 +50,7 @@ import org.slf4j.LoggerFactory;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:refund-transaction-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=refund-transaction-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=3600", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:refund-transaction-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=refund-transaction-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=1800", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
 @ContextConfiguration(classes = RefundTransactionIntegrationTest.Config.class)
 class RefundTransactionIntegrationTest {
     @Autowired private OuterRollbackProbe outerRollbackProbe;

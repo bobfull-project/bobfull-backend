@@ -60,7 +60,7 @@ import org.springframework.transaction.support.TransactionTemplate;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "payment.expiration.enabled=false",
         "jwt.secret=payment-mysql-concurrency-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-payment-mysql-concurrency-test-api-secret",
         "portone.store-id=portone-payment-mysql-concurrency-test-store-id",
         "portone.webhook-secret=d2hzZWNfbXlzcWwtY29uY3VycmVuY3ktdGVzdA=="

@@ -16,7 +16,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "cors.allowed-origins=http://localhost:5173",
         "jwt.secret=websocket-handshake-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=websocket-handshake-test-api-secret",
         "portone.store-id=websocket-handshake-test-store-id",
         "portone.webhook-secret=d2hzX3Rlc3Q="

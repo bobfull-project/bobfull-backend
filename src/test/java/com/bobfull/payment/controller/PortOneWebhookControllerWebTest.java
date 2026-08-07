@@ -16,6 +16,7 @@ import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.payment.port.PortOneWebhookVerifier;
 import com.bobfull.payment.service.PaymentCompletionService;
 import com.bobfull.payment.service.RefundWebhookService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookVerifier;
 import org.junit.jupiter.api.Test;
@@ -31,11 +32,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=webhook-web-test-secret-key-please-keep-this-long-enough",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class PortOneWebhookControllerWebTest {
 
     @Autowired private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
     @MockitoBean private PortOneWebhookVerifier webhookVerifier;
     @MockitoBean private PaymentCompletionService paymentCompletionService;
     @MockitoBean private RefundWebhookService refundWebhookService;

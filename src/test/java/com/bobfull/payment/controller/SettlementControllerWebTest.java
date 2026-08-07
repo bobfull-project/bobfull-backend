@@ -17,6 +17,7 @@ import com.bobfull.common.security.SecurityConfig;
 import com.bobfull.payment.dto.ExpectedSettlementResponse;
 import com.bobfull.payment.dto.SettlementReservationResponse;
 import com.bobfull.payment.service.SettlementQueryService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -35,11 +36,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=settlement-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class SettlementControllerWebTest {
 
     @Autowired private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
     @MockitoBean private SettlementQueryService settlementQueryService;
 
     @Test

@@ -22,6 +22,7 @@ import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.service.MyReservationQueryService;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -40,11 +41,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=my-reservation-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class MyReservationControllerWebTest {
 
     @Autowired private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
     @MockitoBean private MyReservationQueryService myReservationQueryService;
 
     @Test

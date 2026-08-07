@@ -26,7 +26,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
         // 전체 상태를 DOWN으로 끌어내리지 않도록 Redis와 동일하게 비활성화한다.
         "management.health.mail.enabled=false",
         "jwt.secret=actuator-health-test-secret-key-please-keep-this-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-actuator-health-test-api-secret",
         "portone.store-id=portone-actuator-health-test-store-id",
         "portone.webhook-secret=d2hzZWNfYWN0dWF0b3ItdGVzdA==",

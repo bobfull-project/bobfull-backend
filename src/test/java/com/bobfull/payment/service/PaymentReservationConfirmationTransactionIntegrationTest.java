@@ -48,7 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=payment-reservation-transaction-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-payment-reservation-test-api-secret",
         "portone.store-id=portone-payment-reservation-test-store-id",
         "portone.webhook-secret=d2hzZWNfcmVzZXJ2YXRpb24tdGVzdA==",

@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=recruitment-deadline-notification-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-recruitment-deadline-test-api-secret",
         "portone.store-id=portone-recruitment-deadline-test-store-id",
         "portone.webhook-secret=d2hzZWNfcmVjcnVpdG1lbnQtdGVzdA==",
