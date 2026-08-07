@@ -238,7 +238,11 @@ required_parameters=(
   "JWT_SECRET:jwt-secret"
   "PORTONE_API_SECRET:portone-api-secret"
   "PORTONE_STORE_ID:portone-store-id"
+  "PORTONE_WEBHOOK_SECRET:portone-webhook-secret"
   "S3_IMAGE_BUCKET:s3-image-bucket"
+  "MAIL_HOST:mail-host"
+  "MAIL_USERNAME:mail-username"
+  "MAIL_PASSWORD:mail-password"
 )
 
 optional_parameters=(
@@ -248,7 +252,10 @@ optional_parameters=(
   "JPA_DDL_AUTO:jpa-ddl-auto"
   "CORS_ALLOWED_ORIGINS:cors-allowed-origins"
   "PORTONE_CHANNEL_KEY:portone-channel-key"
-  "PORTONE_WEBHOOK_SECRET:portone-webhook-secret"
+  "MAIL_PORT:mail-port"
+  "MAIL_SMTP_AUTH:mail-smtp-auth"
+  "MAIL_SMTP_STARTTLS:mail-smtp-starttls"
+  "NOTIFICATION_EMAIL_FROM_ADDRESS:notification-email-from-address"
   "PAYMENT_EXPIRATION_ENABLED:payment-expiration-enabled"
   "PAYMENT_EXPIRATION_FIXED_DELAY:payment-expiration-fixed-delay"
   "PAYMENT_EXPIRATION_BATCH_SIZE:payment-expiration-batch-size"

@@ -35,7 +35,14 @@
 | `PORTONE_API_SECRET` | PortOne API Secret | 필수 |
 | `PORTONE_CHANNEL_KEY` | PortOne Channel Key | 선택 |
 | `PORTONE_STORE_ID` | PortOne Store ID | 필수 |
-| `PORTONE_WEBHOOK_SECRET` | PortOne Webhook Secret | 선택 |
+| `PORTONE_WEBHOOK_SECRET` | PortOne Webhook Secret | 필수 |
+| `MAIL_HOST` | SMTP Host | 필수 |
+| `MAIL_USERNAME` | SMTP 사용자 이름 | 필수 |
+| `MAIL_PASSWORD` | SMTP 비밀번호 또는 앱 비밀번호 | 필수 |
+| `MAIL_PORT` | SMTP Port | 선택 |
+| `MAIL_SMTP_AUTH` | SMTP 인증 사용 여부 | 선택 |
+| `MAIL_SMTP_STARTTLS` | SMTP STARTTLS 사용 여부 | 선택 |
+| `NOTIFICATION_EMAIL_FROM_ADDRESS` | 예약 알림 발신자 이메일 | 선택 |
 | `PAYMENT_EXPIRATION_ENABLED` | 결제 만료 스케줄러 활성화 | 선택 |
 | `PAYMENT_EXPIRATION_FIXED_DELAY` | 결제 만료 스케줄러 주기 | 선택 |
 | `PAYMENT_EXPIRATION_BATCH_SIZE` | 결제 만료 배치 크기 | 선택 |
@@ -65,7 +72,11 @@
 /bobfull/prod/jwt-secret
 /bobfull/prod/portone-api-secret
 /bobfull/prod/portone-store-id
+/bobfull/prod/portone-webhook-secret
 /bobfull/prod/s3-image-bucket
+/bobfull/prod/mail-host
+/bobfull/prod/mail-username
+/bobfull/prod/mail-password
 ```
 
 선택 Parameter:
@@ -77,7 +88,10 @@
 /bobfull/prod/jpa-ddl-auto
 /bobfull/prod/cors-allowed-origins
 /bobfull/prod/portone-channel-key
-/bobfull/prod/portone-webhook-secret
+/bobfull/prod/mail-port
+/bobfull/prod/mail-smtp-auth
+/bobfull/prod/mail-smtp-starttls
+/bobfull/prod/notification-email-from-address
 /bobfull/prod/payment-expiration-enabled
 /bobfull/prod/payment-expiration-fixed-delay
 /bobfull/prod/payment-expiration-batch-size
@@ -92,7 +106,7 @@
 
 Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backend-v1.sh`가 컨테이너 실행 시 `DB_URL`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `S3_IMAGE_BUCKET` 같은 대문자 환경변수 이름으로 변환한다.
 
-비밀번호, JWT Secret, PortOne Secret처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
+비밀번호, JWT Secret, PortOne Secret, SMTP 비밀번호처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
 
 ## 채팅 WebSocket 배포 참고 (#50)
 
