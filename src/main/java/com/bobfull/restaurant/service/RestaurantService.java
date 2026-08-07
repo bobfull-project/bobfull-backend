@@ -204,7 +204,8 @@ public class RestaurantService {
         try {
             restaurantImageService.delete(previousImageKey);
         } catch (RuntimeException exception) {
-            log.warn("기존 식당 이미지 삭제에 실패했습니다. imageKey={}", previousImageKey, exception);
+            log.warn("event=RESTAURANT_IMAGE_DELETE_FAILED imageKey={} reason={}",
+                    previousImageKey, exception.getClass().getSimpleName(), exception);
         }
     }
 }

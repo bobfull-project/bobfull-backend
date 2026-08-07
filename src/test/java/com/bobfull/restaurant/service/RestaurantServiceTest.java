@@ -9,6 +9,10 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ImageErrorCode;
@@ -35,6 +39,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -303,13 +308,29 @@ class RestaurantServiceTest {
         RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, NEW_IMAGE_KEY);
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
         willThrow(new RuntimeException("delete failed")).given(restaurantImageService).delete(OLD_IMAGE_KEY);
+        Logger logger = (Logger) LoggerFactory.getLogger(RestaurantService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
 
         // when
-        RestaurantIdResponse response = restaurantService.update(1L, 10L, request);
+        RestaurantIdResponse response;
+        try {
+            response = restaurantService.update(1L, 10L, request);
+        } finally {
+            logger.detachAppender(appender);
+        }
 
         // then
         assertThat(response).isNotNull();
         assertThat(restaurant.getImageKey()).isEqualTo(NEW_IMAGE_KEY);
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("event=RESTAURANT_IMAGE_DELETE_FAILED");
+            assertThat(event.getFormattedMessage()).contains("imageKey=" + OLD_IMAGE_KEY);
+            assertThat(event.getFormattedMessage()).contains("reason=RuntimeException");
+            assertThat(event.getThrowableProxy().getClassName()).isEqualTo(RuntimeException.class.getName());
+        });
     }
 
     @Test
