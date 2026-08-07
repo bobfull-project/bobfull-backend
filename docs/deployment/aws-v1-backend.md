@@ -94,6 +94,15 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 
 비밀번호, JWT Secret, PortOne Secret처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
 
+## 채팅 WebSocket 배포 참고 (#50)
+
+예약 채팅은 `/ws` STOMP 엔드포인트와 단일 서버 In-memory SimpleBroker(`registry.enableSimpleBroker`)를 사용한다. 배포 관점에서 다음을 반영한다.
+
+- 신규 GitHub Variables·Secrets, 신규 SSM Parameter Store 값은 없다. 채팅은 STOMP CONNECT 인증에 기존 `JWT_SECRET`을, STOMP Endpoint `setAllowedOrigins`에 기존 `CORS_ALLOWED_ORIGINS`를 그대로 재사용한다. `CORS_ALLOWED_ORIGINS`를 변경하면 REST CORS와 WebSocket 허용 Origin에 동시에 반영되므로, Origin 값을 다룰 때는 두 용도를 함께 고려한다.
+- `build.gradle`에 `spring-boot-starter-websocket` 의존성이 추가되었을 뿐, 별도 배포 스크립트·포트 변경은 없다. `/ws`는 기존 애플리케이션 포트(`8080`)를 공유한다.
+- 브로커가 단일 인스턴스 In-memory SimpleBroker이므로 채팅 세션은 인스턴스 간 공유되지 않는다. EC2를 다중 인스턴스·Auto Scaling으로 확장하는 시점(§ 제외 범위의 ALB·Auto Scaling)에는 sticky session 또는 Redis·RabbitMQ 기반 STOMP broker relay 도입이 먼저 필요하다. 이 범위는 [ARCHITECTURE.md](../ARCHITECTURE.md) §8의 "채팅 Pub/Sub 미확정" 범위와 동일하다.
+- 배포 후 검증(`verify-backend-v1.sh`)은 REST `GET /api/restaurants`만 확인하며 WebSocket 연결 자체는 검증하지 않는다. 컨테이너 기동 여부 확인이 목적이므로 현재 범위에서는 별도 확인을 추가하지 않는다.
+
 ## GitHub Actions 백엔드 CI와 CD
 
 백엔드는 검증 단계와 운영 배포 단계를 분리한다.
