@@ -82,6 +82,10 @@ public class PaymentCompletionService {
             log.error("event=PAYMENT_COMPENSATION_REQUIRED paymentId={} externalStatus=PAID internalStatus=UNKNOWN reason={}",
                     paymentId, exception.getErrorCode().getCode(), exception);
             throw exception;
+        } catch (RuntimeException exception) {
+            log.error("event=PAYMENT_COMPENSATION_REQUIRED paymentId={} externalStatus=PAID internalStatus=UNKNOWN reason={}",
+                    paymentId, exception.getClass().getSimpleName(), exception);
+            throw exception;
         }
     }
 }

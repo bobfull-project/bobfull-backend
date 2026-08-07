@@ -21,6 +21,9 @@ import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -42,6 +45,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.LoggerFactory;
 
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -428,12 +432,22 @@ class RefundTransactionIntegrationTest {
         payment.attachReservationConfirmation(999L, 888L);
         payment = paymentRepository.saveAndFlush(payment);
         Refund refund = transactionService.createRequested(999L, 888L, "test").refund();
+        Logger logger = (Logger) LoggerFactory.getLogger(RefundTransactionService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
 
-        assertThatThrownBy(() -> refundCompletionService.reflectExternalResult(refund.getId(), "cancel-rollback", true))
-                .isInstanceOf(CustomException.class);
+        try {
+            assertThatThrownBy(() -> refundCompletionService.reflectExternalResult(refund.getId(), "cancel-rollback", true))
+                    .isInstanceOf(CustomException.class);
+        } finally {
+            logger.detachAppender(appender);
+        }
 
         assertThat(refundRepository.findById(refund.getId()).orElseThrow().getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(appender.list).noneMatch(event ->
+                event.getFormattedMessage().contains("event=REFUND_COMPLETED"));
     }
 
     @Test

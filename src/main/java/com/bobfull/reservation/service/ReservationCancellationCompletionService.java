@@ -2,8 +2,10 @@ package com.bobfull.reservation.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.time.Instant;
@@ -55,13 +57,24 @@ public class ReservationCancellationCompletionService {
             if (!hasRemainingCancellation) {
                 reservation.cancel();
             }
-            log.info("event=RESERVATION_CANCELLATION_COMPLETED reservationId={} participantId={} afterReservationStatus={} afterParticipantStatus=CANCELLED completedAt={}",
+            logCancellationCompletedAfterCommit(
                     reservationId, reservationParticipantId, reservation.getReservationStatus(), completedAt);
             return;
         }
 
         transactionService.recalculateAfterCompletion(reservation);
-        log.info("event=RESERVATION_CANCELLATION_COMPLETED reservationId={} participantId={} afterReservationStatus={} afterParticipantStatus=CANCELLED completedAt={}",
+        logCancellationCompletedAfterCommit(
                 reservationId, reservationParticipantId, reservation.getReservationStatus(), completedAt);
+    }
+
+    private void logCancellationCompletedAfterCommit(
+            Long reservationId,
+            Long reservationParticipantId,
+            ReservationStatus afterReservationStatus,
+            Instant completedAt
+    ) {
+        AfterCommitExecutor.run(() -> log.info(
+                "event=RESERVATION_CANCELLATION_COMPLETED reservationId={} participantId={} afterReservationStatus={} afterParticipantStatus=CANCELLED completedAt={}",
+                reservationId, reservationParticipantId, afterReservationStatus, completedAt));
     }
 }

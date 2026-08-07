@@ -26,6 +26,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentCompletionTransactionServiceTest {
@@ -57,7 +59,7 @@ class PaymentCompletionTransactionServiceTest {
     }
 
     @Test
-    void READY_Payment를_완료하면_PAYMENT_COMPLETED_구조화로그를_남긴다() {
+    void READY_Payment를_완료하면_afterCommit에서_PAYMENT_COMPLETED_구조화로그를_남긴다() {
         // given
         Payment payment = readyPayment();
         given(paymentRepository.findWithLockByPaymentId("payment-id")).willReturn(Optional.of(payment));
@@ -69,12 +71,20 @@ class PaymentCompletionTransactionServiceTest {
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         logger.addAppender(appender);
+        TransactionSynchronizationManager.initSynchronization();
 
         try {
             // when
             service.complete("payment-id", 1L);
+            assertThat(appender.list).isEmpty();
+            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCommit();
+            }
         } finally {
             logger.detachAppender(appender);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
         }
 
         // then
