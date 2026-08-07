@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationRepository;
@@ -25,6 +26,7 @@ class RecruitmentDeadlineSchedulerTest {
 
     @Mock private ReservationRepository reservationRepository;
     @Mock private RecruitmentDeadlineCancellationService cancellationService;
+    @Mock private BusinessMetricRecorder businessMetricRecorder;
 
     @Test
     void 한_후보_처리_실패후에도_다음_예약을_계속_처리한다() {
@@ -37,7 +39,8 @@ class RecruitmentDeadlineSchedulerTest {
                 .willReturn(List.of(10L, 20L));
         doThrow(new IllegalStateException("db failure")).when(cancellationService).process(10L);
         RecruitmentDeadlineScheduler scheduler = new RecruitmentDeadlineScheduler(
-                reservationRepository, cancellationService, Clock.fixed(now, ZoneOffset.UTC), 100);
+                reservationRepository, cancellationService, Clock.fixed(now, ZoneOffset.UTC), 100,
+                businessMetricRecorder);
 
         scheduler.closeExpiredRecruitments();
 

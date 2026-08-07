@@ -8,6 +8,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -32,6 +33,7 @@ class PaymentWebhookCompensationLogTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private PortOnePaymentReader portOnePaymentReader;
     @Mock private PaymentCompletionTransactionService transactionService;
+    @Mock private BusinessMetricRecorder businessMetricRecorder;
 
     @Test
     void 외부_PAID와_내부_만료가_갈리면_보상필요_구조화로그의_필수필드를_기록한다() {
@@ -45,7 +47,8 @@ class PaymentWebhookCompensationLogTest {
             throw new PaymentExpiredException(PaymentStatus.EXPIRED, payment.getExpiresAt());
         });
         PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
-                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC));
+                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC),
+                businessMetricRecorder);
         Logger logger = (Logger) LoggerFactory.getLogger(PaymentCompletionService.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
@@ -76,7 +79,8 @@ class PaymentWebhookCompensationLogTest {
         given(transactionService.complete("payment-id"))
                 .willThrow(new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED));
         PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
-                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC));
+                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC),
+                businessMetricRecorder);
         Logger logger = (Logger) LoggerFactory.getLogger(PaymentCompletionService.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
@@ -105,7 +109,8 @@ class PaymentWebhookCompensationLogTest {
                 .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "KRW"));
         given(transactionService.complete("payment-id")).willThrow(new IllegalStateException("db flush failed"));
         PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
-                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC));
+                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC),
+                businessMetricRecorder);
         Logger logger = (Logger) LoggerFactory.getLogger(PaymentCompletionService.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();

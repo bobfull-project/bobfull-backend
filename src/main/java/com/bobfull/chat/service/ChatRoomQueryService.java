@@ -6,6 +6,8 @@ import com.bobfull.chat.repository.ChatRoomRepository;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ChatErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.security.MemberRole;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +19,11 @@ public class ChatRoomQueryService {
 
     private final ChatRoomRepository rooms; private final ReservationChatAccessReader access;
     private final ChatRoomCreationService chatRoomCreationService;
+    private final BusinessMetricRecorder businessMetricRecorder;
     public ChatRoomQueryService(ChatRoomRepository rooms, ReservationChatAccessReader access,
-            ChatRoomCreationService chatRoomCreationService) {
+            ChatRoomCreationService chatRoomCreationService, BusinessMetricRecorder businessMetricRecorder) {
         this.rooms = rooms; this.access = access; this.chatRoomCreationService = chatRoomCreationService;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
     /**
      * 권한 검증 뒤 ChatRoom이 없으면 AFTER_COMMIT 생성이 아직 반영되지 않았거나 실패한
@@ -42,6 +46,7 @@ public class ChatRoomQueryService {
         } catch (RuntimeException exception) {
             log.error("event=CHAT_ROOM_CREATION_REQUIRED reservationId={} attemptSource=QUERY_RECOVERY autoRetry=false manualActionRequired=true",
                     reservationId, exception);
+            businessMetricRecorder.increment(BusinessMetricEvent.CHAT_ROOM_CREATION_REQUIRED);
             throw new CustomException(ChatErrorCode.CHAT_ROOM_NOT_READY);
         }
     }

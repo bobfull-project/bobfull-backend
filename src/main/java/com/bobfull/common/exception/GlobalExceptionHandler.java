@@ -1,9 +1,12 @@
 package com.bobfull.common.exception;
 
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.response.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -19,6 +22,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final ObjectProvider<BusinessMetricRecorder> businessMetricRecorderProvider;
+
+    public GlobalExceptionHandler(ObjectProvider<BusinessMetricRecorder> businessMetricRecorderProvider) {
+        this.businessMetricRecorderProvider = businessMetricRecorderProvider;
+    }
 
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
@@ -52,11 +61,20 @@ public class GlobalExceptionHandler {
                     request.getAttribute("portonePaymentId"),
                     request.getAttribute("portoneCancellationId"),
                     e.getClass().getSimpleName(), e);
+            incrementBusinessMetric(BusinessMetricEvent.PORTONE_WEBHOOK_PROCESSING_FAILED);
         } else {
             log.error("event=UNHANDLED_EXCEPTION method={} path={} reason={}",
                     request.getMethod(), request.getRequestURI(), e.getClass().getSimpleName(), e);
+            incrementBusinessMetric(BusinessMetricEvent.UNHANDLED_EXCEPTION);
         }
         return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
                 .body(ApiResponse.fail(CommonErrorCode.INTERNAL_SERVER_ERROR));
+    }
+
+    private void incrementBusinessMetric(BusinessMetricEvent event) {
+        BusinessMetricRecorder businessMetricRecorder = businessMetricRecorderProvider.getIfAvailable();
+        if (businessMetricRecorder != null) {
+            businessMetricRecorder.increment(event);
+        }
     }
 }

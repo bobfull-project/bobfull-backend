@@ -1,5 +1,7 @@
 package com.bobfull.reservation.service;
 
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationRepository;
@@ -35,17 +37,20 @@ public class RecruitmentDeadlineScheduler {
     private final RecruitmentDeadlineCancellationService cancellationService;
     private final Clock clock;
     private final int batchSize;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public RecruitmentDeadlineScheduler(
             ReservationRepository reservationRepository,
             RecruitmentDeadlineCancellationService cancellationService,
             Clock clock,
-            @Value("${reservation.recruitment-deadline.batch-size:100}") int batchSize
+            @Value("${reservation.recruitment-deadline.batch-size:100}") int batchSize,
+            BusinessMetricRecorder businessMetricRecorder
     ) {
         this.reservationRepository = reservationRepository;
         this.cancellationService = cancellationService;
         this.clock = clock;
         this.batchSize = batchSize;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Scheduled(fixedDelayString = "${reservation.recruitment-deadline.fixed-delay:60000}")
@@ -63,6 +68,7 @@ public class RecruitmentDeadlineScheduler {
         } catch (RuntimeException exception) {
             log.error("event=RECRUITMENT_DEADLINE_FAILED reservationId={} reason={}",
                     reservationId, exception.toString(), exception);
+            businessMetricRecorder.increment(BusinessMetricEvent.RECRUITMENT_DEADLINE_FAILED);
         }
     }
 }

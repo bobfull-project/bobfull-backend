@@ -13,6 +13,7 @@ import com.bobfull.chat.repository.ChatRoomRepository;
 import com.bobfull.common.exception.ChatErrorCode;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import java.util.Optional;
@@ -24,7 +25,9 @@ class ChatRoomQueryServiceTest {
     private final ChatRoomRepository rooms = org.mockito.Mockito.mock(ChatRoomRepository.class);
     private final ReservationChatAccessReader access = org.mockito.Mockito.mock(ReservationChatAccessReader.class);
     private final ChatRoomCreationService chatRoomCreationService = org.mockito.Mockito.mock(ChatRoomCreationService.class);
-    private final ChatRoomQueryService service = new ChatRoomQueryService(rooms, access, chatRoomCreationService);
+    private final BusinessMetricRecorder businessMetricRecorder = org.mockito.Mockito.mock(BusinessMetricRecorder.class);
+    private final ChatRoomQueryService service = new ChatRoomQueryService(
+            rooms, access, chatRoomCreationService, businessMetricRecorder);
 
     @Test
     void 비참여자와_CANCELLED_참여자와_MEMBER가_아닌_역할은_403으로_거부한다() {

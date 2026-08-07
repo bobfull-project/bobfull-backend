@@ -14,6 +14,7 @@ import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.common.exception.RestaurantErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.response.PageResponse;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
@@ -64,6 +65,7 @@ class NoShowServiceTest {
     @Mock private SharedTableRepository sharedTableRepository;
     @Mock private RestaurantRepository restaurantRepository;
     @Mock private MemberRepository memberRepository;
+    @Mock private BusinessMetricRecorder businessMetricRecorder;
 
     private NoShowService service;
 
@@ -86,7 +88,7 @@ class NoShowServiceTest {
         service = new NoShowService(
                 reservationRepository, reservationParticipantRepository, noShowHistoryRepository,
                 noShowQueryRepository, timeSlotRepository, sharedTableRepository, restaurantRepository,
-                memberRepository, FIXED_CLOCK);
+                memberRepository, FIXED_CLOCK, businessMetricRecorder);
 
         given(reservationRepository.findById(reservation.getId())).willReturn(Optional.of(reservation));
         given(timeSlotRepository.findByIdAndDeletedAtIsNull(timeSlot.getId())).willReturn(Optional.of(timeSlot));
@@ -150,7 +152,7 @@ class NoShowServiceTest {
         service = new NoShowService(
                 reservationRepository, reservationParticipantRepository, noShowHistoryRepository,
                 noShowQueryRepository, timeSlotRepository, sharedTableRepository, restaurantRepository,
-                memberRepository, FIXED_CLOCK);
+                memberRepository, FIXED_CLOCK, businessMetricRecorder);
         given(reservationRepository.findById(999L)).willReturn(Optional.empty());
 
         // when
@@ -354,7 +356,7 @@ class NoShowServiceTest {
         service = new NoShowService(
                 reservationRepository, reservationParticipantRepository, noShowHistoryRepository,
                 noShowQueryRepository, timeSlotRepository, sharedTableRepository, restaurantRepository,
-                memberRepository, FIXED_CLOCK);
+                memberRepository, FIXED_CLOCK, businessMetricRecorder);
 
         // when
         PageResponse<?> result = service.getRestaurantNoShows(
@@ -370,7 +372,7 @@ class NoShowServiceTest {
         service = new NoShowService(
                 reservationRepository, reservationParticipantRepository, noShowHistoryRepository,
                 noShowQueryRepository, timeSlotRepository, sharedTableRepository, restaurantRepository,
-                memberRepository, FIXED_CLOCK);
+                memberRepository, FIXED_CLOCK, businessMetricRecorder);
         given(restaurantRepository.findByIdAndDeletedAtIsNull(1000L)).willReturn(Optional.of(
                 withId(Restaurant.create(ownerMemberId, "밥풀식당", "제주시", "한식", "설명", "키워드", 10000), 1000L)));
         Pageable pageable = PageRequest.of(0, 20);
@@ -390,7 +392,7 @@ class NoShowServiceTest {
         service = new NoShowService(
                 reservationRepository, reservationParticipantRepository, noShowHistoryRepository,
                 noShowQueryRepository, timeSlotRepository, sharedTableRepository, restaurantRepository,
-                memberRepository, FIXED_CLOCK);
+                memberRepository, FIXED_CLOCK, businessMetricRecorder);
         given(restaurantRepository.findByIdAndDeletedAtIsNull(999L)).willReturn(Optional.empty());
 
         // when

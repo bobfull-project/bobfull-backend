@@ -12,6 +12,8 @@ import com.bobfull.auth.token.RefreshTokenStore;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
@@ -44,6 +46,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
+    private final BusinessMetricRecorder businessMetricRecorder;
     private final AccessTokenBlacklistStore accessTokenBlacklistStore;
     private final Clock clock;
 
@@ -52,6 +55,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
             RefreshTokenStore refreshTokenStore,
+            BusinessMetricRecorder businessMetricRecorder,
             AccessTokenBlacklistStore accessTokenBlacklistStore,
             Clock clock
     ) {
@@ -59,6 +63,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.refreshTokenStore = refreshTokenStore;
+        this.businessMetricRecorder = businessMetricRecorder;
         this.accessTokenBlacklistStore = accessTokenBlacklistStore;
         this.clock = clock;
     }
@@ -102,11 +107,13 @@ public class AuthService {
         Member member = memberRepository.findByEmail(request.email())
                 .orElseThrow(() -> {
                     log.warn("event=LOGIN_FAILED reason=INVALID_CREDENTIALS");
+                    businessMetricRecorder.increment(BusinessMetricEvent.LOGIN_FAILED);
                     return new CustomException(MemberErrorCode.INVALID_CREDENTIALS);
                 });
 
         if (!passwordEncoder.matches(request.password(), member.getPasswordHash())) {
             log.warn("event=LOGIN_FAILED reason=INVALID_CREDENTIALS");
+            businessMetricRecorder.increment(BusinessMetricEvent.LOGIN_FAILED);
             throw new CustomException(MemberErrorCode.INVALID_CREDENTIALS);
         }
 
@@ -136,6 +143,7 @@ public class AuthService {
                     .orElseThrow(() -> new CustomException(CommonErrorCode.UNAUTHORIZED));
         } catch (DataAccessException e) {
             log.error("event=AUTH_REISSUE_FAILED reason=REFRESH_TOKEN_STORE_UNAVAILABLE", e);
+            businessMetricRecorder.increment(BusinessMetricEvent.AUTH_REISSUE_FAILED);
             throw new CustomException(CommonErrorCode.UNAUTHORIZED);
         }
     }

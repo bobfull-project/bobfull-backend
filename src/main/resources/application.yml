@@ -5,7 +5,22 @@ spring:
     time-zone: Asia/Seoul
 
 management:
+  endpoint:
+    prometheus:
+      access: read-only
   endpoints:
     web:
       exposure:
-        include: health
+        include:
+          - health
+          - prometheus
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

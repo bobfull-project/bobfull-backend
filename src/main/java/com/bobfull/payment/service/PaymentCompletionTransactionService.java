@@ -2,6 +2,8 @@ package com.bobfull.payment.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -24,11 +26,18 @@ public class PaymentCompletionTransactionService {
     private final PaymentRepository paymentRepository;
     private final ReservationConfirmationPort reservationConfirmationPort;
     private final Clock clock;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
-    public PaymentCompletionTransactionService(PaymentRepository paymentRepository, ReservationConfirmationPort reservationConfirmationPort, Clock clock) {
+    public PaymentCompletionTransactionService(
+            PaymentRepository paymentRepository,
+            ReservationConfirmationPort reservationConfirmationPort,
+            Clock clock,
+            BusinessMetricRecorder businessMetricRecorder
+    ) {
         this.paymentRepository = paymentRepository;
         this.reservationConfirmationPort = reservationConfirmationPort;
         this.clock = clock;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     // 락 순서: Payment → Reservation(JOIN 확정 시 ReservationConfirmationService에서 획득).
@@ -73,10 +82,13 @@ public class PaymentCompletionTransactionService {
         Long completedParticipantId = result.participationId();
         BigDecimal completedAmount = payment.getAmount();
         PaymentStatus completedStatus = payment.getStatus();
-        AfterCommitExecutor.run(() -> log.info(
-                "event=PAYMENT_COMPLETED paymentId={} memberId={} reservationId={} participantId={} amount={} afterStatus={}",
-                completedPaymentId, completedMemberId, completedReservationId, completedParticipantId,
-                completedAmount, completedStatus));
+        AfterCommitExecutor.run(() -> {
+            log.info(
+                    "event=PAYMENT_COMPLETED paymentId={} memberId={} reservationId={} participantId={} amount={} afterStatus={}",
+                    completedPaymentId, completedMemberId, completedReservationId, completedParticipantId,
+                    completedAmount, completedStatus);
+            businessMetricRecorder.increment(BusinessMetricEvent.PAYMENT_COMPLETED);
+        });
     }
 
     public record PaymentCompletionResult(Payment payment, Long reservationId, Long participationId) { }
