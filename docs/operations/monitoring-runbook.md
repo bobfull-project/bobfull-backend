@@ -5,6 +5,7 @@
 - Prometheus와 Grafana는 애플리케이션 EC2와 분리된 Monitoring EC2 1대에서 Docker Compose로 실행한다.
 - Prometheus는 App EC2의 `/actuator/prometheus`를 scrape한다.
 - Grafana는 Prometheus Data Source, BobFull Overview Dashboard, 초기 Grafana Alert Rule, Slack Contact Point를 provisioning으로 로드한다.
+- Slack으로 발송되는 운영 Alert의 기준은 Grafana Alert Rule이다. Prometheus는 Spring Boot 메트릭 scrape와 Grafana Data Source 역할만 맡는다.
 - Slack Webhook URL, Grafana 관리자 비밀번호 같은 비밀값은 `monitoring/.env` 또는 운영 비밀 저장소에만 둔다.
 
 ## 네트워크
@@ -53,6 +54,8 @@ sum by (event) (increase(bobfull_business_events_total[5m]))
 
 ## Alert 기준
 
+- 운영 Alert는 `monitoring/grafana/provisioning/alerting/alert-rules.yml`에서 관리하며, 각 Rule은 `slack-monitoring` Contact Point로 연결한다.
+- Prometheus Alert Rule은 별도로 로드하지 않는다. 동일 조건을 Prometheus와 Grafana 양쪽에서 중복 평가하지 않기 위함이다.
 - 1순위 비즈니스 사건은 5분 안에 1건 이상 발생하면 즉시 확인한다.
 - `LOGIN_FAILED`, p95, 오류율, JVM Heap, DB Connection Pending은 초기 검증용 임계치로 시작하고 실제 AWS 기준 데이터 측정 후 조정한다.
 - 개별 `paymentId`, `refundId`, `reservationId`, `memberId`, email, client IP는 Prometheus Label로 넣지 않는다. 상세 원인은 CloudWatch 구조화 로그에서 확인한다.

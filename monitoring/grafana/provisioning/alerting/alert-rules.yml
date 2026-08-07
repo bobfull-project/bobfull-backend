@@ -2,6 +2,313 @@ apiVersion: 1
 
 groups:
   - orgId: 1
+    name: bobfull-system-api
+    folder: BobFull
+    interval: 1m
+    rules:
+      - uid: bobfull-backend-down
+        title: BobFullBackendDown
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: absent(up{job="bobfull-backend"}) or up{job="bobfull-backend"} == 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: Alerting
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: BobFull backend Prometheus target is down
+          description: Grafana cannot confirm the bobfull-backend Prometheus target as UP.
+        labels:
+          severity: critical
+          category: system
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring
+
+      - uid: bobfull-http-5xx-detected
+        title: BobFullHttp5xxDetected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: sum(increase(http_server_requests_seconds_count{job="bobfull-backend",status=~"5.."}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: BobFull backend returned 5xx responses
+          description: One or more 5xx responses occurred in the last 5 minutes.
+        labels:
+          severity: warning
+          category: api
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring
+
+      - uid: bobfull-p95-latency-test-threshold
+        title: BobFullP95LatencyTestThreshold
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job="bobfull-backend",uri!="/actuator/prometheus"}[5m])))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: BobFull API p95 latency is above the initial test threshold
+          description: p95 latency is above 1 second for 5 minutes. Tune after AWS baseline measurement.
+        labels:
+          severity: warning
+          category: api
+          threshold: test
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring
+
+      - uid: bobfull-heap-usage-high-test-threshold
+        title: BobFullHeapUsageHighTestThreshold
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: sum(jvm_memory_used_bytes{job="bobfull-backend",area="heap"}) / sum(jvm_memory_max_bytes{job="bobfull-backend",area="heap"})
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.8
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: BobFull JVM heap usage is above the initial test threshold
+          description: Heap usage is above 80 percent for 5 minutes. Tune after AWS baseline measurement.
+        labels:
+          severity: warning
+          category: jvm
+          threshold: test
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring
+
+      - uid: bobfull-db-connection-pending
+        title: BobFullDbConnectionPending
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: max(hikaricp_connections_pending{job="bobfull-backend"})
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: BobFull DB connection pool has pending requests
+          description: HikariCP pending connection count is greater than zero.
+        labels:
+          severity: warning
+          category: db
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring
+
+  - orgId: 1
     name: bobfull-business
     folder: BobFull
     interval: 1m
