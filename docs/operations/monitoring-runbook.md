@@ -57,8 +57,8 @@ sum by (event) (increase(bobfull_business_events_total[5m]))
 
 - 운영 Alert는 `monitoring/grafana/provisioning/alerting/alert-rules.yml`에서 관리하며, 각 Rule은 `slack-monitoring` Contact Point로 연결한다.
 - Prometheus Alert Rule은 별도로 로드하지 않는다. 동일 조건을 Prometheus와 Grafana 양쪽에서 중복 평가하지 않기 위함이다.
-- 1순위 비즈니스 사건은 5분 안에 1건 이상 발생하면 즉시 확인한다.
-- `LOGIN_FAILED`, p95, 오류율, JVM Heap, DB Connection Pending은 초기 검증용 임계치로 시작하고 실제 AWS 기준 데이터 측정 후 조정한다.
+- 1순위 비즈니스 사건과 `PAYMENT_WEBHOOK_PERMANENT_FAILURE`는 5분 안에 1건 이상 발생하면 즉시 확인한다.
+- `LOGIN_FAILED`, `AUTH_REISSUE_FAILED`, `IMAGE_STORAGE_REQUEST_FAILED`, `RECRUITMENT_DEADLINE_FAILED`, p95, 오류율, JVM Heap, DB Connection Pending은 초기 검증용 임계치로 시작하고 실제 AWS 기준 데이터 측정 후 조정한다.
 - 개별 `paymentId`, `refundId`, `reservationId`, `memberId`, email, client IP는 Prometheus Label로 넣지 않는다. 상세 원인은 CloudWatch 구조화 로그에서 확인한다.
 
 ## 기준 데이터 측정

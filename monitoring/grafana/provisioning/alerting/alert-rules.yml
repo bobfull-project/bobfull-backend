@@ -433,3 +433,64 @@ groups:
         isPaused: false
         notification_settings:
           receiver: slack-monitoring
+
+      - uid: bobfull-repeated-business-failure-test
+        title: BobFull repeated business failure test threshold
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: sum by (event) (increase(bobfull_business_events_total{event=~"AUTH_REISSUE_FAILED|IMAGE_STORAGE_REQUEST_FAILED|RECRUITMENT_DEADLINE_FAILED"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 5
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: Repeated BobFull business failure crossed the initial test threshold
+          description: AUTH_REISSUE_FAILED, IMAGE_STORAGE_REQUEST_FAILED, or RECRUITMENT_DEADLINE_FAILED occurred at least 5 times in 5 minutes. Tune after AWS baseline measurement.
+        labels:
+          severity: warning
+          category: business
+          threshold: test
+        isPaused: false
+        notification_settings:
+          receiver: slack-monitoring
