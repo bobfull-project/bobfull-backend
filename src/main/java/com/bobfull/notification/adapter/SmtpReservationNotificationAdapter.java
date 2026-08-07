@@ -143,7 +143,7 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
             String mealTime, String restaurantAddress, String message
     ) {
         return """
-                <div style="box-sizing:border-box;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:420px;margin:0 auto;padding:32px 24px;border:1px solid #eee;border-radius:16px;">
+                <div style="font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:420px;margin:0 auto;padding:32px 24px;border:1px solid #eee;border-radius:16px;">
                   <p style="color:#999;font-size:13px;margin:0 0 4px;">밥풀</p>
                   <h2 style="color:%s;margin:0 0 8px;font-size:22px;">%s</h2>
                   <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 20px;">%s</p>
