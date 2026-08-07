@@ -16,6 +16,7 @@ import com.bobfull.common.response.PageResponse;
 import com.bobfull.common.security.AuthMember;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.common.security.SecurityConfig;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -34,11 +35,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=admin-no-show-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class AdminNoShowControllerWebTest {
 
     @Autowired private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
     @MockitoBean private AdminNoShowQueryService adminNoShowQueryService;
 
     @Test

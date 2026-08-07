@@ -126,6 +126,59 @@ class JwtTokenProviderTest {
     }
 
     @Test
+    void 발급한_토큰마다_서로_다른_jti가_부여된다() {
+        // given
+        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(FIXED_CLOCK, SECRET, 3600L);
+
+        // when
+        JwtTokenProvider.AccessTokenClaims first =
+                jwtTokenProvider.parseAccessTokenClaims(jwtTokenProvider.createAccessToken(1L, MemberRole.MEMBER));
+        JwtTokenProvider.AccessTokenClaims second =
+                jwtTokenProvider.parseAccessTokenClaims(jwtTokenProvider.createAccessToken(1L, MemberRole.MEMBER));
+
+        // then
+        assertThat(first.jti()).isNotBlank();
+        assertThat(second.jti()).isNotBlank();
+        assertThat(first.jti()).isNotEqualTo(second.jti());
+    }
+
+    @Test
+    void parseAccessTokenClaims은_jti와_만료_시각을_함께_반환한다() {
+        // given
+        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(FIXED_CLOCK, SECRET, 1800L);
+        String accessToken = jwtTokenProvider.createAccessToken(1L, MemberRole.OWNER);
+
+        // when
+        JwtTokenProvider.AccessTokenClaims claims = jwtTokenProvider.parseAccessTokenClaims(accessToken);
+
+        // then
+        assertThat(claims.authMember().id()).isEqualTo(1L);
+        assertThat(claims.authMember().role()).isEqualTo(MemberRole.OWNER);
+        assertThat(claims.expiresAt()).isEqualTo(FIXED_CLOCK.instant().plusSeconds(1800L));
+    }
+
+    @Test
+    void jti_클레임이_없는_토큰도_검증에_성공하고_jti는_null이다() {
+        // given: Issue #186 배포 이전에 발급된 토큰(PR #187 리뷰) — jti를 필수로 요구하면
+        // 배포 순간 이런 토큰을 들고 있던 모든 활성 세션이 강제 로그아웃된다.
+        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(FIXED_CLOCK, SECRET, 3600L);
+        String tokenWithoutJti = Jwts.builder()
+                .claim("memberId", 1L)
+                .claim("role", MemberRole.MEMBER.name())
+                .issuedAt(Date.from(FIXED_CLOCK.instant()))
+                .expiration(Date.from(FIXED_CLOCK.instant().plusSeconds(3600L)))
+                .signWith(secretKeyFor(SECRET), Jwts.SIG.HS256)
+                .compact();
+
+        // when
+        JwtTokenProvider.AccessTokenClaims claims = jwtTokenProvider.parseAccessTokenClaims(tokenWithoutJti);
+
+        // then
+        assertThat(claims.authMember().id()).isEqualTo(1L);
+        assertThat(claims.jti()).isNull();
+    }
+
+    @Test
     void role_클레임이_없으면_검증에_실패한다() {
         // given
         JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(FIXED_CLOCK, SECRET, 3600L);

@@ -21,6 +21,7 @@ import com.bobfull.reservation.dto.NoShowHistoryResponse;
 import com.bobfull.reservation.dto.NoShowProcessResponse;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.service.NoShowService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -38,11 +39,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=no-show-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class NoShowControllerWebTest {
 
     @Autowired private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
     @MockitoBean private NoShowService noShowService;
 
     @Test

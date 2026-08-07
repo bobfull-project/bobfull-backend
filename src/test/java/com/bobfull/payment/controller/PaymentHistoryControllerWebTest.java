@@ -26,6 +26,7 @@ import com.bobfull.payment.entity.RefundStatus;
 import com.bobfull.payment.service.PaymentCompletionService;
 import com.bobfull.payment.service.PaymentQueryService;
 import com.bobfull.payment.service.RefundQueryService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -45,11 +46,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=payment-history-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class PaymentHistoryControllerWebTest {
 
     @Autowired private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
     @MockitoBean private PaymentCompletionService paymentCompletionService;
     @MockitoBean private PaymentQueryService paymentQueryService;
     @MockitoBean private RefundQueryService refundQueryService;

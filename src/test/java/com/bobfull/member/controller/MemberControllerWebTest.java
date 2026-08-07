@@ -16,6 +16,7 @@ import com.bobfull.member.dto.MemberResponse;
 import com.bobfull.member.dto.MemberUpdateRequest;
 import com.bobfull.member.dto.MemberUpdateResponse;
 import com.bobfull.member.service.MemberService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,12 +39,13 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=member-controller-web-test-secret-key-please-keep-this-long-enough",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class MemberControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private ObjectMapper objectMapper;

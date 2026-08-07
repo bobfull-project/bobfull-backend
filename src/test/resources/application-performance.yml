@@ -16,7 +16,7 @@ payment:
 
 jwt:
   secret: performance-test-secret-key-must-be-at-least-32-bytes
-  access-token-expiration-seconds: 3600
+  access-token-expiration-seconds: 1800
 
 portone:
   api-secret: performance-test-api-secret

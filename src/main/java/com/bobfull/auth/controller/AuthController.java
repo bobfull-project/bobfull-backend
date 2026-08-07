@@ -17,12 +17,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private final AuthService authService;
 
@@ -55,8 +58,12 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<LogoutResponse>> logout(@AuthenticationPrincipal AuthMember authMember) {
-        LogoutResponse response = authService.logout(authMember.id());
+    public ResponseEntity<ApiResponse<LogoutResponse>> logout(
+            @AuthenticationPrincipal AuthMember authMember,
+            @RequestHeader("Authorization") String authorization
+    ) {
+        String accessToken = authorization.substring(BEARER_PREFIX.length());
+        LogoutResponse response = authService.logout(authMember.id(), accessToken);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

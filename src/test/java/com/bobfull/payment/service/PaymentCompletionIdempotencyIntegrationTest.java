@@ -42,7 +42,7 @@ import org.springframework.test.context.ContextConfiguration;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=payment-idempotency-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-payment-idempotency-test-api-secret",
         "portone.store-id=portone-payment-idempotency-test-store-id",
         "portone.webhook-secret=d2hzZWNfaWRlbXBvdGVuY3ktdGVzdA=="

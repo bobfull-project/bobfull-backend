@@ -18,14 +18,19 @@ import com.bobfull.auth.dto.ReissueResponse;
 import com.bobfull.auth.dto.SignupOwnerRequest;
 import com.bobfull.auth.dto.SignupResponse;
 import com.bobfull.auth.dto.SignupUserRequest;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import com.bobfull.auth.token.RefreshTokenStore;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
+import com.bobfull.common.security.AuthMember;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +59,12 @@ class AuthServiceTest {
 
     @Mock
     private RefreshTokenStore refreshTokenStore;
+
+    @Mock
+    private AccessTokenBlacklistStore accessTokenBlacklistStore;
+
+    @Mock
+    private Clock clock;
 
     @InjectMocks
     private AuthService authService;
@@ -282,12 +293,36 @@ class AuthServiceTest {
     }
 
     @Test
-    void 로그아웃하면_해당_회원의_RefreshToken을_삭제한다() {
+    void 로그아웃하면_Access_Token을_Blacklist에_등록하고_해당_회원의_RefreshToken을_삭제한다() {
+        // given
+        Instant now = Instant.parse("2026-08-01T00:00:00Z");
+        Instant expiresAt = now.plusSeconds(600);
+        given(clock.instant()).willReturn(now);
+        given(jwtTokenProvider.parseAccessTokenClaims("access-token")).willReturn(
+                new JwtTokenProvider.AccessTokenClaims(new AuthMember(1L, MemberRole.MEMBER), "jti-1", expiresAt));
+
         // when
-        LogoutResponse response = authService.logout(1L);
+        LogoutResponse response = authService.logout(1L, "access-token");
 
         // then
         assertThat(response.result()).isTrue();
+        verify(accessTokenBlacklistStore).blacklist("jti-1", Duration.ofSeconds(600));
+        verify(refreshTokenStore).deleteByMember(1L);
+    }
+
+    @Test
+    void jti가_없는_토큰으로_로그아웃하면_Blacklist_등록은_건너뛰고_RefreshToken만_삭제한다() {
+        // given: Issue #186 배포 이전에 발급된 Access Token(PR #187 리뷰) — jti가 없어 Blacklist에
+        // 등록할 방법이 없지만, 로그아웃 자체(Refresh Token 삭제)는 그대로 성공해야 한다.
+        given(jwtTokenProvider.parseAccessTokenClaims("legacy-access-token")).willReturn(
+                new JwtTokenProvider.AccessTokenClaims(new AuthMember(1L, MemberRole.MEMBER), null, Instant.now()));
+
+        // when
+        LogoutResponse response = authService.logout(1L, "legacy-access-token");
+
+        // then
+        assertThat(response.result()).isTrue();
+        verify(accessTokenBlacklistStore, org.mockito.Mockito.never()).blacklist(any(), any());
         verify(refreshTokenStore).deleteByMember(1L);
     }
 }

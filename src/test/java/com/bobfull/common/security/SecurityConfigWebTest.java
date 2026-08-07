@@ -1,6 +1,8 @@
 package com.bobfull.common.security;
 
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -11,19 +13,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.bobfull.common.config.ClockConfig;
 import com.bobfull.common.support.TestApiController;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.List;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -34,7 +45,7 @@ import org.springframework.test.web.servlet.ResultActions;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=security-config-web-test-secret-key-please-keep-this-long-enough",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "cors.allowed-origins=http://localhost:5173"
 })
 @ActiveProfiles("test-api")
@@ -42,6 +53,7 @@ class SecurityConfigWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
@@ -252,6 +264,63 @@ class SecurityConfigWebTest {
         // then
         result.andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
+    }
+
+    @Test
+    void Blacklist에_등록된_토큰이면_보호_API_접근시_401을_반환한다() throws Exception {
+        // given: 서명·만료는 정상이지만 로그아웃돼 Blacklist에 등록된 것으로 가정(Issue #186)
+        String accessToken = jwtTokenProvider.createAccessToken(10L, MemberRole.MEMBER);
+        given(accessTokenBlacklistStore.isBlacklisted(anyString())).willReturn(true);
+
+        // when
+        ResultActions result = mockMvc.perform(
+                get("/api/protected/hello").header("Authorization", "Bearer " + accessToken));
+
+        // then
+        result.andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
+    }
+
+    @Test
+    void Blacklist_조회가_Redis_장애로_실패해도_Fail_open으로_인증을_허용한다() throws Exception {
+        // given: Issue #186 Q5 — Blacklist 조회는 인증되는 모든 요청에 실행되므로 Redis 장애 시
+        // 보호 API 전체를 막지 않고 인증을 허용한다(재발급의 fail-closed와 의도적으로 다른 정책).
+        String accessToken = jwtTokenProvider.createAccessToken(10L, MemberRole.MEMBER);
+        given(accessTokenBlacklistStore.isBlacklisted(anyString()))
+                .willThrow(new RedisConnectionFailureException("Redis 연결 실패"));
+
+        // when
+        ResultActions result = mockMvc.perform(
+                get("/api/protected/hello").header("Authorization", "Bearer " + accessToken));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id", is(10)));
+    }
+
+    @Test
+    void jti가_없는_배포_이전_토큰도_인증에_성공하고_Blacklist_조회는_건너뛴다() throws Exception {
+        // given: Issue #186 배포 이전에 발급된 Access Token(PR #187 리뷰) — jti가 없어도 인증은
+        // 그대로 허용하고, jti가 없으니 Blacklist 조회 자체를 시도하지 않아야 한다.
+        String secret = "security-config-web-test-secret-key-please-keep-this-long-enough";
+        SecretKey secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        Instant now = Instant.now();
+        String tokenWithoutJti = Jwts.builder()
+                .claim("memberId", 10L)
+                .claim("role", MemberRole.MEMBER.name())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(3600L)))
+                .signWith(secretKey, Jwts.SIG.HS256)
+                .compact();
+
+        // when
+        ResultActions result = mockMvc.perform(
+                get("/api/protected/hello").header("Authorization", "Bearer " + tokenWithoutJti));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id", is(10)));
+        Mockito.verifyNoInteractions(accessTokenBlacklistStore);
     }
 
     /**
