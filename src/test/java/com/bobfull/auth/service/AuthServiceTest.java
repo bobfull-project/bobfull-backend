@@ -255,13 +255,30 @@ class AuthServiceTest {
         // given
         given(refreshTokenStore.rotate(anyString()))
                 .willThrow(new org.springframework.data.redis.RedisConnectionFailureException("연결 실패"));
+        Logger logger = (Logger) LoggerFactory.getLogger(AuthService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
 
         // when
-        Throwable result = catchThrowable(() -> authService.reissue("any-refresh-token"));
+        Throwable result;
+        try {
+            result = catchThrowable(() -> authService.reissue("any-refresh-token"));
+        } finally {
+            logger.detachAppender(appender);
+        }
 
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.UNAUTHORIZED);
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage()).contains("event=AUTH_REISSUE_FAILED");
+            assertThat(event.getFormattedMessage()).contains("reason=REFRESH_TOKEN_STORE_UNAVAILABLE");
+            assertThat(event.getFormattedMessage()).doesNotContain("any-refresh-token");
+            assertThat(event.getThrowableProxy().getClassName())
+                    .isEqualTo(org.springframework.data.redis.RedisConnectionFailureException.class.getName());
+        });
     }
 
     @Test

@@ -124,6 +124,7 @@ public class AuthService {
             return refreshTokenStore.rotate(refreshToken)
                     .orElseThrow(() -> new CustomException(CommonErrorCode.UNAUTHORIZED));
         } catch (DataAccessException e) {
+            log.error("event=AUTH_REISSUE_FAILED reason=REFRESH_TOKEN_STORE_UNAVAILABLE", e);
             throw new CustomException(CommonErrorCode.UNAUTHORIZED);
         }
     }
