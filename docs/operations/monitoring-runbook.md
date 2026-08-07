@@ -29,6 +29,7 @@ docker compose up -d
 BOBFULL_BACKEND_METRICS_TARGET=<app-ec2-private-ip>:8080
 GRAFANA_ADMIN_PASSWORD=<strong-password>
 GRAFANA_SLACK_WEBHOOK_URL=<slack-incoming-webhook-url>
+GRAFANA_SLACK_RECIPIENT=<slack-channel-name>
 ```
 
 ## 확인 순서

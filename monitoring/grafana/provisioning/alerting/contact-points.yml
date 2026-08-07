@@ -8,6 +8,7 @@ contactPoints:
         type: slack
         settings:
           url: ${GRAFANA_SLACK_WEBHOOK_URL}
+          recipient: ${GRAFANA_SLACK_RECIPIENT}
           title: BobFull monitoring alert
           text: |
             {{ range .Alerts }}

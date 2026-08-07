@@ -37,7 +37,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_UNIFIED_ALERTING_ENABLED: "true"
-      GRAFANA_SLACK_WEBHOOK_URL: ${GRAFANA_SLACK_WEBHOOK_URL:-}
+      GRAFANA_SLACK_WEBHOOK_URL: ${GRAFANA_SLACK_WEBHOOK_URL:?set grafana slack webhook url}
+      GRAFANA_SLACK_RECIPIENT: ${GRAFANA_SLACK_RECIPIENT:?set grafana slack recipient}
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
     volumes:
