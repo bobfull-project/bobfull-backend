@@ -17,6 +17,9 @@ import org.springframework.boot.test.web.server.LocalServerPort;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "management.health.redis.enabled=false",
+        // 테스트 환경에는 실제로 붙는 SMTP 서버가 없어(Issue #168), mail Health Indicator가
+        // 전체 상태를 DOWN으로 끌어내리지 않도록 Redis와 동일하게 비활성화한다.
+        "management.health.mail.enabled=false",
         "jwt.secret=actuator-health-test-secret-key-please-keep-this-long",
         "jwt.access-token-expiration-seconds=3600",
         "portone.api-secret=portone-actuator-health-test-api-secret",

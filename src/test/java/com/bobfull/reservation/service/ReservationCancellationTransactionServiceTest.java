@@ -17,6 +17,8 @@ import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.event.RecruitmentDeadlineCancelledEvent;
+import com.bobfull.reservation.event.RecruitmentDeadlineConfirmedEvent;
 import com.bobfull.reservation.port.ReservationCancellationRefundPort;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,10 +69,13 @@ class ReservationCancellationTransactionServiceTest {
     @Mock
     private RestaurantRepository restaurantRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private ReservationCancellationTransactionService service() {
         return new ReservationCancellationTransactionService(
                 reservationRepository, reservationParticipantRepository, reservationCapacityReader,
-                timeSlotRepository, sharedTableRepository, restaurantRepository, CLOCK);
+                timeSlotRepository, sharedTableRepository, restaurantRepository, CLOCK, eventPublisher);
     }
 
     @Test
@@ -496,6 +502,7 @@ class ReservationCancellationTransactionServiceTest {
                 .isEqualTo(ReservationCancellationTransactionService.RecruitmentDeadlineOutcome.ALREADY_PROCESSED);
         assertThat(acceptance.refundCommand()).isNull();
         verify(reservationParticipantRepository, never()).findAllByReservationIdAndParticipationStatus(any(), any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -513,6 +520,7 @@ class ReservationCancellationTransactionServiceTest {
         assertThat(acceptance.outcome())
                 .isEqualTo(ReservationCancellationTransactionService.RecruitmentDeadlineOutcome.ALREADY_PROCESSED);
         verify(reservationCapacityReader, never()).readTableCapacity(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -535,6 +543,7 @@ class ReservationCancellationTransactionServiceTest {
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         verify(reservationParticipantRepository, never()).findAllByReservationIdAndParticipationStatus(any(), any());
+        verify(eventPublisher).publishEvent(new RecruitmentDeadlineConfirmedEvent(10L));
     }
 
     @Test
@@ -566,6 +575,7 @@ class ReservationCancellationTransactionServiceTest {
         assertThat(command.reservationParticipantIds()).containsExactlyInAnyOrder(20L, 21L);
         assertThat(command.requesterMemberId()).isEqualTo(5L);
         assertThat(command.cancelReason()).isEqualTo("모집 마감 기준 인원 미달로 자동 취소되었습니다");
+        verify(eventPublisher).publishEvent(new RecruitmentDeadlineCancelledEvent(10L, List.of(20L, 21L)));
     }
 
     private void givenOwnedChain(Reservation reservation, Long ownerMemberId) {

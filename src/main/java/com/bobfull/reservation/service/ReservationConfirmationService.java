@@ -8,6 +8,7 @@ import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.event.ReservationConfirmedEvent;
+import com.bobfull.reservation.event.ReservationPaymentCompletedEvent;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
@@ -58,6 +59,8 @@ public class ReservationConfirmationService {
      * {@link ReservationConfirmedEvent}만 발행한다 — 이 메서드가 MANDATORY로 합류한
      * 호출자의 트랜잭션이 실제로 커밋된 뒤에만 별도 트랜잭션으로 생성돼야, ChatRoom 저장
      * 실패가 이미 완료된 결제·예약을 롤백시키지 않는다(#50 PR #174 리뷰 BLOCKER).
+     * 같은 이유로 접수·참여 완료 이메일 안내도 직접 호출하지 않고 CREATE·JOIN 모두에서
+     * {@link ReservationPaymentCompletedEvent}만 발행한다(Issue #168 V2).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public ReservationConfirmationResult confirm(
@@ -77,6 +80,7 @@ public class ReservationConfirmationService {
         if (purpose == PaymentPurpose.CREATE) {
             eventPublisher.publishEvent(new ReservationConfirmedEvent(reservation.getId()));
         }
+        eventPublisher.publishEvent(new ReservationPaymentCompletedEvent(reservation.getId(), participant.getId(), purpose));
 
         ReservationStatus beforeStatus = reservation.getReservationStatus();
         updateReservationStatus(reservation, timeSlotId);
