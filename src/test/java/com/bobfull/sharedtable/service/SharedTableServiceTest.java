@@ -7,6 +7,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.RestaurantErrorCode;
@@ -32,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -269,6 +273,36 @@ class SharedTableServiceTest {
         // then
         assertThat(table.getCapacity()).isEqualTo(8);
         verify(sharedTableUsageValidator).validateCapacityChangeAllowed(1L);
+    }
+
+    @Test
+    void capacity를_수정하면_TABLE_CAPACITY_CHANGED_구조화로그를_남긴다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable table = sharedTable(1L, 10L, 4);
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(table));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        Logger logger = (Logger) LoggerFactory.getLogger(SharedTableService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            sharedTableService().update(1L, 1L, new SharedTableRequest(8));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=TABLE_CAPACITY_CHANGED");
+            assertThat(event.getFormattedMessage()).contains("tableId=1");
+            assertThat(event.getFormattedMessage()).contains("restaurantId=10");
+            assertThat(event.getFormattedMessage()).contains("actorId=1");
+            assertThat(event.getFormattedMessage()).contains("beforeCapacity=4");
+            assertThat(event.getFormattedMessage()).contains("afterCapacity=8");
+        });
     }
 
     @Test

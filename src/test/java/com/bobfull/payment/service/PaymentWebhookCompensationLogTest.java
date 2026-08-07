@@ -65,4 +65,64 @@ class PaymentWebhookCompensationLogTest {
             assertThat(event.getFormattedMessage()).contains("reason=PAYMENT_EXPIRED");
         });
     }
+
+    @Test
+    void 외부_PAID_이후_내부_업무예외가_발생하면_보상필요_구조화로그를_기록한다() {
+        Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
+                BigDecimal.valueOf(10000), Instant.parse("2026-07-28T00:00:00Z"));
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        given(portOnePaymentReader.read("payment-id"))
+                .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "KRW"));
+        given(transactionService.complete("payment-id"))
+                .willThrow(new CustomException(PaymentErrorCode.PAYMENT_VERIFICATION_FAILED));
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC));
+        Logger logger = (Logger) LoggerFactory.getLogger(PaymentCompletionService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            org.assertj.core.api.Assertions.catchThrowable(() -> service.completeFromWebhook("payment-id"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=PAYMENT_COMPENSATION_REQUIRED");
+            assertThat(event.getFormattedMessage()).contains("paymentId=payment-id");
+            assertThat(event.getFormattedMessage()).contains("externalStatus=PAID");
+            assertThat(event.getFormattedMessage()).contains("internalStatus=UNKNOWN");
+            assertThat(event.getFormattedMessage()).contains("reason=PAYMENT_VERIFICATION_FAILED");
+        });
+    }
+
+    @Test
+    void 외부_PAID_이후_내부_런타임예외가_발생하면_보상필요_구조화로그와_스택트레이스를_기록한다() {
+        Payment payment = Payment.createReady("payment-id", 1L, 2L, null, PaymentPurpose.CREATE, 1,
+                BigDecimal.valueOf(10000), Instant.parse("2026-07-28T00:00:00Z"));
+        given(paymentRepository.findByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        given(portOnePaymentReader.read("payment-id"))
+                .willReturn(new PortOnePaymentReader.PortOnePayment("payment-id", true, BigDecimal.valueOf(10000), "KRW"));
+        given(transactionService.complete("payment-id")).willThrow(new IllegalStateException("db flush failed"));
+        PaymentCompletionService service = new PaymentCompletionService(paymentRepository, portOnePaymentReader,
+                transactionService, Clock.fixed(Instant.parse("2026-07-27T23:59:00Z"), ZoneOffset.UTC));
+        Logger logger = (Logger) LoggerFactory.getLogger(PaymentCompletionService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            org.assertj.core.api.Assertions.catchThrowable(() -> service.completeFromWebhook("payment-id"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=PAYMENT_COMPENSATION_REQUIRED");
+            assertThat(event.getFormattedMessage()).contains("paymentId=payment-id");
+            assertThat(event.getFormattedMessage()).contains("externalStatus=PAID");
+            assertThat(event.getFormattedMessage()).contains("internalStatus=UNKNOWN");
+            assertThat(event.getFormattedMessage()).contains("reason=IllegalStateException");
+            assertThat(event.getThrowableProxy().getClassName()).isEqualTo(IllegalStateException.class.getName());
+        });
+    }
 }

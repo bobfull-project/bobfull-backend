@@ -92,7 +92,9 @@ class GlobalExceptionHandlingWebTest {
 
             // then
             assertThat(listAppender.list)
-                    .anyMatch(event -> event.getLevel() == Level.ERROR);
+                    .anyMatch(event -> event.getLevel() == Level.ERROR
+                            && event.getFormattedMessage().contains("event=UNHANDLED_EXCEPTION")
+                            && event.getFormattedMessage().contains("path=/api/errors/internal"));
         } finally {
             logger.detachAppender(listAppender);
         }

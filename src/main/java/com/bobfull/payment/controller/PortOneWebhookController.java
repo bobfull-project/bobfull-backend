@@ -7,6 +7,7 @@ import com.bobfull.payment.service.RefundWebhookService;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookVerifier;
 import com.bobfull.payment.port.PortOneWebhookVerifier;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -36,12 +37,16 @@ public class PortOneWebhookController {
     public ResponseEntity<Void> receive(@RequestBody String rawBody,
             @RequestHeader(value = WebhookVerifier.HEADER_ID, required = false) String id,
             @RequestHeader(value = WebhookVerifier.HEADER_SIGNATURE, required = false) String signature,
-            @RequestHeader(value = WebhookVerifier.HEADER_TIMESTAMP, required = false) String timestamp) {
+            @RequestHeader(value = WebhookVerifier.HEADER_TIMESTAMP, required = false) String timestamp,
+            HttpServletRequest request) {
         try {
             if (id == null || signature == null || timestamp == null) {
+                log.warn("event=PORTONE_WEBHOOK_SIGNATURE_INVALID reason=MISSING_HEADERS");
                 return ResponseEntity.badRequest().build();
             }
             var event = webhookVerifier.verify(rawBody, id, signature, timestamp);
+            request.setAttribute("portonePaymentId", event.paymentId());
+            request.setAttribute("portoneCancellationId", event.cancellationId());
             if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.UNSUPPORTED) return ResponseEntity.ok().build();
             if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.PARTIAL_CANCELLED) {
                 log.info("event=PORTONE_PARTIAL_CANCELLED_IGNORED paymentId={} cancellationId={}", event.paymentId(), event.cancellationId());
@@ -62,6 +67,7 @@ public class PortOneWebhookController {
             }
             return ResponseEntity.ok().build();
         } catch (WebhookVerificationException e) {
+            log.warn("event=PORTONE_WEBHOOK_SIGNATURE_INVALID reason=VERIFICATION_FAILED");
             return ResponseEntity.badRequest().build();
         }
     }

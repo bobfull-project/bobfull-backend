@@ -1,11 +1,14 @@
 package com.bobfull.common.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -19,6 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
 
@@ -42,10 +46,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(createAuthentication(authMember));
             } catch (InvalidJwtException e) {
                 SecurityContextHolder.clearContext();
+                if (!isTokenExpired(e)) {
+                    log.warn("event=JWT_INVALID reason=INVALID_JWT path={}", request.getRequestURI());
+                }
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isTokenExpired(InvalidJwtException exception) {
+        return exception.getCause() instanceof ExpiredJwtException;
     }
 
     private String resolveToken(HttpServletRequest request) {

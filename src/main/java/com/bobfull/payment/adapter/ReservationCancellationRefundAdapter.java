@@ -66,7 +66,8 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
             // 실제로 실패한 것이 아니므로 PORTONE_REFUND_FAILED로 뭉뚱그리지 않고 재조정이 필요하다는
             // 별도 오류로 구분해, 호출자가 "환불 자체가 실패했다"고 잘못 안내하지 않게 한다.
             log.error("event=REFUND_COMPENSATION_REQUIRED paymentId={} refundId={} cancellationId={} externalStatus={} internalStatus=ROLLBACK autoRetry=false",
-                    refund.getPayment().getId(), refund.getId(), result.cancellationId(), result.completed() ? "COMPLETED" : "PROCESSING");
+                    refund.getPayment().getId(), refund.getId(), result.cancellationId(),
+                    result.completed() ? "COMPLETED" : "PROCESSING", exception);
             if (result.completed()) {
                 throw new CustomException(PaymentErrorCode.REFUND_RECONCILIATION_REQUIRED);
             }
@@ -81,10 +82,10 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
         } catch (RuntimeException exception) {
             if (exception instanceof PortOneRefundRequester.ExplicitRefundFailureException) {
                 transactionService.markFailed(refund.getId());
-                log.error("event=REFUND_FAILED paymentId={} refundId={} externalStatus=FAILED internalStatus=FAILED autoRetry=false",
+                log.warn("event=REFUND_FAILED paymentId={} refundId={} externalStatus=FAILED internalStatus=FAILED autoRetry=false",
                         refund.getPayment().getId(), refund.getId());
             } else {
-                log.error("event=REFUND_RESULT_UNKNOWN paymentId={} refundId={} externalStatus=UNKNOWN internalStatus=REQUESTED autoRetry=false",
+                log.warn("event=REFUND_RESULT_UNKNOWN paymentId={} refundId={} externalStatus=UNKNOWN internalStatus=REQUESTED autoRetry=false",
                         refund.getPayment().getId(), refund.getId());
             }
             throw new CustomException(PaymentErrorCode.PORTONE_REFUND_FAILED);
