@@ -5,13 +5,12 @@
 구현 담당자 AI는 Issue 계약에 따라 구현·테스트·PR 설명 작성과 리뷰 반영을 담당한다.
 
 **PR의 최초 AI 코드 리뷰는 구현 담당자 AI가 수행하지 않는다.**
-PR 생성/업데이트 시 GitHub가 별도의 Copilot reviewer를 자동 요청한다.
+GitHub Repository Ruleset이 별도의 Copilot reviewer를 자동 요청한다.
 
 자동 리뷰 기준:
 
 - `.github/copilot-instructions.md`
 - `.github/skills/bobfull-pr-review/SKILL.md`
-- `.github/workflows/copilot-auto-review.yml`
 
 ## 2. Issue 실행
 
@@ -21,17 +20,7 @@ Issue 단계 시작 명령:
 Issue #번호 구현하라
 ```
 
-새 Issue:
-
-```text
-새 Issue 초안 작성하라
-→ Human 승인
-→ 이 초안으로 Issue 생성하라
-```
-
-### Issue Human 질문
-
-Issue 단계의 기존 정책을 유지한다.
+Issue Human 질문 정책:
 
 - 기본: 필요한 질문 1~2개
 - 강화: 필요한 질문 2~3개
@@ -43,27 +32,19 @@ Issue 단계의 기존 정책을 유지한다.
 
 `status:in-progress` 이후 다음 순서로 진행한다.
 
-1. 현재 브랜치와 작업 트리를 확인한다.
-2. 대상 Issue 전용 브랜치가 없으면 최신 `develop`에서 생성한다.
-3. Issue 최종 계약과 제외 범위를 확인한다.
-4. 강화 검토 대상이면 구현 전 설계 확인을 수행한다.
-5. 코드·테스트·필요 문서를 구현한다.
-6. 관련 테스트와 직접 검증을 실제 실행한다.
-7. 전체 Diff를 자체 검토한다.
-8. `skills/bobfull-pr-explain/SKILL.md`를 적용해 PR 본문을 작성한다.
-9. Issue 관련 변경만 Commit·Push한다.
-10. develop 대상 Draft PR을 생성한다.
+1. 대상 Issue 전용 브랜치 확인 또는 최신 `develop` 기준 생성
+2. Issue 최종 계약과 제외 범위 확인
+3. 강화 검토 대상이면 구현 전 설계 확인
+4. 코드·테스트·필요 문서 구현
+5. 관련 테스트와 직접 검증 실제 실행
+6. 전체 Diff 자체 검토
+7. `skills/bobfull-pr-explain/SKILL.md` 적용
+8. Issue 관련 변경만 Commit·Push
+9. develop 대상 Draft PR 생성
 
 Draft PR 생성 이후 **구현 담당자 AI가 자기 PR을 AI Review하고 댓글을 만드는 단계를 넣지 않는다.**
 
-PR 생성 event가 발생하면 GitHub 자동화가 별도 Copilot reviewer를 요청한다.
-
-```text
-Draft PR 생성
-→ pull_request.opened
-→ Copilot reviewer 자동 요청
-→ 독립 AI Review
-```
+GitHub Ruleset의 Automatic Copilot Code Review가 별도 리뷰를 수행한다.
 
 ## 4. 구현 전 강화 설계 확인
 
@@ -99,11 +80,10 @@ PR 본문은 다음 구조를 유지한다.
 - 실행하지 않은 검증을 PASS로 기록하지 않는다.
 - `BLOCKER`, `FAIL`, `NOT_RUN`, 미검증 위험을 접힌 영역에만 숨기지 않는다.
 - 의미 없는 Mermaid·주요 개념·트러블슈팅을 억지로 생성하지 않는다.
-- 단순 문서·설정·CRUD는 해당 없는 항목에 이유를 적는다.
 
-## 6. 자동 AI Review
+## 6. 자동 독립 AI Review
 
-### 6.1 구현 담당자와 리뷰 에이전트 분리
+### 6.1 역할 분리
 
 ```text
 구현 담당자 AI
@@ -113,22 +93,21 @@ GitHub Copilot reviewer
 → 독립 코드 리뷰·댓글
 ```
 
-구현할 때의 기억이나 자기 판단을 리뷰 결과로 사용하지 않는다.
+### 6.2 Ruleset 설정
 
-### 6.2 트리거
+공식 자동 리뷰는 GitHub Repository Ruleset을 사용한다.
 
-`.github/workflows/copilot-auto-review.yml`은 다음 event에서 Copilot reviewer를 요청한다.
+```text
+Automatically request Copilot code review = Enabled
+Review draft pull requests = Enabled
+Review new pushes = Enabled
+```
 
-- `opened`
-- `synchronize`
-- `reopened`
-- `ready_for_review`
+이 설정으로 Draft PR 생성과 새 Push마다 별도 Copilot reviewer가 자동 실행된다.
 
-새 Push는 `synchronize`를 발생시키므로 자동 재리뷰 대상이다.
+최초 리뷰를 위해 `PR #번호 검토하라`를 요구하지 않는다.
 
 ### 6.3 리뷰 결과
-
-리뷰 에이전트는 실제 코드 위치에 inline comment를 남기고 필요하면 review summary를 작성한다.
 
 중요도 기준:
 
@@ -140,13 +119,13 @@ SUGGESTION
 PASS
 ```
 
-자동 리뷰가 실행되지 않았거나 workflow가 실패하면 이를 PASS로 간주하지 않는다.
+자동 Copilot Review가 실제로 PR에 생성되지 않았다면 PASS로 간주하지 않는다.
 
-## 7. 자동 리뷰 반영
+## 7. 리뷰 반영
 
-자동 리뷰 댓글이 등록된 뒤 구현 담당자 AI가 후속 작업을 수행할 때는 모든 리뷰·댓글을 최신 Head와 대조한다.
+자동 AI Review 댓글이 등록된 뒤 구현 담당자 AI가 후속 작업을 수행할 때는 모든 리뷰·댓글을 최신 Head와 대조한다.
 
-### 범위 안에서 자동 반영 가능
+### 범위 안에서 반영 가능
 
 - 명확한 기능 오류
 - 예외 처리·검증·테스트 누락
@@ -167,8 +146,7 @@ PASS
 ```text
 테스트·직접 검증 재실행
 → Commit·Push
-→ synchronize event
-→ Copilot 자동 재리뷰
+→ Review new pushes로 Copilot 자동 재리뷰
 ```
 
 구현 담당자 AI가 새 리뷰 댓글을 대신 작성하지 않는다.
@@ -197,8 +175,6 @@ PASS
 
 ## 9. Human Review Checklist
 
-모든 PR에서 공통 체크만 사용한다.
-
 - [ ] 이 PR이 무엇을 왜 변경하는지 이해했다.
 - [ ] 변경 후 기본 실행 흐름과 중요한 분기를 이해했다.
 - [ ] 중요한 기술 개념이 있다면 어디에 왜 적용됐는지 이해했다.
@@ -208,14 +184,12 @@ PR별 세부 구현 퀴즈를 동적으로 추가하지 않는다.
 
 ## 10. 완료 경계
 
-다음까지가 구현 담당자 AI의 책임이다.
-
 ```text
 Issue 분석·Human 계약 확인
 → 구현·테스트
 → PR Explain
 → Commit·Push·Draft PR
-→ 자동 Copilot Review 결과 확인
+→ Automatic Copilot Review 확인
 → 범위 안 리뷰 지적 수정
 → Push
 → 자동 재리뷰 확인
