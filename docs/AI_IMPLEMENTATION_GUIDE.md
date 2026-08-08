@@ -70,7 +70,7 @@ Issue #번호 구현하라
 10. 코드·테스트·필요 문서를 구현한다.
 11. 테스트와 직접 검증을 실제로 실행한다.
 12. 전체 실제 Diff를 자체 검토한다.
-13. Draft PR 생성 전에 `skills/bobfull-pr-explain/SKILL.md`를 직접 읽고 적용한다. 최신 `.github/pull_request_template.md`의 섹션 이름과 순서를 유지하고, Skill이 요구하는 Issue 계약·실제 Diff·검증 근거로 한 줄 요약의 네 하위 필드, Explain Diff, 추가·수정 테스트 설명, 필요한 Mermaid 시각화, 담당자 Human 이해도 질문과 PR별 Human Review Checklist를 작성한다.
+13. Draft PR 생성 전에 `skills/bobfull-pr-explain/SKILL.md`를 직접 읽고 적용한다. 최신 `.github/pull_request_template.md`의 `한 줄 요약/관련 Issue → PR 이해 요약 → 상세 변경 및 검증 → Human 검토` 순서를 유지하고, Skill이 요구하는 Issue 계약·실제 Diff·검증 근거로 이해 요약, 상세 검증, 필요한 Mermaid 시각화, 담당자 Human 이해도 질문과 PR별 Human Review Checklist를 작성한다.
 14. Issue 관련 변경만 Commit·Push한다.
 15. develop 대상 Draft PR을 생성한다. 강화 검토 대상이었다면 PR Conversation 댓글에 다음 형식으로 구현 전 설계 확인 기록을 남긴다. Issue 댓글이나 PR 본문, 특히 `코드 확인 순서`에는 이 기록을 추가하지 않는다.
 
@@ -87,7 +87,7 @@ Issue #번호 구현하라
 
 16. 최신 Head 검토와 필수 검증이 끝나면 `status:final-human-review`를 적용하고 Human 최종 리뷰 사항을 Issue 댓글과 PR에 기록한다.
 
-Draft PR 본문은 `bobfull-pr-explain` Skill의 실제 근거 수집·한 줄 요약 하위 필드 유지·추가 테스트 설명·Mermaid 선택·최신 Head 대조 절차를 따른다. 추가·수정 테스트는 코드의 검증 의미를, `테스트·build·직접 검증`은 실행 결과를 기록한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다. `Human Review Checklist`와 `담당자 AI 검토·수정 기록`은 삭제하거나 축약하지 않으며, PR 제목은 Issue의 범위·유형 형식이 아니라 `GITHUB_RULES`의 Conventional Commit 형식을 따른다.
+Draft PR 본문은 `bobfull-pr-explain` Skill의 실제 근거 수집·한 줄 요약 하위 필드 유지·PR 이해 요약·상세 검증·Mermaid 선택·최신 Head 대조 절차를 따른다. PR 이해 요약에는 쉬운 설명, 주요 실행 흐름, 필요한 Mermaid, 주요 개념, 실제 트러블슈팅 요약, 코드 읽는 순서를 두며, 단순 변경에 불필요한 항목은 이유와 함께 `해당 없음`으로 기록한다. 상세 검증의 긴 정보만 `<details>`로 접고 `BLOCKER`·`FAIL`·`NOT_RUN`·미검증 위험은 접힌 영역에만 두지 않는다. 추가·수정 테스트는 코드의 검증 의미를, `테스트·build·직접 검증`은 실행 결과를 기록한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다. `Human Review Checklist`와 `담당자 AI 검토·수정 기록`은 삭제하거나 축약하지 않으며, PR 제목은 Issue의 범위·유형 형식이 아니라 `GITHUB_RULES`의 Conventional Commit 형식을 따른다.
 
 ### 새 Issue 초안·생성
 
@@ -120,7 +120,7 @@ PR #번호 검토하라
 
 1. 최신 Head SHA와 실제 Diff를 확인한다.
 2. PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약, 현재 상태 Label과 계약 이후 변경 여부를 확인한다.
-3. `skills/bobfull-pr-explain/SKILL.md`를 다시 적용해 PR 본문·Mermaid·Checklist가 최신 Head의 실제 Diff와 일치하는지 확인하고, 테스트·build·직접 검증·CI 증거를 확인한다.
+3. `skills/bobfull-pr-explain/SKILL.md`를 다시 적용해 PR 이해 요약·상세 검증·Mermaid·Checklist가 최신 Head의 실제 Diff와 일치하는지 확인하고, 테스트·build·직접 검증·CI 증거를 확인한다.
 4. 담당자 Human 답변을 실제 코드와 대조한다.
 5. 각 1차 답변 아래 `AI 답변 검토`와 실제 계약·최신 Diff·코드·문서·테스트 근거의 `AI 기준 답변`을 작성한다.
 6. PR 본문 마지막의 PR별 `Human Review Checklist`와 PR 댓글의 Human 리뷰 의견을 확인한다. 댓글 메타데이터의 작성자·시각을 사용하고, 체크리스트 댓글에 기준 Head SHA를 기록하거나 추정하지 않는다.
@@ -202,7 +202,7 @@ Issue와 PR 모두 최신 계약·Diff·테스트를 기준으로 담당자가 �
 
 ### 6.2 Human Review Checklist와 댓글
 
-담당자 AI는 Draft PR 생성 시 PR 본문 마지막에 현재 PR 전용 `Human Review Checklist`를 작성한다. 연결 Issue의 최종 결정·완료 조건, 최신 실제 Diff, 추가·수정 테스트, 실제 테스트 결과와 PR 범위를 근거로 구현 확인과 테스트 확인을 분리하며, 한 항목에는 실제 확인 가능한 동작 또는 검증 하나만 둔다. 템플릿에는 동적 생성 규칙과 빈 구조만 두고 실제 PR에는 고정 예시 체크박스를 남기지 않는다.
+담당자 AI는 Draft PR 생성 시 `Human 검토` 안 마지막 영역에 현재 PR 전용 `Human Review Checklist`를 작성한다. 연결 Issue의 최종 결정·완료 조건, 최신 실제 Diff, 추가·수정 테스트, 실제 테스트 결과와 PR 범위를 근거로 구현 확인과 테스트 확인을 분리하며, 한 항목에는 실제 확인 가능한 동작 또는 검증 하나만 둔다. 템플릿에는 동적 생성 규칙과 빈 구조만 두고 실제 PR에는 고정 예시 체크박스를 남기지 않는다.
 
 Human 리뷰어는 PR 본문을 수정하지 않고 체크리스트를 참고하거나 복사해 PR 댓글에 체크 여부와 의견을 직접 작성한다. 리뷰어와 리뷰 시각은 GitHub 댓글 메타데이터를 사용하며, 기준 Head SHA를 댓글에 기록하거나 추정하지 않는다. 새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리하고, 담당자 AI는 PR 검토 명령마다 최신 Diff를 다시 확인한다.
 
@@ -238,7 +238,7 @@ PR에는 실제 확인한 내용만 기록한다.
 - 관련 Issue와 검토 수준
 - Issue 댓글의 최종 계약과 현재 상태 Label
 - 주요 변경과 제외 범위
-- 코드 확인 순서
+- PR 이해 요약의 코드 읽는 순서
 - 완료 조건별 구현·검증 증거
 - 실제 테스트·build·직접 검증 결과
 - 최신 Commit SHA와 CI 상태

@@ -142,8 +142,9 @@ status:final-human-review
 - PR에는 실제 변경·실행 결과·미검증 위험만 기록한다.
 - PR 템플릿에 담당자 Human 이해도와 PR별 Human Review Checklist의 빈 구조를 포함한다.
 - Draft PR 생성 전 `skills/bobfull-pr-explain/SKILL.md`를 직접 읽고 적용한다. Skill이 요구하는 최신 템플릿·연결 Issue 계약·실제 Diff·검증 근거를 확보하지 못하면 PR 내용을 추측해 작성하지 않는다.
-- Explain Diff는 한 줄 요약의 기존 네 하위 필드, 변경 전 동작·문제, 핵심 아이디어, 변경 후 실행 흐름, 코드 확인 순서, 추가·수정 테스트, 예외·트레이드오프·제한사항과 실제 검증 근거를 기록한다. 추가·수정 테스트는 검증 코드를 설명하고 `테스트·build·직접 검증`은 실제 실행 결과를 기록한다. 의미 있는 실행 흐름이 있는 기능 PR은 최신 Head와 일치하는 Mermaid 다이어그램을 최소 1개 포함하고, 실행 흐름이 없는 단순 변경만 `해당 없음`과 이유로 생략할 수 있다.
-- 새 Commit 뒤와 `PR #번호 검토하라`, Ready 전 최종 확인에서는 Skill을 다시 적용해 PR 설명·다이어그램·Checklist를 최신 Head에 맞춘다.
+- PR 본문은 `한 줄 요약/관련 Issue → PR 이해 요약 → 상세 변경 및 검증 → Human 검토` 순서를 유지한다. `PR 이해 요약`에는 쉬운 설명, 주요 실행 흐름, Mermaid 시각화, 주요 개념, 핵심 트러블슈팅, 코드 읽는 순서를 실제 Diff 근거로 작성한다. 단순 변경에 불필요한 항목은 `해당 없음`과 이유를 기록하며, 가짜 트러블슈팅이나 용어 사전을 만들지 않는다.
+- 상세 변경 및 검증에는 한 줄 요약의 기존 네 하위 필드와 주요 변경, 예외·실패·중복·경계, 트레이드오프, 제한사항, 제외 범위, 추가·수정 테스트, 실제 검증 근거를 유지한다. 긴 정보만 `<details>`로 접고 `BLOCKER`·`FAIL`·`NOT_RUN`·미검증 위험은 접힌 영역에만 숨기지 않는다. 추가·수정 테스트는 검증 코드를 설명하고 `테스트·build·직접 검증`은 실제 실행 결과를 기록한다.
+- 새 Commit 뒤와 `PR #번호 검토하라`, Ready 전 최종 확인에서는 Skill을 다시 적용해 PR 이해 요약, 상세 검증, 다이어그램, Checklist를 최신 Head에 맞춘다.
 - `담당자 AI 검토·수정 기록`과 PR 본문 마지막의 Human Review Checklist를 삭제하거나 축약하지 않는다. Ready 전환, Approve와 Merge는 Human 책임이다.
 
 ## 5. PR Human 입력
@@ -161,7 +162,7 @@ Draft PR 생성 후 PR 담당자는 실제 Diff와 테스트 결과를 읽고 PR
 
 ### 5.2 Human Review Checklist와 댓글
 
-Draft PR 생성 시 담당자 AI는 PR 본문 마지막에 연결 Issue의 최종 결정·완료 조건, 최신 실제 Diff, 추가·수정 테스트, 실제 테스트 결과와 PR 범위를 근거로 PR별 `Human Review Checklist`를 작성한다. 구현 확인과 테스트 확인을 분리하고, 실제 확인 가능한 동작 또는 검증을 한 항목씩 작성한다.
+Draft PR 생성 시 담당자 AI는 `Human 검토` 안의 마지막 영역에 연결 Issue의 최종 결정·완료 조건, 최신 실제 Diff, 추가·수정 테스트, 실제 테스트 결과와 PR 범위를 근거로 PR별 `Human Review Checklist`를 작성한다. 구현 확인과 테스트 확인을 분리하고, 실제 확인 가능한 동작 또는 검증을 한 항목씩 작성한다.
 
 PR 작성자가 아닌 Human 리뷰어는 PR 본문을 수정하지 않고 체크리스트를 참고하거나 복사해 PR 댓글에 체크 여부와 의견을 직접 작성한다. 댓글의 리뷰어와 리뷰 시각은 GitHub 메타데이터를 사용하며, 기준 Head SHA는 기록하거나 추정하지 않는다. 새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리한다.
 
