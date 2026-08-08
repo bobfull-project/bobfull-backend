@@ -2,10 +2,12 @@ package com.bobfull.outbox.service;
 
 import com.bobfull.chat.service.ChatRoomCreationService;
 import com.bobfull.outbox.entity.OutboxEventStatus;
+import com.bobfull.outbox.entity.OutboxEventType;
 import com.bobfull.outbox.repository.OutboxEventRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +20,7 @@ public class ChatRoomOutboxProcessor {
     private static final Logger log = LoggerFactory.getLogger(ChatRoomOutboxProcessor.class);
     static final int MAX_RETRIES = 5;
     static final Duration STALE_PROCESSING_THRESHOLD = Duration.ofMinutes(5);
+    private static final List<OutboxEventType> CHAT_ROOM_EVENT_TYPES = List.of(OutboxEventType.CHAT_ROOM_CREATION_REQUESTED);
 
     private final OutboxEventRepository outboxEventRepository;
     private final OutboxEventTransactionService transactionService;
@@ -35,7 +38,7 @@ public class ChatRoomOutboxProcessor {
 
     public void process(Long eventId) {
         try {
-            transactionService.claim(eventId, clock.instant()).ifPresent(this::processClaimed);
+            transactionService.claim(eventId, CHAT_ROOM_EVENT_TYPES, clock.instant()).ifPresent(this::processClaimed);
         } catch (RuntimeException exception) {
             log.error("event=OUTBOX_PROCESSING_REQUIRED outboxEventId={} eventType=CHAT_ROOM_CREATION_REQUESTED reason={}",
                     eventId, exception.toString(), exception);
@@ -48,10 +51,10 @@ public class ChatRoomOutboxProcessor {
 
     public void processDueEvents(int batchSize) {
         Instant now = clock.instant();
-        outboxEventRepository.findStaleProcessingEventIds(OutboxEventStatus.PROCESSING,
-                        now.minus(STALE_PROCESSING_THRESHOLD), PageRequest.of(0, batchSize))
+        outboxEventRepository.findStaleProcessingEventIdsByTypes(OutboxEventStatus.PROCESSING,
+                        now.minus(STALE_PROCESSING_THRESHOLD), CHAT_ROOM_EVENT_TYPES, PageRequest.of(0, batchSize))
                 .forEach(eventId -> recoverStale(eventId, now));
-        outboxEventRepository.findDueEventIds(OutboxEventStatus.PENDING, now, PageRequest.of(0, batchSize))
+        outboxEventRepository.findDueEventIdsByTypes(OutboxEventStatus.PENDING, now, CHAT_ROOM_EVENT_TYPES, PageRequest.of(0, batchSize))
                 .forEach(this::process);
     }
 

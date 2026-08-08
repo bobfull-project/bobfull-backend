@@ -15,6 +15,8 @@ V2의 `AFTER_COMMIT + @Async`는 커밋 뒤 작업이 메모리에서 사라질 
 
 #176 Evidence의 원자 Claim·stale 회수·backoff·`FAILED` 검증을 재사용한다. #183은 이메일별 수신자 멱등성과 SMTP 실패 격리에 집중한다.
 
+공통 `outbox_event`에는 ChatRoom과 `EMAIL_*` 이벤트가 함께 저장된다. ChatRoom·Email Processor는 각각 due/stale 조회와 claim에 자기 eventType만 지정하며, 혼재된 PENDING·stale PROCESSING 회귀 테스트로 상대 이벤트 상태가 바뀌지 않음을 확인했다.
+
 ## 실행 명령
 
 ```bash

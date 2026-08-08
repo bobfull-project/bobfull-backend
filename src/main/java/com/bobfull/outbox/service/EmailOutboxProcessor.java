@@ -42,7 +42,7 @@ public class EmailOutboxProcessor {
     }
     public void signal(Long eventId) { process(eventId); }
     public void process(Long eventId) {
-        try { transactionService.claim(eventId, clock.instant()).ifPresent(this::processClaimed); }
+        try { transactionService.claim(eventId, EMAIL_EVENT_TYPES, clock.instant()).ifPresent(this::processClaimed); }
         catch (RuntimeException e) { log.error("event=OUTBOX_PROCESSING_REQUIRED outboxEventId={} reason={}", eventId, e.toString(), e); }
     }
     public void processDueEvents(int batchSize) {

@@ -3,6 +3,7 @@ package com.bobfull.outbox.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -37,7 +38,7 @@ class EmailOutboxProcessorTest {
         EmailOutboxDelivery a = delivery(1L, 11L);
         EmailOutboxDelivery b = delivery(2L, 12L);
         EmailOutboxDelivery c = delivery(3L, 13L);
-        when(transactionService.claim(any(), any())).thenReturn(java.util.Optional.of(claimed(0)), java.util.Optional.of(claimed(1)));
+        when(transactionService.claim(any(), anyList(), any())).thenReturn(java.util.Optional.of(claimed(0)), java.util.Optional.of(claimed(1)));
         when(deliveryRepository.findAllByOutboxEventIdAndStatus(100L, EmailDeliveryStatus.PENDING))
                 .thenReturn(List.of(a, b, c), List.of(b));
         when(deliveryRepository.existsByOutboxEventIdAndStatus(100L, EmailDeliveryStatus.PENDING)).thenReturn(false);
@@ -58,7 +59,7 @@ class EmailOutboxProcessorTest {
     @Test
     void SMTP_실패가_반복되면_공통_Outbox_FAILED_정책으로_수렴한다() {
         EmailOutboxDelivery failed = delivery(1L, 11L);
-        when(transactionService.claim(any(), any())).thenReturn(java.util.Optional.of(claimed(0)), java.util.Optional.of(claimed(1)),
+        when(transactionService.claim(any(), anyList(), any())).thenReturn(java.util.Optional.of(claimed(0)), java.util.Optional.of(claimed(1)),
                 java.util.Optional.of(claimed(2)), java.util.Optional.of(claimed(3)), java.util.Optional.of(claimed(4)), java.util.Optional.of(claimed(5)));
         when(deliveryRepository.findAllByOutboxEventIdAndStatus(100L, EmailDeliveryStatus.PENDING)).thenReturn(List.of(failed));
         doThrow(new IllegalStateException("SMTP_FAILED")).when(notificationService).sendOutboxEmail(any(), any());
