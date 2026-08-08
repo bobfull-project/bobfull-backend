@@ -16,7 +16,23 @@ V3 Sprint Mode의 리뷰 목적은 **완벽한 코드 만들기**가 아니라 *
 
 스타일·취향·범위 밖 개선으로 Merge를 지연시키지 않는다.
 
-## 2. 역할
+## 2. 리뷰가 가벼워져도 유지하는 안전선
+
+Sprint Mode는 리뷰 깊이를 줄일 뿐 다음 안전선을 제거하지 않는다.
+
+- Issue 최신 계약과 실제 Diff 일치 확인
+- 범위 밖 변경 확인
+- 인증·인가·소유권 확인
+- 데이터·상태·금액·수량 정합성 확인
+- Transaction·Rollback·Lock·멱등성·외부 I/O·Event 경계 확인
+- 실행한 테스트·build·직접 검증만 사실대로 기록
+- 비밀정보·개인정보 노출 확인
+- 정책·API·DB·권한·트랜잭션 재결정은 Human에게 요청
+- 이전 Head의 PASS를 최신 Head에 재사용하지 않음
+
+즉 **확인 항목은 유지하되 Merge를 막는 등급을 BLOCKER/MAJOR로 좁힌다.**
+
+## 3. 역할
 
 ```text
 각 PR의 담당 구현 AI
@@ -34,7 +50,7 @@ Human Reviewer
 
 별도 GitHub Copilot Code Review는 필수 워크플로우에 포함하지 않는다.
 
-## 3. 리뷰 시작 조건
+## 4. 리뷰 시작 조건
 
 담당 구현 AI는 다음 시점에 **별도 Human 명령 없이** `skills/bobfull-pr-review/SKILL.md`를 실행한다.
 
@@ -45,7 +61,7 @@ Human Reviewer
 
 `PR #번호 검토하라`는 수동 재검토가 필요할 때만 사용하는 보조 명령이다.
 
-## 4. 독립 리뷰 패스
+## 5. 독립 리뷰 패스
 
 같은 AI가 리뷰하더라도 구현 중 자신의 판단을 그대로 재사용하지 않는다.
 최신 GitHub 상태에서 다음을 다시 확보한다.
@@ -60,7 +76,7 @@ Human Reviewer
 
 리뷰 기준 Head가 바뀌면 이전 PASS를 재사용하지 않는다.
 
-## 5. V3 Sprint 리뷰 기준
+## 6. V3 Sprint 리뷰 기준
 
 ### 최우선
 
@@ -84,7 +100,7 @@ Human Reviewer
 
 현재 요구 기능을 깨지 않는다면 Merge 차단보다 기록을 우선한다.
 
-## 6. 중요도와 Merge 영향
+## 7. 중요도와 Merge 영향
 
 ### BLOCKER — Merge 금지
 
@@ -116,7 +132,7 @@ Human Reviewer
 
 > V3 Sprint Mode에서 `PASS`는 “완벽함”이 아니라 “현재 Merge를 막을 치명적 문제가 보이지 않음”을 뜻한다.
 
-## 7. 리뷰 댓글
+## 8. 리뷰 댓글
 
 각 정식 리뷰 패스는 PR Conversation 댓글을 남긴다.
 
@@ -153,7 +169,7 @@ Human Reviewer
 - MINOR/SUGGESTION만 있으면 `MERGEABLE`
 - 지적을 만들기 위해 억지로 문제를 생성하지 않는다.
 
-## 8. 필수 검증
+## 9. 필수 검증
 
 ### 기능 PR
 
@@ -172,7 +188,7 @@ HTTP/API 변경은 Postman, curl 또는 동등한 실제 요청을 우선한다.
 
 실행하지 않은 것을 PASS로 기록하지 않는다.
 
-## 9. 리뷰 반영
+## 10. 리뷰 반영
 
 ### Merge 전에 수정
 
@@ -192,7 +208,7 @@ HTTP/API 변경은 Postman, curl 또는 동등한 실제 요청을 우선한다.
 
 수정 Push 뒤 같은 담당 구현 AI가 최신 Head를 즉시 재리뷰하고 새 댓글을 남긴다.
 
-## 10. Human 이해도
+## 11. Human 이해도
 
 ### Issue 단계
 
@@ -217,7 +233,7 @@ Human 이해도 질문: 정확히 3개
 
 목표는 클래스·메서드 암기가 아니라 **담당자가 자신이 만든 기능을 설명할 수 있는 상태**다.
 
-## 11. V3 Sprint Merge Gate
+## 12. V3 Sprint Merge Gate
 
 Merge 차단 조건은 다음으로 제한한다.
 
@@ -235,7 +251,7 @@ Human 결정 필요 사항 미해결
 필수 Human Approve 수는 `0`이다.
 Merge는 담당 Human이 수행한다.
 
-## 12. 금지 사항
+## 13. 금지 사항
 
 - 중요하지 않은 문제로 Merge 지연
 - MINOR/SUGGESTION을 BLOCKER처럼 취급
