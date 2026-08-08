@@ -99,15 +99,43 @@
 
 </details>
 
+## Before / After Evidence
+
+<!--
+성능·신뢰성·동시성·인프라·캐시·Kafka/Outbox·AI 등 개선 효과를 주장하는 PR은 작성합니다.
+단순 CRUD·문서·DTO처럼 Before/After 비교가 의미 없으면 `NOT_APPLICABLE`과 이유를 작성합니다.
+실제 측정 전 임의 수치를 채우지 않습니다.
+공통 규칙: docs/evidence/v3/README.md
+-->
+
+- Evidence 판정: `PASS | FAIL | NOT_APPLICABLE`
+- Evidence 경로:
+- Before Commit SHA:
+- After Commit SHA:
+- 동일 조건 여부:
+- 측정·재현 환경:
+- 검증 한계:
+
+| 핵심 지표·현상 | Before | After | 판정 |
+|---|---|---|---|
+|  |  |  | `PASS | FAIL | N/A` |
+
+### 정합성 회귀 확인
+
+<!-- 성능·격리·확장 개선 뒤 기존 기능·상태·멱등성·정합성이 깨지지 않았는지 기록합니다. -->
+
+-
+
 ## V3 Sprint 필수 검증
 
-<!-- 기능 PR은 아래 세 항목을 우선합니다. 문서·설정 전용이면 해당하지 않는 항목에 NOT_RUN 이유를 적습니다. -->
+<!-- 기능 PR은 아래 항목을 우선합니다. 문서·설정 전용이면 해당하지 않는 항목에 NOT_RUN/N/A 이유를 적습니다. -->
 
 | Merge Gate | 실행 명령·환경 | 결과 | 증거·한계 |
 |---|---|---|---|
 | 관련 테스트 |  | `PASS | FAIL | NOT_RUN` |  |
 | 전체 build |  | `PASS | FAIL | NOT_RUN` |  |
 | 핵심 기능 직접 검증 | Postman/curl/직접 트리거 등 | `PASS | FAIL | NOT_RUN` |  |
+| Before/After Evidence | `docs/evidence/v3/...` 또는 N/A 근거 | `PASS | FAIL | NOT_APPLICABLE` |  |
 | 담당 구현 AI Review | PR Conversation 댓글 | `MERGEABLE | BLOCK | 미실행` |  |
 
 - 최신 검증 Commit SHA:
@@ -147,7 +175,7 @@
 - [ ] 이 PR이 무엇을 왜 변경하는지 이해했다.
 - [ ] 기본 실행 흐름과 중요한 분기를 이해했다.
 - [ ] 중요한 기술 개념과 주요 트레이드오프가 있다면 어디에 왜 적용됐는지 이해했다.
-- [ ] 전체 build·직접 검증·담당 구현 AI Review 결과와 남은 위험을 확인했다.
+- [ ] 전체 build·직접 검증·필요한 Before/After Evidence·담당 구현 AI Review 결과와 남은 위험을 확인했다.
 
 ## V3 Sprint Merge Gate
 
@@ -155,6 +183,7 @@
 
 - [ ] 전체 build `PASS` 또는 해당 없음 근거 명확
 - [ ] 변경 핵심 기능 직접 검증 `PASS` 또는 해당 없음 근거 명확
+- [ ] 고도화 PR이면 Before/After Evidence `PASS` 또는 `NOT_APPLICABLE` 근거 명확
 - [ ] 최신 Head 담당 구현 AI Review 완료
 - [ ] 미해결 `BLOCKER` 없음
 - [ ] 미해결 `MAJOR` 없음
