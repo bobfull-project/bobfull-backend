@@ -44,7 +44,7 @@
 결과: 두 명령 모두 `BUILD SUCCESSFUL`.
 
 - `PENDING_이벤트를_처리하면_ChatRoom을_생성하고_COMPLETED로_기록한다`: 남은 PENDING을 새 Processor 호출이 읽어 ChatRoom 1건과 COMPLETED로 복구한다.
-- `최초_처리_뒤_5회_재시도는_1_2_4_8_16초_backoff를_적용하고_다음_실패에서_FAILED가_된다`, `동시에_Claim하면_같은_이벤트는_한_Processor만_선점한다`, `stale_PROCESSING은_회수한_뒤_다시_처리한다`를 함께 실행했다.
+- `최초_처리_뒤_5회_재시도는_5_10_20_40_80초_backoff를_적용하고_다음_실패에서_FAILED가_된다`, `동시에_Claim하면_같은_이벤트는_한_Processor만_선점한다`, `stale_PROCESSING은_회수한_뒤_다시_처리한다`를 함께 실행했다.
 - `PaymentReservationConfirmationTransactionIntegrationTest`는 핵심 성공 시 Outbox 저장, 핵심 롤백 시 Outbox 미저장, ChatRoom 실패 시 핵심 데이터 유지와 PENDING 재시도를 확인한다.
 
 ## 한계

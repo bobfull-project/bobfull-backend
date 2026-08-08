@@ -105,13 +105,13 @@ class ChatRoomOutboxProcessorIntegrationTest {
     }
 
     @Test
-    void 최초_처리_뒤_5회_재시도는_1_2_4_8_16초_backoff를_적용하고_다음_실패에서_FAILED가_된다() {
+    void 최초_처리_뒤_5회_재시도는_5_10_20_40_80초_backoff를_적용하고_다음_실패에서_FAILED가_된다() {
         // given
         OutboxEvent event = pendingEvent(103L);
         failureMode.fail = true;
 
         // when
-        long[] delays = {1, 2, 4, 8, 16};
+        long[] delays = {5, 10, 20, 40, 80};
         for (int retry = 0; retry < delays.length; retry++) {
             Instant beforeFailure = clock.instant();
             processor.process(event.getId());

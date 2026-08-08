@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
@@ -15,10 +16,15 @@ import java.util.UUID;
 
 /** ChatRoom 생성 의도를 핵심 예약 확정 트랜잭션과 함께 보관하는 최소 Outbox 이벤트다. */
 @Entity
-@Table(name = "outbox_event", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_outbox_event_event_id", columnNames = "event_id"),
-        @UniqueConstraint(name = "uk_outbox_event_aggregate", columnNames = {"event_type", "aggregate_type", "aggregate_id"})
-})
+@Table(name = "outbox_event",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_outbox_event_event_id", columnNames = "event_id"),
+                @UniqueConstraint(name = "uk_outbox_event_aggregate", columnNames = {"event_type", "aggregate_type", "aggregate_id"})
+        },
+        indexes = {
+                @Index(name = "idx_outbox_event_status_next_attempt",
+                        columnList = "status, next_attempt_at, outbox_event_id")
+        })
 public class OutboxEvent extends BaseTimeEntity {
 
     @Id

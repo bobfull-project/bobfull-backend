@@ -375,9 +375,9 @@ erDiagram
 | `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE | `RESERVATION` |
 | `aggregate_id` | BIGINT | N | 위 복합 UNIQUE | 대상 `reservation_id` |
 | `payload_version` | INT | N |  | 현재 1. Payload 원문·개인정보는 저장하지 않음 |
-| `status` | VARCHAR(16) | N | INDEX 후보 | `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` |
+| `status` | VARCHAR(16) | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 선행 컬럼 | `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` |
 | `attempt_count` | INT | N |  | 실제 ChatRoom 생성 실패 횟수. 최초 처리 뒤 5회 재시도 후 다음 실패에서 FAILED |
-| `next_attempt_at` | DATETIME | N | `(status, next_attempt_at, outbox_event_id)` INDEX 후보 | 다음 처리 가능 시각 |
+| `next_attempt_at` | DATETIME | N | 복합 INDEX `idx_outbox_event_status_next_attempt(status, next_attempt_at, outbox_event_id)` | 다음 처리 가능 시각 |
 | `processing_started_at` | DATETIME | Y |  | stale PROCESSING 회수 기준 |
 | `processing_token` | VARCHAR(36) | Y |  | claim 소유자 토큰. 오래된 작업자의 상태 덮어쓰기를 방지 |
 | `last_error_code` | VARCHAR(128) | Y |  | 예외 유형만 기록하며 민감 payload는 저장하지 않음 |
@@ -476,7 +476,7 @@ erDiagram
 1. 인증 회원과 `payment.member_id`를 비교하고 PortOne 결제 정보·금액·통화를 검증한다.
 2. Payment를 멱등하게 `PAID`로 전환한다.
 3. `reservation`, 최초 `reservation_participant`, ChatRoom 생성용 `outbox_event(PENDING)`을 같은 트랜잭션에 저장하고 Payment의 NULL FK를 연결한다.
-4. 커밋 뒤 즉시 signal 또는 scheduler가 Outbox를 claim해 별도 트랜잭션에서 `chat_room`을 `reservation_id` 기준 멱등 생성한다. 최초 처리 실패 뒤 1·2·4·8·16초 backoff로 5회 재시도하고, 다음 실패에서 `FAILED`로 남긴다. 5분 stale `PROCESSING`은 `PENDING`으로 회수한다.
+4. 커밋 뒤 즉시 signal 또는 scheduler가 Outbox를 claim해 별도 트랜잭션에서 `chat_room`을 `reservation_id` 기준 멱등 생성한다. 최초 처리 실패 뒤 5·10·20·40·80초 backoff로 5회 재시도하고, 다음 실패에서 `FAILED`로 남긴다. 5분 stale `PROCESSING`은 `PENDING`으로 회수한다.
 5. 결제 완료 인원으로 예약·모집 상태를 계산한다.
 
 ### 추가 참여 결제 완료

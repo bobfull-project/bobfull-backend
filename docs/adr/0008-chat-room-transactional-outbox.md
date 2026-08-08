@@ -12,7 +12,9 @@
 
 CREATE 확정 트랜잭션에서 `OutboxEvent(CHAT_ROOM_CREATION_REQUESTED, PENDING)`를 Payment·Reservation·ReservationParticipant와 함께 저장한다. 커밋 뒤 즉시 signal은 fast path이고, scheduler가 due `PENDING`과 5분 stale `PROCESSING`을 보정한다. Processor는 조건부 `PENDING → PROCESSING` claim만 짧은 트랜잭션에서 수행하고, ChatRoom 생성은 잠금 밖의 별도 트랜잭션에서 `createIfAbsent(reservationId)`로 처리한다.
 
-최초 처리 실패 뒤 1·2·4·8·16초 backoff로 5회 재시도하고, 그 다음(여섯 번째) 실패에서 `FAILED`로 남긴다. `FAILED`는 운영 확인 후 `PENDING`으로 안전하게 재등록할 수 있으나, 이번 범위에서 UI/API는 만들지 않는다.
+최초 처리 실패 뒤 5·10·20·40·80초 backoff로 5회 재시도하고, 그 다음(여섯 번째) 실패에서 `FAILED`로 남긴다. `FAILED`는 운영 확인 후 `PENDING`으로 안전하게 재등록할 수 있으나, 이번 범위에서 UI/API는 만들지 않는다.
+
+scheduler는 정상 사용자가 기다리는 메인 경로가 아니라 즉시 signal과 조회 시 자가복구(`ChatRoomQueryService`)가 모두 실패했을 때의 안전망이다. 다만 backoff 최솟값(5초)이 실제 재시도 간격으로 동작하려면 scheduler 주기도 같은 크기여야 하므로 `outbox.chat-room.fixed-delay` 기본값을 5초로 낮췄다. 단일 인스턴스 기준 초당 조회 1건, 오토스케일링 시 인스턴스 수에 비례해 늘어나는 수준이라 1초까지 낮추지 않고 5초로 정했다. 이 polling 비용을 낮추기 위해 `outbox_event(status, next_attempt_at, outbox_event_id)` 복합 INDEX를 함께 추가했다.
 
 ## 선택 이유
 

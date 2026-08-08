@@ -19,7 +19,7 @@ public class ChatRoomOutboxScheduler {
         this.batchSize = batchSize;
     }
 
-    @Scheduled(fixedDelayString = "${outbox.chat-room.fixed-delay:60000}")
+    @Scheduled(fixedDelayString = "${outbox.chat-room.fixed-delay:5000}")
     public void processPendingEvents() {
         processor.processDueEvents(batchSize);
     }

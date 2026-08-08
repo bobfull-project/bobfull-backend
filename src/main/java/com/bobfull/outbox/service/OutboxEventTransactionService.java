@@ -46,9 +46,10 @@ public class OutboxEventTransactionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FailureResult fail(ClaimedOutboxEvent event, String errorCode, Instant now, int maxRetries) {
         int attemptCount = event.attemptCount() + 1;
-        // 최초 처리 뒤 5회 재시도를 모두 예약해 1·2·4·8·16초 backoff를 실제로 적용한다.
+        // 최초 처리 뒤 5회 재시도를 모두 예약해 5·10·20·40·80초 backoff를 적용한다.
+        // scheduler 주기(5초)와 맞춰야 backoff가 실제 재시도 간격으로 동작한다.
         boolean failed = attemptCount > maxRetries;
-        Instant nextAttemptAt = failed ? now : now.plusSeconds(1L << (attemptCount - 1));
+        Instant nextAttemptAt = failed ? now : now.plusSeconds(5L * (1L << (attemptCount - 1)));
         int updated = outboxEventRepository.fail(event.id(), OutboxEventStatus.PROCESSING,
                 failed ? OutboxEventStatus.FAILED : OutboxEventStatus.PENDING, event.token(), attemptCount,
                 nextAttemptAt, errorCode);
