@@ -12,7 +12,7 @@
 - Closes #
 - 검토 수준: `기본 | 강화`
 
-<!-- PR 생성/업데이트 시 `.github/workflows/copilot-auto-review.yml`이 구현 담당 AI와 별개의 GitHub Copilot reviewer를 자동 요청합니다. 리뷰 기준은 `.github/skills/bobfull-pr-review/SKILL.md`와 `.github/copilot-instructions.md`를 따릅니다. 최초 AI Review를 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않습니다. -->
+<!-- GitHub Repository Ruleset의 `Automatically request Copilot code review`가 구현 담당 AI와 별개의 Copilot reviewer를 자동 요청합니다. `Review draft pull requests`와 `Review new pushes`를 사용해 Draft PR과 새 Push도 자동 재리뷰합니다. 리뷰 기준은 `.github/skills/bobfull-pr-review/SKILL.md`와 `.github/copilot-instructions.md`를 따릅니다. 최초 AI Review를 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않습니다. -->
 
 ## PR 이해 요약
 
@@ -32,10 +32,7 @@
 
 ### Mermaid 시각화
 
-<!--
-의미 있는 실행 흐름이 있는 기능 PR은 최신 Head의 실제 클래스·호출·분기·상태와 일치하는 Mermaid 다이어그램을 최소 1개 작성합니다.
-Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 등 이번 변경 이해에 필요한 경계만 표현합니다. 단순 문서·설정·DTO·정적 상수 변경이면 `해당 없음`과 이유를 작성합니다.
--->
+<!-- 의미 있는 실행 흐름이 있는 기능 PR은 최신 Head의 실제 클래스·호출·분기·상태와 일치하는 Mermaid를 작성합니다. 단순 문서·설정·DTO·정적 상수 변경이면 `해당 없음`과 이유를 작성합니다. -->
 
 해당 없음:
 
@@ -49,21 +46,19 @@ Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 등 이번 변경 이해에 �
 
 ### 핵심 트러블슈팅
 
-<!-- 실제 구현 과정의 의미 있는 문제만 문제 → 원인 → 해결 → 선택 이유/결과 → 남은 한계 순서로 3~5문장으로 요약합니다. 상세 원본은 docs/troubleshooting에 유지하고 경로를 연결합니다. 없으면 가짜 기록을 만들지 말고 `해당 없음`과 이유를 작성합니다. -->
+<!-- 실제 구현 과정의 의미 있는 문제만 3~5문장으로 요약합니다. 없으면 `해당 없음`과 이유를 작성합니다. -->
 
 해당 없음:
 
 ### 코드 읽는 순서
 
-<!-- 실제 변경 파일·호출 흐름을 따라 3~6단계로 작성합니다. 각 단계는 `파일/클래스 → 확인할 핵심 책임`을 포함합니다. -->
+<!-- 실제 변경 파일·호출 흐름을 따라 3~6단계로 작성합니다. -->
 
 1.
 2.
 3.
 
 ## 상세 변경 및 검증
-
-<!-- BLOCKER, FAIL, NOT_RUN, 미검증 위험은 이 섹션의 제목 아래에 먼저 기록하고 `<details>` 안에만 두지 않습니다. 긴 세부 설명은 필요한 경우에만 접습니다. -->
 
 - BLOCKER·FAIL·NOT_RUN·미검증 위험:
 
@@ -91,8 +86,6 @@ Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 등 이번 변경 이해에 �
 -
 
 ### 추가·수정 테스트
-
-<!-- 테스트 코드를 변경하지 않은 문서·설정 PR은 `해당 없음`과 이유를 작성합니다. 이 영역은 실제 실행 결과와 구분합니다. -->
 
 | 테스트 클래스·파일 | 검증 시나리오 | 이 테스트가 보장하는 것 |
 |---|---|---|
@@ -123,9 +116,8 @@ Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 등 이번 변경 이해에 �
 ### Human 이해도
 
 <!--
-검토 수준에 따라 질문 수를 고정합니다.
 - 기본: Human 이해도 질문 0개. 아래 `해당 없음: 기본 검토`만 유지합니다.
-- 강화: 아래 `해당 없음` 문구를 제거하고 최신 Diff 기준 질문을 정확히 3개 삽입합니다.
+- 강화: 아래 문구를 제거하고 최신 Diff 기준 질문을 정확히 3개 삽입합니다.
 강화 질문의 세 축은 `핵심 실행 흐름`, `중요 기술 개념과 적용 이유`, `설계 선택·실패 처리·남은 한계`입니다.
 -->
 
@@ -133,9 +125,12 @@ Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 등 이번 변경 이해에 �
 
 ### 자동 AI Review·반영 기록
 
-<!-- 실제 리뷰 내용은 GitHub Copilot Review/inline comment에 남습니다. 이 영역에는 구현 담당자가 리뷰 반영 후 최신 상태만 요약하며, 리뷰 내용을 장문으로 복사하지 않습니다. -->
+<!-- 실제 리뷰 내용은 GitHub Copilot Review/inline comment에 남습니다. 구현 담당자는 리뷰 반영 후 최신 상태만 요약합니다. -->
 
-- 자동 리뷰 트리거: `opened | synchronize | reopened | ready_for_review`
+- 자동 리뷰 방식: `GitHub Automatic Copilot Code Review`
+- Ruleset: `Automatically request Copilot code review`
+- Draft 자동 리뷰: `Review draft pull requests`
+- 새 Push 자동 재리뷰: `Review new pushes`
 - 최신 자동 AI Review 기준 Head:
 - 최신 자동 AI Review 결과: `PASS | 수정 필요 | 실행 실패 | 미실행`
 - 반영한 항목:
@@ -145,8 +140,6 @@ Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 등 이번 변경 이해에 �
 - 남은 미검증 위험:
 
 ### Human Review Checklist
-
-<!-- PR마다 임의의 세부 구현 질문을 생성하지 않습니다. Human 리뷰어는 아래 공통 체크를 기준으로 변경 목적·흐름·핵심 개념·검증 상태를 이해했는지 확인하고 PR 댓글에 의견을 남깁니다. -->
 
 - [ ] 이 PR이 무엇을 왜 변경하는지 이해했다.
 - [ ] 변경 후 기본 실행 흐름과 중요한 분기를 이해했다.
