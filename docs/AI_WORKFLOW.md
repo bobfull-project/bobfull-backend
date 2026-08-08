@@ -10,6 +10,7 @@ V3 마무리 기간에는 **속도를 우선하되 치명적인 결함은 담당
 
 - 전체 build 실패
 - 변경한 핵심 기능의 직접 검증 실패
+- 성능·신뢰성·동시성·인프라·캐시·이벤트·AI 등 **고도화 효과를 주장하지만 필요한 Before/After Evidence가 없거나 비교 조건이 불명확한 경우**
 - 최신 담당 구현 AI Review의 미해결 `BLOCKER` 또는 `MAJOR`
 - 정책·API·DB·상태·권한·트랜잭션처럼 Human 결정이 필요한 미확정 사항
 - 강화 PR의 Human 이해도 3문항 미완료
@@ -22,6 +23,7 @@ V3 마무리 기간에는 **속도를 우선하되 치명적인 결함은 담당
 - 추가하면 좋은 테스트
 - 현재 기능에 직접 영향이 없는 코드 스타일 개선
 - 후속 개선으로 남길 수 있는 기술부채
+- Before/After 비교가 의미 없는 단순 변경에서 `NOT_APPLICABLE` 근거가 명확한 경우
 
 이 항목들은 PR 또는 후속 Issue·트러블슈팅으로 기록하고 진행을 막지 않는다.
 
@@ -60,7 +62,7 @@ Sprint Mode에서 바뀌는 것은 **Human 대기와 리뷰 깊이, Merge 차단
 
 ## 3. 역할
 
-- 구현 담당 AI: Issue 계약에 따라 구현·테스트·PR 설명 작성·독립 리뷰 패스·리뷰 반영
+- 구현 담당 AI: Issue 계약에 따라 Before 재현·기준값 확보, 구현·테스트·After 재검증, Evidence 기록, PR 설명 작성·독립 리뷰 패스·리뷰 반영
 - 담당자 Human: 실제 정책 판단, 강화 PR 이해도 답변, 최종 Merge 판단
 - Human 리뷰어: 선택적 추가 리뷰. V3 Sprint Mode에서는 승인 대기 Gate가 아님
 
@@ -70,15 +72,21 @@ GitHub Copilot Code Review나 별도 외부 리뷰 서비스는 필수 구성요
 
 ```text
 Issue 분석
-→ 미결정 정책이 없으면 바로 구현
+→ 고도화 Issue면 Evidence 유형·Before/After 검증 계획 확인
+→ 미결정 정책이 없으면 바로 구현 착수
 → status:in-progress
-→ 구현·관련 테스트·직접 검증
+→ Before 재현 또는 기준값 확보
+→ 구현·관련 테스트
+→ 동일 조건 After 재검증
+→ 정합성 회귀 검증
+→ Evidence 기록
+→ 핵심 기능 직접 검증
 → 전체 build
 → Diff 자체 검토
 → bobfull-pr-explain 적용
 → Draft PR 생성
 → 같은 담당 구현 AI가 즉시 독립 리뷰 패스로 전환
-→ 최신 Issue/Head/Diff/검증 근거 재수집
+→ 최신 Issue/Head/Diff/검증/Evidence 근거 재수집
 → 중요도 순 PR Review 댓글 작성
 → BLOCKER/MAJOR면 수정·재검증·Push
 → 같은 담당 구현 AI가 최신 Head 즉시 재리뷰
@@ -104,6 +112,19 @@ Human 질문은 다음처럼 실제 결정이 필요한 경우에만 한다.
 - 권한·금액·트랜잭션·보상 정책 재결정
 - 다른 담당자 범위와 충돌
 
+### 고도화 Issue의 Evidence 계약
+
+성능·신뢰성·동시성·인프라·캐시·Kafka/Outbox·AI처럼 **도입 효과 또는 개선 효과를 주장하는 Issue**는 구현 전에 다음을 적는다.
+
+1. 현재 구조와 문제/한계
+2. Before에서 재현하거나 측정할 대상
+3. After에서 같은 조건으로 다시 검증할 대상
+4. 기능 정합성 회귀 항목
+5. 저장할 Evidence 경로 또는 산출물
+6. 정량 비교가 의미 없으면 `NOT_APPLICABLE`인 이유와 대신 사용할 기능/장애/정합성 증거
+
+측정하기 전에 임의의 개선 수치를 미리 작성하지 않는다.
+
 실제 실행 상태는 GitHub `status:*` Label 하나로 관리한다.
 
 ```text
@@ -121,16 +142,21 @@ status:final-human-review
 `status:in-progress` 이후 구현 AI는 다음을 수행한다.
 
 1. 대상 Issue 전용 브랜치 확인 또는 최신 `develop` 기준 생성
-2. Issue 최종 계약 범위의 최소 변경 계획 수립
-3. 코드·테스트·필요 문서 구현
-4. 변경 기능 관련 테스트 실행
-5. HTTP/API 기능이면 Postman 또는 동등한 직접 호출로 핵심 성공 흐름 검증
-6. 전체 build 실행
-7. 실제 Diff 자체 검토
-8. `skills/bobfull-pr-explain/SKILL.md` 적용
-9. Issue 관련 변경만 Commit·Push
-10. develop 대상 Draft PR 생성
-11. **즉시 `skills/bobfull-pr-review/SKILL.md`를 적용해 독립 리뷰 패스 실행 및 PR 댓글 작성**
+2. Issue 최신 계약과 Evidence 계획 확인
+3. 고도화 Issue면 기존 구조에서 Before 문제·기준값 재현
+4. 코드·테스트·필요 문서 구현
+5. 변경 기능 관련 테스트 실행
+6. Before와 동일 조건으로 After 재검증
+7. 성능 개선 뒤에도 기능·정합성·멱등성 계약이 유지되는지 회귀 검증
+8. 구조화 로그·메트릭·장애 복구 증거가 범위에 포함되면 확인
+9. Evidence 문서 또는 결과 파일 갱신
+10. 핵심 기능 직접 검증
+11. 전체 build 실행
+12. 실제 Diff 자체 검토
+13. `skills/bobfull-pr-explain/SKILL.md` 적용
+14. Issue 관련 변경만 Commit·Push
+15. develop 대상 Draft PR 생성
+16. **즉시 `skills/bobfull-pr-review/SKILL.md`를 적용해 독립 리뷰 패스 실행 및 PR 댓글 작성**
 
 ### 필수 검증 기준
 
@@ -140,6 +166,7 @@ status:final-human-review
 관련 테스트 PASS
 + 전체 build PASS
 + 변경한 핵심 기능 직접 검증 PASS
++ 고도화 PR이면 Before/After Evidence PASS 또는 NOT_APPLICABLE 근거 명확
 ```
 
 직접 검증 예:
@@ -150,9 +177,36 @@ status:final-human-review
 
 기능과 관계없는 추가 검증을 무조건 늘리지 않는다.
 
-## 7. 담당 구현 AI의 독립 리뷰 패스
+## 7. Evidence-Driven V3 고도화
 
-### 7.1 실행 원칙
+V3에서 `개선했다`, `유실을 막았다`, `안정성이 높아졌다`, `빨라졌다`, `무중단이다`, `확장된다` 같은 표현은 **실제 검증 범위 안에서만** 사용한다.
+
+### Evidence 유형
+
+| 고도화 종류 | 우선 Evidence |
+|---|---|
+| 성능 | p95/p99, 처리량, 오류율, 쿼리·DB Pool·CPU 등 |
+| 신뢰성 | 유실·재시작 복구·재시도·최종 실패·중복 처리 |
+| 동시성 | 초과 처리, 중복 생성, 락 대기, deadlock/timeout |
+| 인프라 | 장애 전환, 실패 요청, Target 상태, 배포 중 요청 연속성 |
+| 캐시 | 응답시간·DB 부하 + stale/무효화/최종 DB 검증 |
+| Kafka/Outbox | Lag·backlog·처리량·Retry/DLT·멱등·장애 격리 |
+| AI | 고정 입력셋 결과 + timeout/5xx 시 기본 서비스 영향 |
+| 보안/제약 | 우회 재현 Before → 차단 After |
+| 단순 기능 | 정상·실패·경계 계약 검증. 의미 없는 성능 측정은 하지 않음 |
+
+### 비교 원칙
+
+- Before/After는 가능한 한 **같은 환경·데이터·부하 조건**으로 비교한다.
+- Commit SHA, 실행 조건, 사용한 Fake/Mock/Sandbox 범위를 기록한다.
+- 서로 다른 환경의 숫자를 같은 Before/After처럼 비교하지 않는다.
+- 개선 수치만 보고 정합성 회귀를 생략하지 않는다.
+- 원본 로그 대용량을 Git에 무조건 넣지 않는다. 재현 명령·핵심 결과·작은 CSV/JSON·대표 로그·결론을 남긴다.
+- 공통 Evidence 규칙과 권장 경로는 `docs/evidence/v3/README.md`를 따른다.
+
+## 8. 담당 구현 AI의 독립 리뷰 패스
+
+### 8.1 실행 원칙
 
 리뷰는 별도 AI 제품이 아니라 **해당 PR을 구현한 담당 AI가 역할을 구현자에서 리뷰어로 전환해 수행**한다.
 
@@ -162,11 +216,12 @@ status:final-human-review
 - 최신 Head SHA
 - base 대비 실제 Diff
 - 관련 테스트·전체 build·직접 검증 결과
+- 고도화 PR의 Before/After Evidence와 비교 조건
 - 기존 리뷰 댓글과 미해결 지적
 
 리뷰 기준은 `skills/bobfull-pr-review/SKILL.md`를 따른다.
 
-### 7.2 자동 실행 시점
+### 8.2 자동 실행 시점
 
 - Draft PR 생성 직후
 - 담당 구현 AI가 기존 PR에 새 Commit을 Push한 직후
@@ -175,7 +230,7 @@ status:final-human-review
 
 별도 Human 명령을 기다리지 않는다.
 
-### 7.3 V3 Sprint Review 기준
+### 8.3 V3 Sprint Review 기준
 
 ```text
 BLOCKER    → Merge 금지
@@ -187,7 +242,7 @@ PASS       → 현재 Merge를 막을 치명적 문제 없음
 
 리뷰 흔적을 만들기 위해 중요하지 않은 문제를 억지로 찾지 않는다.
 
-## 8. PR Human 이해도
+## 9. PR Human 이해도
 
 ### 기본
 
@@ -209,13 +264,14 @@ Human 이해도 질문: 정확히 3개
 
 질문은 코드 암기가 아니라 실제 기능을 이해하는 수준으로 작성한다.
 
-## 9. 리뷰 반영
+## 10. 리뷰 반영
 
 ### Merge 전 반드시 수정
 
 - BLOCKER
 - MAJOR
 - 필수 검증 실패
+- 고도화 효과를 주장하지만 필수 Evidence가 없는 경우
 - 범위 안의 명확한 핵심 기능 오류
 
 ### Merge를 막지 않고 기록
@@ -228,13 +284,14 @@ Human 이해도 질문: 정확히 3개
 
 수정 Push 뒤에는 같은 담당 구현 AI가 최신 Head를 다시 리뷰하고 새 댓글을 남긴다.
 
-## 10. V3 Sprint Merge Gate
+## 11. V3 Sprint Merge Gate
 
 다음만 모두 만족하면 Merge 가능하다.
 
 ```text
 [필수] 전체 build PASS 또는 해당 없음 근거 명확
 [필수] 변경 핵심 기능 직접 검증 PASS 또는 해당 없음 근거 명확
+[고도화 PR] Before/After Evidence PASS 또는 NOT_APPLICABLE 근거 명확
 [필수] 최신 Head 담당 구현 AI Review 완료
 [필수] 미해결 BLOCKER 없음
 [필수] 미해결 MAJOR 없음
