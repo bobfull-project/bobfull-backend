@@ -70,6 +70,12 @@ notification:
   email:
     from-address: ${NOTIFICATION_EMAIL_FROM_ADDRESS:no-reply@bobfull.com}
 
+outbox:
+  chat-room:
+    enabled: ${OUTBOX_CHAT_ROOM_ENABLED:true}
+    fixed-delay: ${OUTBOX_CHAT_ROOM_FIXED_DELAY:60s}
+    batch-size: ${OUTBOX_CHAT_ROOM_BATCH_SIZE:100}
+
 logging:
   level:
     root: info

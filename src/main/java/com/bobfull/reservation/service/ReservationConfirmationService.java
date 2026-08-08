@@ -5,18 +5,21 @@ import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.common.monitoring.BusinessMetricEvent;
 import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.transaction.AfterCommitExecutor;
+import com.bobfull.outbox.entity.OutboxEvent;
+import com.bobfull.outbox.repository.OutboxEventRepository;
+import com.bobfull.outbox.service.ChatRoomOutboxProcessor;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
-import com.bobfull.reservation.event.ReservationConfirmedEvent;
 import com.bobfull.reservation.event.ReservationPaymentCompletedEvent;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.util.List;
+import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,18 +44,25 @@ public class ReservationConfirmationService {
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCapacityReader reservationCapacityReader;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ChatRoomOutboxProcessor chatRoomOutboxProcessor;
+    private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
     private final BusinessMetricRecorder businessMetricRecorder;
 
     public ReservationConfirmationService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            ReservationCapacityReader reservationCapacityReader, ApplicationEventPublisher eventPublisher,
+            ReservationCapacityReader reservationCapacityReader, OutboxEventRepository outboxEventRepository,
+            ChatRoomOutboxProcessor chatRoomOutboxProcessor, Clock clock, ApplicationEventPublisher eventPublisher,
             BusinessMetricRecorder businessMetricRecorder
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.reservationCapacityReader = reservationCapacityReader;
+        this.outboxEventRepository = outboxEventRepository;
+        this.chatRoomOutboxProcessor = chatRoomOutboxProcessor;
+        this.clock = clock;
         this.eventPublisher = eventPublisher;
         this.businessMetricRecorder = businessMetricRecorder;
     }
@@ -61,10 +71,10 @@ public class ReservationConfirmationService {
      * CREATE는 새 Reservation과 최초 ReservationParticipant를, JOIN은 기존 Reservation에
      * ReservationParticipant를 추가로 생성한다. 확정 기준(정원 2면 2명, 그 외에는 정원-1명)
      * 도달 시 CONFIRMED로, 정원에 도달하면 추가로 모집을 CLOSED로 전이한다(§0.8).
-     * ChatRoom은 필수 결제·예약 확정 조건이 아니므로 여기서 직접 저장하지 않고
-     * {@link ReservationConfirmedEvent}만 발행한다 — 이 메서드가 MANDATORY로 합류한
-     * 호출자의 트랜잭션이 실제로 커밋된 뒤에만 별도 트랜잭션으로 생성돼야, ChatRoom 저장
-     * 실패가 이미 완료된 결제·예약을 롤백시키지 않는다(#50 PR #174 리뷰 BLOCKER).
+     * ChatRoom은 필수 결제·예약 확정 조건이 아니므로 여기서 직접 저장하지 않는다. CREATE에서는
+     * ChatRoom 생성 의도만 Outbox PENDING으로 같은 트랜잭션에 기록하고, 커밋 뒤 별도 짧은
+     * 트랜잭션의 processor가 실제 생성한다. 따라서 ChatRoom 저장 실패가 이미 완료된 결제·예약을
+     * 롤백시키지 않으면서도, 커밋 뒤 signal 유실은 scheduler가 DB 이벤트로 복구한다(#176).
      * 같은 이유로 접수·참여 완료 이메일 안내도 직접 호출하지 않고 CREATE·JOIN 모두에서
      * {@link ReservationPaymentCompletedEvent}만 발행한다(Issue #168 V2).
      */
@@ -84,7 +94,9 @@ public class ReservationConfirmationService {
                 ReservationParticipant.create(reservation.getId(), memberId, partySize));
 
         if (purpose == PaymentPurpose.CREATE) {
-            eventPublisher.publishEvent(new ReservationConfirmedEvent(reservation.getId()));
+            OutboxEvent outboxEvent = outboxEventRepository.save(
+                    OutboxEvent.chatRoomCreationRequested(reservation.getId(), clock.instant()));
+            AfterCommitExecutor.run(() -> chatRoomOutboxProcessor.signal(outboxEvent.getId()));
         }
         eventPublisher.publishEvent(new ReservationPaymentCompletedEvent(reservation.getId(), participant.getId(), purpose));
 
