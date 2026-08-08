@@ -14,28 +14,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> {
 
-    @Query("select e.id from OutboxEvent e where e.status = :status and e.nextAttemptAt <= :now "
-            + "order by e.nextAttemptAt asc, e.id asc")
-    List<Long> findDueEventIds(@Param("status") OutboxEventStatus status, @Param("now") Instant now, Pageable pageable);
-
     @Query("select e.id from OutboxEvent e where e.status = :status and e.nextAttemptAt <= :now and e.eventType in :eventTypes order by e.nextAttemptAt asc, e.id asc")
     List<Long> findDueEventIdsByTypes(@Param("status") OutboxEventStatus status, @Param("now") Instant now,
                                       @Param("eventTypes") List<OutboxEventType> eventTypes, Pageable pageable);
 
-    @Query("select e.id from OutboxEvent e where e.status = :status and e.processingStartedAt <= :cutoff "
-            + "order by e.processingStartedAt asc, e.id asc")
-    List<Long> findStaleProcessingEventIds(@Param("status") OutboxEventStatus status, @Param("cutoff") Instant cutoff,
-                                            Pageable pageable);
-
     @Query("select e.id from OutboxEvent e where e.status = :status and e.processingStartedAt <= :cutoff and e.eventType in :eventTypes order by e.processingStartedAt asc, e.id asc")
     List<Long> findStaleProcessingEventIdsByTypes(@Param("status") OutboxEventStatus status, @Param("cutoff") Instant cutoff,
                                                    @Param("eventTypes") List<OutboxEventType> eventTypes, Pageable pageable);
-
-    @Modifying(clearAutomatically = true)
-    @Query("update OutboxEvent e set e.status = :processing, e.processingStartedAt = :now, "
-            + "e.processingToken = :token where e.id = :id and e.status = :pending and e.nextAttemptAt <= :now")
-    int claim(@Param("id") Long id, @Param("pending") OutboxEventStatus pending,
-              @Param("processing") OutboxEventStatus processing, @Param("now") Instant now, @Param("token") String token);
 
     @Modifying(clearAutomatically = true)
     @Query("update OutboxEvent e set e.status = :processing, e.processingStartedAt = :now, e.processingToken = :token "

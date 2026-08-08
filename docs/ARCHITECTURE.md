@@ -125,7 +125,7 @@ sequenceDiagram
 
 취소 가능 시점, 전체·참여자 단위 환불, 상태 전이와 TimeSlot 재사용 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를, 환불·노쇼 데이터 관계는 [ERD](./ERD.md)를 따른다.
 
-## 6-1. 예약 결과·결제 완료 이메일 알림 (V2)
+## 6-1. 예약 결과·결제 완료 이메일 알림
 
 Issue #168은 예약 참여자에게 다음 네 가지 이메일을 안내한다.
 
@@ -138,29 +138,26 @@ Issue #168은 예약 참여자에게 다음 네 가지 이메일을 안내한다
 
 접수·참여 완료 안내는 이 시점에 `Reservation`이 아직 `RECRUITING`일 수 있으므로 "확정"이라 표현하지 않는다. 최종 확정·취소 안내만 식사 시작 2시간 전 모집 마감 처리(§5 `RecruitmentDeadlineScheduler`, Issue #47) 결과를 반영한다.
 
-두 흐름 모두 같은 구조를 따른다(#50 PR #174의 ChatRoom `AFTER_COMMIT` 이벤트와 동일한 관례).
+V2의 메모리 `AFTER_COMMIT` + `@Async` 방식은 커밋 직후 프로세스가 종료되면 이메일 시도 자체가 유실되고 재처리 근거가 없었다. V3(Issue #183)에서 ChatRoom과 같은 공통 Transactional Outbox로 전환했다(§7, ADR 0008).
 
 ```text
 핵심 트랜잭션(결제 완료 확정 또는 모집 마감 처리)
-→ 상태·데이터 변경 커밋 직전 Spring ApplicationEvent 발행
+→ OutboxEvent(EMAIL_*, PENDING) + 수신자별 email_outbox_delivery(PENDING)를 같은 트랜잭션에 저장
 → 트랜잭션 COMMIT
-→ @TransactionalEventListener(AFTER_COMMIT)
-→ @Async(전용 스레드 풀 emailTaskExecutor)
-→ ReservationNotificationService → outbound port → SMTP 발송
+→ 같은 호출 스레드에서 AfterCommit signal (별도 스레드풀·@Async 아님)
+→ EmailOutboxProcessor가 PENDING 수신자만 SMTP에 1회 시도
+→ 성공한 수신자는 SENT로 보존, 실패한 수신자만 공통 Outbox backoff(5·10·20·40·80초, 5회)로 재시도
+→ scheduler(5초 주기)는 signal 유실·재시작 시의 안전망
 ```
 
-- `ReservationConfirmationService#confirm`이 CREATE·JOIN 모두에서 `ReservationPaymentCompletedEvent`를 발행하면 `ReservationPaymentCompletionNotificationEventListener`가 구독해 접수·참여 완료 안내를 보낸다.
-- `ReservationCancellationTransactionService#acceptRecruitmentDeadline`이 `CLOSED_ONLY`/`CANCELLED` 결과에서 각각 `RecruitmentDeadlineConfirmedEvent`/`RecruitmentDeadlineCancelledEvent`를 발행하면 `RecruitmentDeadlineNotificationEventListener`가 구독해 최종 확정·취소 안내를 보낸다.
-- `AFTER_COMMIT`은 "커밋 이후 호출"만 보장할 뿐 비동기를 의미하지 않으므로, SMTP 통신 지연이 호출 스레드(HTTP 요청 또는 스케줄러 실행)를 막지 않도록 전용 `ThreadPoolTaskExecutor`(`emailTaskExecutor`) 기반 `@Async`를 함께 쓴다.
-- 두 리스너 모두 내부에서 예외를 잡아 로그만 남기고 다시 던지지 않는다 — 이메일 실패가 이미 커밋된 예약·결제 상태를 되돌리지 않는다.
-- 환불 요청(`ReservationCancellationRefundPort`)은 `RecruitmentDeadlineCancellationService.process`에서 여전히 직접 호출하며, 이메일 이벤트와는 완전히 독립적으로 실행된다 — 환불 요청이 실패해도 이미 트랜잭션 커밋 시점에 발행된 취소 이메일 이벤트 처리에는 영향이 없다.
-- 별도 알림 이력 테이블은 두지 않는다. `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 기존 멱등 가드를 그대로 이용해 최종 확정·취소 이메일의 중복 발송을 방지한다.
+- `ReservationConfirmationService#confirm`이 CREATE·JOIN 모두에서 `EmailOutboxEventService.enqueue(EMAIL_RESERVATION_CREATED|EMAIL_PARTICIPATION_COMPLETED, ...)`를 호출해 접수·참여 완료 안내를 Outbox에 기록한다.
+- `ReservationCancellationTransactionService#acceptRecruitmentDeadline`이 `CLOSED_ONLY`/`CANCELLED` 결과에서 각각 `EmailOutboxEventService.enqueue(EMAIL_RECRUITMENT_CONFIRMED|EMAIL_RECRUITMENT_CANCELLED, ...)`를 호출해 최종 확정·취소 안내를 Outbox에 기록한다.
+- `EmailOutboxEventService.enqueue`는 `Propagation.MANDATORY`라 활성 트랜잭션 밖에서는 호출할 수 없다 — 이메일 발송 의도가 핵심 상태 변경과 항상 같은 커밋에 들어가도록 강제한다.
+- `EmailOutboxProcessor`는 예외를 삼키지 않고 전파한다 — 실패는 공통 Outbox의 재시도·`FAILED` 전이만으로 처리하며, 이미 커밋된 예약·결제 상태를 되돌리지 않는다.
+- 환불 요청(`ReservationCancellationRefundPort`)은 `RecruitmentDeadlineCancellationService.process`에서 여전히 직접 호출하며, 이메일 Outbox와는 완전히 독립적으로 실행된다 — 환불 요청이 실패해도 이미 커밋된 이메일 Outbox 처리에는 영향이 없다.
+- 별도 알림 이력 테이블은 두지 않는다. `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 기존 멱등 가드와, `email_outbox_delivery`의 `(outbox_event_id, recipient_member_id)` UNIQUE가 함께 중복 발송을 방지한다.
 
-발송은 참여자별로 독립적으로 최대 3회까지 즉시 재시도하며, 재시도를 모두 소진해도 예외를 전파하지 않고 실패만 로그로 남긴다.
-
-**알려진 한계**: 이벤트 발행과 `@Async` 실행은 메모리 안에서만 이뤄진다. 핵심 트랜잭션이 커밋된 직후 서버 프로세스가 종료되면 그 이메일 시도 자체가 유실될 수 있고, 재시작 후에도 재처리를 보장하는 별도 저장소가 없다. 최종 확정·취소 이메일은 재시작 후 스케줄러가 같은 예약을 다시 후보로 잡아도 `acceptRecruitmentDeadline`이 `ALREADY_PROCESSED`만 반환해 재발송되지 않는다. 이 한계는 V3 Transactional Outbox에서 해결할 예정이며(§9), 이번 V2 범위에서는 Outbox·Kafka를 도입하지 않는다.
-
-`emailTaskExecutor`(core 2, max 8, queue 200)가 모두 소진되면 작업을 버리고 로그(`event=RESERVATION_NOTIFICATION_TASK_REJECTED`)만 남긴다 — 기본값인 `CallerRunsPolicy`(호출 스레드에서 대신 실행)를 의도적으로 쓰지 않았다. `CallerRunsPolicy`를 쓰면 극단적인 부하나 SMTP 장애 지속 상황에서 이 Executor의 존재 목적(호출 스레드 비차단)이 오히려 깨지기 때문이다 — 이메일은 이미 최선형 재시도이고 실패해도 예약·결제 상태에 영향이 없으므로, 이런 극단적 상황에서는 이메일 발송을 포기하고 호출 스레드를 지키는 쪽을 택했다.
+SMTP 호출은 수신자마다 정확히 한 번만 시도한다. 재시도와 최종 `FAILED` 전이는 SMTP Adapter가 아니라 공통 Outbox가 단독으로 책임진다(계층별 재시도 중첩 방지).
 
 정원이 2시간 마감 이전에 이미 다 차 스케줄러 후보에서 제외되는 예약(모집이 결제 완료 시점에 조기 마감된 경우)은 최종 확정 이메일 대상이 아니다 — 해당 경우는 프런트엔드 화면(모달·팝업) 안내로 대체하며 이번 Issue 범위에 포함하지 않는다.
 
@@ -189,7 +186,7 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 - Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
-- 이메일 등 다른 후속 처리의 Transactional Outbox 전환과 Kafka 기반 이벤트 재처리 — 별도 V3 Issue 범위
+- Kafka 기반 이벤트 재처리, 범용 Outbox Framework — 별도 V3 Issue 범위(이메일 Outbox 전환 자체는 §6-1, Issue #183에서 완료)
 - 개별 ADR의 사전 생성, API·ERD 상세 복제, 클래스·패키지 구조
 
 새 기술 선택이나 중요한 구조 변경이 실제로 필요해지면 [ADR 운영 기준](./adr/README.md)에 따라 별도 ADR을 작성한다.

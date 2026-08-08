@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -160,7 +161,8 @@ class ChatRoomOutboxProcessorIntegrationTest {
 
         // when
         try {
-            Callable<Boolean> claim = () -> transactionService.claim(event.getId(), clock.instant()).isPresent();
+            Callable<Boolean> claim = () -> transactionService.claim(event.getId(),
+                    List.of(OutboxEventType.CHAT_ROOM_CREATION_REQUESTED), clock.instant()).isPresent();
             Future<Boolean> first = executor.submit(claim);
             Future<Boolean> second = executor.submit(claim);
 
@@ -175,7 +177,8 @@ class ChatRoomOutboxProcessorIntegrationTest {
     void stale_PROCESSING은_회수한_뒤_다시_처리한다() {
         // given
         OutboxEvent event = pendingEvent(105L);
-        assertThat(transactionService.claim(event.getId(), clock.instant())).isPresent();
+        assertThat(transactionService.claim(event.getId(),
+                List.of(OutboxEventType.CHAT_ROOM_CREATION_REQUESTED), clock.instant())).isPresent();
         clock.set(clock.instant().plusSeconds(301));
 
         // when
@@ -191,7 +194,8 @@ class ChatRoomOutboxProcessorIntegrationTest {
         // given
         OutboxEvent chatRoom = pendingEvent(107L);
         OutboxEvent email = emailPendingEvent(207L);
-        assertThat(transactionService.claim(email.getId(), clock.instant())).isPresent();
+        assertThat(transactionService.claim(email.getId(),
+                List.of(OutboxEventType.EMAIL_RECRUITMENT_CONFIRMED), clock.instant())).isPresent();
         clock.set(clock.instant().plusSeconds(301));
 
         // when
