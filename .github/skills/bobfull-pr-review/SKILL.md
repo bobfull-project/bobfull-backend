@@ -8,7 +8,7 @@ description: GitHub Copilot 자동 코드 리뷰가 BobFull PR을 구현 에이�
 ## 목적
 
 이 Skill은 **PR을 구현한 담당자 AI가 자기 코드를 다시 보는 절차가 아니다.**
-GitHub의 자동 Copilot Code Review가 PR 생성·업데이트를 트리거로 별도 리뷰어 역할에서 최신 Diff를 검토하도록 하는 기준이다.
+GitHub의 Automatic Copilot Code Review가 별도 리뷰어 역할에서 최신 Diff를 검토하도록 하는 기준이다.
 
 모든 PR은 검토 수준과 관계없이 자동 AI Review 대상이다. `기본 | 강화`는 Human 이해도 질문 수만 결정한다.
 
@@ -16,15 +16,12 @@ GitHub의 자동 Copilot Code Review가 PR 생성·업데이트를 트리거로 
 
 - 실행 주체: GitHub Copilot Code Review
 - 구현 담당자 AI와 리뷰 에이전트의 역할을 분리한다.
-- PR 생성/재오픈/Ready 전환 시 자동 리뷰한다.
-- PR에 새 Commit이 Push되면 최신 Head를 자동 재리뷰한다.
+- Repository Ruleset의 `Automatically request Copilot code review`를 사용한다.
+- `Review draft pull requests`를 켜 Draft PR 생성부터 자동 리뷰한다.
+- `Review new pushes`를 켜 새 Commit Push마다 최신 Head를 자동 재리뷰한다.
 - 사람이 `PR #번호 검토하라` 같은 명령을 입력하는 것을 최초 리뷰의 전제조건으로 두지 않는다.
 
-자동 요청은 `.github/workflows/copilot-auto-review.yml`이 담당한다.
-
 ## 리뷰 기준
-
-다음 순서로 실제 Diff와 저장소 컨텍스트를 검토한다.
 
 1. PR 설명의 목적·범위와 실제 Diff가 일치하는가
 2. 핵심 정상 흐름과 실패·중복·경계 흐름이 올바른가
@@ -38,8 +35,6 @@ GitHub의 자동 Copilot Code Review가 PR 생성·업데이트를 트리거로 
 단순 문서·설정·CRUD PR도 리뷰는 실행하되, 의미 없는 지적을 만들지 않는다.
 
 ## 중요도
-
-실제 발견 사항은 높은 중요도부터 정리한다.
 
 - **BLOCKER**: 보안·데이터 손실·중복 결제·권한 우회·핵심 계약 훼손 등 Merge하면 안 되는 문제
 - **MAJOR**: 요구사항 실패, 주요 런타임 오류, 필수 실패 처리 누락, 핵심 설계 문제
