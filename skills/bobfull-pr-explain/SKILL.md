@@ -9,7 +9,7 @@ description: BobFull V3 Sprint Draft PR에서 실제 Issue, Diff, build, 직접 
 
 이 Skill은 **PR을 빠르게 이해하게 만드는 설명**을 담당한다.
 
-코드 결함 리뷰는 GitHub Automatic Copilot Code Review가 독립적으로 수행한다.
+코드 결함 리뷰는 Draft PR 생성 직후 같은 담당 구현 AI가 `skills/bobfull-pr-review/SKILL.md`를 적용해 독립 리뷰 패스로 수행한다.
 
 현재 V3 Sprint Mode에서는 설명이 길어지는 것보다 다음 네 가지가 명확한지가 중요하다.
 
@@ -17,7 +17,7 @@ description: BobFull V3 Sprint Draft PR에서 실제 Issue, Diff, build, 직접 
 무엇을 왜 바꿨는가
 핵심 흐름이 무엇인가
 전체 build와 직접 검증이 통과했는가
-자동 AI Review에 BLOCKER/MAJOR가 남았는가
+담당 구현 AI Review에 BLOCKER/MAJOR가 남았는가
 ```
 
 ## 사용 시점
@@ -34,7 +34,7 @@ description: BobFull V3 Sprint Draft PR에서 실제 Issue, Diff, build, 직접 
 4. 관련 테스트 결과
 5. 전체 build 결과
 6. 변경 핵심 기능 직접 검증 결과
-7. 최신 Automatic Copilot Review 결과가 있으면 그 결과
+7. 최신 담당 구현 AI Review 결과가 있으면 그 결과
 
 실행하지 않은 검증은 PASS로 쓰지 않는다.
 
@@ -45,7 +45,7 @@ description: BobFull V3 Sprint Draft PR에서 실제 Issue, Diff, build, 직접 
 3. Mermaid는 실제 흐름 이해에 도움이 되는 기능 PR에서만 작성한다.
 4. 단순 문서·설정·CRUD는 불필요한 개념·트러블슈팅·다이어그램을 억지로 만들지 않는다.
 5. `상세 변경 및 검증`에서 Merge 차단 위험과 비차단 후속 항목을 분리한다.
-6. `V3 Sprint 필수 검증`에 관련 테스트·전체 build·핵심 기능 직접 검증·자동 AI Review 상태를 기록한다.
+6. `V3 Sprint 필수 검증`에 관련 테스트·전체 build·핵심 기능 직접 검증·담당 구현 AI Review 상태를 기록한다.
 7. `BLOCKER`·`MAJOR`·`FAIL`은 접힌 영역에만 숨기지 않는다.
 8. MINOR·SUGGESTION은 Merge를 막지 않는 후속 항목으로 분리한다.
 9. Human 이해도는 기본 0개 / 강화 정확히 3개로 유지한다.
@@ -61,18 +61,23 @@ description: BobFull V3 Sprint Draft PR에서 실제 Issue, Diff, build, 직접 
 
 범위 밖 시나리오를 무한히 확장하지 않는다.
 
-## 자동 AI Review와의 경계
+## 담당 구현 AI Review와의 경계
 
 ```text
-구현 AI
+담당 구현 AI — 구현자 역할
 → 구현·테스트·build·직접 검증
 → PR Explain
-→ Draft PR
+→ Draft PR 생성
 
-GitHub Copilot Reviewer
-→ 독립 Automatic Code Review
-→ BLOCKER/MAJOR/MINOR/SUGGESTION
+같은 담당 구현 AI — 리뷰어 역할
+→ Issue/Head/Diff/검증 근거 최신 재수집
+→ skills/bobfull-pr-review/SKILL.md 적용
+→ 중요도 순 PR Review 댓글
+→ BLOCKER/MAJOR면 수정·Push·즉시 재리뷰
 ```
+
+별도의 GitHub Copilot이나 외부 리뷰 AI를 필수로 사용하지 않는다.
+최초 리뷰를 위해 Human이 추가 명령을 입력할 필요가 없다.
 
 V3 Sprint Mode에서:
 
