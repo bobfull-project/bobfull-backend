@@ -5,26 +5,25 @@
 기술부채(있다면):
 의도부채(있다면, Issue 논의와 달라진 부분):
 
-<!-- `무엇을`, `왜`는 실제 Issue·Diff를 바탕으로 작성합니다. 기술부채와 의도부채가 없으면 각각 `없음`으로 기록하며, 기술부채는 현재 제한사항과 혼동하지 않습니다. -->
-
 ## 관련 Issue
 
 - Closes #
 - 검토 수준: `기본 | 강화`
+- 운영 모드: `V3 Sprint Mode`
 
-<!-- GitHub Repository Ruleset의 `Automatically request Copilot code review`가 구현 담당 AI와 별개의 Copilot reviewer를 자동 요청합니다. `Review draft pull requests`와 `Review new pushes`를 사용해 Draft PR과 새 Push도 자동 재리뷰합니다. 리뷰 기준은 `.github/skills/bobfull-pr-review/SKILL.md`와 `.github/copilot-instructions.md`를 따릅니다. 최초 AI Review를 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않습니다. -->
+<!-- GitHub Automatic Copilot Code Review를 독립 리뷰어로 사용합니다. 기본 PR Human 이해도는 0개, 강화 PR은 정확히 3개입니다. V3 Sprint Mode의 필수 Human Approve 수는 0명입니다. -->
 
 ## PR 이해 요약
 
 ### 쉬운 설명
 
-<!-- 처음 보는 팀원도 이해할 수 있게 실제 Issue·Diff를 근거로 3~5문장으로 작성합니다. 필요한 전문용어는 아래 주요 개념에서 바로 풉니다. -->
+<!-- 처음 보는 팀원이 3~5문장으로 무엇을 왜 바꿨는지 이해할 수 있게 작성합니다. -->
 
 -
 
 ### 주요 실행 흐름
 
-<!-- 요청 → 검증 → Transaction/Lock → 상태 변경 → 이벤트/외부 I/O → 응답 중 실제 변경에 필요한 흐름만 짧게 작성합니다. CREATE/JOIN, 성공/실패처럼 핵심 분기가 있으면 분리합니다. -->
+<!-- 실제 핵심 흐름과 중요한 분기만 작성합니다. -->
 
 1.
 2.
@@ -32,13 +31,13 @@
 
 ### Mermaid 시각화
 
-<!-- 의미 있는 실행 흐름이 있는 기능 PR은 최신 Head의 실제 클래스·호출·분기·상태와 일치하는 Mermaid를 작성합니다. 단순 문서·설정·DTO·정적 상수 변경이면 `해당 없음`과 이유를 작성합니다. -->
+<!-- 의미 있는 실행 흐름이 있을 때만 작성합니다. 단순 문서·설정·CRUD면 `해당 없음`과 이유를 작성합니다. -->
 
 해당 없음:
 
 ### 주요 개념
 
-<!-- 실제 PR 이해에 필요한 개념만 2~5개 작성합니다. 단순 문서·설정·CRUD처럼 별도 핵심 개념이 없으면 `해당 없음`과 이유를 작성합니다. -->
+<!-- 실제 PR 이해에 필요한 개념만 작성합니다. -->
 
 | 개념 | 쉽게 말하면 | 이 PR에서 왜 필요한가 |
 |---|---|---|
@@ -46,13 +45,11 @@
 
 ### 핵심 트러블슈팅
 
-<!-- 실제 구현 과정의 의미 있는 문제만 3~5문장으로 요약합니다. 없으면 `해당 없음`과 이유를 작성합니다. -->
+<!-- 실제 의미 있는 문제 해결이 있었을 때만 작성합니다. 없으면 `해당 없음`과 이유를 작성합니다. -->
 
 해당 없음:
 
 ### 코드 읽는 순서
-
-<!-- 실제 변경 파일·호출 흐름을 따라 3~6단계로 작성합니다. -->
 
 1.
 2.
@@ -60,7 +57,8 @@
 
 ## 상세 변경 및 검증
 
-- BLOCKER·FAIL·NOT_RUN·미검증 위험:
+- 현재 Merge를 막는 위험(BLOCKER·MAJOR·FAIL):
+- Merge를 막지 않는 후속 항목(MINOR·SUGGESTION·기술부채):
 
 <details>
 <summary>상세 변경 및 검증 펼치기</summary>
@@ -70,10 +68,6 @@
 -
 
 ### 예외·실패·중복·경계 상황
-
--
-
-### 트레이드오프
 
 -
 
@@ -93,59 +87,71 @@
 
 ### 완료 조건·검증 결과
 
-| Issue 완료 조건 | 구현 위치 | 테스트·직접 검증 증거 | 결과 |
+| Issue 완료 조건 | 구현 위치 | 검증 증거 | 결과 |
 |---|---|---|---|
-|  |  |  | `PASS | FAIL | HOLD | NOT_RUN` |
-
-### 테스트·build·직접 검증
-
-| 검증 방법 | 실행 명령·환경 | 결과 | 실제 증거·한계 |
-|---|---|---|---|
-| 관련 테스트 |  | `PASS | FAIL | HOLD | NOT_RUN` |  |
-| 전체 테스트·build |  | `PASS | FAIL | HOLD | NOT_RUN` |  |
-| 직접 검증 |  | `PASS | FAIL | HOLD | NOT_RUN` |  |
-| CI |  | `PASS | FAIL | 진행 중 | 미등록 | 미실행` |  |
-
-- 최신 검증 Commit SHA:
-- 미검증 범위와 남은 위험:
+|  |  |  | `PASS | FAIL | NOT_RUN` |
 
 </details>
 
-## Human 검토
+## V3 Sprint 필수 검증
+
+<!-- 기능 PR은 아래 세 항목을 우선합니다. 문서·설정 전용이면 해당하지 않는 항목에 NOT_RUN 이유를 적습니다. -->
+
+| Merge Gate | 실행 명령·환경 | 결과 | 증거·한계 |
+|---|---|---|---|
+| 관련 테스트 |  | `PASS | FAIL | NOT_RUN` |  |
+| 전체 build |  | `PASS | FAIL | NOT_RUN` |  |
+| 핵심 기능 직접 검증 | Postman/curl/직접 트리거 등 | `PASS | FAIL | NOT_RUN` |  |
+| Automatic Copilot Review | GitHub Review | `MERGEABLE | BLOCK | 미실행` |  |
+
+- 최신 검증 Commit SHA:
+- 미해결 BLOCKER:
+- 미해결 MAJOR:
+- Human 결정 필요 사항:
+- Merge를 막지 않는 MINOR/SUGGESTION:
+
+## Human 이해 확인
 
 ### Human 이해도
 
-<!--
-- 기본: Human 이해도 질문 0개. 아래 `해당 없음: 기본 검토`만 유지합니다.
-- 강화: 아래 문구를 제거하고 최신 Diff 기준 질문을 정확히 3개 삽입합니다.
-강화 질문의 세 축은 `핵심 실행 흐름`, `중요 기술 개념과 적용 이유`, `설계 선택·실패 처리·남은 한계`입니다.
--->
+<!-- 기본: 질문 0개, 아래 문구 유지. 강화: 아래 문구를 제거하고 정확히 3문항을 삽입합니다. -->
 
 해당 없음: 기본 검토
 
+<!-- 강화 PR 3문항 축
+1. 핵심 실행 흐름과 주요 분기
+2. 가장 중요한 기술 개념과 실제 적용 이유
+3. 설계 선택 이유, 주요 실패 처리와 남은 한계
+-->
+
 ### 자동 AI Review·반영 기록
 
-<!-- 실제 리뷰 내용은 GitHub Copilot Review/inline comment에 남습니다. 구현 담당자는 리뷰 반영 후 최신 상태만 요약합니다. -->
-
 - 자동 리뷰 방식: `GitHub Automatic Copilot Code Review`
-- Ruleset: `Automatically request Copilot code review`
-- Draft 자동 리뷰: `Review draft pull requests`
-- 새 Push 자동 재리뷰: `Review new pushes`
 - 최신 자동 AI Review 기준 Head:
-- 최신 자동 AI Review 결과: `PASS | 수정 필요 | 실행 실패 | 미실행`
-- 반영한 항목:
-- 반영하지 않은 항목과 이유:
-- Human 결정이 필요한 항목:
-- 재실행 테스트·build 결과:
-- 남은 미검증 위험:
+- 최신 판정: `MERGEABLE | BLOCK | 미실행`
+- BLOCKER/MAJOR 반영 내용:
+- MINOR/SUGGESTION 후속 처리:
+- 리뷰 후 재실행 검증:
 
-### Human Review Checklist
+### Human 이해 Checklist
+
+<!-- 별도 리뷰어 Approve Gate가 아니라 담당자와 팀원이 PR을 빠르게 이해하기 위한 기준입니다. -->
 
 - [ ] 이 PR이 무엇을 왜 변경하는지 이해했다.
-- [ ] 변경 후 기본 실행 흐름과 중요한 분기를 이해했다.
-- [ ] 이 PR에 중요한 기술 개념이 있다면 어디에 왜 적용됐는지 이해했다.
-- [ ] 테스트·검증 결과와 남아 있는 미검증 위험을 확인했다.
+- [ ] 기본 실행 흐름과 중요한 분기를 이해했다.
+- [ ] 중요한 기술 개념이 있다면 어디에 왜 적용됐는지 이해했다.
+- [ ] 전체 build·직접 검증·자동 AI Review 결과와 남은 위험을 확인했다.
 
-#### 리뷰 댓글 작성
+## V3 Sprint Merge Gate
 
-<!-- Human 리뷰어는 이해되지 않거나 추가 설명이 필요한 부분, 수정이 필요한 부분, 제안 사항을 PR 댓글에 직접 작성합니다. -->
+<!-- 필수 Human Approve: 0명 -->
+
+- [ ] 전체 build `PASS`
+- [ ] 변경 핵심 기능 직접 검증 `PASS`
+- [ ] Automatic Copilot Review 실행 완료
+- [ ] 미해결 `BLOCKER` 없음
+- [ ] 미해결 `MAJOR` 없음
+- [ ] Human 결정 필요 사항 없음
+- [ ] 강화 PR인 경우 Human 이해도 3문항 완료
+
+`MINOR`와 `SUGGESTION`은 기록 후 Merge를 막지 않습니다.
