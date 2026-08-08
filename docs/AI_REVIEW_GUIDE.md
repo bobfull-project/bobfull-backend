@@ -16,14 +16,14 @@ V3 Sprint Mode의 리뷰 목적은 **완벽한 코드 만들기**가 아니라 *
 
 스타일·취향·범위 밖 개선으로 Merge를 지연시키지 않는다.
 
-## 2. 역할 분리
+## 2. 역할
 
 ```text
-구현 담당자 AI
-= 구현·테스트·PR 설명·리뷰 반영
-
-GitHub Copilot Reviewer
-= 독립 자동 코드 리뷰
+각 PR의 담당 구현 AI
+= 구현·테스트·PR 설명
++ Draft PR 생성 직후 독립 리뷰 패스
++ 중요도 순 PR 댓글
++ BLOCKER/MAJOR 수정·재리뷰
 
 담당자 Human
 = 실제 정책 결정 + 강화 PR 이해도 + Merge 판단
@@ -32,26 +32,35 @@ Human Reviewer
 = 선택적 추가 리뷰, V3 Sprint Mode 필수 승인 Gate 아님
 ```
 
-## 3. 자동 리뷰
+별도 GitHub Copilot Code Review는 필수 워크플로우에 포함하지 않는다.
 
-Repository Ruleset:
+## 3. 리뷰 시작 조건
 
-```text
-Automatically request Copilot code review = Enabled
-Review draft pull requests = Enabled
-Review new pushes = Enabled
-```
+담당 구현 AI는 다음 시점에 **별도 Human 명령 없이** `skills/bobfull-pr-review/SKILL.md`를 실행한다.
 
-최초 코드 리뷰를 위해 Human 명령을 요구하지 않는다.
+- Draft PR 생성 직후
+- 해당 PR에 새 Commit을 Push한 직후
+- BLOCKER/MAJOR 수정 Push 직후
+- Merge 전 Head가 마지막 리뷰 Head와 달라졌을 때
 
-자동 리뷰 컨텍스트:
+`PR #번호 검토하라`는 수동 재검토가 필요할 때만 사용하는 보조 명령이다.
 
-- `.github/copilot-instructions.md`
-- `.github/skills/bobfull-pr-review/SKILL.md`
-- 최신 PR Head와 실제 Diff
-- 저장소 코드·테스트·관련 문서
+## 4. 독립 리뷰 패스
 
-## 4. V3 Sprint 리뷰 기준
+같은 AI가 리뷰하더라도 구현 중 자신의 판단을 그대로 재사용하지 않는다.
+최신 GitHub 상태에서 다음을 다시 확보한다.
+
+- 연결 Issue 최신 계약
+- 최신 PR Head SHA
+- base 대비 실제 Diff
+- 관련 테스트 결과
+- 전체 build 결과
+- 핵심 기능 직접 검증 결과
+- 기존 리뷰 댓글·미해결 지적
+
+리뷰 기준 Head가 바뀌면 이전 PASS를 재사용하지 않는다.
+
+## 5. V3 Sprint 리뷰 기준
 
 ### 최우선
 
@@ -73,9 +82,9 @@ Review new pushes = Enabled
 - 구조 개선
 - 성능 최적화
 
-현재 요구 기능을 깨지 않는다면 아래 항목은 Merge 차단보다 기록을 우선한다.
+현재 요구 기능을 깨지 않는다면 Merge 차단보다 기록을 우선한다.
 
-## 5. 중요도와 Merge 영향
+## 6. 중요도와 Merge 영향
 
 ### BLOCKER — Merge 금지
 
@@ -107,25 +116,44 @@ Review new pushes = Enabled
 
 > V3 Sprint Mode에서 `PASS`는 “완벽함”이 아니라 “현재 Merge를 막을 치명적 문제가 보이지 않음”을 뜻한다.
 
-## 6. 리뷰 출력
+## 7. 리뷰 댓글
 
-실제 발견 사항은 높은 중요도부터 기록한다.
+각 정식 리뷰 패스는 PR Conversation 댓글을 남긴다.
 
-```text
-BLOCKER
-MAJOR
-MINOR
-SUGGESTION
-판정: BLOCK | MERGEABLE
+```markdown
+## 담당 구현 AI Review
+
+- 기준 Head: `<SHA>`
+- 연결 Issue: `#번호`
+- 검토 수준: `기본 | 강화`
+
+### BLOCKER
+- 없음 또는 실제 지적
+
+### MAJOR
+- 없음 또는 실제 지적
+
+### MINOR
+- 없음 또는 실제 지적
+
+### SUGGESTION
+- 없음 또는 실제 제안
+
+### 판정
+`BLOCK | MERGEABLE`
+
+### 검증 근거
+- 관련 테스트:
+- 전체 build:
+- 핵심 기능 직접 검증:
+- 남은 미검증 위험:
 ```
 
 - BLOCKER/MAJOR 하나라도 있으면 `BLOCK`
 - MINOR/SUGGESTION만 있으면 `MERGEABLE`
 - 지적을 만들기 위해 억지로 문제를 생성하지 않는다.
 
-코드 위치가 명확하면 inline review comment를 우선한다.
-
-## 7. 필수 검증
+## 8. 필수 검증
 
 ### 기능 PR
 
@@ -144,7 +172,7 @@ HTTP/API 변경은 Postman, curl 또는 동등한 실제 요청을 우선한다.
 
 실행하지 않은 것을 PASS로 기록하지 않는다.
 
-## 8. 리뷰 반영
+## 9. 리뷰 반영
 
 ### Merge 전에 수정
 
@@ -162,14 +190,13 @@ HTTP/API 변경은 Postman, curl 또는 동등한 실제 요청을 우선한다.
 - 추가 최적화
 - 현재 기능을 깨지 않는 추가 테스트
 
-후속 가치가 있으면 Issue 또는 `docs/troubleshooting`에 기록한다.
+수정 Push 뒤 같은 담당 구현 AI가 최신 Head를 즉시 재리뷰하고 새 댓글을 남긴다.
 
-## 9. Human 이해도
+## 10. Human 이해도
 
 ### Issue 단계
 
 V3 Sprint Mode에서는 학습용 질문을 구현 착수 Gate로 사용하지 않는다.
-
 Human 질문은 실제 결정이 필요할 때만 한다.
 
 ### PR 기본
@@ -190,23 +217,14 @@ Human 이해도 질문: 정확히 3개
 
 목표는 클래스·메서드 암기가 아니라 **담당자가 자신이 만든 기능을 설명할 수 있는 상태**다.
 
-## 10. Human Review Checklist
-
-이 체크리스트는 이해 기준이며 V3 Sprint Mode의 별도 Approve Gate가 아니다.
-
-- [ ] 무엇을 왜 바꿨는지 이해했다.
-- [ ] 기본 흐름과 중요한 분기를 이해했다.
-- [ ] 중요한 기술 개념과 적용 이유를 이해했다.
-- [ ] 전체 build·직접 검증·자동 AI Review 결과와 남은 위험을 확인했다.
-
 ## 11. V3 Sprint Merge Gate
 
 Merge 차단 조건은 다음으로 제한한다.
 
 ```text
-전체 build FAIL
-핵심 기능 직접 검증 FAIL
-Automatic Copilot Review 미실행
+전체 build FAIL 또는 필요한데 미실행
+핵심 기능 직접 검증 FAIL 또는 필요한데 미실행
+최신 Head 담당 구현 AI Review 미완료
 미해결 BLOCKER
 미해결 MAJOR
 Human 결정 필요 사항 미해결
@@ -214,7 +232,6 @@ Human 결정 필요 사항 미해결
 ```
 
 그 외 MINOR·SUGGESTION은 기록 후 Merge 가능하다.
-
 필수 Human Approve 수는 `0`이다.
 Merge는 담당 Human이 수행한다.
 
@@ -223,7 +240,7 @@ Merge는 담당 Human이 수행한다.
 - 중요하지 않은 문제로 Merge 지연
 - MINOR/SUGGESTION을 BLOCKER처럼 취급
 - 실행하지 않은 검증을 PASS 처리
-- Automatic Copilot Review 미실행인데 완료 처리
+- 이전 Head 리뷰를 최신 Head 리뷰로 재사용
 - Human 답변 대리 작성
 - 정책·API·DB·권한·트랜잭션 임의 결정
 - AI가 Merge 수행
