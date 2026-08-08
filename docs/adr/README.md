@@ -76,3 +76,4 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 - [ADR 0005: 도메인 간 의존 경계와 조회 조합 원칙](./0005-domain-boundary-dependency-policy.md)
 - [ADR 0006: Refresh Token 저장소로 Redis를 최초 도입](./0006-refresh-token-redis.md)
 - [ADR 0007: S3 Presigned URL 식당 이미지 검증 구조](./0007-s3-presigned-restaurant-image-validation.md)
+- [ADR 0008: ChatRoom 생성 의도의 Transactional Outbox](./0008-chat-room-transactional-outbox.md)

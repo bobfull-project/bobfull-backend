@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.chat.repository.ChatRoomRepository;
+import com.bobfull.outbox.entity.OutboxEventStatus;
+import com.bobfull.outbox.repository.OutboxEventRepository;
 import com.bobfull.notification.adapter.FakeReservationNotificationAdapter;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -67,6 +69,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     @Autowired private RestaurantRepository restaurantRepository;
     @Autowired private FailureMode failureMode;
     @Autowired private ChatRoomRepository chatRoomRepository;
+    @Autowired private OutboxEventRepository outboxEventRepository;
     @Autowired private FakeReservationNotificationAdapter notificationAdapter;
 
     @AfterEach
@@ -74,6 +77,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         failureMode.reset();
         notificationAdapter.reservationCreatedNotifications().clear();
         notificationAdapter.participationCompletedNotifications().clear();
+        outboxEventRepository.deleteAll();
         paymentRepository.deleteAll();
         chatRoomRepository.deleteAll();
         reservationParticipantRepository.deleteAll();
@@ -95,6 +99,9 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reservationRepository.count()).isEqualTo(1);
         assertThat(reservationParticipantRepository.count()).isEqualTo(1);
         assertThat(chatRoomRepository.count()).isEqualTo(1);
+        assertThat(outboxEventRepository.count()).isEqualTo(1);
+        assertThat(outboxEventRepository.findAll()).singleElement()
+                .satisfies(event -> assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.COMPLETED));
         assertThat(completed.getReservationId()).isNotNull();
         assertThat(completed.getReservationParticipantId()).isNotNull();
         Reservation reservation = reservationRepository.findById(completed.getReservationId()).orElseThrow();
@@ -120,6 +127,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
 
         assertThat(reservationParticipantRepository.count()).isEqualTo(2);
         assertThat(chatRoomRepository.count()).isZero();
+        assertThat(outboxEventRepository.count()).isZero();
         Reservation updated = reservationRepository.findById(reservation.getId()).orElseThrow();
         assertThat(updated.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(updated.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
@@ -163,7 +171,11 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reservationRepository.count()).isEqualTo(1);
         assertThat(reservationParticipantRepository.count()).isEqualTo(1);
         assertThat(chatRoomRepository.count()).isZero();
-        // ChatRoom 생성 실패는 별도 이벤트·리스너라 이메일 접수 알림에는 영향이 없다.
+        assertThat(outboxEventRepository.findAll()).singleElement().satisfies(event -> {
+            assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+            assertThat(event.getAttemptCount()).isEqualTo(1);
+        });
+        // ChatRoom 생성 실패는 Outbox 재시도로 남고 이메일 접수 알림에는 영향이 없다.
         assertThat(notificationAdapter.reservationCreatedNotifications()).hasSize(1);
     }
 
@@ -221,8 +233,9 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reloaded.getReservationParticipantId()).isNull();
         assertThat(reservationRepository.count()).isZero();
         assertThat(reservationParticipantRepository.count()).isZero();
-        // 핵심 트랜잭션이 롤백되면 AFTER_COMMIT 리스너 자체가 실행되지 않아 ChatRoom도, 이메일 알림도 처리되지 않는다.
+        // 핵심 트랜잭션이 롤백되면 ChatRoom도 Outbox도, 이메일 알림도 처리되지 않는다.
         assertThat(chatRoomRepository.count()).isZero();
+        assertThat(outboxEventRepository.count()).isZero();
         assertThat(notificationAdapter.reservationCreatedNotifications()).isEmpty();
         assertThat(notificationAdapter.participationCompletedNotifications()).isEmpty();
     }

@@ -138,6 +138,14 @@ erDiagram
         bigint reservation_id FK "예약당 1개"
         datetime created_at "최초 예약 결제 완료 후 생성"
     }
+    OUTBOX_EVENT {
+        bigint outbox_event_id PK "Outbox 내부 식별자"
+        varchar event_id UK "이벤트 UUID"
+        varchar event_type "CHAT_ROOM_CREATION_REQUESTED"
+        varchar aggregate_type "RESERVATION"
+        bigint aggregate_id "reservation_id"
+        varchar status "PENDING, PROCESSING, COMPLETED, FAILED"
+    }
     CHAT_MESSAGE {
         bigint chat_message_id PK "커서 조회 기준 식별자"
         bigint chat_room_id FK "대상 채팅방"
@@ -355,6 +363,27 @@ erDiagram
 
 읽음 처리, 이미지·파일, 수정·삭제, 신고·차단은 현재 범위에서 제외한다.
 
+### 4.12 `outbox_event`
+
+목적: 최초 예약 결제 확정과 함께 ChatRoom 생성 의도를 영속화해, 커밋 뒤 메모리 signal 유실·재시작 뒤에도 재처리할 근거를 남긴다(#176).
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `outbox_event_id` | BIGINT | N | PK | 내부 식별자 |
+| `event_id` | VARCHAR(36) | N | UNIQUE | UUID 이벤트 식별자 |
+| `event_type` | VARCHAR(64) | N | UNIQUE(event_type, aggregate_type, aggregate_id) | `CHAT_ROOM_CREATION_REQUESTED` |
+| `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE | `RESERVATION` |
+| `aggregate_id` | BIGINT | N | 위 복합 UNIQUE | 대상 `reservation_id` |
+| `payload_version` | INT | N |  | 현재 1. Payload 원문·개인정보는 저장하지 않음 |
+| `status` | VARCHAR(16) | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 선행 컬럼 | `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` |
+| `attempt_count` | INT | N |  | 실제 ChatRoom 생성 실패 횟수. 최초 처리 뒤 5회 재시도 후 다음 실패에서 FAILED |
+| `next_attempt_at` | DATETIME | N | 복합 INDEX `idx_outbox_event_status_next_attempt(status, next_attempt_at, outbox_event_id)` | 다음 처리 가능 시각 |
+| `processing_started_at` | DATETIME | Y |  | stale PROCESSING 회수 기준 |
+| `processing_token` | VARCHAR(36) | Y |  | claim 소유자 토큰. 오래된 작업자의 상태 덮어쓰기를 방지 |
+| `last_error_code` | VARCHAR(128) | Y |  | 예외 유형만 기록하며 민감 payload는 저장하지 않음 |
+| `processed_at` | DATETIME | Y |  | COMPLETED 처리 시각 |
+| `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
+
 ## 5. 관계와 Cardinality
 
 - `MEMBER 1:N RESTAURANT`: OWNER가 여러 식당을 소유할 수 있다.
@@ -446,8 +475,9 @@ erDiagram
 
 1. 인증 회원과 `payment.member_id`를 비교하고 PortOne 결제 정보·금액·통화를 검증한다.
 2. Payment를 멱등하게 `PAID`로 전환한다.
-3. `reservation`, 최초 `reservation_participant`, `chat_room`을 생성하고 Payment의 NULL FK를 연결한다.
-4. 결제 완료 인원으로 예약·모집 상태를 계산한다.
+3. `reservation`, 최초 `reservation_participant`, ChatRoom 생성용 `outbox_event(PENDING)`을 같은 트랜잭션에 저장하고 Payment의 NULL FK를 연결한다.
+4. 커밋 뒤 즉시 signal 또는 scheduler가 Outbox를 claim해 별도 트랜잭션에서 `chat_room`을 `reservation_id` 기준 멱등 생성한다. 최초 처리 실패 뒤 5·10·20·40·80초 backoff로 5회 재시도하고, 다음 실패에서 `FAILED`로 남긴다. 5분 stale `PROCESSING`은 `PENDING`으로 회수한다.
+5. 결제 완료 인원으로 예약·모집 상태를 계산한다.
 
 ### 추가 참여 결제 완료
 

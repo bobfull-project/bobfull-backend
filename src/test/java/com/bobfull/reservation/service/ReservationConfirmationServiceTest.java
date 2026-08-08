@@ -13,19 +13,24 @@ import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.outbox.entity.OutboxEvent;
+import com.bobfull.outbox.repository.OutboxEventRepository;
+import com.bobfull.outbox.service.ChatRoomOutboxProcessor;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
-import com.bobfull.reservation.event.ReservationConfirmedEvent;
 import com.bobfull.reservation.event.ReservationPaymentCompletedEvent;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import java.util.List;
 import java.util.Optional;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -50,6 +55,12 @@ class ReservationConfirmationServiceTest {
     private ReservationCapacityReader reservationCapacityReader;
 
     @Mock
+    private OutboxEventRepository outboxEventRepository;
+
+    @Mock
+    private ChatRoomOutboxProcessor chatRoomOutboxProcessor;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
@@ -57,7 +68,8 @@ class ReservationConfirmationServiceTest {
 
     private ReservationConfirmationService service() {
         return new ReservationConfirmationService(
-                reservationRepository, reservationParticipantRepository, reservationCapacityReader, eventPublisher,
+                reservationRepository, reservationParticipantRepository, reservationCapacityReader, outboxEventRepository,
+                chatRoomOutboxProcessor, Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC), eventPublisher,
                 businessMetricRecorder);
     }
 
@@ -74,6 +86,11 @@ class ReservationConfirmationServiceTest {
             ReflectionTestUtils.setField(participant, "id", 20L);
             return participant;
         });
+        given(outboxEventRepository.save(any(OutboxEvent.class))).willAnswer(invocation -> {
+            OutboxEvent event = invocation.getArgument(0);
+            ReflectionTestUtils.setField(event, "id", 30L);
+            return event;
+        });
         given(reservationCapacityReader.readTableCapacity(200L)).willReturn(4);
         given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
 
@@ -85,7 +102,8 @@ class ReservationConfirmationServiceTest {
         assertThat(result.reservationId()).isEqualTo(10L);
         assertThat(result.reservationParticipantId()).isEqualTo(20L);
         verify(reservationRepository).save(any(Reservation.class));
-        verify(eventPublisher).publishEvent(new ReservationConfirmedEvent(10L));
+        verify(outboxEventRepository).save(any(OutboxEvent.class));
+        verify(chatRoomOutboxProcessor).signal(30L);
         verify(eventPublisher).publishEvent(new ReservationPaymentCompletedEvent(10L, 20L, PaymentPurpose.CREATE));
     }
 
@@ -108,9 +126,8 @@ class ReservationConfirmationServiceTest {
         // then
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
-        // ChatRoom 생성용 이벤트는 CREATE 전용이라 JOIN에서는 발행되지 않지만(Issue #168 이전과 동일),
-        // 결제 완료 이메일 안내용 이벤트는 CREATE·JOIN 모두에서 발행된다(Issue #168 V2).
-        verify(eventPublisher, never()).publishEvent(any(ReservationConfirmedEvent.class));
+        // ChatRoom Outbox는 CREATE 전용이고, 이메일 안내용 이벤트는 CREATE·JOIN 모두에서 발행된다.
+        verify(outboxEventRepository, never()).save(any(OutboxEvent.class));
         verify(eventPublisher).publishEvent(new ReservationPaymentCompletedEvent(10L, 21L, PaymentPurpose.JOIN));
     }
 
