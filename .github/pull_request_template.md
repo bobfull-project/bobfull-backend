@@ -12,7 +12,7 @@
 - Closes #
 - 검토 수준: `기본 | 강화`
 
-<!-- PR 단계 명령은 `PR #번호 검토하라`입니다. 실제 실행 상태는 연결 Issue의 `status:*` Label만을 기준으로 하며, PR 본문의 상태 문자열은 사용하지 않습니다. 모든 PR은 skills/bobfull-pr-review/SKILL.md에 따른 담당자 AI Review와 PR Conversation 댓글 기록이 필수입니다. -->
+<!-- PR 생성/업데이트 시 `.github/workflows/copilot-auto-review.yml`이 구현 담당 AI와 별개의 GitHub Copilot reviewer를 자동 요청합니다. 리뷰 기준은 `.github/skills/bobfull-pr-review/SKILL.md`와 `.github/copilot-instructions.md`를 따릅니다. 최초 AI Review를 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않습니다. -->
 
 ## PR 이해 요약
 
@@ -127,24 +127,21 @@ Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 등 이번 변경 이해에 �
 - 기본: Human 이해도 질문 0개. 아래 `해당 없음: 기본 검토`만 유지합니다.
 - 강화: 아래 `해당 없음` 문구를 제거하고 최신 Diff 기준 질문을 정확히 3개 삽입합니다.
 강화 질문의 세 축은 `핵심 실행 흐름`, `중요 기술 개념과 적용 이유`, `설계 선택·실패 처리·남은 한계`입니다.
-담당자 AI는 실제 코드와 대조한 AI 답변 검토·기준 답변만 작성하며 Human 원문과 최종 확인을 대신 작성하거나 덮어쓰지 않습니다.
 -->
 
 해당 없음: 기본 검토
 
-### 담당자 AI 검토·수정 기록
+### 자동 AI Review·반영 기록
 
-<!-- 모든 PR에서 skills/bobfull-pr-review/SKILL.md를 실행하고 실제 리뷰는 PR Conversation 댓글에 중요도 순으로 남깁니다. 본문에는 최신 검토 상태와 근거만 요약합니다. -->
+<!-- 실제 리뷰 내용은 GitHub Copilot Review/inline comment에 남습니다. 이 영역에는 구현 담당자가 리뷰 반영 후 최신 상태만 요약하며, 리뷰 내용을 장문으로 복사하지 않습니다. -->
 
-- 담당자 AI 검토 기준 Head:
-- 담당자 AI 검토 결과: `PASS | 수정 후 재검토 필요 | 확인 필요`
-- 최신 AI Review 댓글:
-- 확인한 기존 PR 리뷰·댓글:
+- 자동 리뷰 트리거: `opened | synchronize | reopened | ready_for_review`
+- 최신 자동 AI Review 기준 Head:
+- 최신 자동 AI Review 결과: `PASS | 수정 필요 | 실행 실패 | 미실행`
 - 반영한 항목:
 - 반영하지 않은 항목과 이유:
 - Human 결정이 필요한 항목:
 - 재실행 테스트·build 결과:
-- 최신 Head SHA:
 - 남은 미검증 위험:
 
 ### Human Review Checklist
