@@ -2,6 +2,7 @@ package com.bobfull.notification.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doAnswer;
@@ -77,7 +78,7 @@ class SmtpReservationNotificationAdapterTest {
         ReservationResultNotification notification = notification(new Recipient(1L, "a@bobfull.com", "회원A"));
         doThrow(new MailSendException("boom")).when(mailSender).send(any(MimeMessage.class));
 
-        assertThatCode(() -> adapter().notifyConfirmed(notification)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> adapter().notifyConfirmed(notification)).isInstanceOf(MailSendException.class);
 
         verify(mailSender, times(3)).send(any(MimeMessage.class));
     }
@@ -95,7 +96,8 @@ class SmtpReservationNotificationAdapterTest {
             return null;
         }).when(mailSender).send(any(MimeMessage.class));
 
-        adapter().notifyCancelledDueToInsufficientParticipants(notification);
+        assertThatThrownBy(() -> adapter().notifyCancelledDueToInsufficientParticipants(notification))
+                .isInstanceOf(MailSendException.class);
 
         // 실패한 참여자 3회 재시도 + 성공한 참여자 1회 = 총 4회
         verify(mailSender, times(4)).send(any(MimeMessage.class));
@@ -109,7 +111,7 @@ class SmtpReservationNotificationAdapterTest {
         ReservationResultNotification notification = notification(
                 new Recipient(1L, "broken@bobfull.com", "회원A"), new Recipient(2L, "ok@bobfull.com", "회원B"));
 
-        assertThatCode(() -> adapter().notifyConfirmed(notification)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> adapter().notifyConfirmed(notification)).isInstanceOf(IllegalStateException.class);
 
         verify(mailSender, times(1)).send(any(MimeMessage.class));
     }
@@ -180,7 +182,7 @@ class SmtpReservationNotificationAdapterTest {
         ReservationResultNotification notification = notification(new Recipient(1L, "secret@bobfull.com", "회원A"));
         doThrow(new MailSendException("boom")).when(mailSender).send(any(MimeMessage.class));
 
-        adapter().notifyConfirmed(notification);
+        assertThatThrownBy(() -> adapter().notifyConfirmed(notification)).isInstanceOf(MailSendException.class);
 
         assertThat(logAppender.list).isNotEmpty();
         assertThat(logAppender.list)

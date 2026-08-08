@@ -7,6 +7,7 @@ import com.bobfull.payment.entity.Payment;
 import com.bobfull.chat.repository.ChatRoomRepository;
 import com.bobfull.outbox.entity.OutboxEventStatus;
 import com.bobfull.outbox.repository.OutboxEventRepository;
+import com.bobfull.outbox.repository.EmailOutboxDeliveryRepository;
 import com.bobfull.notification.adapter.FakeReservationNotificationAdapter;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -70,6 +71,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     @Autowired private FailureMode failureMode;
     @Autowired private ChatRoomRepository chatRoomRepository;
     @Autowired private OutboxEventRepository outboxEventRepository;
+    @Autowired private EmailOutboxDeliveryRepository emailOutboxDeliveryRepository;
     @Autowired private FakeReservationNotificationAdapter notificationAdapter;
 
     @AfterEach
@@ -77,6 +79,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         failureMode.reset();
         notificationAdapter.reservationCreatedNotifications().clear();
         notificationAdapter.participationCompletedNotifications().clear();
+        emailOutboxDeliveryRepository.deleteAll();
         outboxEventRepository.deleteAll();
         paymentRepository.deleteAll();
         chatRoomRepository.deleteAll();
@@ -99,9 +102,9 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reservationRepository.count()).isEqualTo(1);
         assertThat(reservationParticipantRepository.count()).isEqualTo(1);
         assertThat(chatRoomRepository.count()).isEqualTo(1);
-        assertThat(outboxEventRepository.count()).isEqualTo(1);
-        assertThat(outboxEventRepository.findAll()).singleElement()
-                .satisfies(event -> assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.COMPLETED));
+        assertThat(outboxEventRepository.count()).isEqualTo(2);
+        assertThat(outboxEventRepository.findAll()).allSatisfy(event ->
+                assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.COMPLETED));
         assertThat(completed.getReservationId()).isNotNull();
         assertThat(completed.getReservationParticipantId()).isNotNull();
         Reservation reservation = reservationRepository.findById(completed.getReservationId()).orElseThrow();
@@ -127,7 +130,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
 
         assertThat(reservationParticipantRepository.count()).isEqualTo(2);
         assertThat(chatRoomRepository.count()).isZero();
-        assertThat(outboxEventRepository.count()).isZero();
+        assertThat(outboxEventRepository.count()).isEqualTo(1);
         Reservation updated = reservationRepository.findById(reservation.getId()).orElseThrow();
         assertThat(updated.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(updated.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
@@ -171,7 +174,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reservationRepository.count()).isEqualTo(1);
         assertThat(reservationParticipantRepository.count()).isEqualTo(1);
         assertThat(chatRoomRepository.count()).isZero();
-        assertThat(outboxEventRepository.findAll()).singleElement().satisfies(event -> {
+        assertThat(outboxEventRepository.findAll()).anySatisfy(event -> {
             assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
             assertThat(event.getAttemptCount()).isEqualTo(1);
         });
@@ -236,6 +239,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         // 핵심 트랜잭션이 롤백되면 ChatRoom도 Outbox도, 이메일 알림도 처리되지 않는다.
         assertThat(chatRoomRepository.count()).isZero();
         assertThat(outboxEventRepository.count()).isZero();
+        assertThat(emailOutboxDeliveryRepository.count()).isZero();
         assertThat(notificationAdapter.reservationCreatedNotifications()).isEmpty();
         assertThat(notificationAdapter.participationCompletedNotifications()).isEmpty();
     }

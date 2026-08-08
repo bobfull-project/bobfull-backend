@@ -10,6 +10,8 @@ import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.port.ReservationNotificationPort;
 import com.bobfull.reservation.port.ReservationNotificationPort.Recipient;
 import com.bobfull.reservation.port.ReservationNotificationPort.ReservationResultNotification;
+import com.bobfull.outbox.entity.EmailOutboxDelivery;
+import com.bobfull.outbox.entity.OutboxEventType;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.restaurant.entity.Restaurant;
@@ -92,6 +94,23 @@ public class ReservationNotificationService {
         notify(reservationId,
                 () -> reservationParticipantRepository.findAllById(List.of(participantId)),
                 notificationPort::notifyParticipationCompleted);
+    }
+
+    /** Outbox processor가 단일 수신자를 발송하고 성공 시에만 전송 이력을 확정할 수 있게 한다. */
+    public void sendOutboxEmail(String eventTypeName, EmailOutboxDelivery delivery) {
+        OutboxEventType type = OutboxEventType.valueOf(eventTypeName);
+        List<ReservationParticipant> participants = reservationParticipantRepository.findAllById(List.of(delivery.getReservationParticipantId()));
+        if (participants.size() != 1 || !participants.get(0).getMemberId().equals(delivery.getRecipientMemberId())) {
+            throw new IllegalStateException("EMAIL_RECIPIENT_NOT_FOUND");
+        }
+        ReservationResultNotification notification = buildNotification(delivery.getReservationId(), participants);
+        switch (type) {
+            case EMAIL_RESERVATION_CREATED -> notificationPort.notifyReservationCreated(notification);
+            case EMAIL_PARTICIPATION_COMPLETED -> notificationPort.notifyParticipationCompleted(notification);
+            case EMAIL_RECRUITMENT_CONFIRMED -> notificationPort.notifyConfirmed(notification);
+            case EMAIL_RECRUITMENT_CANCELLED -> notificationPort.notifyCancelledDueToInsufficientParticipants(notification);
+            default -> throw new IllegalArgumentException("이메일 이벤트 유형이 아닙니다.");
+        }
     }
 
     private void notify(

@@ -84,9 +84,15 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
         String textBody = "%s\n식당: %s\n주소: %s\n예약 날짜: %s\n식사 시작 시간: %s\n%s".formatted(
                 title, notification.restaurantName(), notification.restaurantAddress(), mealDate, mealTime, message);
 
+        RuntimeException failure = null;
         for (Recipient recipient : notification.recipients()) {
-            sendToRecipient(notification.reservationId(), recipient, result, subject, htmlBody, textBody);
+            try {
+                sendToRecipient(notification.reservationId(), recipient, result, subject, htmlBody, textBody);
+            } catch (RuntimeException exception) {
+                failure = exception;
+            }
         }
+        if (failure != null) throw failure;
     }
 
     private void sendToRecipient(
@@ -103,7 +109,7 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
         if (message == null) {
             log.error("event=RESERVATION_NOTIFICATION_FAILED reservationId={} memberId={} result={} reason=MESSAGE_BUILD_FAILED",
                     reservationId, recipient.memberId(), result);
-            return;
+            throw new IllegalStateException("MESSAGE_BUILD_FAILED");
         }
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -116,6 +122,7 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
                 if (attempt == MAX_ATTEMPTS) {
                     log.error("event=RESERVATION_NOTIFICATION_FAILED reservationId={} memberId={} result={} attempts={}",
                             reservationId, recipient.memberId(), result, MAX_ATTEMPTS);
+                    throw exception;
                 } else {
                     log.warn("event=RESERVATION_NOTIFICATION_ATTEMPT_FAILED reservationId={} memberId={} result={} attempt={}",
                             reservationId, recipient.memberId(), result, attempt);

@@ -1,0 +1,25 @@
+# Issue #183 — 이메일 Transactional Outbox Evidence
+
+## 검증 대상
+
+V2의 `AFTER_COMMIT + @Async`는 커밋 뒤 작업이 메모리에서 사라질 수 있고, 여러 수신자 중 일부 성공을 영속적으로 구분하지 못했다. V3는 #176의 공통 Outbox를 재사용해 발송 의도와 수신자별 성공을 DB에 남긴다.
+
+| 구분 | V2 | V3 |
+|---|---|---|
+| 발송 의도 | 메모리 이벤트 | 핵심 상태와 동일 트랜잭션의 `OutboxEvent(PENDING)` |
+| 부분 성공 | 재시도 근거 없음 | `email_outbox_delivery`의 `SENT` 보존, `PENDING`만 재시도 |
+| 최종 실패 | 로그만 남김 | 공통 Outbox `FAILED`와 error code |
+
+## 공통 기반
+
+#176 Evidence의 원자 Claim·stale 회수·backoff·`FAILED` 검증을 재사용한다. #183은 이메일별 수신자 멱등성과 SMTP 실패 격리에 집중한다.
+
+## 실행 명령
+
+```bash
+./gradlew :test --tests com.bobfull.payment.service.PaymentReservationConfirmationTransactionIntegrationTest --tests com.bobfull.reservation.service.RecruitmentDeadlineNotificationIntegrationTest --rerun-tasks
+```
+
+## 한계
+
+SMTP 요청 성공과 DB `SENT` 기록 사이 프로세스가 종료되는 극소 구간은 외부 SMTP의 exactly-once를 보장하지 못한다. 다만 DB에 성공 기록된 수신자는 중복 발송하지 않으며, 실제 SMTP 대량 장애 실험은 수행하지 않는다.

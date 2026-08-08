@@ -79,7 +79,7 @@ class RecruitmentDeadlineNotificationIntegrationTest {
 
         transactionService.acceptRecruitmentDeadline(reservation.getId());
 
-        assertThat(notificationAdapter.confirmedNotifications()).hasSize(1);
+        assertThat(notificationAdapter.confirmedNotifications()).hasSize(3);
         assertThat(notificationAdapter.confirmedNotifications().get(0).reservationId()).isEqualTo(reservation.getId());
         assertThat(notificationAdapter.cancelledNotifications()).isEmpty();
     }
@@ -90,7 +90,7 @@ class RecruitmentDeadlineNotificationIntegrationTest {
 
         transactionService.acceptRecruitmentDeadline(reservation.getId());
 
-        assertThat(notificationAdapter.cancelledNotifications()).hasSize(1);
+        assertThat(notificationAdapter.cancelledNotifications()).hasSize(2);
         assertThat(notificationAdapter.confirmedNotifications()).isEmpty();
     }
 
