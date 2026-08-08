@@ -1,81 +1,77 @@
 ---
 name: bobfull-pr-explain
-description: BobFull Draft PR 생성·본문 갱신·최신 Head 재검토 때 실제 Issue, Diff, 검증 근거를 바탕으로 이해 중심 PR 요약과 상세 검증 근거를 작성·검증한다.
+description: BobFull Draft PR 생성·본문 갱신 때 실제 Issue, Diff, 검증 근거를 바탕으로 이해 중심 PR 요약과 상세 검증 근거를 작성·검증한다.
 ---
 
 # BobFull PR Explain Diff
 
+## 역할
+
+이 Skill은 **PR 본문 설명 작성**만 담당한다. 코드 결함 리뷰는 구현 담당 AI가 수행하지 않고, PR 생성/업데이트 시 GitHub가 자동 요청하는 독립 Copilot reviewer가 `.github/skills/bobfull-pr-review/SKILL.md` 기준으로 수행한다.
+
 ## 사용 시점
 
-다음 작업을 수행하기 전 이 Skill을 직접 읽고 적용한다.
-
-- 구현 완료 후 Draft PR 생성
+- 구현 완료 후 Draft PR 생성 전
 - 기존 PR 본문 복구 또는 최신 템플릿 반영
-- 새 Commit 반영 후 PR 본문·다이어그램·Checklist 갱신
-- `PR #번호 검토하라`에서 최신 Head 기준 PR 설명 재검토
-- Ready 전환 또는 Human 리뷰 요청 전 최종 PR 본문 확인
+- 새 Commit으로 실제 흐름·테스트·검증 상태가 바뀐 뒤 PR 본문 갱신
+- Ready 전환 또는 Human 리뷰 요청 전 PR 설명 최종 확인
 
-이 Skill은 PR 설명을 작성·검증하는 절차다. 코드 결함 재검토와 AI Review 댓글은 별도 `skills/bobfull-pr-review/SKILL.md`를 모든 PR에서 적용한다.
+## 필수 입력
 
-## 필수 입력과 중단 기준
-
-다음 자료를 최신 상태로 확보한다.
-
-1. 연결 Issue의 본문, 댓글, 현재 `status:*` Label과 최종 계약
+1. 연결 Issue의 본문·최종 계약·현재 `status:*` Label
 2. 최신 `.github/pull_request_template.md`
-3. base와 Head 사이의 실제 Diff, 변경 파일과 실제 호출·상태 흐름
-4. 추가·수정 테스트와 실제로 실행한 테스트·build·직접 검증·CI 결과
+3. base와 Head 사이 실제 Diff와 변경 파일
+4. 추가·수정 테스트 및 실제 테스트·build·직접 검증·CI 결과
 5. 변경과 직접 관련된 확정 문서
 
-Issue·Diff·검증 근거 중 PR 설명에 필요한 자료를 읽지 못했거나 실제 상태를 확인할 수 없으면 내용을 추측해 작성하지 않는다. 부족한 자료, 영향을 받는 본문 영역과 중단 이유를 보고한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계로 기록한다.
+근거를 확인하지 못한 영역은 추측하지 않는다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다.
 
 ## 작성 절차
 
-1. 최종 계약과 최신 Diff를 대조해 변경 전 동작, 해결할 문제, 변경 범위와 제외 범위를 정리한다.
-2. 최신 템플릿의 섹션 이름과 순서를 유지한다. 한 줄 요약의 네 하위 필드는 삭제하거나 한 문장으로 대체하지 않는다.
+1. 최종 계약과 최신 Diff를 대조해 변경 목적·범위·제외 범위를 정리한다.
+2. 최신 템플릿의 `한 줄 요약/관련 Issue → PR 이해 요약 → 상세 변경 및 검증 → Human 검토` 순서를 유지한다.
 3. `PR 이해 요약`을 실제 근거로 작성한다.
-   - `쉬운 설명`: 전문용어를 최소화해 3~5문장으로 목적과 결과를 설명한다.
-   - `주요 실행 흐름`: 요청 → 검증 → Transaction/Lock → 상태 변경 → 이벤트/외부 I/O → 응답 중 실제 핵심 순서와 필요한 분기를 짧게 설명한다.
-   - `Mermaid 시각화`: 기능 PR이면 최신 Head의 주요 흐름과 필요한 Transaction·Lock·Event 경계를 설명한다.
-   - `주요 개념`: 실제 이해에 필요한 개념만 2~5개를 `개념 | 쉽게 말하면 | 이 PR에서 왜 필요한가` 표로 작성한다.
-   - `핵심 트러블슈팅`: 실제 의미 있는 문제만 3~5문장으로 요약하고 상세 원본 경로를 연결한다.
-   - `코드 읽는 순서`: 실제 변경 파일·호출 흐름을 따라 3~6단계의 책임을 안내한다.
-4. 단순 문서·설정·DTO·정적 상수·단순 CRUD처럼 해당 항목이 필요 없으면 가짜 설명을 만들지 않고 `해당 없음`과 이유를 기록한다.
-5. `상세 변경 및 검증`에는 주요 변경, 예외·실패·중복·경계, 트레이드오프, 제한사항, 제외 범위, 추가·수정 테스트, 완료 조건과 실제 검증 증거를 유지한다. 긴 정보만 `<details>`로 접으며 `BLOCKER`, `FAIL`, `NOT_RUN`, 미검증 위험은 접힌 영역에만 두지 않는다.
-6. `추가·수정 테스트`는 검증 코드를 설명하고, `테스트·build·직접 검증`은 실제 실행 결과를 기록한다.
-7. Human 이해도는 검토 수준에 따라 고정한다.
-   - `기본`: 질문 0개. `해당 없음: 기본 검토`만 기록한다.
-   - `강화`: 질문 정확히 3개. `핵심 실행 흐름`, `중요 기술 개념과 적용 이유`, `설계 선택·실패 처리·남은 한계` 세 축으로 최신 Diff에 맞게 구체화한다.
-8. `Human Review Checklist`는 PR별 세부 구현 질문을 동적으로 만들지 않는다. 템플릿의 공통 체크인 `변경 목적`, `기본 실행 흐름`, `중요 기술 개념`, `테스트·미검증 위험`을 유지한다.
-9. AI가 Human 답변·리뷰·Approve를 대신 작성하거나 Checklist를 선체크하지 않는다.
+   - 쉬운 설명: 3~5문장
+   - 주요 실행 흐름: 핵심 순서와 분기
+   - Mermaid: 의미 있는 기능 흐름이 있을 때만
+   - 주요 개념: 실제 이해에 필요한 2~5개
+   - 핵심 트러블슈팅: 실제 문제 해결이 있을 때만 3~5문장
+   - 코드 읽는 순서: 실제 변경 파일·호출 흐름을 따라 3~6단계
+4. 단순 문서·설정·DTO·정적 상수·단순 CRUD처럼 해당 항목이 필요 없으면 `해당 없음`과 이유를 기록한다.
+5. 상세 변경 및 검증에는 주요 변경, 예외·실패·중복·경계, 트레이드오프, 제한사항, 제외 범위, 테스트와 실제 검증 증거를 유지한다.
+6. 긴 정보만 `<details>`로 접고 `BLOCKER`, `FAIL`, `NOT_RUN`, 미검증 위험은 접힌 영역에만 두지 않는다.
+7. PR Human 이해도는 검토 수준에 따라 고정한다.
+   - 기본: 질문 0개
+   - 강화: 정확히 3개 — 핵심 흐름 / 중요 개념과 적용 이유 / 설계 선택·실패 처리·남은 한계
+8. Human Review Checklist는 템플릿의 공통 4개 이해 체크를 유지한다.
 
-## Mermaid 실행 흐름 시각화
+## Mermaid 기준
 
-의미 있는 실행 흐름이 있는 기능 PR에는 Mermaid 다이어그램을 최소 1개 포함한다.
+의미 있는 실행 흐름이 있는 기능 PR만 Mermaid를 포함한다.
 
 - 처리 순서·조건 분기: `flowchart`
-- 사용자·클래스·외부 시스템의 호출 순서: `sequenceDiagram`
-- 도메인 상태 전이: `stateDiagram-v2`
-- 데이터 관계가 변경 이해의 중심: `erDiagram`
+- 호출 순서: `sequenceDiagram`
+- 상태 전이: `stateDiagram-v2`
+- 데이터 관계: `erDiagram`
 
-작성 후 다음을 대조한다.
+최신 Head의 실제 클래스·상태·분기와 일치해야 하며 구현되지 않은 후속 계획을 현재 동작처럼 그리지 않는다.
 
-- 노드·참여자·상태·분기가 최신 Head의 실제 클래스·메서드·호출 관계와 일치하는가
-- Transaction, Lock, AFTER_COMMIT, Async, 외부 I/O 중 이번 변경을 이해하는 데 필요한 경계만 표현했는가
-- 구현되지 않은 분기나 후속 계획을 현재 동작처럼 표현하지 않았는가
-- 다이어그램이 장식용이거나 본문을 단순 반복하지 않는가
-- GitHub에서 Mermaid가 정상 렌더링되는가
+## 자동 AI Review와의 경계
 
-## 최신 Head 갱신과 최종 확인
+PR 본문을 작성한 뒤 구현 담당 AI가 자기 PR을 다시 리뷰하는 절차를 실행하지 않는다.
 
-새 Commit으로 호출 관계·분기·상태 전이·테스트가 바뀌면 이 Skill을 다시 적용한다. 이전 Head를 기준으로 한 이해 요약, 상세 검증, 다이어그램, 코드 읽는 순서, 강화 검토 Human 이해도 질문과 검증 결과를 최신 Diff에 맞춰 갱신한다.
+다음은 GitHub 자동화가 담당한다.
 
-`PR #번호 검토하라`와 Ready 전 최종 확인에서는 연결 Issue 계약, 최신 Head, PR 이해 요약, 상세 검증, Mermaid, 검증 증거와 Human 검토 영역을 다시 대조한다. 설명·다이어그램이 실제 Diff와 불일치하면 PR 이해 문서화는 완료되지 않은 것으로 기록한다.
+```text
+PR opened / synchronize / reopened / ready_for_review
+→ .github/workflows/copilot-auto-review.yml
+→ GitHub Copilot reviewer 자동 요청
+→ .github/skills/bobfull-pr-review/SKILL.md 적용
+→ 독립 AI Review 댓글
+```
 
-PR 설명 확인 뒤에는 모든 PR에서 `skills/bobfull-pr-review/SKILL.md`를 적용해 실제 코드·계약·테스트를 재검토하고 PR Conversation 댓글을 남긴다.
+새 Push가 올라오면 자동 reviewer가 최신 Head를 다시 검토한다. 최초 리뷰를 위해 사람이 `PR #번호 검토하라`를 입력할 필요가 없다.
 
 ## 작성 범위
 
-정책과 출력 형식의 원본은 `.github/pull_request_template.md`, `docs/AI_WORKFLOW.md`, `docs/AI_IMPLEMENTATION_GUIDE.md`, `docs/AI_REVIEW_GUIDE.md`에 둔다. 이 Skill에는 PR 설명 작성 절차만 유지한다.
-
-PR Explain Diff의 공식 목적은 다른 사람이 변경을 빠르게 이해하고 실제 Diff와 검증 근거를 올바르게 리뷰하게 하는 것이다. PR 자체를 포트폴리오 문서로 확장하지 않는다. 별도 HTML, PNG·SVG·AI 생성 이미지, GitHub Actions Artifact·Pages, Flow Lab, 새로운 승인·Merge Gate를 만들지 않는다.
+PR Explain의 목적은 다른 사람이 변경을 빠르게 이해하고 실제 Diff와 검증 근거를 올바르게 리뷰하게 하는 것이다. 별도 HTML·이미지·Flow Lab·포트폴리오 문서를 이 Skill에서 만들지 않는다.
