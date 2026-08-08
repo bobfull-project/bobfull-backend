@@ -15,7 +15,7 @@ description: BobFull Draft PR 생성·본문 갱신·최신 Head 재검토 때 �
 - `PR #번호 검토하라`에서 최신 Head 기준 PR 설명 재검토
 - Ready 전환 또는 Human 리뷰 요청 전 최종 PR 본문 확인
 
-이 Skill은 PR 본문을 자동으로 수정·Commit·Push하는 도구가 아니다. 실제 근거를 읽어 설명을 작성·검증하는 절차다.
+이 Skill은 PR 설명을 작성·검증하는 절차다. 코드 결함 재검토와 AI Review 댓글은 별도 `skills/bobfull-pr-review/SKILL.md`를 모든 PR에서 적용한다.
 
 ## 필수 입력과 중단 기준
 
@@ -40,10 +40,14 @@ Issue·Diff·검증 근거 중 PR 설명에 필요한 자료를 읽지 못했거
    - `주요 개념`: 실제 이해에 필요한 개념만 2~5개를 `개념 | 쉽게 말하면 | 이 PR에서 왜 필요한가` 표로 작성한다.
    - `핵심 트러블슈팅`: 실제 의미 있는 문제만 3~5문장으로 요약하고 상세 원본 경로를 연결한다.
    - `코드 읽는 순서`: 실제 변경 파일·호출 흐름을 따라 3~6단계의 책임을 안내한다.
-4. 단순 문서·설정·DTO·정적 상수 변경처럼 해당 항목이 필요 없으면 가짜 설명을 만들지 않고 `해당 없음`과 이유를 기록한다.
+4. 단순 문서·설정·DTO·정적 상수·단순 CRUD처럼 해당 항목이 필요 없으면 가짜 설명을 만들지 않고 `해당 없음`과 이유를 기록한다.
 5. `상세 변경 및 검증`에는 주요 변경, 예외·실패·중복·경계, 트레이드오프, 제한사항, 제외 범위, 추가·수정 테스트, 완료 조건과 실제 검증 증거를 유지한다. 긴 정보만 `<details>`로 접으며 `BLOCKER`, `FAIL`, `NOT_RUN`, 미검증 위험은 접힌 영역에만 두지 않는다.
-6. `추가·수정 테스트`은 검증 코드를 설명하고, `테스트·build·직접 검증`은 실제 실행 결과를 기록한다.
-7. Human 이해도 질문과 PR 전용 Human Review Checklist는 최신 Diff·테스트를 근거로 작성한다. AI가 Human 답변·리뷰·Approve를 대신 작성하거나 Checklist를 선체크하지 않는다.
+6. `추가·수정 테스트`는 검증 코드를 설명하고, `테스트·build·직접 검증`은 실제 실행 결과를 기록한다.
+7. Human 이해도는 검토 수준에 따라 고정한다.
+   - `기본`: 질문 0개. `해당 없음: 기본 검토`만 기록한다.
+   - `강화`: 질문 정확히 3개. `핵심 실행 흐름`, `중요 기술 개념과 적용 이유`, `설계 선택·실패 처리·남은 한계` 세 축으로 최신 Diff에 맞게 구체화한다.
+8. `Human Review Checklist`는 PR별 세부 구현 질문을 동적으로 만들지 않는다. 템플릿의 공통 체크인 `변경 목적`, `기본 실행 흐름`, `중요 기술 개념`, `테스트·미검증 위험`을 유지한다.
+9. AI가 Human 답변·리뷰·Approve를 대신 작성하거나 Checklist를 선체크하지 않는다.
 
 ## Mermaid 실행 흐름 시각화
 
@@ -64,12 +68,14 @@ Issue·Diff·검증 근거 중 PR 설명에 필요한 자료를 읽지 못했거
 
 ## 최신 Head 갱신과 최종 확인
 
-새 Commit으로 호출 관계·분기·상태 전이·테스트가 바뀌면 이 Skill을 다시 적용한다. 이전 Head를 기준으로 한 이해 요약, 상세 검증, 다이어그램, 코드 읽는 순서, Human 이해도 질문, Checklist와 검증 결과를 최신 Diff에 맞춰 갱신한다.
+새 Commit으로 호출 관계·분기·상태 전이·테스트가 바뀌면 이 Skill을 다시 적용한다. 이전 Head를 기준으로 한 이해 요약, 상세 검증, 다이어그램, 코드 읽는 순서, 강화 검토 Human 이해도 질문과 검증 결과를 최신 Diff에 맞춰 갱신한다.
 
-`PR #번호 검토하라`와 Ready 전 최종 확인에서는 연결 Issue 계약, 최신 Head, PR 이해 요약, 상세 검증, Mermaid, 검증 증거, Checklist를 다시 대조한다. 설명·다이어그램·Checklist가 실제 Diff와 불일치하면 PR 이해 문서화는 완료되지 않은 것으로 기록하고 수정 또는 Human 판단을 진행한다.
+`PR #번호 검토하라`와 Ready 전 최종 확인에서는 연결 Issue 계약, 최신 Head, PR 이해 요약, 상세 검증, Mermaid, 검증 증거와 Human 검토 영역을 다시 대조한다. 설명·다이어그램이 실제 Diff와 불일치하면 PR 이해 문서화는 완료되지 않은 것으로 기록한다.
+
+PR 설명 확인 뒤에는 모든 PR에서 `skills/bobfull-pr-review/SKILL.md`를 적용해 실제 코드·계약·테스트를 재검토하고 PR Conversation 댓글을 남긴다.
 
 ## 작성 범위
 
-정책과 출력 형식의 원본은 `.github/pull_request_template.md`, `docs/AI_WORKFLOW.md`, `docs/AI_IMPLEMENTATION_GUIDE.md`, `docs/AI_REVIEW_GUIDE.md`에 둔다. 이 Skill에는 실행 절차만 유지한다.
+정책과 출력 형식의 원본은 `.github/pull_request_template.md`, `docs/AI_WORKFLOW.md`, `docs/AI_IMPLEMENTATION_GUIDE.md`, `docs/AI_REVIEW_GUIDE.md`에 둔다. 이 Skill에는 PR 설명 작성 절차만 유지한다.
 
-PR Explain Diff의 공식 목적은 다른 사람이 변경을 빠르게 이해하고 실제 Diff와 검증 근거를 올바르게 리뷰하게 하는 것이다. PR 자체를 포트폴리오 문서로 확장하지 않는다. 별도 HTML, PNG·SVG·AI 생성 이미지, GitHub Actions Artifact·Pages, Flow Lab, 새로운 퀴즈·승인·Merge Gate를 만들지 않는다.
+PR Explain Diff의 공식 목적은 다른 사람이 변경을 빠르게 이해하고 실제 Diff와 검증 근거를 올바르게 리뷰하게 하는 것이다. PR 자체를 포트폴리오 문서로 확장하지 않는다. 별도 HTML, PNG·SVG·AI 생성 이미지, GitHub Actions Artifact·Pages, Flow Lab, 새로운 승인·Merge Gate를 만들지 않는다.
