@@ -96,6 +96,9 @@ public class ReservationConfirmationService {
         if (purpose == PaymentPurpose.CREATE) {
             OutboxEvent outboxEvent = outboxEventRepository.save(
                     OutboxEvent.chatRoomCreationRequested(reservation.getId(), clock.instant()));
+            AfterCommitExecutor.run(() -> log.info(
+                    "event=OUTBOX_EVENT_CREATED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount=0 status=PENDING",
+                    outboxEvent.getId(), outboxEvent.getEventType(), reservation.getId()));
             AfterCommitExecutor.run(() -> chatRoomOutboxProcessor.signal(outboxEvent.getId()));
         }
         eventPublisher.publishEvent(new ReservationPaymentCompletedEvent(reservation.getId(), participant.getId(), purpose));

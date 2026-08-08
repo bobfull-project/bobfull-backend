@@ -62,12 +62,12 @@ public class ChatRoomOutboxProcessor {
     }
 
     private void processClaimed(OutboxEventTransactionService.ClaimedOutboxEvent event) {
-        log.info("event=OUTBOX_PROCESSING_STARTED outboxEventId={} eventType={} aggregateId={} attemptCount={} status=PROCESSING",
+        log.info("event=OUTBOX_PROCESSING_STARTED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=PROCESSING",
                 event.id(), event.eventType(), event.aggregateId(), event.attemptCount());
         try {
             chatRoomCreationService.createIfAbsent(event.aggregateId());
             if (transactionService.complete(event, clock.instant())) {
-                log.info("event=OUTBOX_PROCESSING_COMPLETED outboxEventId={} eventType={} aggregateId={} attemptCount={} status=COMPLETED",
+                log.info("event=OUTBOX_PROCESSING_COMPLETED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=COMPLETED",
                         event.id(), event.eventType(), event.aggregateId(), event.attemptCount());
             }
         } catch (RuntimeException exception) {
@@ -76,10 +76,10 @@ public class ChatRoomOutboxProcessor {
                     clock.instant(), MAX_ATTEMPTS);
             if (!result.updated()) return;
             if (result.failed()) {
-                log.error("event=OUTBOX_PROCESSING_FAILED outboxEventId={} eventType={} aggregateId={} attemptCount={} status=FAILED errorCode={}",
+                log.error("event=OUTBOX_PROCESSING_FAILED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=FAILED errorCode={}",
                         event.id(), event.eventType(), event.aggregateId(), result.attemptCount(), errorCode, exception);
             } else {
-                log.warn("event=OUTBOX_RETRY_SCHEDULED outboxEventId={} eventType={} aggregateId={} attemptCount={} status=PENDING errorCode={} nextAttemptAt={}",
+                log.warn("event=OUTBOX_RETRY_SCHEDULED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=PENDING errorCode={} nextAttemptAt={}",
                         event.id(), event.eventType(), event.aggregateId(), result.attemptCount(), errorCode, result.nextAttemptAt(), exception);
             }
         }

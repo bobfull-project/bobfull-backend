@@ -6,6 +6,8 @@ import com.bobfull.outbox.repository.OutboxEventRepository;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 /** Outbox 상태 전이만 짧은 독립 트랜잭션으로 수행해 ChatRoom 저장 동안 행 잠금을 유지하지 않는다. */
 @Service
 public class OutboxEventTransactionService {
+
+    private static final Logger log = LoggerFactory.getLogger(OutboxEventTransactionService.class);
 
     private final OutboxEventRepository outboxEventRepository;
 
@@ -61,6 +65,8 @@ public class OutboxEventTransactionService {
         OutboxEvent event = outboxEventRepository.findById(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Outbox 이벤트를 찾을 수 없습니다."));
         event.retryManually(now);
+        log.info("event=OUTBOX_MANUAL_RETRY_REQUESTED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount=0 status=PENDING",
+                event.getId(), event.getEventType(), event.getAggregateId());
     }
 
     public record ClaimedOutboxEvent(Long id, String eventType, Long aggregateId, int attemptCount, String token) {
