@@ -11,22 +11,28 @@
 + 관련 테스트 PASS
 + 전체 build PASS
 + 직접 검증 PASS
-+ 자동 AI Review BLOCKER/MAJOR 없음
++ 담당 구현 AI Review BLOCKER/MAJOR 없음
 ```
 
 MINOR·SUGGESTION·추가 리팩터링·있으면 좋은 테스트는 Merge를 막지 않는다.
 
 ## 2. 역할
 
-구현 담당자 AI는 Issue 계약에 따라 구현·테스트·PR Explain·리뷰 반영을 담당한다.
+각 Issue의 구현 담당 AI는 다음을 끝까지 담당한다.
 
-PR 최초 코드 리뷰는 구현 담당자 AI가 수행하지 않는다.
-GitHub Automatic Copilot Code Review가 별도 리뷰어 역할을 맡는다.
+```text
+Issue 분석
+→ 구현
+→ 테스트·직접 검증·build
+→ PR Explain
+→ Draft PR 생성
+→ 독립 리뷰 패스
+→ PR 댓글
+→ 치명적 지적 수정·재검증·재리뷰
+```
 
-자동 리뷰 기준:
-
-- `.github/copilot-instructions.md`
-- `.github/skills/bobfull-pr-review/SKILL.md`
+여기서 `독립 리뷰 패스`는 별도의 GitHub Copilot이나 다른 AI 제품을 의미하지 않는다.
+**같은 담당 구현 AI가 구현자 역할에서 리뷰어 역할로 전환하고 최신 GitHub 근거를 처음부터 다시 읽는 단계**다.
 
 ## 3. Issue 실행 — 결정이 없으면 바로 진행
 
@@ -62,6 +68,8 @@ Human 질문은 실제로 선택이 필요한 경우에만 한다.
 9. `skills/bobfull-pr-explain/SKILL.md` 적용
 10. Issue 관련 변경만 Commit·Push
 11. develop 대상 Draft PR 생성
+12. **별도 Human 명령 없이 즉시 `skills/bobfull-pr-review/SKILL.md` 실행**
+13. 최신 Head 기준 Review 댓글 작성
 
 ### 직접 검증 기준
 
@@ -80,7 +88,8 @@ PR 설명은 팀원이 빠르게 이해할 수 있게 작성한다.
 한 줄 요약 / 관련 Issue
 → PR 이해 요약
 → 상세 변경 및 검증
-→ Human 검토
+→ Human 이해 확인
+→ V3 Sprint Merge Gate
 ```
 
 필수:
@@ -93,29 +102,39 @@ PR 설명은 팀원이 빠르게 이해할 수 있게 작성한다.
 
 단순 변경에 의미 없는 Mermaid·개념·트러블슈팅을 억지로 만들지 않는다.
 
-## 6. 자동 독립 AI Review
+## 6. 담당 구현 AI Review
 
-Repository Ruleset:
+### 6.1 자동 실행
 
-```text
-Automatically request Copilot code review = Enabled
-Review draft pull requests = Enabled
-Review new pushes = Enabled
-```
+다음 시점에는 추가 명령 없이 리뷰한다.
 
-최초 리뷰를 위해 `PR #번호 검토하라`를 요구하지 않는다.
+- Draft PR 생성 직후
+- 해당 AI가 새 Commit을 Push한 직후
+- BLOCKER/MAJOR 수정 Push 직후
+- Merge 전 최신 Head가 마지막 리뷰 Head와 다를 때
 
-### Merge 차단 기준
+`PR #번호 검토하라`는 예외적인 수동 재검토 요청일 뿐, 최초 리뷰 시작 명령이 아니다.
+
+### 6.2 독립성 확보
+
+리뷰할 때 다음을 다시 조회한다.
+
+1. 연결 Issue 최신 계약
+2. 최신 Head SHA
+3. 실제 Diff
+4. 테스트·전체 build·직접 검증 결과
+5. 기존 리뷰·댓글
+
+구현 중 기억이나 기존 PR 설명만 보고 PASS하지 않는다.
+
+### 6.3 Merge 영향
 
 - `BLOCKER`: 반드시 수정
 - `MAJOR`: 반드시 수정
-
-### 비차단 기준
-
 - `MINOR`: 기록 후 Merge 가능
 - `SUGGESTION`: 기록 후 Merge 가능
 
-자동 리뷰가 실제 생성되지 않았다면 검증 완료로 간주하지 않는다.
+리뷰 결과는 PR Conversation 댓글에 중요도 순으로 남긴다.
 
 ## 7. 리뷰 반영
 
@@ -136,9 +155,8 @@ Review new pushes = Enabled
 - 추가 최적화
 - 현재 요구 기능을 깨지 않는 추가 테스트 제안
 
-후속 가치가 있으면 Issue 또는 트러블슈팅으로 남긴다.
-
-수정 후에는 필요한 테스트·직접 검증·전체 build를 다시 수행하고 Push한다. `Review new pushes`로 최신 Head가 자동 재리뷰된다.
+수정 후 필요한 테스트·직접 검증·전체 build를 다시 수행하고 Push한다.
+**Push 직후 같은 담당 AI가 최신 Head를 다시 리뷰하고 새 댓글을 남긴다.**
 
 ## 8. PR Human 이해도
 
@@ -170,9 +188,9 @@ Human 리뷰는 도움이 되면 수행하지만 필수 Gate가 아니다.
 담당 Human은 다음을 확인하고 직접 Merge한다.
 
 ```text
-전체 build PASS
-핵심 기능 직접 검증 PASS
-Automatic Copilot Review 실행 확인
+전체 build PASS 또는 해당 없음 근거 명확
+핵심 기능 직접 검증 PASS 또는 해당 없음 근거 명확
+최신 Head 담당 구현 AI Review 완료
 미해결 BLOCKER 없음
 미해결 MAJOR 없음
 Human 결정 필요 사항 없음
