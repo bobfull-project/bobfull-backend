@@ -16,13 +16,13 @@ import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.outbox.entity.OutboxEvent;
 import com.bobfull.outbox.repository.OutboxEventRepository;
 import com.bobfull.outbox.service.ChatRoomOutboxProcessor;
+import com.bobfull.outbox.service.EmailOutboxEventService;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
-import com.bobfull.reservation.event.ReservationPaymentCompletedEvent;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.port.ReservationCapacityReader;
@@ -36,7 +36,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,7 +60,7 @@ class ReservationConfirmationServiceTest {
     private ChatRoomOutboxProcessor chatRoomOutboxProcessor;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private EmailOutboxEventService emailOutboxEventService;
 
     @Mock
     private BusinessMetricRecorder businessMetricRecorder;
@@ -69,7 +68,7 @@ class ReservationConfirmationServiceTest {
     private ReservationConfirmationService service() {
         return new ReservationConfirmationService(
                 reservationRepository, reservationParticipantRepository, reservationCapacityReader, outboxEventRepository,
-                chatRoomOutboxProcessor, Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC), eventPublisher,
+                chatRoomOutboxProcessor, emailOutboxEventService, Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC),
                 businessMetricRecorder);
     }
 
@@ -104,7 +103,7 @@ class ReservationConfirmationServiceTest {
         verify(reservationRepository).save(any(Reservation.class));
         verify(outboxEventRepository).save(any(OutboxEvent.class));
         verify(chatRoomOutboxProcessor).signal(30L);
-        verify(eventPublisher).publishEvent(new ReservationPaymentCompletedEvent(10L, 20L, PaymentPurpose.CREATE));
+        verify(emailOutboxEventService).enqueue(any(), any(), any());
     }
 
     @Test
@@ -128,7 +127,7 @@ class ReservationConfirmationServiceTest {
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
         // ChatRoom Outbox는 CREATE 전용이고, 이메일 안내용 이벤트는 CREATE·JOIN 모두에서 발행된다.
         verify(outboxEventRepository, never()).save(any(OutboxEvent.class));
-        verify(eventPublisher).publishEvent(new ReservationPaymentCompletedEvent(10L, 21L, PaymentPurpose.JOIN));
+        verify(emailOutboxEventService).enqueue(any(), any(), any());
     }
 
     @Test

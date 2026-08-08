@@ -7,11 +7,13 @@ import com.bobfull.chat.repository.ChatRoomRepository;
 import com.bobfull.chat.service.ChatRoomCreationService;
 import com.bobfull.outbox.entity.OutboxEvent;
 import com.bobfull.outbox.entity.OutboxEventStatus;
+import com.bobfull.outbox.entity.OutboxEventType;
 import com.bobfull.outbox.repository.OutboxEventRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -48,6 +50,7 @@ class ChatRoomOutboxProcessorIntegrationTest {
     @Autowired private ChatRoomRepository chatRoomRepository;
     @Autowired private MutableClock clock;
     @Autowired private FailureMode failureMode;
+    @Autowired private EmailOutboxProcessor emailProcessor;
 
     @AfterEach
     void cleanUp() {
@@ -158,7 +161,8 @@ class ChatRoomOutboxProcessorIntegrationTest {
 
         // when
         try {
-            Callable<Boolean> claim = () -> transactionService.claim(event.getId(), clock.instant()).isPresent();
+            Callable<Boolean> claim = () -> transactionService.claim(event.getId(),
+                    List.of(OutboxEventType.CHAT_ROOM_CREATION_REQUESTED), clock.instant()).isPresent();
             Future<Boolean> first = executor.submit(claim);
             Future<Boolean> second = executor.submit(claim);
 
@@ -173,7 +177,8 @@ class ChatRoomOutboxProcessorIntegrationTest {
     void stale_PROCESSING은_회수한_뒤_다시_처리한다() {
         // given
         OutboxEvent event = pendingEvent(105L);
-        assertThat(transactionService.claim(event.getId(), clock.instant())).isPresent();
+        assertThat(transactionService.claim(event.getId(),
+                List.of(OutboxEventType.CHAT_ROOM_CREATION_REQUESTED), clock.instant())).isPresent();
         clock.set(clock.instant().plusSeconds(301));
 
         // when
@@ -184,8 +189,46 @@ class ChatRoomOutboxProcessorIntegrationTest {
         assertThat(reload(event).getStatus()).isEqualTo(OutboxEventStatus.COMPLETED);
     }
 
+    @Test
+    void 공통_Outbox에서_ChatRoom_Processor는_자신의_Pending과_stale_이벤트만_처리한다() {
+        // given
+        OutboxEvent chatRoom = pendingEvent(107L);
+        OutboxEvent email = emailPendingEvent(207L);
+        assertThat(transactionService.claim(email.getId(),
+                List.of(OutboxEventType.EMAIL_RECRUITMENT_CONFIRMED), clock.instant())).isPresent();
+        clock.set(clock.instant().plusSeconds(301));
+
+        // when
+        processor.processDueEvents(10);
+
+        // then
+        assertThat(reload(chatRoom).getStatus()).isEqualTo(OutboxEventStatus.COMPLETED);
+        assertThat(reload(email).getStatus()).isEqualTo(OutboxEventStatus.PROCESSING);
+        assertThat(chatRoomRepository.findByReservationId(207L)).isEmpty();
+    }
+
+    @Test
+    void Email_Processor는_공통_Outbox의_ChatRoom_이벤트를_처리하지_않는다() {
+        // given
+        OutboxEvent chatRoom = pendingEvent(108L);
+        OutboxEvent email = emailPendingEvent(208L);
+
+        // when
+        emailProcessor.processDueEvents(10);
+
+        // then
+        assertThat(reload(chatRoom).getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(reload(email).getStatus()).isEqualTo(OutboxEventStatus.COMPLETED);
+        assertThat(chatRoomRepository.findByReservationId(108L)).isEmpty();
+    }
+
     private OutboxEvent pendingEvent(Long reservationId) {
         return outboxEventRepository.saveAndFlush(OutboxEvent.chatRoomCreationRequested(reservationId, clock.instant()));
+    }
+
+    private OutboxEvent emailPendingEvent(Long reservationId) {
+        return outboxEventRepository.saveAndFlush(OutboxEvent.emailNotificationRequested(
+                OutboxEventType.EMAIL_RECRUITMENT_CONFIRMED, "RESERVATION", reservationId, clock.instant()));
     }
 
     private OutboxEvent reload(OutboxEvent event) {

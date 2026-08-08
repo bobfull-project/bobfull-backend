@@ -25,15 +25,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.task.SyncTaskExecutor;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 모집 마감 처리(#47)의 핵심 트랜잭션 커밋·롤백에 따라 이메일 알림 이벤트가 실제로 처리되거나
- * 처리되지 않는지 검증한다(Issue #168 V2). {@code @Async} 리스너를 테스트에서 결정적으로
- * 검증하기 위해 {@code emailTaskExecutor}를 동기 실행 Executor로 교체한다.
+ * 모집 마감 처리(#47)의 핵심 트랜잭션 커밋·롤백에 따라 이메일 Outbox가 실제로 저장되거나
+ * 저장되지 않는지 검증한다(Issue #183).
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:recruitment-deadline-notification-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -46,7 +43,6 @@ import org.springframework.transaction.annotation.Transactional;
         "portone.api-secret=portone-recruitment-deadline-test-api-secret",
         "portone.store-id=portone-recruitment-deadline-test-store-id",
         "portone.webhook-secret=d2hzZWNfcmVjcnVpdG1lbnQtdGVzdA==",
-        // emailTaskExecutor를 테스트 전용 동기 실행 Executor로 완전히 교체하기 위해 필요하다.
         "spring.main.allow-bean-definition-overriding=true"
 })
 @ContextConfiguration(classes = RecruitmentDeadlineNotificationIntegrationTest.TestConfig.class)
@@ -79,7 +75,7 @@ class RecruitmentDeadlineNotificationIntegrationTest {
 
         transactionService.acceptRecruitmentDeadline(reservation.getId());
 
-        assertThat(notificationAdapter.confirmedNotifications()).hasSize(1);
+        assertThat(notificationAdapter.confirmedNotifications()).hasSize(3);
         assertThat(notificationAdapter.confirmedNotifications().get(0).reservationId()).isEqualTo(reservation.getId());
         assertThat(notificationAdapter.cancelledNotifications()).isEmpty();
     }
@@ -90,7 +86,7 @@ class RecruitmentDeadlineNotificationIntegrationTest {
 
         transactionService.acceptRecruitmentDeadline(reservation.getId());
 
-        assertThat(notificationAdapter.cancelledNotifications()).hasSize(1);
+        assertThat(notificationAdapter.cancelledNotifications()).hasSize(2);
         assertThat(notificationAdapter.confirmedNotifications()).isEmpty();
     }
 
@@ -145,13 +141,6 @@ class RecruitmentDeadlineNotificationIntegrationTest {
         @Primary
         ReservationNotificationPort fakeReservationNotificationPort() {
             return new FakeReservationNotificationAdapter();
-        }
-
-        @Bean(com.bobfull.notification.config.NotificationAsyncConfig.EMAIL_TASK_EXECUTOR)
-        @Primary
-        TaskExecutor synchronousEmailTaskExecutor() {
-            // AFTER_COMMIT + @Async 리스너를 테스트에서 결정적으로 검증하기 위해 동기 실행으로 대체한다.
-            return new SyncTaskExecutor();
         }
 
         @Bean

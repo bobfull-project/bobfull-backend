@@ -5,6 +5,7 @@ import com.bobfull.outbox.entity.OutboxEventStatus;
 import com.bobfull.outbox.repository.OutboxEventRepository;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,15 +25,15 @@ public class OutboxEventTransactionService {
         this.outboxEventRepository = outboxEventRepository;
     }
 
+    /** Processor가 담당하지 않는 이벤트를 claim하지 못하게 공통 테이블 경계를 강제한다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Optional<ClaimedOutboxEvent> claim(Long eventId, Instant now) {
+    public Optional<ClaimedOutboxEvent> claim(Long eventId, List<com.bobfull.outbox.entity.OutboxEventType> eventTypes, Instant now) {
         OutboxEvent event = outboxEventRepository.findById(eventId).orElse(null);
-        if (event == null) return Optional.empty();
+        if (event == null || !eventTypes.contains(event.getEventType())) return Optional.empty();
 
         String token = UUID.randomUUID().toString();
-        if (outboxEventRepository.claim(eventId, OutboxEventStatus.PENDING, OutboxEventStatus.PROCESSING, now, token) == 0) {
-            return Optional.empty();
-        }
+        if (outboxEventRepository.claimByTypes(eventId, OutboxEventStatus.PENDING, OutboxEventStatus.PROCESSING,
+                now, token, eventTypes) == 0) return Optional.empty();
         return Optional.of(new ClaimedOutboxEvent(eventId, event.getEventType().name(), event.getAggregateId(),
                 event.getAttemptCount(), token));
     }

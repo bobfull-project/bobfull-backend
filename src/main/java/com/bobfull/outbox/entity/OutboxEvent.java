@@ -14,7 +14,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 
-/** ChatRoom 생성 의도를 핵심 예약 확정 트랜잭션과 함께 보관하는 최소 Outbox 이벤트다. */
+/** 핵심 상태 변경과 함께 후속 처리 의도를 보관하는 최소 Outbox 이벤트다. */
 @Entity
 @Table(name = "outbox_event",
         uniqueConstraints = {
@@ -73,18 +73,27 @@ public class OutboxEvent extends BaseTimeEntity {
     protected OutboxEvent() {
     }
 
-    private OutboxEvent(Long reservationId, Instant now) {
+    private OutboxEvent(OutboxEventType eventType, String aggregateType, Long aggregateId, Instant now) {
         this.eventId = UUID.randomUUID().toString();
-        this.eventType = OutboxEventType.CHAT_ROOM_CREATION_REQUESTED;
-        this.aggregateType = "RESERVATION";
-        this.aggregateId = reservationId;
+        this.eventType = eventType;
+        this.aggregateType = aggregateType;
+        this.aggregateId = aggregateId;
         this.payloadVersion = 1;
         this.status = OutboxEventStatus.PENDING;
         this.nextAttemptAt = now;
     }
 
     public static OutboxEvent chatRoomCreationRequested(Long reservationId, Instant now) {
-        return new OutboxEvent(reservationId, now);
+        return new OutboxEvent(OutboxEventType.CHAT_ROOM_CREATION_REQUESTED, "RESERVATION", reservationId, now);
+    }
+
+    public static OutboxEvent emailNotificationRequested(
+            OutboxEventType eventType, String aggregateType, Long aggregateId, Instant now
+    ) {
+        if (eventType == OutboxEventType.CHAT_ROOM_CREATION_REQUESTED) {
+            throw new IllegalArgumentException("이메일 Outbox에는 이메일 이벤트 유형만 사용할 수 있습니다.");
+        }
+        return new OutboxEvent(eventType, aggregateType, aggregateId, now);
     }
 
     public Long getId() { return id; }
