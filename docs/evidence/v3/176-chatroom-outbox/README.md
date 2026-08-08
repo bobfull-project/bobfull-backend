@@ -6,10 +6,10 @@
 
 | 시나리오 | Before (V2 AFTER_COMMIT) | After (Transactional Outbox) | 판정 |
 |---|---|---|---|
-| 핵심 Commit 뒤 후속 처리 미실행 | Payment·Reservation·Participant는 커밋, ChatRoom 없음, 영속 Event 없음 | Payment·Reservation·Participant와 Outbox `PENDING`이 원자 커밋 | PASS |
+| AFTER_COMMIT ChatRoom 생성 실패 | Payment·Reservation·Participant는 커밋, ChatRoom 없음, 영속 Event 없음 | Payment·Reservation·Participant와 Outbox `PENDING`이 원자 커밋 | PASS |
 | 새 처리 사이클 재처리 | DB에 복구 후보 없음 | Processor가 ChatRoom 1건 생성 후 `COMPLETED` | PASS |
 | 중복 처리 | N/A | 기존 ChatRoom이 있어도 `COMPLETED`, 최종 1건 | PASS |
-| 반복 실패 | N/A | 5회 실패 후 `FAILED`, 자동 재시도 중단 | PASS |
+| 반복 실패 | N/A | 최초 처리 뒤 5회 재시도 후 다음 실패에서 `FAILED`, 자동 재시도 중단 | PASS |
 | stale `PROCESSING` | N/A | 5분 초과 작업을 `PENDING`으로 회수 후 처리 | PASS |
 
 ## 실행 근거
@@ -44,7 +44,7 @@
 결과: 두 명령 모두 `BUILD SUCCESSFUL`.
 
 - `PENDING_이벤트를_처리하면_ChatRoom을_생성하고_COMPLETED로_기록한다`: 남은 PENDING을 새 Processor 호출이 읽어 ChatRoom 1건과 COMPLETED로 복구한다.
-- `최대_5회_실패하면_FAILED로_전이하고_자동_재시도하지_않는다`, `동시에_Claim하면_같은_이벤트는_한_Processor만_선점한다`, `stale_PROCESSING은_회수한_뒤_다시_처리한다`를 함께 실행했다.
+- `최초_처리_뒤_5회_재시도는_1_2_4_8_16초_backoff를_적용하고_다음_실패에서_FAILED가_된다`, `동시에_Claim하면_같은_이벤트는_한_Processor만_선점한다`, `stale_PROCESSING은_회수한_뒤_다시_처리한다`를 함께 실행했다.
 - `PaymentReservationConfirmationTransactionIntegrationTest`는 핵심 성공 시 Outbox 저장, 핵심 롤백 시 Outbox 미저장, ChatRoom 실패 시 핵심 데이터 유지와 PENDING 재시도를 확인한다.
 
 ## 한계

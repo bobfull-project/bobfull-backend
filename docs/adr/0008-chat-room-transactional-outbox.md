@@ -12,7 +12,7 @@
 
 CREATE 확정 트랜잭션에서 `OutboxEvent(CHAT_ROOM_CREATION_REQUESTED, PENDING)`를 Payment·Reservation·ReservationParticipant와 함께 저장한다. 커밋 뒤 즉시 signal은 fast path이고, scheduler가 due `PENDING`과 5분 stale `PROCESSING`을 보정한다. Processor는 조건부 `PENDING → PROCESSING` claim만 짧은 트랜잭션에서 수행하고, ChatRoom 생성은 잠금 밖의 별도 트랜잭션에서 `createIfAbsent(reservationId)`로 처리한다.
 
-실패는 1·2·4·8·16초 backoff로 최대 5회까지 재시도한 뒤 `FAILED`로 남긴다. `FAILED`는 운영 확인 후 `PENDING`으로 안전하게 재등록할 수 있으나, 이번 범위에서 UI/API는 만들지 않는다.
+최초 처리 실패 뒤 1·2·4·8·16초 backoff로 5회 재시도하고, 그 다음(여섯 번째) 실패에서 `FAILED`로 남긴다. `FAILED`는 운영 확인 후 `PENDING`으로 안전하게 재등록할 수 있으나, 이번 범위에서 UI/API는 만들지 않는다.
 
 ## 선택 이유
 
@@ -26,4 +26,4 @@ DB Outbox는 핵심 데이터와 생성 의도를 원자적으로 보관하면�
 
 ## 검증 방법
 
-대표 Before/After 실패 경계와 Outbox 원자 저장·롤백, PENDING 처리, 멱등성, 최대 5회 FAILED, 단일 Claim, stale 회수를 자동 테스트와 `docs/evidence/v3/176-chatroom-outbox/README.md`로 확인한다.
+대표 Before/After 실패 경계와 Outbox 원자 저장·롤백, PENDING 처리, 멱등성, 5회 재시도 후 FAILED, 단일 Claim, stale 회수를 자동 테스트와 `docs/evidence/v3/176-chatroom-outbox/README.md`로 확인한다.

@@ -105,22 +105,28 @@ class ChatRoomOutboxProcessorIntegrationTest {
     }
 
     @Test
-    void 최대_5회_실패하면_FAILED로_전이하고_자동_재시도하지_않는다() {
+    void 최초_처리_뒤_5회_재시도는_1_2_4_8_16초_backoff를_적용하고_다음_실패에서_FAILED가_된다() {
         // given
         OutboxEvent event = pendingEvent(103L);
         failureMode.fail = true;
 
         // when
-        for (int attempt = 0; attempt < 5; attempt++) {
+        long[] delays = {1, 2, 4, 8, 16};
+        for (int retry = 0; retry < delays.length; retry++) {
+            Instant beforeFailure = clock.instant();
             processor.process(event.getId());
-            clock.set(reload(event).getNextAttemptAt());
+            OutboxEvent retryScheduled = reload(event);
+            assertThat(retryScheduled.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+            assertThat(retryScheduled.getAttemptCount()).isEqualTo(retry + 1);
+            assertThat(retryScheduled.getNextAttemptAt()).isEqualTo(beforeFailure.plusSeconds(delays[retry]));
+            clock.set(retryScheduled.getNextAttemptAt());
         }
         processor.process(event.getId());
 
         // then
         OutboxEvent failed = reload(event);
         assertThat(failed.getStatus()).isEqualTo(OutboxEventStatus.FAILED);
-        assertThat(failed.getAttemptCount()).isEqualTo(5);
+        assertThat(failed.getAttemptCount()).isEqualTo(6);
         assertThat(chatRoomRepository.findByReservationId(103L)).isEmpty();
     }
 
@@ -129,7 +135,7 @@ class ChatRoomOutboxProcessorIntegrationTest {
         // given
         OutboxEvent event = pendingEvent(106L);
         failureMode.fail = true;
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < 6; attempt++) {
             processor.process(event.getId());
             clock.set(reload(event).getNextAttemptAt());
         }

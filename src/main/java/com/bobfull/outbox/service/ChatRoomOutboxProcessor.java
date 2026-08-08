@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 public class ChatRoomOutboxProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(ChatRoomOutboxProcessor.class);
-    static final int MAX_ATTEMPTS = 5;
+    static final int MAX_RETRIES = 5;
     static final Duration STALE_PROCESSING_THRESHOLD = Duration.ofMinutes(5);
 
     private final OutboxEventRepository outboxEventRepository;
@@ -73,7 +73,7 @@ public class ChatRoomOutboxProcessor {
         } catch (RuntimeException exception) {
             String errorCode = exception.getClass().getSimpleName();
             OutboxEventTransactionService.FailureResult result = transactionService.fail(event, errorCode,
-                    clock.instant(), MAX_ATTEMPTS);
+                    clock.instant(), MAX_RETRIES);
             if (!result.updated()) return;
             if (result.failed()) {
                 log.error("event=OUTBOX_PROCESSING_FAILED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=FAILED errorCode={}",
