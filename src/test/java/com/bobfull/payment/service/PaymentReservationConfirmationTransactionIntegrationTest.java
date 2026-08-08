@@ -39,8 +39,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.task.SyncTaskExecutor;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.annotation.Propagation;
@@ -57,7 +55,6 @@ import org.springframework.transaction.annotation.Transactional;
         "portone.api-secret=portone-payment-reservation-test-api-secret",
         "portone.store-id=portone-payment-reservation-test-store-id",
         "portone.webhook-secret=d2hzZWNfcmVzZXJ2YXRpb24tdGVzdA==",
-        // emailTaskExecutor를 동기 실행으로 교체해 @Async 리스너를 결정적으로 검증하기 위해 필요하다.
         "spring.main.allow-bean-definition-overriding=true"
 })
 @ContextConfiguration(classes = PaymentReservationConfirmationTransactionIntegrationTest.FailureInjectionConfiguration.class)
@@ -287,13 +284,6 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         @Primary
         ReservationNotificationPort fakeReservationNotificationPort() {
             return new FakeReservationNotificationAdapter();
-        }
-
-        @Bean(com.bobfull.notification.config.NotificationAsyncConfig.EMAIL_TASK_EXECUTOR)
-        @Primary
-        TaskExecutor synchronousEmailTaskExecutor() {
-            // AFTER_COMMIT + @Async 리스너를 테스트에서 결정적으로 검증하기 위해 동기 실행으로 대체한다.
-            return new SyncTaskExecutor();
         }
 
         @Bean
