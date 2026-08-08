@@ -15,7 +15,7 @@
 ## 실행 근거
 
 - Before SHA: `b090a2ba1cd2375859f33417908769ab3c6f811b` (최신 develop)
-- After SHA: `6b01554b724d2036f97363e533f83826b384460a`
+- After SHA: `b3a5e4f2433728b26c3ceb653d4327493692f3f4`
 - DB: H2 `MODE=MySQL`, `ddl-auto=create-drop`
 - Profile: Spring Boot 통합 테스트, scheduler는 Outbox Processor 단독 테스트에서 비활성화하고 명시적으로 새 처리 사이클을 호출
 - 장애 주입 위치: Before는 `AFTER_COMMIT` ChatRoom 생성 예외, After는 ChatRoom 생성 예외 또는 Processor 실행 전 PENDING 잔존
