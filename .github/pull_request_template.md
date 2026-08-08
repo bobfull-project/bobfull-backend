@@ -11,7 +11,7 @@
 - 검토 수준: `기본 | 강화`
 - 운영 모드: `V3 Sprint Mode`
 
-<!-- GitHub Automatic Copilot Code Review를 독립 리뷰어로 사용합니다. 기본 PR Human 이해도는 0개, 강화 PR은 정확히 3개입니다. V3 Sprint Mode의 필수 Human Approve 수는 0명입니다. -->
+<!-- Draft PR 생성 직후 해당 PR을 구현한 담당 AI가 별도 Human 명령 없이 skills/bobfull-pr-review/SKILL.md를 적용해 최신 Head를 독립 리뷰 패스로 검토하고 PR 댓글을 남깁니다. GitHub Copilot은 필수 구성요소가 아닙니다. -->
 
 ## PR 이해 요약
 
@@ -102,7 +102,7 @@
 | 관련 테스트 |  | `PASS | FAIL | NOT_RUN` |  |
 | 전체 build |  | `PASS | FAIL | NOT_RUN` |  |
 | 핵심 기능 직접 검증 | Postman/curl/직접 트리거 등 | `PASS | FAIL | NOT_RUN` |  |
-| Automatic Copilot Review | GitHub Review | `MERGEABLE | BLOCK | 미실행` |  |
+| 담당 구현 AI Review | PR Conversation 댓글 | `MERGEABLE | BLOCK | 미실행` |  |
 
 - 최신 검증 Commit SHA:
 - 미해결 BLOCKER:
@@ -124,11 +124,12 @@
 3. 설계 선택 이유, 주요 실패 처리와 남은 한계
 -->
 
-### 자동 AI Review·반영 기록
+### 담당 구현 AI Review·반영 기록
 
-- 자동 리뷰 방식: `GitHub Automatic Copilot Code Review`
-- 최신 자동 AI Review 기준 Head:
+- Review Skill: `skills/bobfull-pr-review/SKILL.md`
+- 최신 Review 기준 Head:
 - 최신 판정: `MERGEABLE | BLOCK | 미실행`
+- 최신 PR Review 댓글:
 - BLOCKER/MAJOR 반영 내용:
 - MINOR/SUGGESTION 후속 처리:
 - 리뷰 후 재실행 검증:
@@ -140,15 +141,15 @@
 - [ ] 이 PR이 무엇을 왜 변경하는지 이해했다.
 - [ ] 기본 실행 흐름과 중요한 분기를 이해했다.
 - [ ] 중요한 기술 개념이 있다면 어디에 왜 적용됐는지 이해했다.
-- [ ] 전체 build·직접 검증·자동 AI Review 결과와 남은 위험을 확인했다.
+- [ ] 전체 build·직접 검증·담당 구현 AI Review 결과와 남은 위험을 확인했다.
 
 ## V3 Sprint Merge Gate
 
 <!-- 필수 Human Approve: 0명 -->
 
-- [ ] 전체 build `PASS`
-- [ ] 변경 핵심 기능 직접 검증 `PASS`
-- [ ] Automatic Copilot Review 실행 완료
+- [ ] 전체 build `PASS` 또는 해당 없음 근거 명확
+- [ ] 변경 핵심 기능 직접 검증 `PASS` 또는 해당 없음 근거 명확
+- [ ] 최신 Head 담당 구현 AI Review 완료
 - [ ] 미해결 `BLOCKER` 없음
 - [ ] 미해결 `MAJOR` 없음
 - [ ] Human 결정 필요 사항 없음
