@@ -16,11 +16,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * 실제 SMTP 서버로 예약 결과(확정·인원 미달 취소) 및 결제 완료(접수·참여) 안내 메일을 발송한다
- * (Issue #168). 이 클래스가 호출되는 시점에는 핵심 트랜잭션이 이미 커밋돼 있으므로, 재시도로
- * 시간이 걸려도 DB 락이나 요청 스레드를 점유하지 않는다. 참여자별로 서로 독립적으로 최대
- * {@value #MAX_ATTEMPTS}회까지 재시도하며, 한 명의 발송 실패가 다른 참여자의 발송을 막지
- * 않는다. 재시도를 모두 소진해도 예외를 던지지 않고 실패만 로그로 남긴다 — 이메일 주소·본문은
- * 로그에 남기지 않는다. 이미지 첨부 없이 CSS만으로 꾸민 HTML 본문을 사용한다. 접수·참여 완료
+ * (Issue #183). SMTP 호출은 수신자마다 정확히 한 번만 시도하고 실패를 Processor에 전달한다.
+ * 재시도와 최종 FAILED 전이는 공통 Outbox가 단독으로 책임진다. 이메일 주소·본문은 로그에 남기지
+ * 않는다. 이미지 첨부 없이 CSS만으로 꾸민 HTML 본문을 사용한다. 접수·참여 완료
  * 안내는 결제 완료 시점에 이미 정원이 차 모집이 즉시 마감(CLOSED)될 수도 있으므로, "확정"이라
  * 표현하지 않는 것은 물론 "모집 중"이라고 단정하지도 않는다 — 실제 모집 상태와 무관하게 참인
  * 상태 중립 문구만 사용한다.
@@ -28,7 +26,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class SmtpReservationNotificationAdapter implements ReservationNotificationPort {
     private static final Logger log = LoggerFactory.getLogger(SmtpReservationNotificationAdapter.class);
-    private static final int MAX_ATTEMPTS = 3;
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter MEAL_DATE_FORMAT =
             DateTimeFormatter.ofPattern("yyyy. MM. dd (E)", Locale.KOREAN).withZone(SEOUL_ZONE);
@@ -112,22 +109,14 @@ public class SmtpReservationNotificationAdapter implements ReservationNotificati
             throw new IllegalStateException("MESSAGE_BUILD_FAILED");
         }
 
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            try {
-                mailSender.send(message);
-                log.info("event=RESERVATION_NOTIFICATION_SENT reservationId={} memberId={} result={} attempt={}",
-                        reservationId, recipient.memberId(), result, attempt);
-                return;
-            } catch (MailException exception) {
-                if (attempt == MAX_ATTEMPTS) {
-                    log.error("event=RESERVATION_NOTIFICATION_FAILED reservationId={} memberId={} result={} attempts={}",
-                            reservationId, recipient.memberId(), result, MAX_ATTEMPTS);
-                    throw exception;
-                } else {
-                    log.warn("event=RESERVATION_NOTIFICATION_ATTEMPT_FAILED reservationId={} memberId={} result={} attempt={}",
-                            reservationId, recipient.memberId(), result, attempt);
-                }
-            }
+        try {
+            mailSender.send(message);
+            log.info("event=RESERVATION_NOTIFICATION_SENT reservationId={} memberId={} result={}",
+                    reservationId, recipient.memberId(), result);
+        } catch (MailException exception) {
+            log.error("event=RESERVATION_NOTIFICATION_FAILED reservationId={} memberId={} result={}",
+                    reservationId, recipient.memberId(), result);
+            throw exception;
         }
     }
 

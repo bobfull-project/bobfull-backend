@@ -73,14 +73,14 @@ class SmtpReservationNotificationAdapterTest {
     }
 
     @Test
-    void 발송이_계속_실패하면_참여자당_최대_3회까지만_재시도한다() {
+    void SMTP_발송이_실패하면_한_번만_시도하고_Processor로_예외를_전달한다() {
         givenMimeMessage();
         ReservationResultNotification notification = notification(new Recipient(1L, "a@bobfull.com", "회원A"));
         doThrow(new MailSendException("boom")).when(mailSender).send(any(MimeMessage.class));
 
         assertThatThrownBy(() -> adapter().notifyConfirmed(notification)).isInstanceOf(MailSendException.class);
 
-        verify(mailSender, times(3)).send(any(MimeMessage.class));
+        verify(mailSender).send(any(MimeMessage.class));
     }
 
     @Test
@@ -99,8 +99,8 @@ class SmtpReservationNotificationAdapterTest {
         assertThatThrownBy(() -> adapter().notifyCancelledDueToInsufficientParticipants(notification))
                 .isInstanceOf(MailSendException.class);
 
-        // 실패한 참여자 3회 재시도 + 성공한 참여자 1회 = 총 4회
-        verify(mailSender, times(4)).send(any(MimeMessage.class));
+        // 실패한 참여자 1회 + 성공한 참여자 1회. 재시도는 Outbox Processor가 담당한다.
+        verify(mailSender, times(2)).send(any(MimeMessage.class));
     }
 
     @Test

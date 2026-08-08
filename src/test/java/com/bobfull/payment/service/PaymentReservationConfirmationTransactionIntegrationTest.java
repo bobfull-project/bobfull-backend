@@ -6,8 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.chat.repository.ChatRoomRepository;
 import com.bobfull.outbox.entity.OutboxEventStatus;
+import com.bobfull.outbox.entity.OutboxEventType;
 import com.bobfull.outbox.repository.OutboxEventRepository;
 import com.bobfull.outbox.repository.EmailOutboxDeliveryRepository;
+import com.bobfull.outbox.service.EmailOutboxEventService;
 import com.bobfull.notification.adapter.FakeReservationNotificationAdapter;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -72,6 +74,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     @Autowired private ChatRoomRepository chatRoomRepository;
     @Autowired private OutboxEventRepository outboxEventRepository;
     @Autowired private EmailOutboxDeliveryRepository emailOutboxDeliveryRepository;
+    @Autowired private EmailOutboxEventService emailOutboxEventService;
     @Autowired private FakeReservationNotificationAdapter notificationAdapter;
 
     @AfterEach
@@ -117,6 +120,13 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         // 핵심 트랜잭션 커밋 후 AFTER_COMMIT 리스너가 예약 접수 이메일 이벤트를 실제로 처리한다.
         assertThat(notificationAdapter.reservationCreatedNotifications()).hasSize(1);
         assertThat(notificationAdapter.participationCompletedNotifications()).isEmpty();
+    }
+
+    @Test
+    void Email_Outbox는_핵심_트랜잭션_밖에서_저장할수_없다() {
+        assertThatThrownBy(() -> emailOutboxEventService.enqueue(
+                OutboxEventType.EMAIL_RESERVATION_CREATED, 1L, java.util.List.of()))
+                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
     }
 
     @Test

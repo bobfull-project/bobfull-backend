@@ -9,6 +9,7 @@ V2의 `AFTER_COMMIT + @Async`는 커밋 뒤 작업이 메모리에서 사라질 
 | 발송 의도 | 메모리 이벤트 | 핵심 상태와 동일 트랜잭션의 `OutboxEvent(PENDING)` |
 | 부분 성공 | 재시도 근거 없음 | `email_outbox_delivery`의 `SENT` 보존, `PENDING`만 재시도 |
 | 최종 실패 | 로그만 남김 | 공통 Outbox `FAILED`와 error code |
+| SMTP 재시도 | Adapter 내부 즉시 3회 | Processor의 최초 1회 + 공통 Outbox 5회 backoff 재시도 |
 
 ## 공통 기반
 
@@ -18,6 +19,7 @@ V2의 `AFTER_COMMIT + @Async`는 커밋 뒤 작업이 메모리에서 사라질 
 
 ```bash
 ./gradlew :test --tests com.bobfull.payment.service.PaymentReservationConfirmationTransactionIntegrationTest --tests com.bobfull.reservation.service.RecruitmentDeadlineNotificationIntegrationTest --rerun-tasks
+./gradlew :test --tests com.bobfull.outbox.service.EmailOutboxProcessorTest --tests com.bobfull.notification.adapter.SmtpReservationNotificationAdapterTest --rerun-tasks
 ```
 
 ## 한계

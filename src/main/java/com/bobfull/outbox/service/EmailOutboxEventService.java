@@ -10,6 +10,8 @@ import com.bobfull.reservation.entity.ReservationParticipant;
 import java.time.Clock;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 이메일 발송 의도와 수신자별 멱등 키를 호출자의 핵심 트랜잭션에 함께 저장한다. */
 @Service
@@ -28,6 +30,7 @@ public class EmailOutboxEventService {
         this.clock = clock;
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
     public void enqueue(OutboxEventType type, Long reservationId, List<ReservationParticipant> participants) {
         if (participants.isEmpty()) return;
         ReservationParticipant aggregate = participants.get(0);
