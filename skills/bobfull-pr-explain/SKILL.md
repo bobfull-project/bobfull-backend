@@ -1,73 +1,141 @@
 ---
 name: bobfull-pr-explain
-description: BobFull Draft PR 생성·본문 갱신·최신 Head 재검토 때 실제 Issue, Diff, 검증 근거를 바탕으로 Explain Diff와 Mermaid 실행 흐름 시각화를 작성·검증한다.
+description: BobFull V3 Sprint Draft PR에서 실제 Issue, Diff, build, 직접 검증, 필요한 Before/After Evidence를 바탕으로 팀원이 빠르게 이해할 수 있는 PR 설명을 작성한다.
 ---
 
-# BobFull PR Explain Diff
+# BobFull V3 Sprint PR Explain
+
+## 역할
+
+이 Skill은 **PR을 빠르게 이해하게 만드는 설명**을 담당한다.
+
+코드 결함 리뷰는 Draft PR 생성 직후 같은 담당 구현 AI가 `skills/bobfull-pr-review/SKILL.md`를 적용해 독립 리뷰 패스로 수행한다.
+
+현재 V3 Sprint Mode에서는 설명이 길어지는 것보다 다음이 명확한지가 중요하다.
+
+```text
+무엇을 왜 바꿨는가
+핵심 흐름이 무엇인가
+중요한 개념·트레이드오프가 무엇인가
+전체 build와 직접 검증이 통과했는가
+고도화 PR이면 무엇이 Before보다 어떻게 달라졌는가
+그 차이를 뒷받침하는 Evidence가 어디에 있는가
+담당 구현 AI Review에 BLOCKER/MAJOR가 남았는가
+```
 
 ## 사용 시점
 
-다음 작업을 수행하기 전 이 Skill을 직접 읽고 적용한다.
+- 구현 완료 후 Draft PR 생성 전
+- 새 Commit으로 실제 흐름·검증·Evidence 상태가 바뀐 뒤
+- Merge 전 최신 상태 갱신
 
-- 구현 완료 후 Draft PR 생성
-- 기존 PR 본문 복구 또는 최신 템플릿 반영
-- 새 Commit 반영 후 PR 본문·다이어그램·Checklist 갱신
-- `PR #번호 검토하라`에서 최신 Head 기준 PR 설명 재검토
-- Ready 전환 또는 Human 리뷰 요청 전 최종 PR 본문 확인
+## 필수 입력
 
-이 Skill은 PR 본문을 자동으로 수정·Commit·Push하는 도구가 아니다. 실제 근거를 읽어 설명을 작성·검증하는 절차다.
-
-## 필수 입력과 중단 기준
-
-다음 자료를 최신 상태로 확보한다.
-
-1. 연결 Issue의 본문, 댓글, 현재 `status:*` Label과 최종 계약
+1. 연결 Issue의 최신 계약과 범위
 2. 최신 `.github/pull_request_template.md`
-3. base와 Head 사이의 실제 Diff, 변경 파일과 실제 호출·상태 흐름
-4. 추가·수정 테스트와 실제로 실행한 테스트·build·직접 검증·CI 결과
-5. 변경과 직접 관련된 확정 문서
+3. base 대비 실제 Diff
+4. 관련 테스트 결과
+5. 전체 build 결과
+6. 변경 핵심 기능 직접 검증 결과
+7. 고도화 PR이면 Before/After Evidence와 비교 조건·한계
+8. 최신 담당 구현 AI Review 결과가 있으면 그 결과
 
-Issue·Diff·검증 근거 중 PR 설명에 필요한 자료를 읽지 못했거나 실제 상태를 확인할 수 없으면 내용을 추측해 작성하지 않는다. 부족한 자료, 영향을 받는 본문 영역과 중단 이유를 보고한다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계로 기록한다.
+실행하지 않은 검증이나 Evidence는 PASS로 쓰지 않는다.
 
 ## 작성 절차
 
-1. 최종 계약과 최신 Diff를 대조해 변경 전 동작, 해결할 문제, 변경 범위와 제외 범위를 정리한다. 신규 기능에는 존재하지 않았던 이전 동작을 만들지 않는다.
-2. 최신 템플릿의 섹션 이름과 순서를 유지한다. `한 줄 요약`의 `무엇을`, `왜`, `기술부채(있다면)`, `의도부채(있다면, Issue 논의와 달라진 부분)` 하위 필드는 삭제하거나 한 문장으로 대체하지 않는다. 앞의 두 필드는 실제 Issue·Diff를 근거로 작성하고, 기술부채와 의도부채가 없으면 각각 `없음`으로 기록한다. 기술부채는 현재 제한사항과 혼동하지 않는다.
-3. 요청·검증·상태 변경·저장·응답의 실제 실행 흐름을 작성한다. 실행 흐름과 실제 클래스·메서드를 연결한 코드 확인 순서를 제공한다.
-4. 아래 기준으로 Mermaid 필요 여부와 형식을 결정하고, 필요한 경우 GitHub PR 본문의 `mermaid` 코드블록에 작성한다.
-5. 실제 근거가 있는 예외·실패·중복·경계 상황, 트레이드오프, 현재 제한사항과 확정된 후속 개선만 기록한다. 단순 문서·설정 PR에서는 해당하지 않는 Explain Diff 영역을 `해당 없음`과 이유로 짧게 작성할 수 있다.
-6. `추가·수정 테스트`에는 실제 추가·수정한 테스트 클래스·파일, 검증 시나리오와 테스트가 보장하는 것을 기록한다. 테스트 코드를 변경하지 않았다면 `해당 없음`과 이유를 기록한다. 이 영역은 테스트·build·직접 검증의 실제 실행 결과와 구분한다.
-7. Issue 완료 조건을 구현 위치와 실제 검증 증거에 연결한다. Human 이해도 질문과 PR 전용 Human Review Checklist는 최신 Diff·테스트를 근거로 미체크(`- [ ]`) 항목만 작성한다. 의미 있는 실행 흐름과 Mermaid가 있는 기능 PR의 `구현 확인`에는 Mermaid가 최신 Head의 실제 호출·분기·상태 흐름과 일치하는지 확인하는 PR 전용 항목을 포함한다. 단순 문서 PR에는 이 항목을 만들지 않는다.
-8. PR 본문 마지막의 `Human Review Checklist`와 `담당자 AI 검토·수정 기록`을 유지한다. AI가 Human 답변·리뷰·Approve를 대신 작성하거나 Checklist를 선체크하지 않는다.
+1. `한 줄 요약`에서 무엇을 왜 바꿨는지 바로 설명한다.
+2. `PR 이해 요약`에서 핵심 실행 흐름과 중요한 기술 개념만 정리한다.
+3. Mermaid는 실제 흐름 이해에 도움이 되는 기능 PR에서만 작성한다.
+4. 단순 문서·설정·CRUD는 불필요한 개념·트러블슈팅·다이어그램·성능 수치를 억지로 만들지 않는다.
+5. `상세 변경 및 검증`에서 예외·실패·중복·경계, 실제 트레이드오프, 제한사항, Merge 차단 위험과 비차단 후속 항목을 분리한다.
+6. 트레이드오프는 실제 선택에서 얻은 것과 포기한 것이 있을 때만 작성하고, 단순 변경이면 `해당 없음`과 이유를 적는다.
+7. 고도화 PR이면 `Before / After Evidence`에 핵심 지표·현상만 요약하고 원본 Evidence 경로를 연결한다.
+8. Before/After가 의미 없는 PR은 `NOT_APPLICABLE`과 이유를 적는다.
+9. `V3 Sprint 필수 검증`에 관련 테스트·전체 build·핵심 기능 직접 검증·Before/After Evidence·담당 구현 AI Review 상태를 기록한다.
+10. `BLOCKER`·`MAJOR`·`FAIL`은 접힌 영역에만 숨기지 않는다.
+11. MINOR·SUGGESTION은 Merge를 막지 않는 후속 항목으로 분리한다.
+12. Human 이해도는 기본 0개 / 강화 정확히 3개로 유지한다.
 
-강화 검토의 구현 전 설계 확인 기록은 PR Conversation 댓글에 유지한다. 책임 클래스, 상태 변경 위치, 트랜잭션 범위, 실패 처리 방식을 PR 본문에 그대로 복제하지 않고, Explain Diff에서는 리뷰에 필요한 실행 흐름·선택 이유·예외만 한 번 요약한다.
+## Before / After Evidence 작성 기준
 
-## Mermaid 실행 흐름 시각화
+PR 본문은 원본 실험 보고서가 아니라 **핵심 결론과 근거 위치를 빠르게 보는 곳**이다.
 
-Controller·Service·Port/Adapter·Repository 호출, 상태 전이, 분기, 트랜잭션, 락, 이벤트처럼 의미 있는 실행 흐름이 있는 기능 PR에는 Mermaid 다이어그램을 최소 1개 포함한다.
+작성할 내용:
 
-- 처리 순서·조건 분기: `flowchart`
-- 사용자·클래스·외부 시스템의 호출 순서: `sequenceDiagram`
-- 도메인 상태 전이: `stateDiagram-v2`
-- 데이터 관계가 변경 이해의 중심: `erDiagram` 또는 더 적합한 Mermaid 표현
+```text
+Evidence 판정
+Evidence 경로
+Before/After Commit SHA
+동일 조건 여부
+핵심 지표 또는 핵심 장애 현상
+정합성 회귀 결과
+검증 한계
+```
 
-서로 다른 관점이 실제 이해에 필요할 때만 다이어그램을 추가한다. 단순 문서·설정·DTO·정적 상수 변경처럼 의미 있는 실행 흐름이 없으면 `해당 없음`과 이유를 명시하고 생략할 수 있다.
+하지 말 것:
 
-작성 후 다음을 대조한다.
+- 실행하지 않은 숫자 채우기
+- 다른 환경의 수치를 직접 개선율로 비교하기
+- 실제 검증 범위보다 넓게 `완전 해결`, `유실 0 보장`, `무중단 보장`이라고 표현하기
+- 대용량 로그 전체를 PR 본문에 붙이기
 
-- 노드·참여자·상태·분기가 최신 Head의 실제 클래스·메서드·호출 관계와 일치하는가
-- 구현되지 않은 분기나 후속 계획을 현재 동작처럼 표현하지 않았는가
-- 다이어그램이 설명을 장식하거나 본문과 같은 내용을 반복하지 않는가
-- GitHub에서 Mermaid가 정상 렌더링되는가
+공통 저장 기준은 `docs/evidence/v3/README.md`를 따른다.
 
-## 최신 Head 갱신과 최종 확인
+## 핵심 기능 직접 검증
 
-새 Commit으로 호출 관계·분기·상태 전이·테스트가 바뀌면 이 Skill을 다시 적용한다. 이전 Head를 기준으로 한 설명, 코드 확인 순서, 다이어그램, 검증 결과, Human 이해도 질문, Checklist를 제거하거나 최신 Diff에 맞춰 갱신한다.
+기능 PR은 사용자가 실제로 원하는 동작을 확인한다.
 
-`PR #번호 검토하라`와 Ready 전 최종 확인에서는 연결 Issue 계약, 최신 Head, PR 본문, Mermaid, 검증 증거, Checklist를 다시 대조한다. 설명·다이어그램·Checklist가 실제 Diff와 불일치하면 PR 이해 문서화는 완료되지 않은 것으로 기록하고 수정 또는 Human 판단을 진행한다.
+- HTTP/API: Postman, curl 또는 동등한 실제 요청
+- 결제·예약·환불: 핵심 상태 전이와 결과
+- Event/Scheduler/Consumer: 직접 트리거·테스트·로그
+- 문서/설정: 정적 검사 또는 적용 결과
 
-## 작성 범위
+범위 밖 시나리오를 무한히 확장하지 않는다.
 
-정책과 출력 형식의 원본은 `.github/pull_request_template.md`, `docs/AI_WORKFLOW.md`, `docs/AI_IMPLEMENTATION_GUIDE.md`, `docs/AI_REVIEW_GUIDE.md`에 둔다. 이 Skill에는 실행 절차만 유지한다.
+## 담당 구현 AI Review와의 경계
 
-PR Explain Diff는 변경 하나를 이해하기 위한 GitHub Markdown이다. 별도 HTML, PNG·SVG·AI 생성 이미지, GitHub Actions Artifact·Pages, Flow Lab, 새로운 퀴즈·승인·Merge Gate를 만들지 않는다.
+```text
+담당 구현 AI — 구현자 역할
+→ Before 재현·구현·테스트·After 재검증
+→ Evidence 기록·build·직접 검증
+→ PR Explain
+→ Draft PR 생성
+
+같은 담당 구현 AI — 리뷰어 역할
+→ Issue/Head/Diff/검증/Evidence 근거 최신 재수집
+→ skills/bobfull-pr-review/SKILL.md 적용
+→ 중요도 순 PR Review 댓글
+→ BLOCKER/MAJOR면 수정·Push·즉시 재리뷰
+```
+
+별도의 GitHub Copilot이나 외부 리뷰 AI를 필수로 사용하지 않는다.
+최초 리뷰를 위해 Human이 추가 명령을 입력할 필요가 없다.
+
+V3 Sprint Mode에서:
+
+- BLOCKER/MAJOR → Merge 차단
+- MINOR/SUGGESTION → 기록 후 Merge 가능
+
+## Human 이해도
+
+### 기본
+
+질문 0개.
+
+### 강화
+
+정확히 3개.
+
+1. 핵심 실행 흐름과 주요 분기
+2. 중요한 기술 개념과 실제 적용 이유
+3. 설계 선택 이유, 주요 실패 처리와 남은 한계
+
+코드 암기 문제가 아니라 기능 설명 능력을 확인한다.
+
+## 목적
+
+PR Explain은 포트폴리오 문서가 아니라 **스퍼트 중 팀원이 빠르게 읽고 핵심을 이해하는 작업 문서**다.
+
+Evidence 원본은 별도 문서에 두고 PR에서는 결과와 경로를 짧게 연결한다.
+필요 이상으로 길게 만들지 않는다.
