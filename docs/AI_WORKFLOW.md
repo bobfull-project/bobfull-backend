@@ -1,28 +1,14 @@
 # BobFull AI 협업 워크플로우
 
-## 1. 목적
+## 1. 역할
 
-BobFull은 구현 AI, 자동 리뷰 AI, 담당자 Human, Human 리뷰어의 역할을 분리한다.
+BobFull은 구현 AI와 리뷰 AI를 분리한다.
 
 - 구현 AI: Issue 계약에 따라 구현·테스트·PR 설명 작성
-- 자동 리뷰 AI: GitHub Copilot Code Review가 구현 AI와 독립된 리뷰어 역할로 PR을 검토
+- 자동 리뷰 AI: GitHub Automatic Copilot Code Review
 - 담당자 Human: Issue 정책 판단과 강화 PR Human 이해도 답변
 - Human 리뷰어: 최종 코드 리뷰·Approve
 - Merge: Human 책임
-
-Issue 단계 시작 명령은 다음과 같다.
-
-```text
-Issue #번호 구현하라
-```
-
-새 Issue는 다음 순서를 따른다.
-
-```text
-새 Issue 초안 작성하라
-→ Human 확인
-→ 이 초안으로 Issue 생성하라
-```
 
 ## 2. 전체 흐름
 
@@ -33,59 +19,35 @@ Issue 분석
 → 구현·테스트·Diff 자체 검토
 → bobfull-pr-explain 적용
 → Draft PR 생성
-→ GitHub PR event 발생
-→ copilot-auto-review workflow
-→ GitHub Copilot reviewer 자동 요청
+→ GitHub Ruleset이 Copilot reviewer 자동 요청
 → 독립 AI Review 댓글
 → BLOCKER/MAJOR면 구현 담당자가 수정·Push
-→ synchronize event로 자동 재리뷰
+→ Review new pushes로 자동 재리뷰
 → 기본 PR: Human 이해도 0개
 → 강화 PR: Human 이해도 정확히 3개
-→ Human Review Checklist 확인
+→ Human Review Checklist
 → status:final-human-review
 → Human Approve
 → Merge
 ```
 
-**최초 AI Review를 시작하기 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않는다.**
-PR이 열리거나 새 Push가 올라오면 자동 리뷰가 시작되는 것이 공식 흐름이다.
+**최초 AI Review를 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않는다.**
 
 ## 3. Issue 단계
 
-### 3.1 Issue 분석
+Issue 단계 Human 질문 정책은 기존 규칙을 유지한다.
 
-구현 AI는 최신 Issue, 확정 문서, 관련 코드와 테스트를 확인한다.
+- 기본: 필요한 질문 1~2개
+- 강화: 필요한 질문 2~3개
+- 강화: 담당자가 직접 작성한 이해 근거 한 줄 이상 필요
 
-- 목적·범위·제외 범위
-- 정상·실패·경계 흐름
-- API·DB·상태·권한·트랜잭션
-- 선행 작업과 도메인 의존성
-- 완료 조건과 검증 계획
-- 문서·Issue·코드 충돌
-
-Human 결정이 필요한 사항이 있으면 Issue 본문의 `Human 이해도`에 질문을 작성하고 `status:human-answer-required`를 적용한다.
-
-### 3.2 Issue Human 질문
-
-Issue 단계 질문 정책은 기존 규칙을 유지한다.
-
-- 기본 검토: 필요한 질문 1~2개
-- 강화 검토: 필요한 질문 2~3개
-- 강화 검토는 담당자가 직접 작성한 이해 근거 한 줄 이상 필요
-
-담당자 AI는 Human 원문·최종 확인·강화 이해 근거를 대신 작성하지 않는다.
-
-### 3.3 상태 Label
-
-실제 실행 상태는 GitHub `status:*` Label 하나를 기준으로 한다.
+실제 실행 상태는 GitHub `status:*` Label 하나로 관리한다.
 
 ```text
 status:human-answer-required
 status:in-progress
 status:final-human-review
 ```
-
-상태를 바꿀 때 기존 `status:*` Label을 제거하고 새 상태 하나만 적용한다.
 
 ## 4. 구현과 Draft PR
 
@@ -110,50 +72,42 @@ PR 본문은 다음 4계층을 유지한다.
 → Human 검토
 ```
 
-`BLOCKER`, `FAIL`, `NOT_RUN`, 미검증 위험은 접힌 `<details>` 안에만 숨기지 않는다.
-
 ## 5. 자동 독립 AI Review
 
 ### 5.1 실행 주체
 
-PR 코드 리뷰는 구현 담당 AI가 자기 PR을 다시 읽고 PASS하는 구조가 아니다.
+PR 코드 리뷰는 구현 담당 AI의 자기리뷰가 아니다.
 
-**GitHub Copilot Code Review를 독립 리뷰어로 사용한다.**
+**GitHub Automatic Copilot Code Review를 독립 리뷰어로 사용한다.**
 
 리뷰 기준:
 
 - `.github/copilot-instructions.md`
 - `.github/skills/bobfull-pr-review/SKILL.md`
 
-### 5.2 자동 트리거
+### 5.2 Repository Ruleset
 
-`.github/workflows/copilot-auto-review.yml`은 다음 PR event에서 Copilot reviewer를 자동 요청한다.
+저장소 Ruleset에서 다음을 사용한다.
 
 ```text
-opened
-synchronize
-reopened
-ready_for_review
+Automatically request Copilot code review = Enabled
+Review draft pull requests = Enabled
+Review new pushes = Enabled
 ```
 
 따라서:
 
 ```text
-PR 생성
+Draft PR 생성
 → 자동 리뷰
 
 새 Commit Push
-→ synchronize
 → 자동 재리뷰
 ```
 
 리뷰를 시작하기 위한 Human 명령은 필요 없다.
 
-### 5.3 리뷰 출력
-
-자동 리뷰는 실제 코드 위치의 inline comment와 review summary를 사용한다.
-
-발견 사항은 다음 중요도 순으로 판단한다.
+### 5.3 리뷰 중요도
 
 ```text
 BLOCKER
@@ -163,23 +117,21 @@ SUGGESTION
 PASS
 ```
 
-의미 있는 문제가 없으면 억지 지적을 생성하지 않는다.
+단순 문서·설정·CRUD도 리뷰는 실행하되 의미 없는 지적을 만들지 않는다.
 
-BLOCKER 또는 MAJOR가 있으면 구현 담당자가 범위 안에서 수정·재검증·Push한다. 새 Push가 올라오면 자동 재리뷰가 다시 실행된다.
+BLOCKER 또는 MAJOR가 있으면 구현 담당자가 범위 안에서 수정·재검증·Push한다. `Review new pushes`가 최신 Head를 자동 재리뷰한다.
 
 ### 5.4 자동 리뷰 실패
 
-Copilot reviewer 요청 자체가 실패하면 이를 `PASS`로 보지 않는다.
+Copilot Review가 실제 PR에 생성되지 않았으면 이를 PASS로 보지 않는다.
 
-- workflow 실패 원인 확인
-- Copilot Code Review 사용 가능 여부 확인
-- 리뷰가 실제 생성되기 전까지 `자동 AI Review 미실행`으로 기록
+- Copilot Code Review 정책·라이선스·Ruleset 상태 확인
+- 실제 Review/inline comment 생성 여부 확인
+- 미생성 시 `자동 AI Review 미실행`으로 기록
 
 자동 리뷰는 Human Approve를 대체하지 않는다.
 
 ## 6. PR Human 이해도
-
-PR 단계 질문 수는 검토 수준으로 고정한다.
 
 ### 기본
 
@@ -187,15 +139,13 @@ PR 단계 질문 수는 검토 수준으로 고정한다.
 Human 이해도 질문: 0개
 ```
 
-문서·설정·단순 CRUD·기존 패턴 반복처럼 별도 학습 검증 가치가 낮은 PR에는 질문을 만들지 않는다.
+문서·설정·단순 CRUD·기존 패턴 반복에는 질문을 만들지 않는다.
 
 ### 강화
 
 ```text
 Human 이해도 질문: 정확히 3개
 ```
-
-세 축을 고정한다.
 
 1. 핵심 실행 흐름과 주요 분기
 2. 가장 중요한 기술 개념과 실제 적용 이유
@@ -205,8 +155,6 @@ Human 이해도 질문: 정확히 3개
 
 ## 7. Human Review Checklist
 
-PR마다 임의의 세부 구현 질문을 생성하지 않는다.
-
 모든 PR은 다음 공통 체크를 사용한다.
 
 - [ ] 이 PR이 무엇을 왜 변경하는지 이해했다.
@@ -214,13 +162,9 @@ PR마다 임의의 세부 구현 질문을 생성하지 않는다.
 - [ ] 중요한 기술 개념이 있다면 어디에 왜 적용됐는지 이해했다.
 - [ ] 테스트·검증 결과와 남아 있는 미검증 위험을 확인했다.
 
-Human 리뷰어는 필요한 의견을 PR 댓글에 직접 남긴다.
-
 ## 8. 리뷰 반영
 
-자동 AI Review 또는 Human Review에서 실제 결함이 발견되면 구현 담당 AI는 Issue 계약과 최신 코드로 근거를 확인한다.
-
-### 자동 수정 가능
+### 범위 안 자동 반영 가능
 
 - Issue 계약 안의 명확한 기능 오류
 - 예외 처리·검증·테스트 누락
@@ -234,33 +178,15 @@ Human 리뷰어는 필요한 의견을 PR 댓글에 직접 남긴다.
 - 새로운 라이브러리·인프라 도입
 - 다른 담당자 계약 변경
 
-실제 파일 수정을 시작하면 `status:in-progress`로 되돌리고, 수정·검증·Push 후 자동 재리뷰 결과까지 확인한다.
+실제 파일 수정을 시작하면 `status:in-progress`로 되돌리고 수정·검증·Push 후 자동 재리뷰를 확인한다.
 
 ## 9. Merge 전 경계
 
-다음을 확인한 뒤 `status:final-human-review`로 전환한다.
-
-- 최신 Head의 필수 테스트·build·직접 검증 상태 확인
-- 최신 Head에 대한 자동 AI Review 실제 생성 확인
+- 최신 Head 필수 테스트·build·직접 검증 상태 확인
+- 최신 Head Automatic Copilot Review 실제 생성 확인
 - 해결되지 않은 BLOCKER 없음
 - 강화 PR이면 Human 이해도 3문항 답변과 AI 대조 완료
 - 남은 Human 결정 필요 사항 명시
 - Human Review Checklist 확인 가능 상태
 
 Approve와 Merge는 Human이 수행한다.
-
-## 10. 역할 요약
-
-```text
-구현 AI
-= 만든다 + 테스트한다 + PR을 설명한다
-
-GitHub Copilot Reviewer
-= PR event로 자동 실행되는 독립 AI 리뷰어
-
-담당자 Human
-= 정책 판단 + 강화 PR 이해도 3문항
-
-Human Reviewer
-= 최종 검토 + Approve
-```
