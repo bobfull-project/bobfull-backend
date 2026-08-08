@@ -12,6 +12,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
@@ -19,6 +20,7 @@ import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.event.ReservationConfirmedEvent;
+import com.bobfull.reservation.event.ReservationPaymentCompletedEvent;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.port.ReservationCapacityReader;
@@ -50,9 +52,13 @@ class ReservationConfirmationServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private BusinessMetricRecorder businessMetricRecorder;
+
     private ReservationConfirmationService service() {
         return new ReservationConfirmationService(
-                reservationRepository, reservationParticipantRepository, reservationCapacityReader, eventPublisher);
+                reservationRepository, reservationParticipantRepository, reservationCapacityReader, eventPublisher,
+                businessMetricRecorder);
     }
 
     @Test
@@ -80,6 +86,7 @@ class ReservationConfirmationServiceTest {
         assertThat(result.reservationParticipantId()).isEqualTo(20L);
         verify(reservationRepository).save(any(Reservation.class));
         verify(eventPublisher).publishEvent(new ReservationConfirmedEvent(10L));
+        verify(eventPublisher).publishEvent(new ReservationPaymentCompletedEvent(10L, 20L, PaymentPurpose.CREATE));
     }
 
     @Test
@@ -101,7 +108,10 @@ class ReservationConfirmationServiceTest {
         // then
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
-        verify(eventPublisher, never()).publishEvent(any());
+        // ChatRoom 생성용 이벤트는 CREATE 전용이라 JOIN에서는 발행되지 않지만(Issue #168 이전과 동일),
+        // 결제 완료 이메일 안내용 이벤트는 CREATE·JOIN 모두에서 발행된다(Issue #168 V2).
+        verify(eventPublisher, never()).publishEvent(any(ReservationConfirmedEvent.class));
+        verify(eventPublisher).publishEvent(new ReservationPaymentCompletedEvent(10L, 21L, PaymentPurpose.JOIN));
     }
 
     @Test

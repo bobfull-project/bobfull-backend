@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.bobfull.common.config.ClockConfig;
 import com.bobfull.common.config.JpaAuditingConfig;
 import com.bobfull.common.exception.CustomException;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.Refund;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,7 @@ class RefundTransactionServiceTest {
     @Autowired private RefundRepository refundRepository;
     @Autowired private RefundTransactionService transactionService;
     @Autowired private EntityManager entityManager;
+    @MockitoBean private BusinessMetricRecorder businessMetricRecorder;
 
     @Test
     void markPgChecked은_updatedAt은_보존한_채_lastPgCheckedAt만_갱신한다() throws InterruptedException {

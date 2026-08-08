@@ -51,6 +51,7 @@ flowchart TB
     image["이미지 저장·검증"]
     noshow["노쇼"]
     chat["채팅"]
+    notification["알림"]
 
     auth --> restaurant
     auth --> image
@@ -62,6 +63,7 @@ flowchart TB
     payment --> noshow
     reservation --> chat
     payment --> chat
+    reservation --> notification
 ```
 
 | 구성 요소 | 책임 | 기준 데이터·경계 |
@@ -73,6 +75,7 @@ flowchart TB
 | 결제·환불 | 임시 선점, PortOne 검증, 결제·환불 상태 반영 | `Payment`, `Refund` |
 | 노쇼 | 식사 종료 후 OWNER의 참여자 단위 처리·해제 이력 | `NoShowHistory` |
 | 채팅 | 예약당 채팅방, 유효 참여자 접근, 메시지 저장·조회 | `ChatRoom`, `ChatMessage` |
+| 알림 | 모집 마감 처리 결과(확정·인원 미달 취소)를 유효 참여자에게 이메일로 안내 | 신규 저장 엔티티 없음, `Reservation`/`ReservationParticipant` 조회 결과만 사용 |
 
 ## 4. 인증·인가와 소유권 검증
 
@@ -122,6 +125,45 @@ sequenceDiagram
 
 취소 가능 시점, 전체·참여자 단위 환불, 상태 전이와 TimeSlot 재사용 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를, 환불·노쇼 데이터 관계는 [ERD](./ERD.md)를 따른다.
 
+## 6-1. 예약 결과·결제 완료 이메일 알림 (V2)
+
+Issue #168은 예약 참여자에게 다음 네 가지 이메일을 안내한다.
+
+```text
+결제 완료(CREATE) → 예약 접수 안내("모집 중입니다")
+결제 완료(JOIN)   → 참여 완료 안내("모집 중입니다")
+모집 마감 + 확정 기준 충족 → 최종 확정 안내
+모집 마감 + 확정 기준 미달 → 인원 미달 취소 안내
+```
+
+접수·참여 완료 안내는 이 시점에 `Reservation`이 아직 `RECRUITING`일 수 있으므로 "확정"이라 표현하지 않는다. 최종 확정·취소 안내만 식사 시작 2시간 전 모집 마감 처리(§5 `RecruitmentDeadlineScheduler`, Issue #47) 결과를 반영한다.
+
+두 흐름 모두 같은 구조를 따른다(#50 PR #174의 ChatRoom `AFTER_COMMIT` 이벤트와 동일한 관례).
+
+```text
+핵심 트랜잭션(결제 완료 확정 또는 모집 마감 처리)
+→ 상태·데이터 변경 커밋 직전 Spring ApplicationEvent 발행
+→ 트랜잭션 COMMIT
+→ @TransactionalEventListener(AFTER_COMMIT)
+→ @Async(전용 스레드 풀 emailTaskExecutor)
+→ ReservationNotificationService → outbound port → SMTP 발송
+```
+
+- `ReservationConfirmationService#confirm`이 CREATE·JOIN 모두에서 `ReservationPaymentCompletedEvent`를 발행하면 `ReservationPaymentCompletionNotificationEventListener`가 구독해 접수·참여 완료 안내를 보낸다.
+- `ReservationCancellationTransactionService#acceptRecruitmentDeadline`이 `CLOSED_ONLY`/`CANCELLED` 결과에서 각각 `RecruitmentDeadlineConfirmedEvent`/`RecruitmentDeadlineCancelledEvent`를 발행하면 `RecruitmentDeadlineNotificationEventListener`가 구독해 최종 확정·취소 안내를 보낸다.
+- `AFTER_COMMIT`은 "커밋 이후 호출"만 보장할 뿐 비동기를 의미하지 않으므로, SMTP 통신 지연이 호출 스레드(HTTP 요청 또는 스케줄러 실행)를 막지 않도록 전용 `ThreadPoolTaskExecutor`(`emailTaskExecutor`) 기반 `@Async`를 함께 쓴다.
+- 두 리스너 모두 내부에서 예외를 잡아 로그만 남기고 다시 던지지 않는다 — 이메일 실패가 이미 커밋된 예약·결제 상태를 되돌리지 않는다.
+- 환불 요청(`ReservationCancellationRefundPort`)은 `RecruitmentDeadlineCancellationService.process`에서 여전히 직접 호출하며, 이메일 이벤트와는 완전히 독립적으로 실행된다 — 환불 요청이 실패해도 이미 트랜잭션 커밋 시점에 발행된 취소 이메일 이벤트 처리에는 영향이 없다.
+- 별도 알림 이력 테이블은 두지 않는다. `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 기존 멱등 가드를 그대로 이용해 최종 확정·취소 이메일의 중복 발송을 방지한다.
+
+발송은 참여자별로 독립적으로 최대 3회까지 즉시 재시도하며, 재시도를 모두 소진해도 예외를 전파하지 않고 실패만 로그로 남긴다.
+
+**알려진 한계**: 이벤트 발행과 `@Async` 실행은 메모리 안에서만 이뤄진다. 핵심 트랜잭션이 커밋된 직후 서버 프로세스가 종료되면 그 이메일 시도 자체가 유실될 수 있고, 재시작 후에도 재처리를 보장하는 별도 저장소가 없다. 최종 확정·취소 이메일은 재시작 후 스케줄러가 같은 예약을 다시 후보로 잡아도 `acceptRecruitmentDeadline`이 `ALREADY_PROCESSED`만 반환해 재발송되지 않는다. 이 한계는 V3 Transactional Outbox에서 해결할 예정이며(§9), 이번 V2 범위에서는 Outbox·Kafka를 도입하지 않는다.
+
+`emailTaskExecutor`(core 2, max 8, queue 200)가 모두 소진되면 작업을 버리고 로그(`event=RESERVATION_NOTIFICATION_TASK_REJECTED`)만 남긴다 — 기본값인 `CallerRunsPolicy`(호출 스레드에서 대신 실행)를 의도적으로 쓰지 않았다. `CallerRunsPolicy`를 쓰면 극단적인 부하나 SMTP 장애 지속 상황에서 이 Executor의 존재 목적(호출 스레드 비차단)이 오히려 깨지기 때문이다 — 이메일은 이미 최선형 재시도이고 실패해도 예약·결제 상태에 영향이 없으므로, 이런 극단적 상황에서는 이메일 발송을 포기하고 호출 스레드를 지키는 쪽을 택했다.
+
+정원이 2시간 마감 이전에 이미 다 차 스케줄러 후보에서 제외되는 예약(모집이 결제 완료 시점에 조기 마감된 경우)은 최종 확정 이메일 대상이 아니다 — 해당 경우는 프런트엔드 화면(모달·팝업) 안내로 대체하며 이번 Issue 범위에 포함하지 않는다.
+
 ## 7. 채팅
 
 최초 예약 결제가 완료되면 예약당 `ChatRoom` 하나를 생성한다. 결제 완료 후 취소되지 않은 유효 참여자만 접근할 수 있고 OWNER와 ADMIN은 참여하지 않는다. 예약 또는 참여가 취소되면 해당 참여자의 접근은 종료되며, 예약이 `CANCELLED` 또는 `CLOSED`가 되면 새 메시지 전송을 종료한다. 기존 `ChatMessage`는 DB에 보관하고 cursor 기반으로 조회한다.
@@ -145,6 +187,7 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 - Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
+- Transactional Outbox(이메일·이벤트 유실 방지, §6-1의 V2 알려진 한계 참고), Kafka 기반 이벤트 재처리 — V3 범위
 - 개별 ADR의 사전 생성, API·ERD 상세 복제, 클래스·패키지 구조
 
 새 기술 선택이나 중요한 구조 변경이 실제로 필요해지면 [ADR 운영 기준](./adr/README.md)에 따라 별도 ADR을 작성한다.

@@ -2,6 +2,8 @@ package com.bobfull.reservation.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
@@ -27,15 +29,18 @@ public class ReservationCancellationCompletionService {
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCancellationTransactionService transactionService;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public ReservationCancellationCompletionService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            ReservationCancellationTransactionService transactionService
+            ReservationCancellationTransactionService transactionService,
+            BusinessMetricRecorder businessMetricRecorder
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.transactionService = transactionService;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     /** Reservation을 먼저 잠그고 조건부 UPDATE로 참여자 완료 처리권을 하나만 허용한다. */
@@ -73,8 +78,11 @@ public class ReservationCancellationCompletionService {
             ReservationStatus afterReservationStatus,
             Instant completedAt
     ) {
-        AfterCommitExecutor.run(() -> log.info(
-                "event=RESERVATION_CANCELLATION_COMPLETED reservationId={} participantId={} afterReservationStatus={} afterParticipantStatus=CANCELLED completedAt={}",
-                reservationId, reservationParticipantId, afterReservationStatus, completedAt));
+        AfterCommitExecutor.run(() -> {
+            log.info(
+                    "event=RESERVATION_CANCELLATION_COMPLETED reservationId={} participantId={} afterReservationStatus={} afterParticipantStatus=CANCELLED completedAt={}",
+                    reservationId, reservationParticipantId, afterReservationStatus, completedAt);
+            businessMetricRecorder.increment(BusinessMetricEvent.RESERVATION_CANCELLATION_COMPLETED);
+        });
     }
 }

@@ -16,6 +16,7 @@ import com.bobfull.restaurant.dto.RestaurantDetailResponse;
 import com.bobfull.restaurant.dto.RestaurantSearchRequest;
 import com.bobfull.restaurant.dto.RestaurantSearchResponse;
 import com.bobfull.restaurant.service.RestaurantService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,12 +35,13 @@ import org.springframework.test.web.servlet.ResultActions;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=restaurant-controller-web-test-secret-key-please-keep-this-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class RestaurantControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @MockitoBean
     private RestaurantService restaurantService;

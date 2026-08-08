@@ -2,12 +2,16 @@ package com.bobfull.reservation.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.event.ReservationConfirmedEvent;
+import com.bobfull.reservation.event.ReservationPaymentCompletedEvent;
 import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
@@ -38,16 +42,19 @@ public class ReservationConfirmationService {
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCapacityReader reservationCapacityReader;
     private final ApplicationEventPublisher eventPublisher;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public ReservationConfirmationService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            ReservationCapacityReader reservationCapacityReader, ApplicationEventPublisher eventPublisher
+            ReservationCapacityReader reservationCapacityReader, ApplicationEventPublisher eventPublisher,
+            BusinessMetricRecorder businessMetricRecorder
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.reservationCapacityReader = reservationCapacityReader;
         this.eventPublisher = eventPublisher;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     /**
@@ -58,6 +65,8 @@ public class ReservationConfirmationService {
      * {@link ReservationConfirmedEvent}만 발행한다 — 이 메서드가 MANDATORY로 합류한
      * 호출자의 트랜잭션이 실제로 커밋된 뒤에만 별도 트랜잭션으로 생성돼야, ChatRoom 저장
      * 실패가 이미 완료된 결제·예약을 롤백시키지 않는다(#50 PR #174 리뷰 BLOCKER).
+     * 같은 이유로 접수·참여 완료 이메일 안내도 직접 호출하지 않고 CREATE·JOIN 모두에서
+     * {@link ReservationPaymentCompletedEvent}만 발행한다(Issue #168 V2).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public ReservationConfirmationResult confirm(
@@ -77,6 +86,7 @@ public class ReservationConfirmationService {
         if (purpose == PaymentPurpose.CREATE) {
             eventPublisher.publishEvent(new ReservationConfirmedEvent(reservation.getId()));
         }
+        eventPublisher.publishEvent(new ReservationPaymentCompletedEvent(reservation.getId(), participant.getId(), purpose));
 
         ReservationStatus beforeStatus = reservation.getReservationStatus();
         updateReservationStatus(reservation, timeSlotId);
@@ -84,6 +94,7 @@ public class ReservationConfirmationService {
                 && reservation.getReservationStatus() == ReservationStatus.CONFIRMED) {
             log.info("event=RESERVATION_CONFIRMED reservationId={} participantId={} memberId={} beforeStatus={} afterStatus={}",
                     reservation.getId(), participant.getId(), memberId, beforeStatus, reservation.getReservationStatus());
+            AfterCommitExecutor.run(() -> businessMetricRecorder.increment(BusinessMetricEvent.RESERVATION_CONFIRMED));
         }
         return new ReservationConfirmationResult(reservation.getId(), participant.getId());
     }

@@ -18,9 +18,21 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
 
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:true}
+
 jwt:
   secret: ${JWT_SECRET}
-  access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:3600}
+  access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:1800}
 
 auth:
   refresh-token:
@@ -53,6 +65,10 @@ aws:
     image-bucket: ${S3_IMAGE_BUCKET:}
     upload-url-expiration: ${S3_IMAGE_UPLOAD_URL_EXPIRATION:5m}
     get-url-expiration: ${S3_IMAGE_GET_URL_EXPIRATION:5m}
+
+notification:
+  email:
+    from-address: ${NOTIFICATION_EMAIL_FROM_ADDRESS:no-reply@bobfull.com}
 
 logging:
   level:

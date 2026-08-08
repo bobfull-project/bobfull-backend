@@ -14,6 +14,7 @@ on:
       - 'lambda/**'
       - 'scripts/aws/**'
       - 'src/**'
+  workflow_dispatch: {}
 
 concurrency:
   group: backend-v1-deploy

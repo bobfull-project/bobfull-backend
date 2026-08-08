@@ -27,6 +27,7 @@ import com.bobfull.timeslot.dto.DiningSessionIdResponse;
 import com.bobfull.timeslot.dto.DiningSessionRequest;
 import com.bobfull.timeslot.dto.DiningSessionResponse;
 import com.bobfull.timeslot.service.TimeSlotService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -51,12 +52,13 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=dining-session-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class DiningSessionControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private ObjectMapper objectMapper;

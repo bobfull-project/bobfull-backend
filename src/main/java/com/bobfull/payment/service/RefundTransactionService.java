@@ -2,6 +2,8 @@ package com.bobfull.payment.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -25,13 +27,16 @@ public class RefundTransactionService {
     private final RefundRepository refundRepository;
     private final Clock clock;
     private final RefundIdempotencyKeyGenerator keyGenerator;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public RefundTransactionService(PaymentRepository paymentRepository, RefundRepository refundRepository, Clock clock,
-                                    RefundIdempotencyKeyGenerator keyGenerator) {
+                                    RefundIdempotencyKeyGenerator keyGenerator,
+                                    BusinessMetricRecorder businessMetricRecorder) {
         this.paymentRepository = paymentRepository;
         this.refundRepository = refundRepository;
         this.clock = clock;
         this.keyGenerator = keyGenerator;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -179,10 +184,13 @@ public class RefundTransactionService {
         BigDecimal completedAmount = refund.getAmount();
         RefundStatus completedRefundStatus = refund.getStatus();
         PaymentStatus completedPaymentStatus = refund.getPayment().getStatus();
-        AfterCommitExecutor.run(() -> log.info(
-                "event=REFUND_COMPLETED refundId={} paymentId={} reservationId={} participantId={} amount={} afterStatus={} paymentAfterStatus={}",
-                completedRefundId, completedPaymentId, completedReservationId, completedParticipantId,
-                completedAmount, completedRefundStatus, completedPaymentStatus));
+        AfterCommitExecutor.run(() -> {
+            log.info(
+                    "event=REFUND_COMPLETED refundId={} paymentId={} reservationId={} participantId={} amount={} afterStatus={} paymentAfterStatus={}",
+                    completedRefundId, completedPaymentId, completedReservationId, completedParticipantId,
+                    completedAmount, completedRefundStatus, completedPaymentStatus);
+            businessMetricRecorder.increment(BusinessMetricEvent.REFUND_COMPLETED);
+        });
     }
 
     public record RefundCompletion(RefundStatus refundStatus, Long reservationId,

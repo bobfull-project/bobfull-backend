@@ -1,6 +1,8 @@
 package com.bobfull.chat.adapter;
 
 import com.bobfull.chat.service.ChatRoomCreationService;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.reservation.event.ReservationConfirmedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,9 +21,14 @@ public class ChatRoomCreationEventListener {
     private static final Logger log = LoggerFactory.getLogger(ChatRoomCreationEventListener.class);
 
     private final ChatRoomCreationService chatRoomCreationService;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
-    public ChatRoomCreationEventListener(ChatRoomCreationService chatRoomCreationService) {
+    public ChatRoomCreationEventListener(
+            ChatRoomCreationService chatRoomCreationService,
+            BusinessMetricRecorder businessMetricRecorder
+    ) {
         this.chatRoomCreationService = chatRoomCreationService;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -30,6 +37,7 @@ public class ChatRoomCreationEventListener {
             chatRoomCreationService.createIfAbsent(event.reservationId());
         } catch (RuntimeException exception) {
             log.error("event=CHAT_ROOM_CREATION_REQUIRED reservationId={}", event.reservationId(), exception);
+            businessMetricRecorder.increment(BusinessMetricEvent.CHAT_ROOM_CREATION_REQUIRED);
         }
     }
 }

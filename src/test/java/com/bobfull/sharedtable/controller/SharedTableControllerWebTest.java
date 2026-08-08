@@ -26,6 +26,7 @@ import com.bobfull.sharedtable.dto.SharedTableRequest;
 import com.bobfull.sharedtable.dto.SharedTableResponse;
 import com.bobfull.sharedtable.entity.SharedTableStatus;
 import com.bobfull.sharedtable.service.SharedTableService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,12 +47,13 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=shared-table-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class SharedTableControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private ObjectMapper objectMapper;

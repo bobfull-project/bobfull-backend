@@ -2,6 +2,8 @@ package com.bobfull.payment.controller;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.service.PaymentCompletionService;
 import com.bobfull.payment.service.RefundWebhookService;
 import io.portone.sdk.server.errors.WebhookVerificationException;
@@ -30,8 +32,15 @@ public class PortOneWebhookController {
     private final PortOneWebhookVerifier webhookVerifier;
     private final PaymentCompletionService paymentCompletionService;
     private final RefundWebhookService refundWebhookService;
+    private final BusinessMetricRecorder businessMetricRecorder;
     @Autowired
-    public PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService, RefundWebhookService refundWebhookService) { this.webhookVerifier = webhookVerifier; this.paymentCompletionService = paymentCompletionService; this.refundWebhookService = refundWebhookService; }
+    public PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService,
+            RefundWebhookService refundWebhookService, BusinessMetricRecorder businessMetricRecorder) {
+        this.webhookVerifier = webhookVerifier;
+        this.paymentCompletionService = paymentCompletionService;
+        this.refundWebhookService = refundWebhookService;
+        this.businessMetricRecorder = businessMetricRecorder;
+    }
 
     @PostMapping
     public ResponseEntity<Void> receive(@RequestBody String rawBody,
@@ -63,6 +72,7 @@ public class PortOneWebhookController {
                 if (e.getErrorCode() != PaymentErrorCode.PAYMENT_EXPIRED) {
                     log.error("event=PAYMENT_WEBHOOK_PERMANENT_FAILURE paymentId={} reason={}", paymentId,
                             e.getErrorCode().getCode());
+                    businessMetricRecorder.increment(BusinessMetricEvent.PAYMENT_WEBHOOK_PERMANENT_FAILURE);
                 }
             }
             return ResponseEntity.ok().build();

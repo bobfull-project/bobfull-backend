@@ -1,5 +1,6 @@
 package com.bobfull.common.security;
 
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import tools.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.util.List;
@@ -39,8 +40,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
-        return new JwtAuthenticationFilter(jwtTokenProvider);
+    public JwtAuthenticationFilter jwtAuthenticationFilter(
+            JwtTokenProvider jwtTokenProvider,
+            AccessTokenBlacklistStore accessTokenBlacklistStore
+    ) {
+        return new JwtAuthenticationFilter(jwtTokenProvider, accessTokenBlacklistStore);
     }
 
     @Bean
@@ -76,6 +80,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/portone").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/restaurants",

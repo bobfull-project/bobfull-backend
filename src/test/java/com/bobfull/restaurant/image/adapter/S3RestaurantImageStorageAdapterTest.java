@@ -12,6 +12,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ImageErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.restaurant.image.config.RestaurantImageS3Properties;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -30,6 +31,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 class S3RestaurantImageStorageAdapterTest {
 
+    private final BusinessMetricRecorder businessMetricRecorder = mock(BusinessMetricRecorder.class);
+
     @Test
     void 업로드_url은_content_type만_서명_헤더에_포함한다() {
         // given
@@ -46,7 +49,8 @@ class S3RestaurantImageStorageAdapterTest {
             S3RestaurantImageStorageAdapter adapter = new S3RestaurantImageStorageAdapter(
                     mock(S3Client.class),
                     s3Presigner,
-                    properties
+                    properties,
+                    businessMetricRecorder
             );
 
             // when
@@ -77,7 +81,8 @@ class S3RestaurantImageStorageAdapterTest {
         S3RestaurantImageStorageAdapter adapter = new S3RestaurantImageStorageAdapter(
                 s3Client,
                 mock(S3Presigner.class),
-                properties
+                properties,
+                businessMetricRecorder
         );
         Logger logger = (Logger) LoggerFactory.getLogger(S3RestaurantImageStorageAdapter.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();

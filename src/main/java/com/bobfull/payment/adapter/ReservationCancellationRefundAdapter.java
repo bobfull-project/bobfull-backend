@@ -2,6 +2,8 @@ package com.bobfull.payment.adapter;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.port.PortOneRefundRequester;
 import com.bobfull.payment.service.RefundCompletionService;
@@ -19,12 +21,15 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
     private final RefundTransactionService transactionService;
     private final RefundCompletionService completionService;
     private final PortOneRefundRequester refundRequester;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public ReservationCancellationRefundAdapter(RefundTransactionService transactionService,
-            RefundCompletionService completionService, PortOneRefundRequester refundRequester) {
+            RefundCompletionService completionService, PortOneRefundRequester refundRequester,
+            BusinessMetricRecorder businessMetricRecorder) {
         this.transactionService = transactionService;
         this.completionService = completionService;
         this.refundRequester = refundRequester;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Override
@@ -68,6 +73,7 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
             log.error("event=REFUND_COMPENSATION_REQUIRED paymentId={} refundId={} cancellationId={} externalStatus={} internalStatus=ROLLBACK autoRetry=false",
                     refund.getPayment().getId(), refund.getId(), result.cancellationId(),
                     result.completed() ? "COMPLETED" : "PROCESSING", exception);
+            businessMetricRecorder.increment(BusinessMetricEvent.REFUND_COMPENSATION_REQUIRED);
             if (result.completed()) {
                 throw new CustomException(PaymentErrorCode.REFUND_RECONCILIATION_REQUIRED);
             }
