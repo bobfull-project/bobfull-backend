@@ -1,45 +1,83 @@
 # BobFull AI 협업 워크플로우
 
-## 1. 역할
+## 1. 현재 운영 모드 — V3 Sprint Mode
 
-BobFull은 구현 AI와 리뷰 AI를 분리한다.
+V3 마무리 기간에는 **속도를 우선하되 치명적인 결함은 자동 AI Review와 필수 검증으로 차단**한다.
 
-- 구현 AI: Issue 계약에 따라 구현·테스트·PR 설명 작성
+이 모드의 원칙은 `검토를 없앤다`가 아니라 **Merge를 막는 기준을 핵심 위험으로 좁힌다**는 것이다.
+
+### Merge를 막는 항목
+
+- 전체 build 실패
+- 변경한 핵심 기능의 직접 검증 실패
+- 최신 Automatic Copilot Code Review의 미해결 `BLOCKER` 또는 `MAJOR`
+- 정책·API·DB·상태·권한·트랜잭션처럼 Human 결정이 필요한 미확정 사항
+- 강화 PR의 Human 이해도 3문항 미완료
+
+### Merge를 막지 않는 항목
+
+- `MINOR`
+- `SUGGESTION`
+- 범위 밖 리팩터링
+- 추가하면 좋은 테스트
+- 현재 기능에 직접 영향이 없는 코드 스타일 개선
+- 후속 개선으로 남길 수 있는 기술부채
+
+이 항목들은 PR 또는 후속 Issue·트러블슈팅으로 기록하고 진행을 막지 않는다.
+
+### 승인 정책
+
+V3 Sprint Mode에서는 **필수 Human Approve 인원은 0명**으로 운영한다.
+
+- 별도 리뷰어 승인을 기다리지 않는다.
+- Human Review는 가능하면 수행하지만 Merge 필수 Gate로 두지 않는다.
+- Merge는 담당 Human이 필수 검증과 자동 AI Review 결과를 확인한 뒤 수행한다.
+- 스퍼트 종료 후 승인 정책은 다시 평가한다.
+
+## 2. 역할
+
+- 구현 AI: Issue 계약에 따라 구현·테스트·PR 설명 작성과 리뷰 반영
 - 자동 리뷰 AI: GitHub Automatic Copilot Code Review
-- 담당자 Human: Issue 정책 판단과 강화 PR Human 이해도 답변
-- Human 리뷰어: 최종 코드 리뷰·Approve
-- Merge: Human 책임
+- 담당자 Human: 정책 판단, 강화 PR 이해도 답변, 최종 Merge 판단
+- Human 리뷰어: 선택적 추가 리뷰. V3 Sprint Mode에서는 승인 대기 Gate가 아님
 
-## 2. 전체 흐름
+## 3. 전체 흐름
 
 ```text
 Issue 분석
-→ Human 질문·정책 확정
+→ 미결정 정책이 없으면 바로 구현
 → status:in-progress
-→ 구현·테스트·Diff 자체 검토
+→ 구현·관련 테스트·직접 검증
+→ 전체 build
+→ Diff 자체 검토
 → bobfull-pr-explain 적용
 → Draft PR 생성
 → GitHub Ruleset이 Copilot reviewer 자동 요청
-→ 독립 AI Review 댓글
-→ BLOCKER/MAJOR면 구현 담당자가 수정·Push
+→ 독립 AI Review
+→ BLOCKER/MAJOR면 수정·재검증·Push
 → Review new pushes로 자동 재리뷰
 → 기본 PR: Human 이해도 0개
 → 강화 PR: Human 이해도 정확히 3개
-→ Human Review Checklist
-→ status:final-human-review
-→ Human Approve
-→ Merge
+→ Sprint Merge Gate 확인
+→ 담당 Human Merge
 ```
 
-**최초 AI Review를 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않는다.**
+최초 AI Review를 위해 `PR #번호 검토하라` 같은 수동 명령을 요구하지 않는다.
 
-## 3. Issue 단계
+## 4. Issue 단계 — 질문 병목 최소화
 
-Issue 단계 Human 질문 정책은 기존 규칙을 유지한다.
+V3 Sprint Mode에서는 Issue 단계의 **학습용 Human 질문을 구현 착수 Gate로 사용하지 않는다.**
 
-- 기본: 필요한 질문 1~2개
-- 강화: 필요한 질문 2~3개
-- 강화: 담당자가 직접 작성한 이해 근거 한 줄 이상 필요
+AI가 Issue·코드·확정 문서를 읽고 구현 가능한 수준이면 바로 계약을 정리하고 진행한다.
+
+Human 질문은 다음처럼 실제 결정이 필요한 경우에만 한다.
+
+- 정책이 둘 이상 가능하고 코드만으로 결정할 수 없음
+- API·DB·상태 계약 변경
+- 권한·금액·트랜잭션·보상 정책 재결정
+- 다른 담당자 범위와 충돌
+
+질문은 한 번에 가장 중요한 결정 하나를 우선한다.
 
 실제 실행 상태는 GitHub `status:*` Label 하나로 관리한다.
 
@@ -49,32 +87,42 @@ status:in-progress
 status:final-human-review
 ```
 
-## 4. 구현과 Draft PR
+## 5. 구현과 Draft PR
 
 `status:in-progress` 이후 구현 AI는 다음을 수행한다.
 
 1. 대상 Issue 전용 브랜치 확인 또는 최신 `develop` 기준 생성
 2. Issue 최종 계약 범위의 최소 변경 계획 수립
-3. 강화 검토 대상이면 구현 전 설계 확인
-4. 코드·테스트·필요 문서 구현
-5. 관련 테스트·직접 검증 실행
-6. 실제 Diff 자체 검토
-7. `skills/bobfull-pr-explain/SKILL.md` 적용
-8. Issue 관련 변경만 Commit·Push
-9. develop 대상 Draft PR 생성
+3. 코드·테스트·필요 문서 구현
+4. 변경 기능 관련 테스트 실행
+5. HTTP/API 기능이면 Postman 또는 동등한 직접 호출로 핵심 성공 흐름 검증
+6. 전체 build 실행
+7. 실제 Diff 자체 검토
+8. `skills/bobfull-pr-explain/SKILL.md` 적용
+9. Issue 관련 변경만 Commit·Push
+10. develop 대상 Draft PR 생성
 
-PR 본문은 다음 4계층을 유지한다.
+### 필수 검증 기준
+
+기능 PR의 최소 필수 검증은 다음이다.
 
 ```text
-한 줄 요약 / 관련 Issue
-→ PR 이해 요약
-→ 상세 변경 및 검증
-→ Human 검토
+관련 테스트 PASS
++ 전체 build PASS
++ 변경한 핵심 기능 직접 검증 PASS
 ```
 
-## 5. 자동 독립 AI Review
+직접 검증 예:
 
-### 5.1 실행 주체
+- HTTP/API: Postman, curl 또는 동등한 실제 요청
+- Scheduler/Consumer/Event: 해당 동작을 실제로 실행 가능한 테스트·로그·직접 트리거
+- 문서/설정 전용: 적용 결과 또는 정적 검증
+
+기능과 관계없는 추가 검증을 무조건 늘리지 않는다.
+
+## 6. 자동 독립 AI Review
+
+### 6.1 실행 주체
 
 PR 코드 리뷰는 구현 담당 AI의 자기리뷰가 아니다.
 
@@ -85,9 +133,7 @@ PR 코드 리뷰는 구현 담당 AI의 자기리뷰가 아니다.
 - `.github/copilot-instructions.md`
 - `.github/skills/bobfull-pr-review/SKILL.md`
 
-### 5.2 Repository Ruleset
-
-저장소 Ruleset에서 다음을 사용한다.
+### 6.2 Repository Ruleset
 
 ```text
 Automatically request Copilot code review = Enabled
@@ -95,43 +141,33 @@ Review draft pull requests = Enabled
 Review new pushes = Enabled
 ```
 
-따라서:
+### 6.3 V3 Sprint Review 기준
+
+자동 리뷰는 광범위한 개선 제안보다 다음을 우선한다.
+
+1. 기능이 실제로 깨지는가
+2. 데이터 정합성·결제·환불·예약·권한을 잘못 만들 수 있는가
+3. 주요 예외·실패 처리로 런타임 장애가 발생하는가
+4. Transaction·Lock·멱등성·외부 I/O 경계에 치명적인 문제가 있는가
+5. 테스트·직접 검증·build 결과가 실제 사실과 다른가
+
+중요도:
 
 ```text
-Draft PR 생성
-→ 자동 리뷰
-
-새 Commit Push
-→ 자동 재리뷰
+BLOCKER  → Merge 금지
+MAJOR    → Merge 금지
+MINOR    → 기록 후 Merge 가능
+SUGGESTION → 기록 후 Merge 가능
+PASS     → Merge Gate 통과 가능
 ```
 
-리뷰를 시작하기 위한 Human 명령은 필요 없다.
+리뷰 흔적을 만들기 위해 중요하지 않은 문제를 억지로 찾지 않는다.
 
-### 5.3 리뷰 중요도
+### 6.4 자동 리뷰 실패
 
-```text
-BLOCKER
-MAJOR
-MINOR
-SUGGESTION
-PASS
-```
+Automatic Copilot Review가 실제 PR에 생성되지 않았다면 Merge Gate를 통과한 것으로 보지 않는다.
 
-단순 문서·설정·CRUD도 리뷰는 실행하되 의미 없는 지적을 만들지 않는다.
-
-BLOCKER 또는 MAJOR가 있으면 구현 담당자가 범위 안에서 수정·재검증·Push한다. `Review new pushes`가 최신 Head를 자동 재리뷰한다.
-
-### 5.4 자동 리뷰 실패
-
-Copilot Review가 실제 PR에 생성되지 않았으면 이를 PASS로 보지 않는다.
-
-- Copilot Code Review 정책·라이선스·Ruleset 상태 확인
-- 실제 Review/inline comment 생성 여부 확인
-- 미생성 시 `자동 AI Review 미실행`으로 기록
-
-자동 리뷰는 Human Approve를 대체하지 않는다.
-
-## 6. PR Human 이해도
+## 7. PR Human 이해도
 
 ### 기본
 
@@ -151,42 +187,52 @@ Human 이해도 질문: 정확히 3개
 2. 가장 중요한 기술 개념과 실제 적용 이유
 3. 설계 선택 이유, 주요 실패 처리와 남은 한계
 
-특정 클래스·메서드 암기나 프레임워크 내부 구현 퀴즈로 만들지 않는다.
+질문은 코드 암기가 아니라 **실제 기능을 이해하는 수준**으로 작성한다.
 
-## 7. Human Review Checklist
+## 8. Human Review Checklist
 
-모든 PR은 다음 공통 체크를 사용한다.
+체크리스트는 이해를 돕는 기준이며 V3 Sprint Mode에서 별도 리뷰어 승인 Gate는 아니다.
 
 - [ ] 이 PR이 무엇을 왜 변경하는지 이해했다.
 - [ ] 변경 후 기본 실행 흐름과 중요한 분기를 이해했다.
 - [ ] 중요한 기술 개념이 있다면 어디에 왜 적용됐는지 이해했다.
-- [ ] 테스트·검증 결과와 남아 있는 미검증 위험을 확인했다.
+- [ ] 전체 build·직접 검증·자동 AI Review 결과와 남은 위험을 확인했다.
 
-## 8. 리뷰 반영
+## 9. 리뷰 반영
 
-### 범위 안 자동 반영 가능
+### Merge 전 반드시 수정
 
-- Issue 계약 안의 명확한 기능 오류
-- 예외 처리·검증·테스트 누락
-- PR 설명과 Diff 불일치
-- 정책 재결정이 필요 없는 BLOCKER·MAJOR·MINOR
+- BLOCKER
+- MAJOR
+- 필수 검증 실패
+- 범위 안의 명확한 핵심 기능 오류
 
-### Human 결정 필요
+### Merge를 막지 않고 기록
 
-- Issue 범위 확장
-- 정책·API·DB·상태·권한·트랜잭션 재결정
-- 새로운 라이브러리·인프라 도입
-- 다른 담당자 계약 변경
+- MINOR
+- SUGGESTION
+- 범위 밖 개선
+- 추가 최적화·리팩터링
+- 현재 요구 기능을 깨뜨리지 않는 테스트 보강 제안
 
-실제 파일 수정을 시작하면 `status:in-progress`로 되돌리고 수정·검증·Push 후 자동 재리뷰를 확인한다.
+발견된 비차단 항목은 필요하면 후속 Issue 또는 `docs/troubleshooting`에 남긴다.
 
-## 9. Merge 전 경계
+## 10. V3 Sprint Merge Gate
 
-- 최신 Head 필수 테스트·build·직접 검증 상태 확인
-- 최신 Head Automatic Copilot Review 실제 생성 확인
-- 해결되지 않은 BLOCKER 없음
-- 강화 PR이면 Human 이해도 3문항 답변과 AI 대조 완료
-- 남은 Human 결정 필요 사항 명시
-- Human Review Checklist 확인 가능 상태
+다음만 모두 만족하면 Merge 가능하다.
 
-Approve와 Merge는 Human이 수행한다.
+```text
+[필수] 전체 build PASS
+[필수] 변경 핵심 기능 직접 검증 PASS
+[필수] 최신 Automatic Copilot Review 실행 확인
+[필수] 미해결 BLOCKER 없음
+[필수] 미해결 MAJOR 없음
+[필수] Human 결정 필요 사항 없음
+[강화 PR만] Human 이해도 3문항 완료
+```
+
+필수 Human Approve 수는 `0`이다.
+
+MINOR/SUGGESTION은 Merge를 막지 않는다.
+
+Merge는 담당 Human이 수행한다.
