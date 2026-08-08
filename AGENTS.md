@@ -2,7 +2,7 @@
 
 이 파일은 BobFull 저장소에서 사용하는 담당자 AI 에이전트의 공통 실행 규칙이다.
 
-담당자 AI는 Issue 정리·구현·검증·PR 자체 검토·리뷰 반영을 수행한다. Human은 이해도 답변, Human 리뷰, 정책 판단, Approve와 최종 Merge를 책임진다.
+담당자 AI는 Issue 정리·구현·검증·PR 자체 검토·리뷰 반영을 수행한다. Human은 필요한 이해도 답변과 정책 판단, 최종 Merge를 책임진다. V3 Sprint Mode에서는 별도 GitHub Human Approve를 필수 Merge Gate로 두지 않지만, 이 원칙은 Human의 판단 책임을 없애지 않는다.
 
 ## 1. 기본 Skill 적용 방식
 
@@ -73,7 +73,7 @@ AI 상태 흐름, 승인·Merge 조건의 판단 근거로 사용하지 않는�
 Issue 또는 계약이 크게 변경되어 필요한 기준 문서가 달라진 경우에만 Skill을 다시 확인해 문서를 재선택한다.
 
 Human이 Issue 본문에 답변을 작성한 뒤에는 같은 명령을 다시 입력한다.
-PR의 Human 답변 또는 리뷰를 작성한 뒤에는 `PR #번호 검토하라`를 사용한다.
+Human이 PR 재검토, 외부 Review 반영 또는 추가 수정 검토를 명시적으로 요청할 때는 `PR #번호 검토하라`를 사용한다.
 
 별도의 다른 팀원 AI 리뷰는 워크플로우 단계나 완료 조건으로 사용하지 않는다. PR에 리뷰·댓글이 등록되면 작성 주체와 관계없이 담당자 AI가 실제 코드 근거를 확인해 반영 여부를 판단한다.
 
@@ -104,23 +104,58 @@ Human이 답변을 작성한 뒤 `Issue #번호 구현하라`를 입력하는 �
 충돌이 없을 때 같은 실행의 구현 진행을 요청하는 신호다. 별도의 `AI_FINALIZED → HUMAN_APPROVED`
 명령 왕복은 사용하지 않는다. Ready 전환, Approve와 Merge는 계속 Human 책임이다.
 
-## 5. PR 단계 실행 명령
+## 5. V3 Sprint Mode PR 검토와 수동 진입 명령
 
-연결된 PR의 검토·리뷰 반영은 다음 명령으로 시작한다.
+### 자동 독립 Review
+
+V3 Sprint Mode에서는 Draft PR 생성 직후 또는 담당 구현 AI의 새 Push 직후 다음 흐름으로 최신 Head를 독립 검토한다.
+
+```text
+Draft PR 생성 또는 새 Push
+→ 담당 구현 AI가 최신 Issue 계약 / Head / Diff / 검증 / Evidence를 다시 읽음
+→ `bobfull-pr-review` Skill 기반 독립 Review
+→ BLOCKER/MAJOR가 있으면 수정·재검증
+→ 없으면 Human 최종 Merge 대기
+```
+
+자동 Review는 기존 Review 결과나 이전 SHA를 재사용하지 않는다. BLOCKER와 MAJOR만 Merge를 차단하며,
+Before/After Evidence, `NOT_APPLICABLE` 허용 기준, 최신 Head 재검토 기준은
+`skills/bobfull-pr-review/SKILL.md`와 `docs/evidence/v3/README.md`를 따른다.
+
+### `PR #번호 검토하라` 수동 진입
 
 ```text
 PR #번호 검토하라
 ```
 
-담당자 AI는 PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약, 현재 `status:*` Label,
-최신 Head, PR 답변·리뷰·댓글과 로컬 상태를 확인한다. PR 답변 또는 Human 리뷰 작성 후
-`Issue #번호 구현하라`를 다시 입력하도록 요구하지 않는다.
+이 명령은 초기 자동 Review를 시작하기 위한 필수 관문이 아니라, Human이 PR 재검토, 외부 Review 반영,
+추가 수정 검토를 명시적으로 요청할 때 사용하는 수동 PR 진입 명령이다. 담당자 AI는 PR 번호로 연결된 모든
+Issue, 각 Issue 댓글의 최종 계약, 현재 `status:*` Label, 최신 Head, PR 답변·리뷰·댓글과 로컬 상태를
+확인한다. PR 답변 또는 Human 리뷰 작성 후 `Issue #번호 구현하라`를 다시 입력하도록 요구하지 않는다.
 
 PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 수정을 시작할 때만 연결된 모든 Issue에서
 기존 `status:*` Label을 제거하고 `status:in-progress` 하나를 적용한다. 수정·검증·Push·최신 Head
 자체 검토가 끝나면 연결된 모든 Issue에서 `status:final-human-review` 하나만 적용한다.
 
-## 6. PR Human 입력과 담당자 AI 검토
+## 6. Human 경계와 담당자 AI 검토
+
+### V3 Sprint Mode의 Human 책임
+
+V3 Sprint Mode에서 별도 GitHub Human Approve 1개 이상이나 다른 팀원의 형식적 Approve 대기는 필수
+Merge Gate가 아니다. 그러나 다음 판단과 실행은 계속 Human 책임이다.
+
+- 정책 변경
+- API 계약 변경
+- DB·상태 모델 재결정
+- 권한·보안 정책 결정
+- 트랜잭션 경계 재결정
+- Human 답변이 필요한 Issue 결정
+- 최종 Merge
+
+즉, Human 판단 책임을 없애는 것과 GitHub Approve를 필수 Merge Gate에서 제외하는 것은 다르다.
+담당자 AI는 Human 판단이 필요한 사항을 자동 Review로 대체하거나, Approve 또는 Merge를 수행하지 않는다.
+
+### Human 입력과 담당자 AI 검토
 
 PR 담당자는 PR 본문의 `Human 이해도` 질문에 직접 답한다.
 
@@ -133,9 +168,9 @@ Human 이해도 질문은 신입 백엔드 기술면접 기본 개념 수준으�
 
 담당자 AI는 Human 답변 원문을 대신 작성하거나 덮어쓰지 않는다.
 
-PR 작성자가 아닌 Human 리뷰어는 PR 본문 마지막의 PR별 `Human Review Checklist`를 참고하거나 복사해 PR 댓글로 체크 여부와 의견을 직접 작성한다. 리뷰어와 리뷰 시각은 GitHub 댓글 메타데이터를 사용하며, 체크리스트 댓글에 기준 Head SHA를 기록하거나 추정하지 않는다.
+PR 작성자가 아닌 Human 리뷰어는 PR 본문 마지막의 PR별 `Human Review Checklist`를 참고하거나 복사해 PR 댓글로 체크 여부와 의견을 직접 작성할 수 있다. V3 Sprint Mode에서는 이 체크리스트와 GitHub Approve를 필수 Merge Gate로 사용하지 않는다. 리뷰어와 리뷰 시각은 GitHub 댓글 메타데이터를 사용하며, 체크리스트 댓글에 기준 Head SHA를 기록하거나 추정하지 않는다.
 
-새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리한다. 담당자 AI는 `PR #번호 검토하라`를 받을 때마다 최신 Diff를 다시 검토한다.
+새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리한다. V3 Sprint Mode의 자동 독립 Review와 수동 `PR #번호 검토하라` 모두 최신 Diff를 다시 검토한다.
 
 PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 AI는 작성 주체와 관계없이 다음처럼 처리한다.
 
@@ -156,6 +191,7 @@ PR에 등록된 리뷰·댓글은 공식 선행 단계가 아니다. 담당자 A
 | AI 전체 절차 | `docs/AI_WORKFLOW.md` |
 | 담당자 AI 실행 | `docs/AI_IMPLEMENTATION_GUIDE.md` |
 | 담당자 AI PR 검토·리뷰 반영 | `docs/AI_REVIEW_GUIDE.md` |
+| V3 자동 독립 Review·Evidence Gate | `skills/bobfull-pr-review/SKILL.md`, `docs/evidence/v3/README.md` |
 | Human 이해도 질문 난이도·생성 | `docs/AI_REVIEW_GUIDE.md` |
 | 코드 작성 | `docs/CODE_CONVENTION.md` |
 | 테스트·증거 | `docs/TEST_CONVENTION.md` |
@@ -174,12 +210,12 @@ API 변경은 API 명세와 `PROJECT_CONTEXT`, ERD, 영향 문서의 동기화 �
 - AI 보완 내용은 반드시 `AI 보완 설명`으로 구분한다.
 - Issue 범위 밖 기능과 불필요한 리팩터링을 추가하지 않는다.
 - 정책·API·DB·상태·권한·트랜잭션을 임의로 결정하지 않는다.
-- 필수 Human 답변 검토·최종 계약 확인·`status:in-progress` 기록 없이 구현하지 않는다.
+- 필요한 Human 답변 검토·최종 계약 확인·`status:in-progress` 기록 없이 구현하지 않는다.
 - 상태 변경 전 기존 `status:*` Label을 제거하고 새 상태 Label 하나만 적용한다.
 - 실행하지 않은 테스트를 `PASS`로 기록하지 않는다.
 - 전체 build가 실패하면 완료로 표현하지 않는다.
 - 비밀정보와 실제 개인정보를 입력·Commit·PR에 포함하지 않는다.
-- 담당자 AI의 PR 검토는 독립적인 Human Approve를 대체하지 않는다.
+- V3 Sprint Mode에서는 별도 GitHub Human Approve를 필수 Merge Gate로 요구하지 않지만, 담당자 AI의 PR 검토는 Human의 정책 판단이나 최종 Merge를 대체하지 않는다.
 - 다른 팀원 AI 리뷰의 존재 여부를 작업 시작·수정·Merge 조건으로 사용하지 않는다.
 - AI는 Approve와 Merge를 수행하지 않는다.
 - API Response의 계산값을 근거 없이 DB 컬럼으로 중복 저장하지 않는다. 저장이 필요하면 갱신 책임·정합성·동시성 전략을 Human과 별도 결정한다.
@@ -195,7 +231,7 @@ API 변경은 API 명세와 `PROJECT_CONTEXT`, ERD, 영향 문서의 동기화 �
 ## 10. 즉시 중단 조건
 
 - 확정 문서·Issue·코드가 충돌함
-- Human 답변이 모호하거나 핵심 미결정 사항이 남음
+- 필요한 Human 답변이 모호하거나 핵심 미결정 사항이 남음
 - Human 답변 검토와 Issue 댓글의 최종 계약 기록이 없거나, 그 이후 계약이 변경됨
 - 다른 담당자의 계약 변경이 필요함
 - 새로운 정책·API·DB·인프라 결정이 필요함
