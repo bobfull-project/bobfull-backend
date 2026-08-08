@@ -34,7 +34,31 @@ V3 Sprint Mode에서는 **필수 Human Approve 인원은 0명**으로 운영한�
 - Merge는 담당 Human이 필수 검증과 담당 구현 AI Review 결과를 확인한 뒤 수행한다.
 - 스퍼트 종료 후 승인 정책은 다시 평가한다.
 
-## 2. 역할
+## 2. V3에서도 유지하는 안전 규칙
+
+Sprint Mode는 기존 안전 규칙을 폐기하지 않는다. 다음은 그대로 유지한다.
+
+- `AGENTS.md`와 `docs/GITHUB_RULES.md`의 브랜치 안전 규칙
+- `main`, `master`, `develop` 직접 수정 금지
+- 다른 Issue 작업 브랜치에서 새 작업 시작 금지
+- 새 Issue 브랜치는 최신 `develop` 기준 생성
+- 한 번에 하나의 Issue만 처리하고 Issue 범위 밖 변경 금지
+- 실제 상태는 GitHub `status:*` Label 하나로 관리
+- 실행하지 않은 테스트·build·직접 검증을 `PASS`로 기록하지 않음
+- 비밀정보·개인정보를 Commit하지 않음
+- 정책·API·DB·권한·트랜잭션 재결정은 Human에게 요청
+- Approve와 Merge는 AI가 대신 수행하지 않음
+
+새 Issue 초안·생성, 브랜치 명명, 테스트 컨벤션 등 세부 규칙은 기존 전용 문서를 따른다.
+
+- `docs/ISSUE_TITLE_RULES.md`
+- `docs/GITHUB_RULES.md`
+- `docs/TEST_CONVENTION.md`
+- `skills/bobfull-onboarding/SKILL.md`
+
+Sprint Mode에서 바뀌는 것은 **Human 대기와 리뷰 깊이, Merge 차단 기준**이지 이 안전 규칙들이 아니다.
+
+## 3. 역할
 
 - 구현 담당 AI: Issue 계약에 따라 구현·테스트·PR 설명 작성·독립 리뷰 패스·리뷰 반영
 - 담당자 Human: 실제 정책 판단, 강화 PR 이해도 답변, 최종 Merge 판단
@@ -42,7 +66,7 @@ V3 Sprint Mode에서는 **필수 Human Approve 인원은 0명**으로 운영한�
 
 GitHub Copilot Code Review나 별도 외부 리뷰 서비스는 필수 구성요소가 아니다.
 
-## 3. 전체 흐름
+## 4. 전체 흐름
 
 ```text
 Issue 분석
@@ -67,7 +91,7 @@ Issue 분석
 **최초 AI Review를 위해 `PR #번호 검토하라` 같은 추가 Human 명령을 요구하지 않는다.**
 Draft PR 생성이 담당 구현 AI의 리뷰 단계 시작점이다.
 
-## 4. Issue 단계 — 질문 병목 최소화
+## 5. Issue 단계 — 질문 병목 최소화
 
 V3 Sprint Mode에서는 Issue 단계의 **학습용 Human 질문을 구현 착수 Gate로 사용하지 않는다.**
 
@@ -88,7 +112,11 @@ status:in-progress
 status:final-human-review
 ```
 
-## 5. 구현과 Draft PR
+- Human 결정 필요 → `status:human-answer-required`
+- 구현·수정 진행 → `status:in-progress`
+- Sprint Merge Gate 확인 단계 → `status:final-human-review`
+
+## 6. 구현과 Draft PR
 
 `status:in-progress` 이후 구현 AI는 다음을 수행한다.
 
@@ -122,9 +150,9 @@ status:final-human-review
 
 기능과 관계없는 추가 검증을 무조건 늘리지 않는다.
 
-## 6. 담당 구현 AI의 독립 리뷰 패스
+## 7. 담당 구현 AI의 독립 리뷰 패스
 
-### 6.1 실행 원칙
+### 7.1 실행 원칙
 
 리뷰는 별도 AI 제품이 아니라 **해당 PR을 구현한 담당 AI가 역할을 구현자에서 리뷰어로 전환해 수행**한다.
 
@@ -138,7 +166,7 @@ status:final-human-review
 
 리뷰 기준은 `skills/bobfull-pr-review/SKILL.md`를 따른다.
 
-### 6.2 자동 실행 시점
+### 7.2 자동 실행 시점
 
 - Draft PR 생성 직후
 - 담당 구현 AI가 기존 PR에 새 Commit을 Push한 직후
@@ -147,7 +175,7 @@ status:final-human-review
 
 별도 Human 명령을 기다리지 않는다.
 
-### 6.3 V3 Sprint Review 기준
+### 7.3 V3 Sprint Review 기준
 
 ```text
 BLOCKER    → Merge 금지
@@ -159,7 +187,7 @@ PASS       → 현재 Merge를 막을 치명적 문제 없음
 
 리뷰 흔적을 만들기 위해 중요하지 않은 문제를 억지로 찾지 않는다.
 
-## 7. PR Human 이해도
+## 8. PR Human 이해도
 
 ### 기본
 
@@ -181,7 +209,7 @@ Human 이해도 질문: 정확히 3개
 
 질문은 코드 암기가 아니라 실제 기능을 이해하는 수준으로 작성한다.
 
-## 8. 리뷰 반영
+## 9. 리뷰 반영
 
 ### Merge 전 반드시 수정
 
@@ -200,7 +228,7 @@ Human 이해도 질문: 정확히 3개
 
 수정 Push 뒤에는 같은 담당 구현 AI가 최신 Head를 다시 리뷰하고 새 댓글을 남긴다.
 
-## 9. V3 Sprint Merge Gate
+## 10. V3 Sprint Merge Gate
 
 다음만 모두 만족하면 Merge 가능하다.
 
