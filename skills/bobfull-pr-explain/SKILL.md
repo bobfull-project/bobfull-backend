@@ -1,65 +1,102 @@
 ---
 name: bobfull-pr-explain
-description: BobFull Draft PR 생성·본문 갱신 때 실제 Issue, Diff, 검증 근거를 바탕으로 이해 중심 PR 요약과 상세 검증 근거를 작성·검증한다.
+description: BobFull V3 Sprint Draft PR에서 실제 Issue, Diff, build, 직접 검증 근거를 바탕으로 팀원이 빠르게 이해할 수 있는 PR 설명을 작성한다.
 ---
 
-# BobFull PR Explain Diff
+# BobFull V3 Sprint PR Explain
 
 ## 역할
 
-이 Skill은 **PR 본문 설명 작성**만 담당한다. 코드 결함 리뷰는 구현 담당 AI가 수행하지 않고, GitHub Repository Ruleset의 Automatic Copilot Code Review가 독립 reviewer로 수행한다.
+이 Skill은 **PR을 빠르게 이해하게 만드는 설명**을 담당한다.
 
-자동 리뷰 기준은 `.github/skills/bobfull-pr-review/SKILL.md`와 `.github/copilot-instructions.md`에 둔다.
+코드 결함 리뷰는 GitHub Automatic Copilot Code Review가 독립적으로 수행한다.
+
+현재 V3 Sprint Mode에서는 설명이 길어지는 것보다 다음 네 가지가 명확한지가 중요하다.
+
+```text
+무엇을 왜 바꿨는가
+핵심 흐름이 무엇인가
+전체 build와 직접 검증이 통과했는가
+자동 AI Review에 BLOCKER/MAJOR가 남았는가
+```
 
 ## 사용 시점
 
 - 구현 완료 후 Draft PR 생성 전
-- 기존 PR 본문 복구 또는 최신 템플릿 반영
-- 새 Commit으로 실제 흐름·테스트·검증 상태가 바뀐 뒤 PR 본문 갱신
-- Ready 전환 또는 Human 리뷰 요청 전 PR 설명 최종 확인
+- 새 Commit으로 실제 흐름·검증 상태가 바뀐 뒤
+- Merge 전 최신 상태 갱신
 
 ## 필수 입력
 
-1. 연결 Issue의 본문·최종 계약·현재 `status:*` Label
+1. 연결 Issue의 최신 계약과 범위
 2. 최신 `.github/pull_request_template.md`
-3. base와 Head 사이 실제 Diff와 변경 파일
-4. 추가·수정 테스트 및 실제 테스트·build·직접 검증·CI 결과
-5. 변경과 직접 관련된 확정 문서
+3. base 대비 실제 Diff
+4. 관련 테스트 결과
+5. 전체 build 결과
+6. 변경 핵심 기능 직접 검증 결과
+7. 최신 Automatic Copilot Review 결과가 있으면 그 결과
 
-근거를 확인하지 못한 영역은 추측하지 않는다. 실행하지 않은 검증은 `NOT_RUN | 미실행`과 이유·한계를 기록한다.
+실행하지 않은 검증은 PASS로 쓰지 않는다.
 
 ## 작성 절차
 
-1. 최종 계약과 최신 Diff를 대조해 변경 목적·범위·제외 범위를 정리한다.
-2. 최신 템플릿의 `한 줄 요약/관련 Issue → PR 이해 요약 → 상세 변경 및 검증 → Human 검토` 순서를 유지한다.
-3. PR 이해 요약에는 쉬운 설명, 주요 실행 흐름, 필요한 Mermaid, 주요 개념, 실제 트러블슈팅, 코드 읽는 순서를 작성한다.
-4. 단순 문서·설정·DTO·정적 상수·단순 CRUD처럼 해당 항목이 필요 없으면 `해당 없음`과 이유를 기록한다.
-5. 상세 검증에는 주요 변경, 예외·실패·중복·경계, 트레이드오프, 제한사항, 제외 범위, 테스트와 실제 검증 증거를 유지한다.
-6. 긴 정보만 `<details>`로 접고 `BLOCKER`, `FAIL`, `NOT_RUN`, 미검증 위험은 접힌 영역에만 두지 않는다.
-7. PR Human 이해도는 기본 0개 / 강화 정확히 3개로 고정한다.
-8. Human Review Checklist는 공통 4개 이해 체크를 유지한다.
+1. `한 줄 요약`에서 무엇을 왜 바꿨는지 바로 설명한다.
+2. `PR 이해 요약`에서 핵심 실행 흐름과 중요한 기술 개념만 정리한다.
+3. Mermaid는 실제 흐름 이해에 도움이 되는 기능 PR에서만 작성한다.
+4. 단순 문서·설정·CRUD는 불필요한 개념·트러블슈팅·다이어그램을 억지로 만들지 않는다.
+5. `상세 변경 및 검증`에서 Merge 차단 위험과 비차단 후속 항목을 분리한다.
+6. `V3 Sprint 필수 검증`에 관련 테스트·전체 build·핵심 기능 직접 검증·자동 AI Review 상태를 기록한다.
+7. `BLOCKER`·`MAJOR`·`FAIL`은 접힌 영역에만 숨기지 않는다.
+8. MINOR·SUGGESTION은 Merge를 막지 않는 후속 항목으로 분리한다.
+9. Human 이해도는 기본 0개 / 강화 정확히 3개로 유지한다.
+
+## 핵심 기능 직접 검증
+
+기능 PR은 사용자가 실제로 원하는 동작을 확인한다.
+
+- HTTP/API: Postman, curl 또는 동등한 실제 요청
+- 결제·예약·환불: 핵심 상태 전이와 결과
+- Event/Scheduler/Consumer: 직접 트리거·테스트·로그
+- 문서/설정: 정적 검사 또는 적용 결과
+
+범위 밖 시나리오를 무한히 확장하지 않는다.
 
 ## 자동 AI Review와의 경계
 
-PR 설명 작성 뒤 구현 담당 AI가 자기 PR을 다시 리뷰하는 절차를 실행하지 않는다.
-
-공식 리뷰 흐름은 다음과 같다.
-
 ```text
-Draft PR 생성
-→ Repository Ruleset의 Automatically request Copilot code review
-→ GitHub Copilot reviewer 자동 실행
-→ .github/skills/bobfull-pr-review/SKILL.md 적용
-→ 독립 AI Review 댓글
+구현 AI
+→ 구현·테스트·build·직접 검증
+→ PR Explain
+→ Draft PR
+
+GitHub Copilot Reviewer
+→ 독립 Automatic Code Review
+→ BLOCKER/MAJOR/MINOR/SUGGESTION
 ```
 
-Ruleset에서 `Review draft pull requests`와 `Review new pushes`를 활성화해 Draft PR과 새 Push도 자동 리뷰한다.
-최초 리뷰를 위해 사람이 `PR #번호 검토하라`를 입력할 필요가 없다.
+V3 Sprint Mode에서:
 
-## Mermaid 기준
+- BLOCKER/MAJOR → Merge 차단
+- MINOR/SUGGESTION → 기록 후 Merge 가능
 
-의미 있는 실행 흐름이 있는 기능 PR만 Mermaid를 포함한다. 최신 Head의 실제 클래스·상태·분기와 일치해야 하며 구현되지 않은 후속 계획을 현재 동작처럼 그리지 않는다.
+## Human 이해도
 
-## 작성 범위
+### 기본
 
-PR Explain의 목적은 다른 사람이 변경을 빠르게 이해하고 실제 Diff와 검증 근거를 올바르게 리뷰하게 하는 것이다. 별도 HTML·이미지·Flow Lab·포트폴리오 문서를 이 Skill에서 만들지 않는다.
+질문 0개.
+
+### 강화
+
+정확히 3개.
+
+1. 핵심 실행 흐름과 주요 분기
+2. 중요한 기술 개념과 실제 적용 이유
+3. 설계 선택 이유, 주요 실패 처리와 남은 한계
+
+코드 암기 문제가 아니라 기능 설명 능력을 확인한다.
+
+## 목적
+
+PR Explain은 포트폴리오 문서가 아니라 **스퍼트 중 팀원이 빠르게 읽고 핵심을 이해하는 작업 문서**다.
+
+필요 이상으로 길게 만들지 않는다.
