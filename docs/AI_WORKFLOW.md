@@ -25,7 +25,7 @@ PR 단계의 검토·리뷰 반영에는 다음 명령을 사용한다.
 PR #번호 검토하라
 ```
 
-다른 팀원의 AI 리뷰는 이 워크플로우의 단계나 필수 조건으로 관리하지 않는다. PR에 어떤 리뷰나 댓글이 등록되면 담당자 AI가 작성 주체와 관계없이 실제 코드 근거를 확인해 반영 여부를 판단한다.
+모든 PR은 검토 수준과 관계없이 **해당 PR을 구현한 담당자 AI의 AI Review가 필수**다. 담당자 AI는 `skills/bobfull-pr-review/SKILL.md`를 적용해 최신 Head·Issue 계약·실제 Diff·테스트·검증 근거를 다시 읽고, `BLOCKER → MAJOR → MINOR → SUGGESTION` 중요도 순으로 PR Conversation 댓글을 남긴다. 다른 팀원 또는 외부 AI 리뷰는 필수 Gate가 아니지만 등록된 리뷰·댓글은 실제 코드 근거로 반영 여부를 판단한다.
 
 ## 2. 전체 흐름
 
@@ -40,16 +40,20 @@ PR #번호 검토하라
 → 구현·검증·Diff 자체 검토
 → `skills/bobfull-pr-explain/SKILL.md` 직접 읽기·적용
 → 템플릿 전체 구조로 develop 대상 Draft PR 생성
-→ PR 담당자 Human의 이해도 답변·Human 리뷰
+→ `skills/bobfull-pr-review/SKILL.md` 적용
+→ 담당자 AI Review 댓글 작성
+→ BLOCKER/MAJOR면 수정·재검증·AI Review 재실행
+→ 강화 검토만 담당자 Human 이해도 3문항 답변
+→ Human Review
 → `PR #번호 검토하라`
-→ 담당자 AI 검토·범위 안 수정·재검증
+→ 최신 Head 기준 담당자 AI Review·리뷰 반영 확인
 → `status:final-human-review`
 → Human Approve와 Merge
 ```
 
-Human 답변, Human 리뷰와 외부 리뷰·댓글의 작성 순서는 고정하지 않는다. 담당자 AI는 명령을 받을 때마다 현재 GitHub 상태를 읽고 누적된 입력을 함께 처리한다.
+Human 답변과 Human 리뷰의 작성 순서는 고정하지 않는다. 담당자 AI는 명령을 받을 때마다 현재 GitHub 상태를 읽고 누적된 입력을 함께 처리한다.
 
-담당자 AI의 PR 검토는 구현 품질을 보완하는 절차이며 독립적인 Human Approve나 Merge 판단을 대체하지 않는다.
+담당자 AI의 PR Review는 구현 품질을 보완하는 절차이며 독립적인 Human Approve나 Merge 판단을 대체하지 않는다.
 
 ## 관련 기록 문서
 
@@ -83,7 +87,7 @@ Human 결정이 필요하면 최초 Human 질문을 Issue 본문에 구체적으
 
 담당자 Human은 1차 답변과 최종 확인을 직접 작성한다. 1차 답변은 `모르겠습니다`여도 된다. 담당자 AI는 실제 계약·코드·문서·테스트 근거의 AI 기준 답변을 제공하지만, Human 원문과 최종 확인을 대신 작성하지 않는다.
 
-기본 검토는 AI 기준 답변 뒤 Human이 `이해함`을 선택하면 답변 재작성 요구 없이 이해 확인을 끝낸다. 질문 수·난이도·생성 기준, 강화 검토 대상과 직접 작성 이해 근거 조건은 `AI_REVIEW_GUIDE`를 단일 기준으로 따른다. `추가 설명 필요`는 AI 기준 답변을 보완하고, `동의하지 않음`은 다음 단계로 진행하지 않고 Human 판단을 요청한다.
+Issue 단계 질문 수·난이도·생성 기준, 강화 검토 대상과 직접 작성 이해 근거 조건은 `AI_REVIEW_GUIDE`를 단일 기준으로 따른다. `추가 설명 필요`는 AI 기준 답변을 보완하고, `동의하지 않음`은 다음 단계로 진행하지 않고 Human 판단을 요청한다.
 
 ### 3.3 담당자 AI 검증·최종 계약 기록과 자동 진행
 
@@ -127,9 +131,10 @@ status:final-human-review
 → 구현
 → 테스트·직접 검증
 → 실제 Diff 자체 검토
-→ PR Human 이해도 질문 작성
 → Commit·Push
 → develop 대상 Draft PR 생성
+→ PR Explain 최신 Head 대조
+→ 담당자 AI Review 실행·PR 댓글 작성
 ```
 
 필수 원칙:
@@ -140,80 +145,98 @@ status:final-human-review
 - build 실패를 성공으로 표현하지 않는다.
 - 정책·API·DB 재결정이 필요하면 중단한다.
 - PR에는 실제 변경·실행 결과·미검증 위험만 기록한다.
-- PR 템플릿에 담당자 Human 이해도와 PR별 Human Review Checklist의 빈 구조를 포함한다.
 - Draft PR 생성 전 `skills/bobfull-pr-explain/SKILL.md`를 직접 읽고 적용한다. Skill이 요구하는 최신 템플릿·연결 Issue 계약·실제 Diff·검증 근거를 확보하지 못하면 PR 내용을 추측해 작성하지 않는다.
 - PR 본문은 `한 줄 요약/관련 Issue → PR 이해 요약 → 상세 변경 및 검증 → Human 검토` 순서를 유지한다. `PR 이해 요약`에는 쉬운 설명, 주요 실행 흐름, Mermaid 시각화, 주요 개념, 핵심 트러블슈팅, 코드 읽는 순서를 실제 Diff 근거로 작성한다. 단순 변경에 불필요한 항목은 `해당 없음`과 이유를 기록하며, 가짜 트러블슈팅이나 용어 사전을 만들지 않는다.
-- 상세 변경 및 검증에는 한 줄 요약의 기존 네 하위 필드와 주요 변경, 예외·실패·중복·경계, 트레이드오프, 제한사항, 제외 범위, 추가·수정 테스트, 실제 검증 근거를 유지한다. 긴 정보만 `<details>`로 접고 `BLOCKER`·`FAIL`·`NOT_RUN`·미검증 위험은 접힌 영역에만 숨기지 않는다. 추가·수정 테스트는 검증 코드를 설명하고 `테스트·build·직접 검증`은 실제 실행 결과를 기록한다.
-- 새 Commit 뒤와 `PR #번호 검토하라`, Ready 전 최종 확인에서는 Skill을 다시 적용해 PR 이해 요약, 상세 검증, 다이어그램, Checklist를 최신 Head에 맞춘다.
-- `담당자 AI 검토·수정 기록`과 PR 본문 마지막의 Human Review Checklist를 삭제하거나 축약하지 않는다. Ready 전환, Approve와 Merge는 Human 책임이다.
+- 상세 변경 및 검증에는 주요 변경, 예외·실패·중복·경계, 트레이드오프, 제한사항, 제외 범위, 추가·수정 테스트, 실제 검증 근거를 유지한다. 긴 정보만 `<details>`로 접고 `BLOCKER`·`FAIL`·`NOT_RUN`·미검증 위험은 접힌 영역에만 숨기지 않는다.
+- Draft PR 생성 직후와 새 Commit 뒤에는 `skills/bobfull-pr-review/SKILL.md`를 적용해 담당자 AI가 최신 Head를 재검토하고 PR Conversation 댓글을 남긴다.
+- AI Review 지적은 `BLOCKER → MAJOR → MINOR → SUGGESTION` 순으로 기록한다. BLOCKER 또는 MAJOR가 있으면 수정·재검증 후 최신 Head에서 AI Review를 다시 실행한다.
+- `담당자 AI 검토·수정 기록`에는 최신 AI Review 기준 Head·결과·댓글과 반영 내역을 요약하되 실제 리뷰 본문을 중복 복사하지 않는다.
+- Ready 전환, Approve와 Merge는 Human 책임이다.
 
 ## 5. PR Human 입력
 
 ### 5.1 담당자 Human 이해도
 
-Draft PR 생성 후 PR 담당자는 실제 Diff와 테스트 결과를 읽고 PR 본문의 질문에 직접 답한다.
+PR Human 이해도는 **PR 검토 수준에 따라 질문 수를 고정**한다.
 
-담당자 AI는 최신 코드와 1차 답변을 대조해 각 질문 아래에 다음을 작성한다.
+- `기본`: 질문 0개. 문서·설정·단순 CRUD처럼 별도 학습 검증이 필요하지 않은 PR에서 억지 질문을 생성하지 않는다.
+- `강화`: 질문 정확히 3개. 담당자가 최신 Diff와 테스트 결과를 읽고 직접 답한다.
+
+강화 검토 3문항의 축은 다음으로 고정한다.
+
+1. 핵심 실행 흐름과 주요 분기
+2. 가장 중요한 기술 개념과 실제 적용 위치·이유
+3. 설계 선택 이유, 주요 실패 처리와 남은 한계
+
+담당자 AI는 질문을 현재 PR에 맞게 구체화할 수 있지만 세 축을 임의로 늘리거나 줄이지 않는다. 각 답변 아래에는 다음을 작성한다.
 
 - `AI 답변 검토`: `일치 | 보완 필요 | 미작성`
 - `AI 기준 답변`: 실제 코드 흐름·예외·테스트 근거를 포함한 현재 확정 계약과 구현 기준의 설명
 
-담당자 AI는 Human 답변 원문을 수정하거나 대신 작성하지 않는다. 답변이 아직 없어도 코드 검토는 진행할 수 있지만, Merge 전에는 답변과 AI 검토가 필요하다.
+담당자 AI는 Human 답변 원문을 수정하거나 대신 작성하지 않는다. 기본 검토에는 Human 이해도 답변 자체가 Merge 조건이 아니다. 강화 검토는 Merge 전 3문항 답변과 AI 대조가 필요하다.
 
 ### 5.2 Human Review Checklist와 댓글
 
-Draft PR 생성 시 담당자 AI는 `Human 검토` 안의 마지막 영역에 연결 Issue의 최종 결정·완료 조건, 최신 실제 Diff, 추가·수정 테스트, 실제 테스트 결과와 PR 범위를 근거로 PR별 `Human Review Checklist`를 작성한다. 구현 확인과 테스트 확인을 분리하고, 실제 확인 가능한 동작 또는 검증을 한 항목씩 작성한다.
+Human Review Checklist는 PR마다 세부 구현 확인 질문을 동적으로 생성하지 않는다. 모든 PR에서 다음 공통 이해 확인을 사용한다.
 
-PR 작성자가 아닌 Human 리뷰어는 PR 본문을 수정하지 않고 체크리스트를 참고하거나 복사해 PR 댓글에 체크 여부와 의견을 직접 작성한다. 댓글의 리뷰어와 리뷰 시각은 GitHub 메타데이터를 사용하며, 기준 Head SHA는 기록하거나 추정하지 않는다. 새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리한다.
+- 이 PR이 무엇을 왜 변경하는지 이해했는가
+- 변경 후 기본 실행 흐름과 중요한 분기를 이해했는가
+- 중요한 기술 개념이 있다면 어디에 왜 적용됐는지 이해했는가
+- 테스트·검증 결과와 남아 있는 미검증 위험을 확인했는가
+
+Human 리뷰어는 PR 본문을 수정하지 않고 위 체크를 참고해 PR 댓글에 체크 여부와 의견을 직접 작성한다. 댓글의 리뷰어와 리뷰 시각은 GitHub 메타데이터를 사용하며, 기준 Head SHA는 기록하거나 추정하지 않는다. 새 Commit 이후 정식 Approve의 유효성은 GitHub Branch Ruleset의 `dismiss_stale_reviews_on_push: true` 설정으로 관리한다.
 
 Human 리뷰 원문은 담당자 AI가 대신 작성하거나 덮어쓰지 않는다. 담당자 AI는 `PR #번호 검토하라` 명령마다 최신 Diff를 기준으로 댓글 의견을 다시 대조한다.
 
-## 6. 담당자 AI PR 검토
+## 6. 담당자 AI PR Review
 
-연결된 PR이 존재하면 `PR #번호 검토하라` 명령으로 담당자 AI가 현재 Head를 검토한다.
+모든 PR은 Draft 생성 직후 담당자 AI Review를 최소 1회 수행한다. 이후 `PR #번호 검토하라`, 수정 Commit Push, Ready 전환 전에도 최신 Head 기준으로 `skills/bobfull-pr-review/SKILL.md`를 다시 적용한다.
+
 PR 번호로 연결된 모든 Issue, 각 Issue 댓글의 최종 계약과 현재 `status:*` Label을 먼저 확인한다.
 
 ### 최소 검토 기준
 
 - 최신 Head Commit SHA
 - 최신 Head의 실제 Diff
-- Issue 또는 PR에서 확인되는 작업 범위
+- Issue 최종 계약과 현재 상태 Label
+- 실제 테스트·build·직접 검증·CI 상태
+- 기존 PR 리뷰·댓글
 
-위 항목이 있으면 테스트·Human 입력이 미완료여도 확인 가능한 범위까지 검토한다.
+테스트·Human 입력이 미완료여도 확인 가능한 범위까지 검토하고 미완료 상태를 위험으로 기록한다.
 
 검토 대상:
 
-- Issue 댓글의 최종 계약과 현재 상태 Label
-- 최종 계약 이후 변경 여부
-- PR 설명과 실제 Diff
-- 요청부터 응답·저장까지 코드 흐름
+- Issue 최종 계약과 실제 Diff 일치 여부
+- PR 이해 요약과 최신 Head 일치 여부
+- 요청부터 응답·저장까지 핵심 흐름과 주요 분기
 - 입력 검증·예외 처리
 - 권한·소유권·트랜잭션·정합성·동시성
-- 테스트·build·직접 검증·CI 증거
+- Event·외부 I/O·멱등성 등 변경에 중요한 경계
+- 테스트가 실제 주장한 동작을 보장하는지
+- 테스트·build·직접 검증·CI 결과 과장 여부
 - 미검증 범위와 남은 위험
-- 담당자 Human 답변과 AI 보완 필요 사항
-- PR 댓글의 Human 리뷰 의견과 최신 Diff의 대조
-- PR에 등록된 모든 리뷰·댓글
+- 기존 리뷰 지적의 해결 여부
+- 강화 검토일 때 담당자 Human 답변과 AI 보완 필요 사항
 
-테스트 실패·미실행, `FAIL`·`HOLD`·`NOT_RUN`, Human 답변 미작성과 Human 리뷰 댓글 미작성은 검토 중단 사유가 아니다. 현재 상태와 위험으로 기록한다.
+담당자 AI는 PR Conversation 댓글에 실제 지적을 중요도 순으로 남긴다.
 
-담당자 AI 검토 결과는 다음 중 하나로 기록한다.
+```text
+BLOCKER
+→ MAJOR
+→ MINOR
+→ SUGGESTION
+→ 판정 PASS 또는 수정 후 재검토 필요
+```
 
-- `수정 필요`
-- `확인 필요`
-- `특이사항 없음`
-
-이 결과는 Merge 가능 판정이 아니다.
+없는 지적을 리뷰 흔적을 위해 억지로 만들지 않는다. BLOCKER·MAJOR·MINOR가 없으면 `PASS`로 기록할 수 있다. 이 판정은 Human Approve나 Merge 판정이 아니다.
 
 ## 7. PR 리뷰·댓글 판단과 수정
 
-PR에 등록된 리뷰·댓글은 작성 주체와 관계없이 참고 입력이다. 특정 팀원 또는 다른 AI의 리뷰가 있어야 다음 단계로 진행하는 구조가 아니다.
+담당자 AI Review 댓글은 모든 PR의 필수 기록이다. 그 외 Human 리뷰·다른 팀원 AI·외부 AI 댓글은 추가 입력이며 필수 Gate가 아니다.
 
 담당자 AI는 각 의견을 실제 Issue 계약과 코드로 검증한다.
 
-PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 수정을 시작할 때만 연결된 모든 Issue에서
-기존 `status:*` Label을 제거하고 `status:in-progress` 하나를 적용한다. 수정·검증·Push·최신 Head
-자체 검토가 끝나면 연결된 모든 Issue에서 `status:final-human-review` 하나만 적용한다.
+PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 수정을 시작할 때만 연결된 모든 Issue에서 기존 `status:*` Label을 제거하고 `status:in-progress` 하나를 적용한다. 수정·검증·Push·최신 Head AI Review가 끝나면 연결된 모든 Issue에서 `status:final-human-review` 하나만 적용한다.
 
 ### 자동 반영 가능한 항목
 
@@ -234,7 +257,7 @@ PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 �
 
 담당자 AI는 반영한 항목과 반영하지 않은 항목의 이유를 PR에 기록한다. 정책 결정이 필요한 항목은 Human에게 보고한다.
 
-수정 후에는 영향받는 테스트·직접 검증·전체 build를 다시 실행하고 실제 Diff, PR 본문, 검증 증거와 최신 Head를 갱신한다.
+수정 후에는 영향받는 테스트·직접 검증·전체 build를 다시 실행하고 실제 Diff, PR 본문, 검증 증거와 최신 Head를 갱신한 뒤 `bobfull-pr-review`를 다시 실행해 새 PR Conversation 댓글을 남긴다.
 
 ## 8. 최신 Head 재검토
 
@@ -243,26 +266,28 @@ PR을 읽고 보고만 할 때는 기존 Label을 유지한다. 실제 파일 �
 - 현재 Head SHA와 수정 Diff 확인
 - 기존 지적 해결 여부 확인
 - 영향받은 테스트·build·직접 검증·CI 확인
-- 새 결함과 PR 설명 불일치 확인
-- 담당자 Human 답변과 AI 기준 답변 재대조
+- 새 결함과 PR 이해 요약·상세 검증 불일치 확인
+- 강화 검토일 때 담당자 Human 답변과 AI 기준 답변 재대조
 - PR 댓글의 Human 리뷰 의견과 최신 Diff의 대조
 - 남은 리뷰·댓글 확인
+- `bobfull-pr-review` 재실행과 최신 Head 기준 새 AI Review 댓글 작성
 
 해결되지 않은 항목과 미검증 위험을 최신 상태로 다시 기록한다.
 
 ## 9. 최종 Human 확인과 Merge
 
-담당자 AI가 연결된 모든 Issue에 `status:final-human-review`를 적용하고 Issue 댓글과 PR에 최종 검토 결과를 기록하면,
-Human이 실제 코드, 테스트·CI, Human 입력과 리뷰 반영 결과를 확인한다.
+담당자 AI가 연결된 모든 Issue에 `status:final-human-review`를 적용하고 Issue 댓글과 PR에 최종 검토 결과를 기록하면, Human이 실제 코드, 테스트·CI, Human 입력과 리뷰 반영 결과를 확인한다.
 
 다음을 충족하지 않으면 Merge 준비 완료로 판단하지 않는다.
 
-- 담당자 Human 이해도 답변과 담당자 AI 보완 확인
+- 모든 PR에서 최신 Head 기준 담당자 AI Review 완료
+- 최신 AI Review의 해결되지 않은 BLOCKER 없음
+- 강화 검토 PR이면 Human 이해도 3문항 답변과 담당자 AI 대조 완료
 - PR 댓글의 Human 리뷰 의견과 최신 Diff의 대조 완료
 - 필수 테스트·build·직접 검증 결과 확인
-- 최신 Head 기준 담당자 AI 검토 완료
-- 해결되지 않은 BLOCKER 없음
 - GitHub Rules의 Human Approve 조건 충족
+
+기본 검토 PR에는 Human 이해도 질문 0개이므로 해당 답변을 Merge 조건으로 요구하지 않는다.
 
 PR 작성자가 Merge하며 AI는 Approve와 Merge를 수행하지 않는다.
 
