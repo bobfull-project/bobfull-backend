@@ -24,7 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * actual rows/loops를 함께 확인한다.
  *
  * <p>Hibernate saveAll 대신 배치 JDBC INSERT로 대량 데이터를 빠르게 적재해 옵티마이저가
- * 실제 규모(식당 2만 건, 각 1개 합석 테이블·2개 회차)에서 어떤 접근 방식을 선택하는지 확인한다.</p>
+ * 실제 규모(식당 5천 건, 각 1개 합석 테이블·2개 회차)에서 어떤 접근 방식을 선택하는지 확인한다.</p>
  */
 @EnabledIfEnvironmentVariable(named = "BOBFULL_MYSQL_PERF_TEST", matches = "true")
 @SpringBootTest(properties = {
@@ -96,6 +96,26 @@ class RestaurantSearchExplainInvestigationTest {
                             + "AND ts.shared_table_id = st.shared_table_id AND ts.deleted_at IS NULL "
                             + "AND hour(ts.start_at) = 2 AND minute(ts.start_at) = 0 "
                             + "ORDER BY r.restaurant_id ASC LIMIT 20");
+
+            // Issue #61 최소 조합 보완. 아래 세 시나리오는 하네스만 추가한 상태이며,
+            // 실제 Before/After raw Evidence는 동일 MySQL/Fixture에서 재실행한 뒤에만 기록한다.
+            explain(connection, "date + time 필터(정확 시각 일치)",
+                    "SELECT DISTINCT r.restaurant_id FROM restaurant r, shared_table st, time_slot ts "
+                            + "WHERE r.deleted_at IS NULL AND r.status = 'ACTIVE' "
+                            + "AND st.restaurant_id = r.restaurant_id AND st.deleted_at IS NULL "
+                            + "AND ts.shared_table_id = st.shared_table_id AND ts.deleted_at IS NULL "
+                            + "AND ts.start_at = '2026-08-13 02:00:00' "
+                            + "ORDER BY r.restaurant_id ASC LIMIT 20");
+
+            explain(connection, "정렬 조건(name ASC)",
+                    "SELECT DISTINCT r.restaurant_id, r.name FROM restaurant r "
+                            + "WHERE r.deleted_at IS NULL AND r.status = 'ACTIVE' "
+                            + "ORDER BY r.name ASC LIMIT 20");
+
+            explain(connection, "pagination 2페이지(id ASC, OFFSET 20)",
+                    "SELECT DISTINCT r.restaurant_id FROM restaurant r "
+                            + "WHERE r.deleted_at IS NULL AND r.status = 'ACTIVE' "
+                            + "ORDER BY r.restaurant_id ASC LIMIT 20 OFFSET 20");
         }
     }
 
