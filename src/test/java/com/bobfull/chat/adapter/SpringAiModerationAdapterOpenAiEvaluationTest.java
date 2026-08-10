@@ -58,6 +58,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
     @Autowired private AiModerationPort aiModerationPort;
     @Autowired private ApplicationContext applicationContext;
     @Autowired @Qualifier("moderationChatClient") private ChatClient moderationChatClient;
+    @Value("${spring.ai.openai.chat.model}") private String evaluationModel;
     @Value("${bobfull.ai.moderation.max-output-tokens}") private int maxOutputTokens;
 
     @DynamicPropertySource
@@ -79,10 +80,13 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
     @Test
     void 실제_OpenAI_RAW와_DTO를_콘솔에서_확인한다() {
         String input = "내 번호 010-1234-5678이야";
+        System.out.printf("%n===== EVALUATION OPTIONS =====%nmodel=%s%n%s=%d%nreasoningEffort=%s%n%n",
+                evaluationModel, OpenAiModerationEvaluationOptions.outputTokenOptionName(evaluationModel), maxOutputTokens,
+                "gpt-5.4-nano".equals(evaluationModel) ? "none" : "not-set");
         ResponseEntity<ChatResponse, ModerationResult> response = moderationChatClient.prompt()
                 .system(ModerationPrompt.SYSTEM_PROMPT)
                 .user(input)
-                .options(ModerationOpenAiOptions.withMaxOutputTokens(maxOutputTokens))
+                .options(OpenAiModerationEvaluationOptions.forModel(evaluationModel, maxOutputTokens))
                 .call()
                 .responseEntity(ModerationResult.class, spec -> spec.useProviderStructuredOutput());
         ChatResponse chatResponse = response.response();
@@ -101,6 +105,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
         assertThat(response.entity().riskLevel()).isEqualTo(RiskLevel.MEDIUM);
         assertThat(metadata).isNotNull();
         assertThat(metadata.getModel()).isNotBlank();
+        assertThat(metadata.getModel()).startsWith(evaluationModel);
     }
 
     @Test
