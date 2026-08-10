@@ -58,8 +58,10 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 | 실제 OpenAI 단건 호출 | local IntelliJ 환경에서 Context 기동·Provider 호출·Structured Output 변환·SAFE 기대값 확인 | PASS (Human 실행 결과) |
 | 40건 고정 Dataset 재측정 (Prompt version drift 발견 전 BobFull 실측) | Result 40/40, Category 40/40, Risk 17/40, Exact 17/40, Review Actionability 26/40 | BEFORE |
 | drift 발견 전 Provider 관측 | Provider Failure 0, OpenAI Calls 40, latency avg 967.6ms / p95 1239ms / p99 3559ms, total token 14,256, total elapsed 38,723ms | BEFORE (Human 실행 결과) |
-| 40건 고정 Dataset 재측정 (Prompt 복구 후) | Result 40/40, Category 40/40, Risk 35/40, Exact 35/40, Review Actionability 39/40 | AFTER (Human 실행 결과) |
-| drift 복구 후 Provider 관측 | OpenAI Calls 40, latency avg 869.6ms / p95 1292ms / p99 1569ms, prompt/completion/total token 30,897 / 687 / 31,584, total elapsed 34,804ms | AFTER (Human 실행 결과) |
+| Prompt v2 복구 baseline 40건 | Result 40/40, Category 40/40, Risk 35/40, Exact 35/40, Review Actionability 39/40 | BASELINE (Human 실행 결과) |
+| Prompt v2 복구 baseline Provider 관측 | OpenAI Calls 40, latency avg 869.6ms / p95 1292ms / p99 1569ms, prompt/completion/total token 30,897 / 687 / 31,584, total elapsed 34,804ms | BASELINE (Human 실행 결과) |
+| Prompt v2 + 128 token guard 40건 | Result 40/40, Category 40/40, Risk 34/40, Exact 34/40, Review Actionability 38/40 | GUARD (Human 실행 결과) |
+| Prompt v2 + 128 token guard Provider 관측 | Provider/Structured Output failure 0, OpenAI Calls 40, latency avg 1037.1ms / p95 1748ms / p99 1904ms, prompt/completion/total token 30,897 / 686 / 31,583, total elapsed 41,503ms | GUARD (Human 실행 결과) |
 | Core 정상·검증실패·멱등성·AI 장애 격리 | `./gradlew :test --tests com.bobfull.chat.service.ChatModerationServiceTest` 성공 | PASS |
 | 전체 build 및 테스트 | `./gradlew test` 성공 | PASS |
 
@@ -97,7 +99,46 @@ Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment�
   -PshowTestOutput
 ```
 
-`OPENAI_MODERATION_MAX_TOKENS=128`은 위 Prompt v2 기준선 측정 뒤에 추가된 Moderation 전용 Provider request option이다. 기존 40건 After 수치를 삭제하거나 변경하지 않으며, API Key가 있는 환경에서 RAW/DTO 단건과 대표 6건이 PASS한 뒤 동일 Dataset 40건을 재측정해 상한 적용 후 기준선 유지 여부를 별도 기록한다.
+## Output Token Guard 검증
+
+`OPENAI_MODERATION_MAX_TOKENS=128`은 Prompt v2 기준선 측정 뒤에 추가한 Moderation 전용 Provider request option이다. 기존 baseline 수치를 유지한 채 다음 검증을 수행했다.
+
+### RAW → DTO 실제 Provider 확인
+
+Human local opt-in test 결과는 다음과 같다. 이 출력은 학습·검증용 test stdout에만 허용하며 운영 Logger에는 원문·RAW를 기록하지 않는다.
+
+```text
+INPUT: 내 번호 010-1234-5678이야
+OPENAI RAW: {"categories":["PERSONAL_INFORMATION"],"result":"FLAGGED","riskLevel":"MEDIUM"}
+PARSED DTO: ModerationResult[result=FLAGGED, categories=[PERSONAL_INFORMATION], riskLevel=MEDIUM]
+METADATA: provider=OpenAI, model=gpt-4o-mini-2024-07-18, promptTokens=775, completionTokens=19, totalTokens=794
+```
+
+Provider Structured Output JSON은 `ModerationResult`로 정상 변환됐고, completion 19는 128 상한보다 충분히 낮다. 상한 도달 또는 잘림의 근거는 없다.
+
+### 대표 6건 회귀
+
+`Prompt_v2_대표_회귀_6건을_실제_OpenAI로_검증한다`는 실제 OpenAI 호출에서 6/6 PASS했다. PROFANITY MEDIUM 2건, PERSONAL_INFORMATION MEDIUM 2건, SPAM HIGH 1건, SAFE LOW 1건이 모두 기대값과 일치했다.
+
+### Prompt v2 + Output Token Guard 40건 검증
+
+| 지표 | Prompt v2 복구 baseline | Prompt v2 + 128 guard |
+|---|---:|---:|
+| Result Accuracy | 40/40 (100.0%) | 40/40 (100.0%) |
+| Category Accuracy | 40/40 (100.0%) | 40/40 (100.0%) |
+| Risk / Exact | 35/40 (87.5%) | 34/40 (85.0%) |
+| Review Actionability | 39/40 (97.5%) | 38/40 (95.0%) |
+| Provider / Structured Output failure | 0 / 0 | 0 / 0 |
+| latency avg / p95 / p99 | 869.6 / 1292 / 1569ms | 1037.1 / 1748 / 1904ms |
+| prompt / completion / total token | 30,897 / 687 / 31,584 | 30,897 / 686 / 31,583 |
+
+Guard run mismatch는 `PROFANITY-07` MEDIUM→LOW, `PI-09` MEDIUM→LOW, `SPAM-02`, `SPAM-05`, `SPAM-07`, `SPAM-09` HIGH→MEDIUM이다. PI-09의 LOW 변동으로 Review Actionability가 baseline보다 1건 감소했다.
+
+### 해석과 Freeze
+
+- guard run의 평균 completion은 686/40 ≈ 17.15 tokens이며, 128 상한 도달·잘림·parse 실패는 0건이다. 따라서 현재 Structured Moderation 응답에 128은 충분한 여유가 있는 guard다.
+- 같은 Prompt/Dataset/모델 계열의 단일 외부 LLM 실행 간 차이를 128 token guard의 인과적 품질 저하로 해석하지 않는다. latency 차이도 guard에 의한 성능 저하라고 주장하지 않는다.
+- Prompt v2는 고정한다. 동일 Dataset에 맞춘 Prompt v3, PI-09/PROFANITY-07/SPAM case 맞춤 few-shot, expected 변경을 하지 않는다. 향후 품질 개선은 별도 신규 Human-labeled·versioned held-out Dataset에서 재평가한다.
 
 ## 정합성·장애 격리
 
