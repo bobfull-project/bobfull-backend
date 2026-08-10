@@ -97,8 +97,8 @@ class RestaurantSearchExplainInvestigationTest {
                             + "AND hour(ts.start_at) = 2 AND minute(ts.start_at) = 0 "
                             + "ORDER BY r.restaurant_id ASC LIMIT 20");
 
-            // Issue #61 최소 조합 보완. 아래 세 시나리오는 하네스만 추가한 상태이며,
-            // 실제 Before/After raw Evidence는 동일 MySQL/Fixture에서 재실행한 뒤에만 기록한다.
+            // Issue #61 최소 조합 보완(date+time / 정렬 / pagination). raw Before/After는
+            // docs/evidence/v3/61-search-query/README.md와 raw/explain-*-trackA.txt에 기록됨.
             explain(connection, "date + time 필터(정확 시각 일치)",
                     "SELECT DISTINCT r.restaurant_id FROM restaurant r, shared_table st, time_slot ts "
                             + "WHERE r.deleted_at IS NULL AND r.status = 'ACTIVE' "

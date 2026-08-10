@@ -29,6 +29,7 @@
 - Track B 데이터: Restaurant 1건, SharedTable 1건, TimeSlot 20건, 각 TimeSlot마다 RECRUITING 상태 Reservation 1건 + ReservationParticipant 1건(partySize=2). READY Payment는 이번 측정에 포함하지 않았다(포함해도 duplicate 쿼리 구조 자체는 동일하게 나타난다).
 - 데이터 규모는 `small`(Track B, 20 TimeSlot) 1종, `medium`(Track A, 5,000 Restaurant) 1종만 측정했다. 더 큰 규모(예: 수십만 Restaurant)는 이번 Issue에서 측정하지 않았다는 한계가 있다(아래 "검증 한계" 참고).
 - 실행 방법 재현: `src/test/java/com/bobfull/timeslot/service/AvailableDiningSessionQueryCountInvestigationTest.java`, `src/test/java/com/bobfull/restaurant/repository/RestaurantSearchExplainInvestigationTest.java`. 둘 다 `BOBFULL_MYSQL_PERF_TEST=true` + `BOBFULL_TEST_MYSQL_URL`/`BOBFULL_TEST_MYSQL_USERNAME`/`BOBFULL_TEST_MYSQL_PASSWORD` 환경변수가 있을 때만 실행되며, `@AfterEach`에서 자신이 만든 데이터만 정리한다(개발 DB를 절대 가리키지 않아야 한다).
+- Track A 8개 시나리오 전체(기본/keyword/category/date/time/date+time/정렬/pagination)의 Before/After는 같은 MySQL 8.4.10 컨테이너·같은 Fixture 생성 코드에서, `SharedTable`의 `@Index` 선언을 일시적으로 제거한 상태로 전체 테스트를 1회 실행(Before)한 뒤 `@Index`를 복원해 다시 1회 실행(After)해 얻었다. `ddl-auto: update`는 엔티티에 선언된 인덱스를 스키마에 없으면 추가하지만 엔티티에서 제거된 인덱스를 스키마에서 자동으로 지우지는 않으므로, Before 측정은 반드시 엔티티 선언을 먼저 제거한 뒤 새 컨테이너에서 스키마를 생성해야 한다(이번에도 그렇게 했다).
 
 ## Before 결과
 
@@ -43,8 +44,15 @@
 | category 등치 | 2 | `PRIMARY`(index scan) | 없음 | 0.075ms |
 | date 필터(3-way join) | 2 | `shared_table`: 없음(PRIMARY 외 인덱스 부재) / `time_slot`: `uk_time_slot_active_start` / `restaurant`: `PRIMARY` | **`shared_table` full scan(5,000행 전체) + Using temporary + Using filesort** | 11.5ms |
 | time 필터(hour/minute, date 없음) | 2 | 위와 동일 | **`shared_table` full scan(5,000행 전체) + Using temporary + Using filesort** | 12.1ms |
+| date + time 필터(정확 시각 일치, `timeSlot.startAt.eq(instant)` 경로) | 2 | 위와 동일(`shared_table` 인덱스 부재) | **`shared_table` full scan(5,000행 전체)** | 14.8ms(실제 매치 0건 — 아래 참고) |
+| 정렬 조건(name ASC, 단일 테이블) | 2 | 없음(`name` 컬럼 인덱스 부재) | `Table scan on r`(5,000행 전체) + `Sort` | 2.06ms |
+| pagination 2페이지(`OFFSET 20`, 단일 테이블) | 2 | `PRIMARY`(index scan) | 없음 | 0.0405ms |
 
-> Issue #61이 최소 조합으로 요구한 `date + time`, 별도 정렬 조건, pagination 시나리오는 현재 raw Before Evidence에 없다. 측정 하네스는 보완하되 실제 MySQL Before/After 실행 결과가 추가되기 전까지 해당 세 시나리오는 `NOT_MEASURED`로 취급한다.
+이 세 시나리오는 최초 Evidence 작성 시 raw 측정이 빠져 있었다(#61 PR 리뷰에서 지적, `NOT_MEASURED`로 기록). `SharedTable`의 `@Index` 선언을 임시로 제거·재적용해 동일 5,000건 Fixture에서 Before/After를 각각 재실행해 보강했다.
+
+- `date + time`: 정확한 `start_at` 값 일치 조건이라 `date 필터`(범위)보다 훨씬 선택적이다. 이번 Fixture의 seed 값과 테스트가 사용한 리터럴(`2026-08-13 02:00:00`)이 실제로는 일치하는 행이 없어(`actual rows=0`) 결과 집합은 비었다. 그래도 join 순서·인덱스 사용 여부는 Before/After 계획 비교에 그대로 나타난다(아래 "After 결과" 참고) — 이 시나리오의 목적은 특정 결과를 재현하는 것이 아니라 `date+time` 조건 경로가 `date`/`time` 단독 경로와 같은 계획 문제(shared_table full scan)를 갖는지 확인하는 것이었고, 그 목적은 달성했다.
+- `정렬 조건(name ASC)`: `restaurant.name`에 인덱스가 없어 `Table scan on r`(5,000행 전체 스캔) + 명시적 `Sort`가 발생한다. 이 PR의 변경(shared_table 인덱스, 회차 조회 중복 제거) 범위 밖의 별개 지점이며, Before/After 동일하다(이번 PR에서 다루지 않음 — 아래 "결과 해석" 참고).
+- `pagination`: `ORDER BY restaurant_id LIMIT 20 OFFSET 20`은 `PRIMARY` 인덱스 순서로 40행까지 examine 후 앞 20행을 skip한다. 정상적인 OFFSET 동작이며 별도 문제가 아니다.
 
 핵심 발견: 처음 가설이었던 "`LIKE '%keyword%'` 선두 와일드카드"와 "`hour()/minute()` 함수 래핑"은 이 규모(5,000건)에서 실제 병목이 **아니었다**.
 
@@ -90,8 +98,11 @@
 | category 등치 | `PRIMARY`(동일) | 없음(동일) | 0.144ms | 단일 관측값, 계획 변화 없음 |
 | date 필터(3-way join) | `restaurant.PRIMARY`(선행) → `idx_shared_table_restaurant_id`(신규) → `time_slot.uk_time_slot_active_start` | **shared_table full scan 제거.** join 순서가 `restaurant` 선행으로 바뀌어 `r` 스캔도 751행에서 조기 종료 | **3.03ms** | 11.5ms → 3.03ms의 단일 실행 관측 |
 | time 필터(hour/minute) | 위와 동일 순서 | shared_table full scan 제거, `r` 스캔 474행에서 조기 종료 | **1.33ms** | 12.1ms → 1.33ms의 단일 실행 관측 |
+| date + time 필터(정확 시각 일치) | `restaurant.PRIMARY`(선행) → `idx_shared_table_restaurant_id`(신규) → `time_slot.uk_time_slot_active_start` | **shared_table full scan 제거**(동일 계획 개선) | 15.3ms(실제 매치 0건, Before와 동일하게 0건) | 계획은 동일하게 개선(full scan 제거), 결과 집합 0건이라 actual time 자체는 비교 의미가 제한적 |
+| 정렬 조건(name ASC) | 없음(동일) | `Table scan on r`(동일, 5,000행) + `Sort`(동일) | 1.55ms | 단일 관측값, 계획 변화 없음(이 PR의 변경과 무관한 지점) |
+| pagination 2페이지 | `PRIMARY`(동일) | 없음(동일) | 0.0446ms | 단일 관측값, 계획 변화 없음 |
 
-기본/keyword/category 3가지는 이번 인덱스와 무관한 단일 테이블 조회라 계획이 그대로다(의도된 결과 — 이 변경이 다른 조회에 영향을 주지 않았다는 근거).
+기본/keyword/category/정렬/pagination은 이번 인덱스와 무관한 단일 테이블 조회(또는 shared_table을 거치지 않는 조회)라 계획이 그대로다(의도된 결과 — 이 변경이 다른 조회에 영향을 주지 않았다는 근거).
 
 ### Track B
 
@@ -115,11 +126,14 @@
 - Track B는 측정 즉시 명확한 구조적 중복이 확인되어 Query 수준 개선을 적용했다. 계산식은 그대로이므로 기능 리스크가 낮다.
 - Track A는 최초 가설(keyword LIKE, hour/minute 함수)이 **실제로는 이 규모에서 병목이 아니었다** — 측정 없이 바로 "함수 조건이니 인덱스가 안 먹는다"고 인덱스를 추가했다면 틀린 지점에 인덱스를 추가했을 것이다. 실제 병목은 예상 밖의 지점(`shared_table`의 조인 인덱스 부재)이었고, 이는 이 Issue의 "측정 후에만 변경을 선택한다" 원칙이 실제로 값을 낸 사례다.
 - date/time 필터에서는 동일 Fixture의 대표 실행에서 각각 `11.5ms → 3.03ms`, `12.1ms → 1.33ms`가 관측됐고 `shared_table` full scan 제거도 확인됐다. 다만 warmup·반복 분포가 없으므로 **3.8x/9.1x 같은 안정적인 성능 개선율로 일반화하지 않는다.** HTTP 수준 성능은 #63에서 별도 검증한다.
+- `date + time`(정확 시각 일치) 경로도 `date`/`time` 단독 경로와 동일하게 `shared_table` full scan이 Before에 있었고 After에는 제거됐다 — 같은 인덱스가 세 경로 모두를 해결한다는 근거를 얻었다. 이 시나리오는 실제 매치가 0건이라 절대 시간 개선치보다 "계획이 바뀌었는가"에 의미가 있다.
+- 정렬 조건(name ASC)에서 `restaurant.name`에 인덱스가 없어 전체 스캔+명시적 Sort가 발생하는 것을 확인했다. 이 PR이 다룬 병목(회차 조회 중복, `shared_table` 조인 인덱스 부재)과는 다른 지점이고, Issue #61이 측정한 범위(keyword/category/date/time) 안에서 이 인덱스 추가를 결정할 근거가 없어 이번 PR에서는 변경하지 않는다. 이름 정렬이 실제 트래픽에서 자주 쓰인다면 별도 Issue에서 `restaurant.name` 인덱스 필요성을 재측정할 수 있다.
 
 ## 검증 한계
 
-- Issue #61의 Track A 최소 조합 중 `date + time`, 별도 정렬 조건, pagination은 아직 raw Before/After가 없다. 보완 측정 전까지 해당 시나리오의 Evidence 수준은 `NOT_MEASURED`다.
 - Track A raw actual time은 각 시나리오의 대표 실행 1회이며 별도 warmup·반복 분포가 없다. 따라서 full scan 제거·사용 Index 변경은 근거로 사용할 수 있지만 실제 latency 개선율의 일반화에는 사용할 수 없다.
+- `date + time` 시나리오는 실제 매치 0건으로 측정됐다(seed 데이터와 테스트 리터럴이 정확히 일치하는 조합을 찾지 못함). 결과 집합이 있는 상태에서의 `date+time` actual time은 별도로 확인하지 않았다 — join 순서·인덱스 사용 여부(계획 자체의 개선)만 근거로 삼는다.
+- `restaurant.name` 정렬 시 발생하는 전체 스캔+Sort는 이번에 발견했지만 이번 PR의 측정·변경 범위(keyword/category/date/time 병목) 밖이라 인덱스를 추가하지 않았다. 별도 후속 검토 후보로 남긴다.
 - 데이터 규모는 Track A 5,000건, Track B 20건 각 1종만 측정했다(Issue 권장 `small/medium/large` 중 medium 1종 위주). 수십만 건 규모의 실제 운영 데이터에서는 옵티마이저의 판단이 달라질 수 있다.
 - HTTP 레벨 p50/p95/p99는 측정하지 않았다 — 이번 Issue는 DB 레벨(SQL/EXPLAIN/쿼리 수)에 한정했고, 부하·응답시간 지표는 #63 K6 Harness의 몫으로 남긴다.
 - keyword LIKE의 "실제 매치가 0건에 가까울 때 전체 스캔에 근접한다"는 위험은 이론적으로는 남아 있으나, 이번 측정에서 확정 병목으로 재현하지 않았다 — Full Text Search 등 검색 방식 변경은 Human 결정 Q2에 따라 이번 Issue에서 다루지 않는다.
