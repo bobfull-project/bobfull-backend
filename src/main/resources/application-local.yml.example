@@ -8,7 +8,6 @@ spring:
       api-key: ${OPENAI_API_KEY}
       chat:
         model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
-        max-tokens: ${OPENAI_CHAT_MAX_TOKENS:128}
 
   retry:
     max-attempts: 1
@@ -101,3 +100,8 @@ outbox:
 logging:
   level:
     org.hibernate.SQL: debug
+
+bobfull:
+  ai:
+    moderation:
+      max-output-tokens: ${OPENAI_MODERATION_MAX_TOKENS:128}

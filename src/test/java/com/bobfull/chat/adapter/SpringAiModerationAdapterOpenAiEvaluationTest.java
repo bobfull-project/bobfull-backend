@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -56,6 +57,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
     @Autowired private AiModerationPort aiModerationPort;
     @Autowired private ApplicationContext applicationContext;
     @Autowired @Qualifier("moderationChatClient") private ChatClient moderationChatClient;
+    @Value("${bobfull.ai.moderation.max-output-tokens}") private int maxOutputTokens;
 
     @DynamicPropertySource
     static void openAiApiKey(DynamicPropertyRegistry registry) {
@@ -79,6 +81,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
         ResponseEntity<ChatResponse, ModerationResult> response = moderationChatClient.prompt()
                 .system(ModerationPrompt.SYSTEM_PROMPT)
                 .user(input)
+                .options(ModerationOpenAiOptions.withMaxOutputTokens(maxOutputTokens))
                 .call()
                 .responseEntity(ModerationResult.class, spec -> spec.useProviderStructuredOutput());
         ChatResponse chatResponse = response.response();

@@ -21,7 +21,7 @@ Kafka Consumer와 Retry/DLT는 Issue #59 범위이므로 이 Evidence에서 구�
 
 - provider: OpenAI
 - model: `spring.ai.openai.chat.model` ← `OPENAI_CHAT_MODEL` 환경변수, 기본값 `gpt-4o-mini`
-- output token cap: `spring.ai.openai.chat.max-tokens` ← `OPENAI_CHAT_MAX_TOKENS`, 기본값 `128`. Spring AI 2.0.0 metadata에서 확인한 gpt-4o-mini 일반 Chat option이며, reasoning model용 `max-completion-tokens`와 함께 설정하지 않는다.
+- moderation output token cap: `bobfull.ai.moderation.max-output-tokens` ← `OPENAI_MODERATION_MAX_TOKENS`, 기본값 `128`. Adapter가 Spring AI 2.0.0 `OpenAiChatOptions.builder().maxTokens(...)`를 Moderation 요청에만 전달한다. 전역 `spring.ai.openai.chat.max-tokens`는 설정하지 않으며 reasoning model용 `max-completion-tokens`와 함께 설정하지 않는다.
 - local/prod API Key: `OPENAI_API_KEY` 환경변수. 실제 키는 `application-local.yml`·배포 설정·저장소에 저장하지 않는다.
 - promptVersion: `moderation-prompt-v2`
 - policyVersion: `moderation-policy-v1`
@@ -97,7 +97,7 @@ Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment�
   -PshowTestOutput
 ```
 
-`OPENAI_CHAT_MAX_TOKENS=128`은 위 Prompt v2 기준선 측정 뒤에 추가된 Provider request option이다. 기존 40건 After 수치를 삭제하거나 변경하지 않으며, API Key가 있는 환경에서 RAW/DTO 단건과 대표 6건이 PASS한 뒤 동일 Dataset 40건을 재측정해 상한 적용 후 기준선 유지 여부를 별도 기록한다.
+`OPENAI_MODERATION_MAX_TOKENS=128`은 위 Prompt v2 기준선 측정 뒤에 추가된 Moderation 전용 Provider request option이다. 기존 40건 After 수치를 삭제하거나 변경하지 않으며, API Key가 있는 환경에서 RAW/DTO 단건과 대표 6건이 PASS한 뒤 동일 Dataset 40건을 재측정해 상한 적용 후 기준선 유지 여부를 별도 기록한다.
 
 ## 정합성·장애 격리
 

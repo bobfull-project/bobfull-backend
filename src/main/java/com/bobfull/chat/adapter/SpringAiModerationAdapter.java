@@ -16,15 +16,18 @@ import org.springframework.stereotype.Component;
 public class SpringAiModerationAdapter implements AiModerationPort {
     private final ChatClient chatClient;
     private final String configuredModel;
+    private final int maxOutputTokens;
     public SpringAiModerationAdapter(ChatClient moderationChatClient,
-            @Value("${spring.ai.openai.chat.model:gpt-4o-mini}") String configuredModel) {
-        this.chatClient = moderationChatClient; this.configuredModel = configuredModel;
+            @Value("${spring.ai.openai.chat.model:gpt-4o-mini}") String configuredModel,
+            @Value("${bobfull.ai.moderation.max-output-tokens:128}") int maxOutputTokens) {
+        this.chatClient = moderationChatClient; this.configuredModel = configuredModel; this.maxOutputTokens = maxOutputTokens;
     }
     @Override
     public AiModerationResponse analyze(String content) {
         ResponseEntity<ChatResponse, ModerationResult> response = chatClient.prompt()
                 .system(ModerationPrompt.SYSTEM_PROMPT)
                 .user(content)
+                .options(ModerationOpenAiOptions.withMaxOutputTokens(maxOutputTokens))
                 .call()
                 .responseEntity(ModerationResult.class, spec -> spec.useProviderStructuredOutput());
         ChatResponseMetadata metadata = response.response().getMetadata();
