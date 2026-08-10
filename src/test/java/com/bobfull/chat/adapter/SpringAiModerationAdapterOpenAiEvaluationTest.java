@@ -35,6 +35,7 @@ import org.springframework.test.context.ActiveProfiles;
 @EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
 @ActiveProfiles("local")
 @SpringBootTest(properties = {
+        "spring.ai.openai.chat.model=${OPENAI_EVAL_MODEL:${OPENAI_CHAT_MODEL:gpt-4o-mini}}",
         "spring.datasource.url=jdbc:h2:mem:openai-evaluation;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
