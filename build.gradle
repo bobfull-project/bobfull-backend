@@ -50,6 +50,17 @@ dependencies {
 	testRuntimeOnly 'com.h2database:h2'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
+	if (System.getProperty('os.name').toLowerCase().contains('mac')) {
+		def macOsClassifier = System.getProperty('os.arch').toLowerCase().contains('aarch64')
+				|| System.getProperty('os.arch').toLowerCase().contains('arm64') ? 'osx-aarch_64' : 'osx-x86_64'
+		runtimeOnly('io.netty:netty-resolver-dns-native-macos') {
+			artifact {
+				classifier = macOsClassifier
+				type = 'jar'
+				extension = 'jar'
+			}
+		}
+	}
 }
 
 tasks.named('test') {
