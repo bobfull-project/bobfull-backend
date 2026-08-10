@@ -8,7 +8,6 @@ import com.bobfull.chat.dto.ModerationResult;
 import com.bobfull.chat.entity.ModerationCategory;
 import com.bobfull.chat.entity.ModerationResultType;
 import com.bobfull.chat.entity.RiskLevel;
-import com.bobfull.chat.port.AiModerationPort;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -55,7 +54,6 @@ import org.springframework.test.context.ActiveProfiles;
         "outbox.email.enabled=false"
 })
 class SpringAiModerationAdapterOpenAiEvaluationTest {
-    @Autowired private AiModerationPort aiModerationPort;
     @Autowired private ApplicationContext applicationContext;
     @Autowired @Qualifier("moderationChatClient") private ChatClient moderationChatClient;
     @Value("${spring.ai.openai.chat.model}") private String evaluationModel;
@@ -69,7 +67,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
     @Test
     void local_환경변수로_바인딩한_OpenAI에_SAFE_단건_분석을_요청한다() {
         // when
-        AiModerationResponse response = aiModerationPort.analyze("내일 7시에 식당에서 봐요.");
+        AiModerationResponse response = evaluateWithSelectedModel("내일 7시에 식당에서 봐요.").response();
 
         // then
         assertThat(response.provider()).isEqualTo("OpenAI");
@@ -83,26 +81,20 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
         System.out.printf("%n===== EVALUATION OPTIONS =====%nmodel=%s%n%s=%d%nreasoningEffort=%s%n%n",
                 evaluationModel, OpenAiModerationEvaluationOptions.outputTokenOptionName(evaluationModel), maxOutputTokens,
                 "gpt-5.4-nano".equals(evaluationModel) ? "none" : "not-set");
-        ResponseEntity<ChatResponse, ModerationResult> response = moderationChatClient.prompt()
-                .system(ModerationPrompt.SYSTEM_PROMPT)
-                .user(input)
-                .options(OpenAiModerationEvaluationOptions.forModel(evaluationModel, maxOutputTokens))
-                .call()
-                .responseEntity(ModerationResult.class, spec -> spec.useProviderStructuredOutput());
-        ChatResponse chatResponse = response.response();
-        ChatResponseMetadata metadata = chatResponse.getMetadata();
+        EvaluationResponse response = evaluateWithSelectedModel(input);
+        ChatResponseMetadata metadata = response.metadata();
         Usage usage = metadata == null ? null : metadata.getUsage();
 
         System.out.printf("%n===== INPUT =====%n%s%n%n", input);
-        System.out.printf("===== OPENAI RAW =====%n%s%n%n", chatResponse.getResult().getOutput().getText());
-        System.out.printf("===== PARSED DTO =====%n%s%n%n", response.entity());
+        System.out.printf("===== OPENAI RAW =====%n%s%n%n", response.raw());
+        System.out.printf("===== PARSED DTO =====%n%s%n%n", response.response().result());
         System.out.printf("===== METADATA =====%nprovider=OpenAI%nmodel=%s%npromptTokens=%s%ncompletionTokens=%s%ntotalTokens=%s%n",
                 metadata == null ? null : metadata.getModel(), usage == null ? null : usage.getPromptTokens(),
                 usage == null ? null : usage.getCompletionTokens(), usage == null ? null : usage.getTotalTokens());
 
-        assertThat(response.entity().result()).isEqualTo(ModerationResultType.FLAGGED);
-        assertThat(response.entity().categories()).containsExactly(ModerationCategory.PERSONAL_INFORMATION);
-        assertThat(response.entity().riskLevel()).isEqualTo(RiskLevel.MEDIUM);
+        assertThat(response.response().result().result()).isEqualTo(ModerationResultType.FLAGGED);
+        assertThat(response.response().result().categories()).containsExactly(ModerationCategory.PERSONAL_INFORMATION);
+        assertThat(response.response().result().riskLevel()).isEqualTo(RiskLevel.MEDIUM);
         assertThat(metadata).isNotNull();
         assertThat(metadata.getModel()).isNotBlank();
         assertThat(metadata.getModel()).startsWith(evaluationModel);
@@ -140,7 +132,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
         for (ModerationTestCase testCase : testCases) {
             long startedAt = System.nanoTime();
             try {
-                AiModerationResponse response = aiModerationPort.analyze(testCase.message());
+                AiModerationResponse response = evaluateWithSelectedModel(testCase.message()).response();
                 long latencyMillis = elapsedMillis(startedAt);
                 latencies.add(latencyMillis);
                 ModerationResult actual = response.result();
@@ -199,7 +191,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
 
     private void assertAnalysis(String message, ModerationResultType expectedResult,
             Set<ModerationCategory> expectedCategories, RiskLevel expectedRiskLevel) {
-        ModerationResult actual = aiModerationPort.analyze(message).result();
+        ModerationResult actual = evaluateWithSelectedModel(message).response().result();
         assertThat(actual.result()).isEqualTo(expectedResult);
         assertThat(actual.categories()).isEqualTo(expectedCategories);
         assertThat(actual.riskLevel()).isEqualTo(expectedRiskLevel);
@@ -208,6 +200,26 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
     static void verifyDatasetContract() {
         assertDatasetContract(testCases());
     }
+
+    private EvaluationResponse evaluateWithSelectedModel(String content) {
+        ResponseEntity<ChatResponse, ModerationResult> response = moderationChatClient.prompt()
+                .system(ModerationPrompt.SYSTEM_PROMPT)
+                .user(content)
+                .options(OpenAiModerationEvaluationOptions.forModel(evaluationModel, maxOutputTokens))
+                .call()
+                .responseEntity(ModerationResult.class, spec -> spec.useProviderStructuredOutput());
+        ChatResponse chatResponse = response.response();
+        ChatResponseMetadata metadata = chatResponse.getMetadata();
+        Usage usage = metadata == null ? null : metadata.getUsage();
+        String model = metadata == null || metadata.getModel() == null ? evaluationModel : metadata.getModel();
+        AiModerationResponse aiResponse = new AiModerationResponse(response.entity(), "OpenAI", model,
+                usage == null ? null : asLong(usage.getPromptTokens()),
+                usage == null ? null : asLong(usage.getCompletionTokens()),
+                usage == null ? null : asLong(usage.getTotalTokens()));
+        return new EvaluationResponse(aiResponse, chatResponse.getResult().getOutput().getText(), metadata);
+    }
+
+    private static Long asLong(Integer value) { return value == null ? null : value.longValue(); }
 
     private static void printSummary(int total, int resultMatches, int categoryMatches, int riskMatches,
             int exactMatches, int reviewActionabilityMatches, List<EvaluationFailure> failures, List<Long> latencies,
@@ -291,6 +303,7 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
 
     private record ModerationTestCase(String id, String message, ModerationResultType expectedResult,
                                       Set<ModerationCategory> expectedCategories, RiskLevel expectedRiskLevel) { }
+    private record EvaluationResponse(AiModerationResponse response, String raw, ChatResponseMetadata metadata) { }
     private record EvaluationFailure(String id, ModerationResultType expectedResult, Set<ModerationCategory> expectedCategories,
                                      RiskLevel expectedRiskLevel, ModerationResultType actualResult,
                                      Set<ModerationCategory> actualCategories, RiskLevel actualRiskLevel,
