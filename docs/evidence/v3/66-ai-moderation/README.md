@@ -74,6 +74,15 @@ Prompt 복구 후 FAIL은 `PROFANITY-07`의 MEDIUM→LOW 1건과 `SPAM-02`, `SPA
 
 상세 boundary/few-shot 복구로 total token은 14,256에서 31,584로 증가했다. 반면 Review Actionability는 65.0%에서 97.5%로 회복됐다. latency와 총 경과 시간은 외부 OpenAI 실행 편차가 있으므로 Before 대비 성능 개선으로 주장하지 않고, 각 실행의 실제 관측값으로만 기록한다.
 
+| After 40건 카테고리 | Result/Category | Risk/Exact | Review Actionability |
+|---|---:|---:|---:|
+| SAFE (10) | 10/10 | 10/10 | 10/10 |
+| PROFANITY (10) | 10/10 | 9/10 | 9/10 |
+| PERSONAL_INFORMATION (10) | 10/10 | 10/10 | 10/10 |
+| SPAM (10) | 10/10 | 6/10 | 10/10 |
+
+After의 Result/Category 기준 오탐·미탐은 각각 0건이다. token은 호출당 평균 prompt 772.4, completion 17.2, total 789.6이며, 이는 40회 순차 실행의 관측값이다.
+
 40건 평가는 같은 클래스의 `Prompt_v2를_동일한_40건_Human_labeled_Dataset으로_측정한다` 테스트가 순차 호출로 수행한다. Result/Category/Risk/Exact/Review Actionability 정확도, FAIL case ID와 expected/actual, 요청별 latency의 avg/p95/p99, token 합계와 총 호출 수를 출력한다. 40건 누적 실행 시간은 참고값으로만 출력한다.
 
 Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment·reservation scheduler 및 chat-room/email outbox background job을 모두 비활성화한다. 외부 의존은 OpenAI만 남긴다.
