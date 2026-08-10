@@ -29,7 +29,13 @@ import org.springframework.test.context.ActiveProfiles;
         "portone.store-id=test-store-id",
         "portone.webhook-secret=d2hzZWNfZEdWemRDMXpkR055WlhRPQ==",
         "spring.mail.host=localhost",
-        "spring.mail.port=1025"
+        "spring.mail.port=1025",
+        "payment.expiration.enabled=false",
+        "payment.refund-reconciliation.enabled=false",
+        "reservation.recruitment-deadline.enabled=false",
+        "reservation.dining-end.enabled=false",
+        "outbox.chat-room.enabled=false",
+        "outbox.email.enabled=false"
 })
 class SpringAiModerationAdapterOpenAiEvaluationTest {
     @Autowired private AiModerationPort aiModerationPort;

@@ -44,7 +44,7 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 
 | 지표·현상 | 결과 | 판정 |
 |---|---:|---|
-| 실제 OpenAI 단건 호출 | `NOT_MEASURED` — 이 실행 환경에 `OPENAI_API_KEY` 없음 | NOT_RUN |
+| 실제 OpenAI 단건 호출 | local IntelliJ 환경에서 Context 기동·Provider 호출·Structured Output 변환·SAFE 기대값 확인 | PASS (Human 실행 결과) |
 | 40건 고정 Dataset 재측정 | `NOT_MEASURED` — 실제 Provider 호출 미실행 | NOT_RUN |
 | latency / token / 비용 | `NOT_MEASURED` — 실제 Provider 응답 없음 | NOT_RUN |
 | Core 정상·검증실패·멱등성·AI 장애 격리 | `./gradlew :test --tests com.bobfull.chat.service.ChatModerationServiceTest` 성공 | PASS |
@@ -55,6 +55,8 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 ```bash
 ./gradlew :test --tests com.bobfull.chat.adapter.SpringAiModerationAdapterOpenAiEvaluationTest
 ```
+
+Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment·reservation scheduler 및 chat-room/email outbox background job을 모두 비활성화한다. 외부 의존은 OpenAI만 남긴다.
 
 ## 정합성·장애 격리
 
