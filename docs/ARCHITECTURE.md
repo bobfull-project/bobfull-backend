@@ -91,7 +91,7 @@ OWNER는 백엔드에서 Presigned PUT URL을 발급받아 `temp/restaurants/{ow
 
 ### 인증 세션(Access·Refresh Token)
 
-Access Token은 HS256 JWT로 서명·만료만 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃의 Redis 실패는 감추지 않고 그대로 전파한다. Access Token Blacklist(요청마다 Redis 조회)는 도입하지 않으며, Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)도 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
+Access Token은 HS256 JWT로 서명·만료를 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. 다만 발급 시 부여하는 `jti` Claim으로 로그아웃된 토큰만 예외적으로 즉시 폐기할 수 있다(Access Token Blacklist, Issue #186). Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제하고, 그 Access Token의 `jti`를 남은 유효시간만큼 Blacklist에 등록한다. 인증 필터는 서명·만료 검증을 통과한 모든 요청마다 이 Blacklist를 조회해 로그아웃된 토큰을 차단한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃 자체(Blacklist 등록·Refresh Token 삭제)의 Redis 실패는 감추지 않고 그대로 전파한다. 반면 Blacklist *조회*는 인증 필터를 거치는 모든 요청에 실행돼 Redis 장애가 곧 전체 API 장애로 번지므로 Fail-open으로 처리한다 — Redis 예외 시 요청을 막지 않고 인증을 허용하며, 노출되는 위험은 직전 로그아웃한 토큰이 만료 시각까지 잠시 재사용되는 좁은 범위로 한정한다. 이 기능 배포 이전에 발급돼 `jti`가 없는 토큰은 Blacklist 조회를 건너뛰고 인증만 정상 처리한다. Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)는 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
 
 ## 5. 예약·좌석·결제 처리
 
