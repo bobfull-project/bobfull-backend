@@ -25,7 +25,9 @@ import org.springframework.test.context.ActiveProfiles;
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=openai-evaluation-only-secret-key-with-minimum-length",
-        "portone.api-secret=openai-evaluation-only-portone-secret",
+        "portone.api-secret=test-api-secret",
+        "portone.store-id=test-store-id",
+        "portone.webhook-secret=d2hzZWNfZEdWemRDMXpkR055WlhRPQ==",
         "spring.mail.host=localhost",
         "spring.mail.port=1025"
 })
