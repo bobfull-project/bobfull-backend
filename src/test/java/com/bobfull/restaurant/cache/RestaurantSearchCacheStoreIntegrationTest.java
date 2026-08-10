@@ -2,11 +2,16 @@ package com.bobfull.restaurant.cache;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import tools.jackson.databind.json.JsonMapper;
@@ -90,6 +95,47 @@ class RestaurantSearchCacheStoreIntegrationTest {
             store.bumpVersion();
         } finally {
             unreachableFactory.destroy();
+        }
+    }
+
+    @Test
+    void Redis가_연결은_받지만_응답하지_않으면_설정된_command_timeout_이내에_실패한다() throws Exception {
+        try (ServerSocket blackhole = new ServerSocket(0)) {
+            Thread acceptThread = new Thread(() -> {
+                try {
+                    while (!blackhole.isClosed()) {
+                        blackhole.accept();
+                        // 연결은 받아주지만 응답은 절대 보내지 않는다(명령 자체가 멈춘 것처럼 재현).
+                    }
+                } catch (IOException ignored) {
+                    // 테스트 종료로 소켓이 닫히면 accept()가 예외를 던진다 — 정상 종료.
+                }
+            });
+            acceptThread.setDaemon(true);
+            acceptThread.start();
+
+            LettuceClientConfiguration clientConfiguration = LettuceClientConfiguration.builder()
+                    .commandTimeout(Duration.ofSeconds(2))
+                    .build();
+            LettuceConnectionFactory blackholeFactory = new LettuceConnectionFactory(
+                    new RedisStandaloneConfiguration("localhost", blackhole.getLocalPort()), clientConfiguration);
+            blackholeFactory.afterPropertiesSet();
+            try {
+                StringRedisTemplate redisTemplate = new StringRedisTemplate(blackholeFactory);
+                redisTemplate.afterPropertiesSet();
+                RestaurantSearchCacheStore store =
+                        new RestaurantSearchCacheStore(redisTemplate, JsonMapper.builder().build(), 60);
+
+                long start = System.nanoTime();
+                assertThat(store.find(key("블랙홀", 0))).isEmpty();
+                long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+                // 설정한 command timeout(2초) 근처에서 실패해야 한다 — DB 조회보다 오래 걸리는
+                // 무한 대기가 되지 않는다는 것을 실측으로 확인한다(Issue #62 Q2, PR #202 리뷰 반영).
+                assertThat(elapsedMs).isLessThan(5_000L);
+            } finally {
+                blackholeFactory.destroy();
+            }
         }
     }
 

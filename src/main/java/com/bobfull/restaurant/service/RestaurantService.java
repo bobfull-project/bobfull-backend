@@ -73,7 +73,7 @@ public class RestaurantService {
         );
 
         Restaurant savedRestaurant = restaurantRepository.save(restaurant);
-        restaurantSearchCacheStore.bumpVersion();
+        bumpSearchCacheVersionAfterCommit();
         return RestaurantIdResponse.from(savedRestaurant);
     }
 
@@ -164,7 +164,7 @@ public class RestaurantService {
             restaurant.updateImageKey(newImageKey);
             deletePreviousImageAfterCommit(previousImageKey, newImageKey);
         }
-        restaurantSearchCacheStore.bumpVersion();
+        bumpSearchCacheVersionAfterCommit();
         return RestaurantIdResponse.from(restaurant);
     }
 
@@ -176,7 +176,7 @@ public class RestaurantService {
         // 합석 테이블·회차·예약 도메인이 아직 없어 연결 데이터 검사를 하지 않는다.
         // 해당 도메인 구현 시 활성 데이터가 있으면 여기서 RestaurantErrorCode.RESTAURANT_DELETE_NOT_ALLOWED를 던져야 한다(Issue #31 결정 2).
         restaurant.softDelete(clock.instant());
-        restaurantSearchCacheStore.bumpVersion();
+        bumpSearchCacheVersionAfterCommit();
         return RestaurantIdResponse.from(restaurant);
     }
 
@@ -234,6 +234,26 @@ public class RestaurantService {
 
     private String createImageUrl(Restaurant restaurant) {
         return restaurantImageService.createGetUrl(restaurant.getImageKey());
+    }
+
+    /**
+     * DB 트랜잭션 커밋 후에만 검색 캐시 버전을 올린다(PR #202 리뷰 반영). 커밋 전에 올리면
+     * 아직 반영되지 않은 변경 사항 중간에 동시 검색 요청이 새 버전으로 캐시 Miss를 일으키고,
+     * 그 시점 DB에서는 여전히 이전 값을 읽어 그 값을 새 버전 key에 다시 저장해버릴 수 있다
+     * (이후 요청은 TTL 동안 이 stale 값을 "최신"으로 오인해 Hit한다). afterCommit에서 올리면
+     * 그 시점 이후에 시작하는 모든 DB 조회가 이미 커밋된 값을 보게 되어 이 경쟁이 사라진다.
+     */
+    private void bumpSearchCacheVersionAfterCommit() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    restaurantSearchCacheStore.bumpVersion();
+                }
+            });
+            return;
+        }
+        restaurantSearchCacheStore.bumpVersion();
     }
 
     private void deletePreviousImageAfterCommit(String previousImageKey, String newImageKey) {

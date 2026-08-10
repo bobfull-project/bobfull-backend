@@ -24,6 +24,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2000ms}
 
   mail:
     host: ${MAIL_HOST:localhost}

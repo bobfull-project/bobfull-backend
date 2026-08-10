@@ -63,7 +63,9 @@
 
 ### 성능 관련 부수 발견과 수정
 
-- **`@Transactional` 제거**: `RestaurantService.searchRestaurants`에 `@Transactional(readOnly = true)`가 있으면, 캐시 Hit이라 DB를 전혀 조회하지 않아도 메서드에 진입하는 순간 Hikari Connection을 열고 닫는 것을 실측으로 확인했다(아래 "핵심 트러블슈팅" 참고). Spring Data JPA 저장소 프록시(`restaurantRepository`)가 자체적으로 트랜잭션을 열기 때문에 바깥 메서드의 `@Transactional`은 불필요했다 — 제거 후 동시 Warm Hit 시나리오의 Pool 점유가 0으로 떨어졌다.
+- **`@Transactional` 제거**: `RestaurantService.searchRestaurants`에 `@Transactional(readOnly = true)`가 있으면, 캐시 Hit이라 DB를 전혀 조회하지 않아도 메서드에 진입하는 순간 Hikari Connection을 열고 닫는 것을 실측으로 확인했다(아래 "핵심 트러블슈팅" 참고). 제거 후 동시 Warm Hit 시나리오의 Pool 점유가 0으로 떨어졌다.
+- **`RestaurantSearchRepositoryImpl.search()`에 명시적 `@Transactional(readOnly = true)` 추가(PR #202 리뷰 반영)**: 처음에는 "Spring Data JPA 저장소 프록시가 자체적으로 트랜잭션을 연다"고 판단해 바깥 메서드의 트랜잭션만 제거했는데, 리뷰에서 이 커스텀 fragment 구현(`RestaurantSearchRepositoryImpl`)은 `SimpleJpaRepository`를 상속하지 않아 그 기본 트랜잭션 advice가 자동으로 적용되지 않는다는 지적을 받았다. 이 경로가 실제로 트랜잭션 없이 실행되면 `contentQuery`와 `countQuery`가 서로 다른 시점의 데이터를 볼 수 있다(동시 쓰기 개입 시). 이를 막기 위해 `search()` 메서드 자체에 `@Transactional(readOnly = true)`를 명시적으로 추가해, 두 쿼리가 항상 하나의 읽기 전용 트랜잭션 안에서 실행되도록 보장했다. 이 트랜잭션은 캐시 Hit 경로와는 무관하다(Hit이면 이 메서드 자체를 호출하지 않는다) — 그래서 Warm Hit의 Pool 미점유(0/0)는 그대로 유지된다.
+- **검색 캐시 버전 증가를 트랜잭션 커밋 후로 이동(PR #202 리뷰 반영)**: 처음 구현은 `register/update/delete`의 DB 트랜잭션이 커밋되기 *전에* `RestaurantSearchCacheStore.bumpVersion()`을 호출했다. 리뷰에서 이 순서가 실제로 경쟁을 유발한다는 지적을 받았다 — 자세한 시나리오는 아래 "핵심 트러블슈팅 2" 참고. `deletePreviousImageAfterCommit`과 같은 방식(`TransactionSynchronization.afterCommit`)으로 옮겨, DB 변경이 실제로 커밋된 뒤에만 버전을 올리도록 고쳤다.
 
 ## After 결과 — 시나리오 B/C/D: Cold/Warm/Mixed
 
@@ -98,7 +100,7 @@
 원본: `RestaurantSearchCacheStoreIntegrationTest`(5개 테스트 모두 PASS)
 
 - 존재하지 않는 포트(연결 자체가 실패하는 상황)로 `find`/`put`/`bumpVersion`을 호출해도 예외가 전파되지 않고 각각 빈 결과/no-op으로 처리됐다(Fail-open, Human 결정 Q2). 이 컴포넌트는 실제 HTTP 경로(`RestaurantService.searchRestaurants`)가 그대로 사용하는 클래스이므로, Redis 전체 장애 시에도 검색 API는 항상 DB 경로로 정상 응답한다(추가로 HTTP 레벨 전체 장애 재현은 하지 않았다 — 아래 "검증 한계" 참고).
-- Redis 연결 timeout이 DB보다 오래 대기하는지는 별도로 측정하지 않았다 — Lettuce의 기본 연결 실패는 즉시(수 ms 내) 예외로 이어졌고, 별도 timeout 설정을 추가하지 않았다.
+- **Redis 명령 timeout 설정(PR #202 리뷰 반영)**: 처음에는 `spring.data.redis.timeout`을 설정하지 않아 Lettuce 기본값(command timeout 60초)을 그대로 썼다 — Redis가 연결은 받아주지만 응답하지 않는 상황(네트워크 블랙홀)에서는 요청이 최대 60초까지 걸릴 수 있어, "Redis timeout 때문에 DB보다 더 오래 대기하지 않는다"(Issue #62 Q2)는 계약을 실제로는 지키지 못하는 경로였다. `application-prod.yml`/`application-local.yml.example`에 `spring.data.redis.timeout: 2000ms`(환경변수 `REDIS_TIMEOUT`로 재정의 가능)를 명시했다. `RestaurantSearchCacheStoreIntegrationTest`에 연결은 받아주되 응답은 절대 보내지 않는 소켓(블랙홀)을 만들어 재현한 결과, 설정한 2초 근처에서 실제로 실패함을 확인했다(5초 이내 완료를 assert, PASS). 이 timeout은 인증 Redis(`RefreshTokenStore`/`AccessTokenBlacklistStore`)와 같은 `RedisConnectionFactory`를 공유해 전체 Redis 사용에 적용된다.
 
 ## 핵심 트러블슈팅
 
@@ -106,11 +108,33 @@
 
 **진단**: `RestaurantService.searchRestaurants`에 붙어 있던 `@Transactional(readOnly = true)`가 원인이었다. Spring이 이 메서드를 트랜잭션으로 감싸면, 실제로 SQL을 한 줄도 실행하지 않아도 트랜잭션을 시작·커밋하는 것만으로 Hikari Connection을 체크아웃·반납한다. Cache Hit 경로는 Redis만 조회하고 리턴하는데도 이 오버헤드를 피할 수 없었다.
 
-**해결**: `searchRestaurants`에서 `@Transactional`을 제거했다. 이 메서드가 실제로 DB에 접근하는 유일한 경로는 `restaurantRepository.search(...)`(Spring Data JPA 저장소 프록시)인데, 이 저장소 자체가 이미 자기 메서드 호출마다 읽기 전용 트랜잭션을 연다. 따라서 바깥 메서드에 트랜잭션이 없어도 DB 접근 경로의 트랜잭션 보장은 그대로 유지되고, Cache Hit 경로는 트랜잭션 자체를 시작하지 않게 됐다. 제거 후 재측정한 결과 Pool 점유가 0/0으로 떨어졌다(위 "After 결과" 표).
+**해결(1차)**: `searchRestaurants`에서 `@Transactional`을 제거했다. 제거 후 재측정한 결과 Pool 점유가 0/0으로 떨어졌다(위 "After 결과" 표). 다만 이 1차 해결에서 "이 메서드가 DB에 접근하는 유일한 경로(`restaurantRepository.search`)는 Spring Data JPA 저장소 프록시가 자체적으로 트랜잭션을 연다"고 판단해 그 경로의 트랜잭션 보장을 별도로 추가하지 않았는데, 이는 부정확했다(아래 트러블슈팅 2 참고).
+
+**해결(2차, PR #202 리뷰 반영)**: 리뷰에서 `RestaurantSearchRepositoryImpl`은 커스텀 fragment 구현이라 `SimpleJpaRepository`의 기본 트랜잭션 advice를 상속받지 않는다는 지적을 받았다. `search()` 메서드에 명시적으로 `@Transactional(readOnly = true)`를 추가해 `contentQuery`/`countQuery`가 항상 하나의 트랜잭션에서 실행되도록 고쳤다. 이 트랜잭션은 캐시 Miss(또는 date/time 검색)에서만 열리고 Cache Hit 경로와는 무관해, Warm Hit의 Pool 미점유(0/0)는 그대로 유지된다.
+
+## 핵심 트러블슈팅 2 — 검색 캐시 버전 무효화의 커밋 전/후 경쟁
+
+**증상(리뷰에서 발견)**: 처음 구현은 `register/update/delete`의 DB 트랜잭션이 커밋되기 전에 `RestaurantSearchCacheStore.bumpVersion()`을 호출했다. 단일 스레드 순차 테스트(`Restaurant_수정_후_같은_검색_결과가_최신값으로_갱신된다`)는 이 문제를 잡지 못했다 — `update()` 호출 자체가 `@Transactional`이라 메서드가 반환할 때는 이미 커밋까지 끝난 뒤였기 때문이다.
+
+**진단**: 실제로는 다음 순서가 가능했다.
+
+1. Restaurant update 트랜잭션이 엔티티를 메모리에서 변경(아직 DB에 반영 전일 수 있음, flush는 커밋 시점)
+2. **DB commit 전** `bumpVersion()`이 Redis 버전을 `N`→`N+1`로 올림
+3. 동시 검색 요청이 버전 `N+1`로 캐시를 조회 → Miss(아직 아무도 이 버전으로 저장한 적 없음)
+4. 그 검색이 DB를 조회하는데, update 트랜잭션이 아직 커밋 전이라 **격리 수준에 따라 이전 값**을 읽음
+5. 그 이전 값을 버전 `N+1`(현재 버전) 아래 다시 캐시에 저장
+6. update 트랜잭션 commit
+7. 이후 요청들은 버전 `N+1`의 이 stale 캐시를 TTL(60초) 동안 "최신"으로 오인해 Hit
+
+이러면 "Restaurant 변경 후 캐시된 검색 결과가 갱신된다"는 Evidence의 Guardrail이 최악의 경우 최대 60초간 깨질 수 있었다.
+
+**해결**: `bumpVersion()` 호출을 `deletePreviousImageAfterCommit`과 동일한 패턴(`TransactionSynchronizationManager`의 `afterCommit()`)으로 옮겼다. DB 커밋이 실제로 끝난 뒤에만 버전을 올리므로, 그 시점 이후에 시작하는 모든 DB 조회는 이미 커밋된 최신 값을 본다 — 위 3번 단계에서 옛 값을 다시 캐시할 방법이 없어진다. `RestaurantServiceTest`에 `TransactionSynchronizationManager.initSynchronization()`으로 트랜잭션 동기화를 흉내 내어, 커밋 콜백을 실행하기 전에는 `bumpVersion()`이 호출되지 않고 콜백 실행 후에만 호출됨을 검증하는 테스트 3개(register/update/delete)를 추가했다.
 
 ## 정합성 회귀 검증
 
-- 전체 테스트: `./gradlew clean :test` → **722개 중 722 PASS, 0 실패, 0 에러**(40개는 환경변수 게이트 통합 테스트로 스킵, 실패 아님).
+- 전체 테스트: `./gradlew clean :test` → **726개 중 726 PASS, 0 실패, 0 에러**(41개는 환경변수 게이트 통합 테스트로 스킵, 실패 아님).
+- 검색 캐시 버전 무효화가 트랜잭션 커밋 후에만 실행되는지: `RestaurantServiceTest`에 register/update/delete 각각 "트랜잭션 안에서 ~하면 검색 캐시 버전 증가는 커밋 후에만 실행된다" 테스트 3개 추가, 모두 PASS(위 "핵심 트러블슈팅 2" 참고).
+- Redis 명령 timeout이 실제로 적용되는지: `RestaurantSearchCacheStoreIntegrationTest`에 응답 없는 소켓(블랙홀)을 만들어 2초 command timeout 근처에서 실패함을 확인, PASS.
 - 검색 결과: 캐시된 응답도 매번 presigned S3 URL을 새로 생성한다(`toPageResponse`가 캐시 히트 시에도 `restaurantImageService.createGetUrl(item.imageKey())`를 다시 호출) — presigned URL(기본 5분 만료)이 캐시 TTL(60초)보다 오래 노출되는 문제를 피했다. `RestaurantServiceTest`에 이 경로를 검증하는 테스트를 추가했다.
 - date/time이 있는 검색은 캐시를 조회·저장하지 않는다(`RestaurantServiceTest#date나_time이_있는_검색은_캐시를_조회하거나_저장하지_않는다` PASS) — #61 After 코드 그대로 동작한다.
 - `RestaurantService.register/update/delete` 성공 시 `bumpVersion()`이 호출된다(각각 테스트로 확인).
@@ -145,7 +169,7 @@
 - 실제 운영 트래픽의 "반복 조회 비율"(동일 조건이 실제로 얼마나 자주 반복되는지)은 측정하지 못했다 — 이번 측정은 인위적으로 100% 동일 조건(Warm)과 완전히 다른 조건(Mixed 1차)의 두 극단만 봤다. 실제 반복률이 낮으면 Hit Ratio도 낮아 이번에 관측한 개선이 그대로 나타나지 않을 수 있다.
 - TTL 60초는 근사값이다 — 실제 운영에서 식당 정보 변경 빈도·검색 반복 빈도를 지켜본 뒤 조정이 필요할 수 있다.
 - Stampede(동일 hot key 만료 직후 동시 요청 몰림) 시나리오는 별도로 재현하지 않았다. 이번 규모(5,000건, 30 동시 요청)에서는 Cold Miss 자체도 12ms 수준으로 빨라(#61 개선 덕분) 만료 순간 동시 Miss가 몰려도 DB가 감당 못할 정도로 커지지 않을 것으로 판단하지만, 실제로 재현해 확인하지는 않았다. single-flight·TTL jitter 등은 도입하지 않았다.
-- Redis 장애는 컴포넌트 단위(`RestaurantSearchCacheStore`)로 확인했고, 실제 HTTP 요청이 Redis 전체 장애 상황에서 어느 정도의 latency로 응답하는지(Lettuce 연결 실패 timeout이 실제 요청 latency에 얼마나 더해지는지)는 end-to-end로 재현하지 않았다.
+- Redis 장애는 컴포넌트 단위(`RestaurantSearchCacheStore`)로 확인했고(연결 실패·명령 timeout 둘 다), 실제 HTTP 요청이 Redis 전체 장애 상황에서 어느 정도의 latency로 응답하는지는 end-to-end(전체 Spring 컨텍스트+실제 HTTP)로 재현하지 않았다. 컴포넌트 단위 결과(연결 실패는 즉시, 명령 timeout은 설정한 2초 근처)가 HTTP 경로에서도 그대로 유지될 것으로 판단하지만, HTTP 레벨에서 직접 측정하지는 않았다.
 - Cache Hit/Miss를 Prometheus 메트릭으로 노출하지 않았다 — 운영 중 실제 Hit Ratio 관측은 로그 기반 분석이나 후속 Issue가 필요하다.
 - date/time이 있는 검색의 캐시는 이번 Issue에서 다루지 않았다(TimeSlot 변경 무효화 추적 필요, 별도 후속 검토).
 - 인덱스 스키마 버전(`v1`) 갱신은 수동이다 — 페이로드 구조 변경 시 사람이 직접 올려야 한다.

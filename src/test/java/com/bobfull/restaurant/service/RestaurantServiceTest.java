@@ -104,6 +104,32 @@ class RestaurantServiceTest {
     }
 
     @Test
+    void 트랜잭션_안에서_등록하면_검색_캐시_버전_증가는_커밋_후에만_실행된다() {
+        // given
+        RestaurantCreateRequest request =
+                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, null);
+        given(restaurantRepository.save(any(Restaurant.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            // when
+            restaurantService.register(1L, request);
+
+            // then: 트랜잭션이 아직 커밋되지 않은 시점에는 호출되지 않는다.
+            verify(restaurantSearchCacheStore, never()).bumpVersion();
+
+            // when: 커밋 콜백을 실행하면
+            List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            // then: 그제서야 호출된다.
+            verify(restaurantSearchCacheStore).bumpVersion();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
     void 식당을_등록할_때_이미지_key가_있으면_검증_완료_객체인지_확인하고_저장한다() {
         // given
         String imageKey = IMAGE_KEY;
@@ -277,6 +303,34 @@ class RestaurantServiceTest {
     }
 
     @Test
+    void 트랜잭션_안에서_수정하면_검색_캐시_버전_증가는_커밋_후에만_실행된다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, null);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            // when
+            restaurantService.update(1L, 10L, request);
+
+            // then: 아직 DB 트랜잭션이 커밋되지 않은 시점에는 Redis 버전을 올리지 않는다 —
+            // 이 시점에 동시 검색이 새 버전으로 캐시 Miss를 내면 아직 반영 안 된 옛 값을
+            // 다시 캐시해버리는 경쟁(PR #202 리뷰)이 생기므로, 반드시 커밋 후여야 한다.
+            verify(restaurantSearchCacheStore, never()).bumpVersion();
+
+            // when
+            List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            // then
+            verify(restaurantSearchCacheStore).bumpVersion();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
     void 본인_식당을_수정할_때_이미지_key가_있으면_검증하고_교체한다() {
         // given
         Restaurant restaurant = restaurantOwnedByWithIdAndImage(10L, 1L, OLD_IMAGE_KEY);
@@ -432,6 +486,37 @@ class RestaurantServiceTest {
         // then
         assertThat(restaurant.getDeletedAt()).isEqualTo(FIXED_CLOCK.instant());
         verify(restaurantSearchCacheStore).bumpVersion();
+    }
+
+    @Test
+    void 트랜잭션_안에서_삭제하면_검색_캐시_버전_증가는_커밋_후에만_실행된다() {
+        // given
+        RestaurantService clockedService = new RestaurantService(
+                restaurantRepository,
+                FIXED_CLOCK,
+                restaurantImageService,
+                restaurantSearchCacheStore
+        );
+        Restaurant restaurant = restaurantOwnedByWithImage(1L, DETAIL_IMAGE_KEY);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            // when
+            clockedService.delete(1L, 10L);
+
+            // then
+            verify(restaurantSearchCacheStore, never()).bumpVersion();
+
+            // when
+            List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            // then
+            verify(restaurantSearchCacheStore).bumpVersion();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
