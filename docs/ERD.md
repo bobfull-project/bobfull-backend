@@ -514,6 +514,8 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 
 `chat_message(chat_room_id, created_at)`는 createdAt cursor 방식을 채택할 때만 추가 검토한다. 검색·통계용 복합 인덱스는 실제 API 조회량과 실행 계획 측정 전에는 확정하지 않는다.
 
+`shared_table (restaurant_id)`는 Issue #61에서 `idx_shared_table_restaurant_id`로 구현했다. `GET /api/restaurants`의 date·time 필터(3-way join)가 이 인덱스 없이 매 요청마다 `shared_table` 전체를 스캔하는 것을 실제 MySQL EXPLAIN ANALYZE로 확인한 뒤(docs/evidence/v3/61-search-query/README.md) 추가했다.
+
 ## 11. 삭제와 이력 보존 정책
 
 | 대상 | 처리 방향 | 근거·보류 |

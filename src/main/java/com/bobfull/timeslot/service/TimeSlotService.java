@@ -244,7 +244,8 @@ public class TimeSlotService {
                 capacity,
                 toOffsetDateTime(timeSlot.getStartAt()),
                 toOffsetDateTime(timeSlot.getEndAt()),
-                availableCapacityCalculator.calculate(timeSlot.getId(), capacity),
+                availableCapacityCalculator.calculateWithKnownParticipantCount(
+                        timeSlot.getId(), capacity, currentParticipantCount),
                 reservationId,
                 currentParticipantCount
         );
