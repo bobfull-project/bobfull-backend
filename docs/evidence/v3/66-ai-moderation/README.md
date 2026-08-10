@@ -97,6 +97,8 @@ Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment�
   -PshowTestOutput
 ```
 
+`OPENAI_CHAT_MAX_TOKENS=128`은 위 Prompt v2 기준선 측정 뒤에 추가된 Provider request option이다. 기존 40건 After 수치를 삭제하거나 변경하지 않으며, API Key가 있는 환경에서 RAW/DTO 단건과 대표 6건이 PASS한 뒤 동일 Dataset 40건을 재측정해 상한 적용 후 기준선 유지 여부를 별도 기록한다.
+
 ## 정합성·장애 격리
 
 - `chat_moderation.chat_message_id`는 UNIQUE다.
