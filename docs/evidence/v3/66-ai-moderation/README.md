@@ -23,6 +23,7 @@ Kafka Consumer와 Retry/DLT는 Issue #59 범위이므로 이 Evidence에서 구�
 - local/prod API Key: `OPENAI_API_KEY` 환경변수. 실제 키는 `application-local.yml`·배포 설정·저장소에 저장하지 않는다.
 - promptVersion: `moderation-prompt-v2`
 - policyVersion: `moderation-policy-v1`
+- Prompt source: `ModerationPrompt`가 `PROMPT_VERSION`, `POLICY_VERSION`, `SYSTEM_PROMPT`를 함께 관리한다. Adapter와 저장 Service는 이 버전 상수를 참조한다.
 - Structured Output: Provider Native Structured Output. Spring AI schema self-correction retry는 사용하지 않는다.
 - Provider retry: `spring.ai.retry.max-attempts=1`. 전체 재시도는 #59 Kafka Consumer가 소유한다.
 
@@ -53,8 +54,9 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 | 지표·현상 | 결과 | 판정 |
 |---|---:|---|
 | 실제 OpenAI 단건 호출 | local IntelliJ 환경에서 Context 기동·Provider 호출·Structured Output 변환·SAFE 기대값 확인 | PASS (Human 실행 결과) |
-| 40건 고정 Dataset 재측정 | 동일 Dataset Evaluation Test 구현 완료, 실제 Provider 실행 대기 | NOT_RUN |
-| latency / token / 비용 | `NOT_MEASURED` — 실제 Provider 응답 없음 | NOT_RUN |
+| 40건 고정 Dataset 재측정 (Prompt version drift 발견 전 BobFull 실측) | Result 40/40, Category 40/40, Risk 17/40, Exact 17/40, Review Actionability 26/40 | BEFORE |
+| drift 발견 전 Provider 관측 | Provider Failure 0, OpenAI Calls 40, latency avg 967.6ms / p95 1239ms / p99 3559ms, total token 14,256, total elapsed 38,723ms | BEFORE (Human 실행 결과) |
+| 40건 고정 Dataset 재측정 (Prompt 복구 후) | 대표 6건 실제 Provider 회귀 검증 뒤 동일 Dataset으로 재실행 | NOT_RUN |
 | Core 정상·검증실패·멱등성·AI 장애 격리 | `./gradlew :test --tests com.bobfull.chat.service.ChatModerationServiceTest` 성공 | PASS |
 | 전체 build 및 테스트 | `./gradlew test` 성공 | PASS |
 
@@ -63,6 +65,8 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 ```bash
 ./gradlew :test --tests com.bobfull.chat.adapter.SpringAiModerationAdapterOpenAiEvaluationTest
 ```
+
+Prompt version drift 발견 전 실측의 Risk FAIL은 PROFANITY MEDIUM→LOW 4건, PROFANITY HIGH→MEDIUM 1건, PERSONAL_INFORMATION MEDIUM→LOW 10건, SPAM HIGH→MEDIUM 8건이다. Review Actionability 실패 14건은 PROFANITY MEDIUM→LOW 4건과 PERSONAL_INFORMATION MEDIUM→LOW 10건에 정확히 대응한다. Prompt 복구 후에는 먼저 `Prompt_v2_대표_회귀_6건을_실제_OpenAI로_검증한다`로 경계 5건과 SAFE 1건을 확인하고, 그 다음에만 동일 40건을 실행한다.
 
 40건 평가는 같은 클래스의 `Prompt_v2를_동일한_40건_Human_labeled_Dataset으로_측정한다` 테스트가 순차 호출로 수행한다. Result/Category/Risk/Exact/Review Actionability 정확도, FAIL case ID와 expected/actual, 요청별 latency의 avg/p95/p99, token 합계와 총 호출 수를 출력한다. 40건 누적 실행 시간은 참고값으로만 출력한다.
 
@@ -83,7 +87,8 @@ Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment�
 ## Known Limitation
 
 - sandbox v2에서 `이런 젠장`은 Human MEDIUM 기대와 달리 LOW였다. SPAM 4건은 HIGH/MEDIUM 차이지만 모두 REVIEW_REQUIRED 산정 대상이다.
-- 실제 OpenAI 모델·Prompt 통합 재측정 및 운영 latency/token은 API Key가 있는 격리 환경에서 같은 40건 Dataset으로 별도 수행해야 한다.
+- demo2가 Prompt v2를 `BobFull Moderation Policy v2`로 표기한 것은 promptVersion과 policyVersion을 혼용한 과거 sandbox 명명 오류다. BobFull은 Prompt 원문 경계·few-shot·출력 규칙을 복구하되, 공식 계약인 `moderation-prompt-v2`와 `moderation-policy-v1`을 유지한다.
+- Prompt 복구 후 실제 OpenAI 모델 재측정은 API Key가 있는 격리 환경에서 대표 6건을 먼저 통과한 뒤 같은 40건 Dataset으로 수행해야 한다.
 - #59가 아직 `status:draft`이므로 Kafka Consumer/Retry/DLT 연결은 구현하지 않았다.
 
 ## 관련

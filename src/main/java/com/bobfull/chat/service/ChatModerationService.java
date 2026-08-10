@@ -1,6 +1,7 @@
 package com.bobfull.chat.service;
 
 import com.bobfull.chat.dto.AiModerationResponse;
+import com.bobfull.chat.adapter.ModerationPrompt;
 import com.bobfull.chat.entity.ChatMessage;
 import com.bobfull.chat.entity.ChatModeration;
 import com.bobfull.chat.repository.ChatMessageRepository;
@@ -19,8 +20,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class ChatModerationService {
     private static final Logger log = LoggerFactory.getLogger(ChatModerationService.class);
-    static final String PROMPT_VERSION = "moderation-prompt-v2";
-    static final String POLICY_VERSION = "moderation-policy-v1";
     private final ChatMessageRepository messages;
     private final ChatModerationRepository moderations;
     private final AiModerationPort aiModerationPort;
@@ -58,10 +57,10 @@ public class ChatModerationService {
     private void persistCompleted(Long messageId, ChatModeration existing, AiModerationResponse response, long latencyMillis) {
         Instant now = clock.instant();
         ChatModeration moderation = existing == null ? ChatModeration.completed(messageId, response.result().result(), response.result().categories(),
-                response.result().riskLevel(), response.provider(), response.model(), PROMPT_VERSION, POLICY_VERSION, latencyMillis,
+                response.result().riskLevel(), response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis,
                 response.promptTokens(), response.completionTokens(), response.totalTokens(), now) : existing;
         if (existing != null) moderation.complete(response.result().result(), response.result().categories(), response.result().riskLevel(),
-                response.provider(), response.model(), PROMPT_VERSION, POLICY_VERSION, latencyMillis, response.promptTokens(),
+                response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis, response.promptTokens(),
                 response.completionTokens(), response.totalTokens(), now);
         try { moderations.saveAndFlush(moderation); }
         catch (DataIntegrityViolationException exception) {
@@ -73,9 +72,9 @@ public class ChatModerationService {
     }
     private void persistFailure(Long messageId, ChatModeration existing, long latencyMillis, String errorCode) {
         Instant now = clock.instant();
-        ChatModeration moderation = existing == null ? ChatModeration.failed(messageId, "OpenAI", "NOT_MEASURED", PROMPT_VERSION,
-                POLICY_VERSION, latencyMillis, now, errorCode) : existing;
-        if (existing != null) moderation.fail("OpenAI", "NOT_MEASURED", PROMPT_VERSION, POLICY_VERSION, latencyMillis, now, errorCode);
+        ChatModeration moderation = existing == null ? ChatModeration.failed(messageId, "OpenAI", "NOT_MEASURED", ModerationPrompt.PROMPT_VERSION,
+                ModerationPrompt.POLICY_VERSION, latencyMillis, now, errorCode) : existing;
+        if (existing != null) moderation.fail("OpenAI", "NOT_MEASURED", ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis, now, errorCode);
         moderations.saveAndFlush(moderation);
         log.warn("event=CHAT_MODERATION_FAILED messageId={} errorCode={} latencyMillis={}", messageId, errorCode, latencyMillis);
     }

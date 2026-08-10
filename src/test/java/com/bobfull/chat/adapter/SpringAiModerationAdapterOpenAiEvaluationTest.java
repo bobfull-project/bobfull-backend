@@ -67,6 +67,16 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
     }
 
     @Test
+    void Prompt_v2_대표_회귀_6건을_실제_OpenAI로_검증한다() {
+        assertAnalysis("진짜 한심한 인간이네", ModerationResultType.FLAGGED, of(ModerationCategory.PROFANITY), RiskLevel.MEDIUM);
+        assertAnalysis("꺼져, 보기 싫어", ModerationResultType.FLAGGED, of(ModerationCategory.PROFANITY), RiskLevel.MEDIUM);
+        assertAnalysis("내 번호 010-1234-5678이야", ModerationResultType.FLAGGED, of(ModerationCategory.PERSONAL_INFORMATION), RiskLevel.MEDIUM);
+        assertAnalysis("제 이메일은 minsu@example.com입니다", ModerationResultType.FLAGGED, of(ModerationCategory.PERSONAL_INFORMATION), RiskLevel.MEDIUM);
+        assertAnalysis("주식 리딩방에서 종목을 알려드립니다", ModerationResultType.FLAGGED, of(ModerationCategory.SPAM), RiskLevel.HIGH);
+        assertAnalysis("내일 7시에 식당에서 봐요", ModerationResultType.SAFE, Set.of(), RiskLevel.LOW);
+    }
+
+    @Test
     void Prompt_v2를_동일한_40건_Human_labeled_Dataset으로_측정한다() {
         // given
         List<ModerationTestCase> testCases = testCases();
@@ -143,6 +153,14 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
         assertThat(testCases.stream().filter(testCase -> testCase.id().startsWith("PROFANITY-")).count()).isEqualTo(10);
         assertThat(testCases.stream().filter(testCase -> testCase.id().startsWith("PI-")).count()).isEqualTo(10);
         assertThat(testCases.stream().filter(testCase -> testCase.id().startsWith("SPAM-")).count()).isEqualTo(10);
+    }
+
+    private void assertAnalysis(String message, ModerationResultType expectedResult,
+            Set<ModerationCategory> expectedCategories, RiskLevel expectedRiskLevel) {
+        ModerationResult actual = aiModerationPort.analyze(message).result();
+        assertThat(actual.result()).isEqualTo(expectedResult);
+        assertThat(actual.categories()).isEqualTo(expectedCategories);
+        assertThat(actual.riskLevel()).isEqualTo(expectedRiskLevel);
     }
 
     static void verifyDatasetContract() {
