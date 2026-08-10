@@ -159,6 +159,52 @@ Guard run mismatch는 `PROFANITY-07` MEDIUM→LOW, `PI-09` MEDIUM→LOW, `SPAM-0
 - Prompt v2는 이 Dataset에 대해 추가 튜닝하거나 `moderation-prompt-v3`를 만들지 않는다. 현재 After 결과를 Prompt v2 기준선으로 동결한다.
 - #59가 아직 `status:draft`이므로 Kafka Consumer/Retry/DLT 연결은 구현하지 않았다.
 
+## OpenAI Model Selection
+
+### 배경과 고정 기준
+
+Human은 실제 Provider metadata에서 `gpt-4o-mini-2024-07-18` snapshot을 확인한 뒤, 2026년 기준 더 적합한 소형 모델이 있는지 재검토했다. 최신 모델이라는 이유만으로 교체하지 않고, frozen `moderation-prompt-v2` / `moderation-policy-v1`과 같은 Human-labeled 40건 Dataset으로 비교했다. Dataset·expected와 Prompt는 이 비교를 보고 변경하지 않았다.
+
+Primary Gate는 Result Accuracy 100%, Category Accuracy 100%, Review Actionability 95% 이상, Provider failure 0, Structured Output/parse failure 0이다. Risk/Exact, 공개 가격 기반 추정 비용, latency, token usage는 Secondary 지표다. LOW와 MEDIUM/HIGH의 관리자 검토 분기가 실제 운영 행동이므로 Exact Risk보다 Review Actionability를 우선한다.
+
+### 후보와 API option compatibility
+
+- `gpt-4o-mini`: production 기본값이며 `maxTokens(128)` → Chat Completions `max_tokens` 계약을 사용한다. 실제 metadata snapshot은 `gpt-4o-mini-2024-07-18`이었지만 alias를 snapshot으로 강제 pin하지 않는다.
+- `gpt-5-nano`: Stage A RAW 호출에서 실제 OpenAI가 `400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`라고 응답했다. 품질 탈락이 아니라 현 production option 계약과 호환되지 않아 이번 비교 범위에서 제외했다. production option 구조를 확장하지 않았다.
+- `gpt-5.4-nano`: 공식 OpenAI 문서가 classification/data extraction/ranking 같은 simple high-volume 작업을 대상으로 안내하고 Chat Completions·Structured Outputs와 `reasoning.effort=none`을 지원한다. Evaluation 전용 helper에서만 `maxCompletionTokens(128)` / `reasoningEffort("none")`을 적용했고 production Adapter는 변경하지 않았다. [GPT-5.4 nano 공식 문서](https://developers.openai.com/api/docs/models/gpt-5.4-nano)
+
+### Stage A
+
+`gpt-5.4-nano` RAW 단건은 실제 Provider에서 성공했다. `PERSONAL_INFORMATION` / `MEDIUM` JSON이 `ModerationResult`로 변환됐고, snapshot은 `gpt-5.4-nano-2026-03-17`, prompt/completion/total token은 773 / 26 / 799였다. `maxCompletionTokens=128`, `reasoningEffort=none`에서 응답 잘림·parse failure는 없었다. 같은 계약의 대표 6건은 6/6 PASS했다.
+
+### 동일 40건 비교
+
+| Model | Run | Result | Category | Risk / Exact | Review Actionability | Provider / Parse failure | avg / p95 / p99 latency | Prompt / Completion / Total tokens | 공개 가격 기반 40건 추정 비용 |
+|---|---|---:|---:|---:|---:|---:|---|---|---:|
+| gpt-4o-mini | 128 guard | 40/40 | 40/40 | 34/40 | 38/40 (95.0%) | 0 / 0 | 1037.1 / 1748 / 1904ms | 30,897 / 686 / 31,583 | $0.005046 |
+| gpt-5.4-nano | evaluation | 40/40 | 40/40 | 33/40 | 39/40 (97.5%) | 0 / 0 | 1686.6 / 5360 / 5838ms | 30,817 / 969 / 31,786 | $0.007375 |
+
+gpt-5.4-nano mismatch는 `PROFANITY-07` MEDIUM→LOW 및 `SPAM-02`, `SPAM-03`, `SPAM-05`, `SPAM-07`, `SPAM-09`, `SPAM-10` HIGH→MEDIUM이다. 두 모델 모두 Primary Gate를 통과했다.
+
+### 가격과 해석
+
+가격 확인일은 2026-08-10이며, OpenAI 공개 text token 단가인 gpt-4o-mini input/output $0.15/$0.60, gpt-5.4-nano $0.20/$1.25 per 1M tokens를 적용했다. [GPT-4o mini 공식 문서](https://developers.openai.com/api/docs/models/gpt-4o-mini), [GPT-5.4 nano 공식 문서](https://developers.openai.com/api/docs/models/gpt-5.4-nano)
+
+| Model | 40건 | 메시지 1건 | 100,000건 | 1,000,000건 |
+|---|---:|---:|---:|---:|
+| gpt-4o-mini | $0.005046 | $0.0001262 | $12.62 | $126.15 |
+| gpt-5.4-nano | $0.007375 | $0.0001844 | $18.44 | $184.37 |
+
+이는 실제 청구액이 아니라 공개 token 단가 × 이 평가의 실측 token 사용량이다. cached input, Batch, 계약 조건과 가격 변경에 따라 실제 billing은 달라질 수 있다. 이번 측정 기준 gpt-5.4-nano 추정 비용은 약 46% 높다.
+
+gpt-5.4-nano의 Review Actionability는 1건 높았지만 Risk/Exact는 gpt-4o-mini가 1건 높았다. 외부 API 단일 40-call run의 1건 차이를 결정적 품질 우위로 해석하지 않는다. 이번 BobFull 40건 평가 환경에서는 gpt-5.4-nano의 avg/p95/p99 latency가 더 높게 관측됐지만, 이를 모든 환경에서 항상 더 느리다고 일반화하지 않는다.
+
+### 최종 Human 결정
+
+두 모델은 모두 Primary Gate를 통과했다. Human은 gpt-5.4-nano의 결정적 품질 우위가 확인되지 않았고, 이번 실측에서 gpt-4o-mini가 더 낮은 공개 단가와 latency를 보였으므로 production 기본 모델을 `gpt-4o-mini`로 유지하기로 결정했다. 최신 모델이라는 이유만으로 교체하지 않았으며, 향후 재평가는 신규 Human-labeled/versioned held-out Dataset에서 수행한다.
+
+Kafka Consumer가 구현된 뒤 #59는 `ChatMessage COMMIT → Outbox → Kafka → Consumer → OpenAI → ChatModeration 저장`의 E2E latency, OpenAI latency, throughput, Consumer Lag, Retry/DLT, backlog recovery를 별도 측정한다. 이는 아직 측정·구현 완료가 아니다.
+
 ## 관련
 
 - Issue: #66

@@ -75,6 +75,7 @@ flowchart TB
 | 결제·환불 | 임시 선점, PortOne 검증, 결제·환불 상태 반영 | `Payment`, `Refund` |
 | 노쇼 | 식사 종료 후 OWNER의 참여자 단위 처리·해제 이력 | `NoShowHistory` |
 | 채팅 | 예약당 채팅방, 유효 참여자 접근, 메시지 저장·조회 | `ChatRoom`, `ChatMessage` |
+| AI Moderation Core | ChatMessage 원문 분석 orchestration, 결과 검증·저장, Provider 실패 전파 | `ChatModerationService`, `ChatModeration`, `AiModerationPort` |
 | 알림 | 모집 마감 처리 결과(확정·인원 미달 취소)를 유효 참여자에게 이메일로 안내 | 신규 저장 엔티티 없음, `Reservation`/`ReservationParticipant` 조회 결과만 사용 |
 
 ## 4. 인증·인가와 소유권 검증
@@ -172,6 +173,21 @@ SMTP 호출은 수신자마다 정확히 한 번만 시도한다. 재시도와 �
 결제 완료 후 취소되지 않은 유효 참여자만 접근할 수 있고 OWNER와 ADMIN은 참여하지 않는다. 예약 또는 참여가 취소되면 해당 참여자의 접근은 종료되며, 예약이 `CANCELLED` 또는 `CLOSED`가 되면 새 메시지 전송을 종료한다. 기존 `ChatMessage`는 DB에 보관하고 cursor 기반으로 조회한다.
 
 STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 참조한다.
+
+### AI Moderation Core
+
+`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 Application Validation을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider Native Structured Output을 사용하며, Provider 의존성과 Prompt/Policy metadata는 Port 뒤에 격리한다. AI 실패를 SAFE로 바꾸지 않고 retry 가능한 예외로 전달한다.
+
+```text
+ChatMessage
+→ ChatModerationService
+→ AiModerationPort
+→ OpenAI
+→ Application Validation
+→ ChatModeration
+```
+
+Kafka 자동 연결·Retry/DLT·E2E pipeline은 #59 범위다. 현재 #66은 Consumer가 호출할 수 있는 Core와 최종 실패 기록 연결 지점만 제공하며, Kafka가 이미 연결됐다고 보지 않는다.
 
 ## 8. 저장값·계산값과 운영 관찰
 
