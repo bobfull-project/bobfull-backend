@@ -108,6 +108,16 @@
 공통 규칙: docs/evidence/v3/README.md
 -->
 
+### 측정 계약
+
+<!-- Issue/Evidence에 정의된 대표 지표를 요약합니다. 정량 KPI가 의미 없는 신뢰성 문제는 검증 가능한 현상을 적습니다. -->
+
+- Primary KPI:
+- Secondary KPI:
+- Guardrail:
+
+### Evidence 결과
+
 - Evidence 판정: `PASS | FAIL | NOT_APPLICABLE`
 - Evidence 경로:
 - Before Commit SHA:
