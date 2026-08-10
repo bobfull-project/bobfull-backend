@@ -5,6 +5,13 @@ payment:
     enabled: false
 
 spring:
+  ai:
+    openai:
+      api-key: test-key
+      chat:
+        model: gpt-4o-mini
+  retry:
+    max-attempts: 1
   mail:
     host: localhost
     port: 1025

@@ -3,6 +3,15 @@
 # 실제 DB 접속 정보는 환경변수로 주입합니다.
 
 spring:
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+
+  retry:
+    max-attempts: 1
+
   config:
     import: optional:file:.env[.properties]
 
