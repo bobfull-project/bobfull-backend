@@ -21,7 +21,6 @@ import com.bobfull.restaurant.image.service.RestaurantImageService;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import java.time.Clock;
 import java.util.List;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -90,11 +89,20 @@ public class RestaurantService {
      * 변경에도 영향을 받아 무효화 대상이 늘어나므로 이번 Issue의 최소 범위에서는 캐시하지 않고
      * 항상 DB를 조회한다.
      *
-     * <p>이 메서드 자체는 {@code @Transactional}을 붙이지 않는다. {@code restaurantRepository}는
-     * Spring Data JPA 저장소 프록시라 호출될 때 자체적으로 읽기 전용 트랜잭션을 연다. 캐시 Hit
-     * 경로는 DB를 전혀 만지지 않는데도 바깥 메서드가 {@code @Transactional}이면 매 요청마다
-     * 실제로 실행되는 SQL이 없어도 Hikari Connection을 열고 닫아 동시 요청에서 Pool을 불필요하게
-     * 점유한다는 것을 실측으로 확인했다(Issue #62 Evidence "Warm Hit 동시 반복" 참고).</p>
+     * <p>이 메서드 자체는 {@code @Transactional}을 붙이지 않는다. Cache Hit 경로는 DB를 전혀
+     * 만지지 않는데도 바깥 메서드가 {@code @Transactional}이면 매 요청마다 실제로 실행되는 SQL이
+     * 없어도 Hikari Connection을 열고 닫아 동시 요청에서 Pool을 불필요하게 점유한다는 것을
+     * 실측으로 확인했다(Issue #62 Evidence "Warm Hit 동시 반복" 참고). Cache Miss 경로에서
+     * {@code restaurantRepository.search(...)}가 실제로 DB에 접근할 때는
+     * {@link com.bobfull.restaurant.repository.RestaurantSearchRepositoryImpl#search}에 명시된
+     * 자체 트랜잭션이 그 경로만 감싼다 — 이 메서드가 트랜잭션 없이도 안전한 것은 그 때문이며,
+     * "저장소 프록시가 기본적으로 트랜잭션을 연다"는 가정 때문이 아니다(그 가정은 커스텀
+     * repository fragment에는 적용되지 않아 실제로는 틀렸었다, PR #202 리뷰로 확인).</p>
+     *
+     * <p>Cache Miss 시 {@link RestaurantSearchCacheStore#find}가 반환한 버전 스냅샷을 그대로
+     * {@link RestaurantSearchCacheStore#put}에 넘긴다 — DB 조회 도중 다른 트랜잭션이 커밋되어
+     * 버전이 올라가도, 이번 결과는 조회 시점의 옛 버전에만 저장돼 stale 값이 "현재" 버전으로
+     * 노출되지 않는다(PR #202 재리뷰 반영, {@link RestaurantSearchCacheStore} 클래스 설명 참고).</p>
      */
     public PageResponse<RestaurantSearchResponse> searchRestaurants(
             RestaurantSearchRequest request,
@@ -105,14 +113,14 @@ public class RestaurantService {
         }
 
         RestaurantSearchCacheKey cacheKey = RestaurantSearchCacheKey.of(request, pageable);
-        Optional<CachedRestaurantSearchResult> cached = restaurantSearchCacheStore.find(cacheKey);
-        if (cached.isPresent()) {
-            return toPageResponse(cached.get());
+        RestaurantSearchCacheStore.Lookup lookup = restaurantSearchCacheStore.find(cacheKey);
+        if (lookup.result().isPresent()) {
+            return toPageResponse(lookup.result().get());
         }
 
         Page<Restaurant> restaurants = restaurantRepository.search(request, pageable);
         CachedRestaurantSearchResult result = CachedRestaurantSearchResult.from(restaurants);
-        restaurantSearchCacheStore.put(cacheKey, result);
+        restaurantSearchCacheStore.put(lookup.version(), cacheKey, result);
         return toPageResponse(result);
     }
 

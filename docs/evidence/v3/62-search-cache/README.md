@@ -65,7 +65,7 @@
 
 - **`@Transactional` 제거**: `RestaurantService.searchRestaurants`에 `@Transactional(readOnly = true)`가 있으면, 캐시 Hit이라 DB를 전혀 조회하지 않아도 메서드에 진입하는 순간 Hikari Connection을 열고 닫는 것을 실측으로 확인했다(아래 "핵심 트러블슈팅" 참고). 제거 후 동시 Warm Hit 시나리오의 Pool 점유가 0으로 떨어졌다.
 - **`RestaurantSearchRepositoryImpl.search()`에 명시적 `@Transactional(readOnly = true)` 추가(PR #202 리뷰 반영)**: 처음에는 "Spring Data JPA 저장소 프록시가 자체적으로 트랜잭션을 연다"고 판단해 바깥 메서드의 트랜잭션만 제거했는데, 리뷰에서 이 커스텀 fragment 구현(`RestaurantSearchRepositoryImpl`)은 `SimpleJpaRepository`를 상속하지 않아 그 기본 트랜잭션 advice가 자동으로 적용되지 않는다는 지적을 받았다. 이 경로가 실제로 트랜잭션 없이 실행되면 `contentQuery`와 `countQuery`가 서로 다른 시점의 데이터를 볼 수 있다(동시 쓰기 개입 시). 이를 막기 위해 `search()` 메서드 자체에 `@Transactional(readOnly = true)`를 명시적으로 추가해, 두 쿼리가 항상 하나의 읽기 전용 트랜잭션 안에서 실행되도록 보장했다. 이 트랜잭션은 캐시 Hit 경로와는 무관하다(Hit이면 이 메서드 자체를 호출하지 않는다) — 그래서 Warm Hit의 Pool 미점유(0/0)는 그대로 유지된다.
-- **검색 캐시 버전 증가를 트랜잭션 커밋 후로 이동(PR #202 리뷰 반영)**: 처음 구현은 `register/update/delete`의 DB 트랜잭션이 커밋되기 *전에* `RestaurantSearchCacheStore.bumpVersion()`을 호출했다. 리뷰에서 이 순서가 실제로 경쟁을 유발한다는 지적을 받았다 — 자세한 시나리오는 아래 "핵심 트러블슈팅 2" 참고. `deletePreviousImageAfterCommit`과 같은 방식(`TransactionSynchronization.afterCommit`)으로 옮겨, DB 변경이 실제로 커밋된 뒤에만 버전을 올리도록 고쳤다.
+- **검색 캐시 버전 무효화 경쟁 제거(PR #202 리뷰 2라운드 반영)**: (1) `register/update/delete`의 `bumpVersion()` 호출을 DB 트랜잭션 커밋 후로 이동(`TransactionSynchronization.afterCommit`), (2) `find()`가 조회 시점의 버전을 함께 반환하고 `put()`이 그 버전을 그대로 재사용하도록 API를 바꿔, DB 조회와 캐시 저장 사이에 버전이 바뀌어도 옛 값이 새 버전에 다시 저장되지 않게 했다. 자세한 시나리오와 2단계 수정 과정은 아래 "핵심 트러블슈팅 2" 참고.
 
 ## After 결과 — 시나리오 B/C/D: Cold/Warm/Mixed
 
@@ -112,11 +112,11 @@
 
 **해결(2차, PR #202 리뷰 반영)**: 리뷰에서 `RestaurantSearchRepositoryImpl`은 커스텀 fragment 구현이라 `SimpleJpaRepository`의 기본 트랜잭션 advice를 상속받지 않는다는 지적을 받았다. `search()` 메서드에 명시적으로 `@Transactional(readOnly = true)`를 추가해 `contentQuery`/`countQuery`가 항상 하나의 트랜잭션에서 실행되도록 고쳤다. 이 트랜잭션은 캐시 Miss(또는 date/time 검색)에서만 열리고 Cache Hit 경로와는 무관해, Warm Hit의 Pool 미점유(0/0)는 그대로 유지된다.
 
-## 핵심 트러블슈팅 2 — 검색 캐시 버전 무효화의 커밋 전/후 경쟁
+## 핵심 트러블슈팅 2 — 검색 캐시 버전 무효화의 커밋 전/후 경쟁(2라운드에 걸쳐 발견)
 
-**증상(리뷰에서 발견)**: 처음 구현은 `register/update/delete`의 DB 트랜잭션이 커밋되기 전에 `RestaurantSearchCacheStore.bumpVersion()`을 호출했다. 단일 스레드 순차 테스트(`Restaurant_수정_후_같은_검색_결과가_최신값으로_갱신된다`)는 이 문제를 잡지 못했다 — `update()` 호출 자체가 `@Transactional`이라 메서드가 반환할 때는 이미 커밋까지 끝난 뒤였기 때문이다.
+**증상(1차, 리뷰에서 발견)**: 처음 구현은 `register/update/delete`의 DB 트랜잭션이 커밋되기 전에 `RestaurantSearchCacheStore.bumpVersion()`을 호출했다. 단일 스레드 순차 테스트(`Restaurant_수정_후_같은_검색_결과가_최신값으로_갱신된다`)는 이 문제를 잡지 못했다 — `update()` 호출 자체가 `@Transactional`이라 메서드가 반환할 때는 이미 커밋까지 끝난 뒤였기 때문이다.
 
-**진단**: 실제로는 다음 순서가 가능했다.
+**진단(1차)**: 실제로는 다음 순서가 가능했다.
 
 1. Restaurant update 트랜잭션이 엔티티를 메모리에서 변경(아직 DB에 반영 전일 수 있음, flush는 커밋 시점)
 2. **DB commit 전** `bumpVersion()`이 Redis 버전을 `N`→`N+1`로 올림
@@ -126,14 +126,25 @@
 6. update 트랜잭션 commit
 7. 이후 요청들은 버전 `N+1`의 이 stale 캐시를 TTL(60초) 동안 "최신"으로 오인해 Hit
 
-이러면 "Restaurant 변경 후 캐시된 검색 결과가 갱신된다"는 Evidence의 Guardrail이 최악의 경우 최대 60초간 깨질 수 있었다.
+**해결(1차, 불완전)**: `bumpVersion()` 호출을 `deletePreviousImageAfterCommit`과 동일한 패턴(`TransactionSynchronizationManager`의 `afterCommit()`)으로 옮겼다. 이 수정만으로는 "커밋 전 bump" 경쟁은 없어졌지만, **아래 2차에서 밝혀진 대로 경쟁이 완전히 사라지지는 않았다**.
 
-**해결**: `bumpVersion()` 호출을 `deletePreviousImageAfterCommit`과 동일한 패턴(`TransactionSynchronizationManager`의 `afterCommit()`)으로 옮겼다. DB 커밋이 실제로 끝난 뒤에만 버전을 올리므로, 그 시점 이후에 시작하는 모든 DB 조회는 이미 커밋된 최신 값을 본다 — 위 3번 단계에서 옛 값을 다시 캐시할 방법이 없어진다. `RestaurantServiceTest`에 `TransactionSynchronizationManager.initSynchronization()`으로 트랜잭션 동기화를 흉내 내어, 커밋 콜백을 실행하기 전에는 `bumpVersion()`이 호출되지 않고 콜백 실행 후에만 호출됨을 검증하는 테스트 3개(register/update/delete)를 추가했다.
+**증상(2차, 재리뷰에서 발견)**: `RestaurantSearchCacheStore.find()`와 `put()`이 각각 독립적으로 `currentVersion()`을 다시 읽는 구조는 1차 수정 후에도 그대로였다. 다음 순서가 여전히 가능했다.
+
+1. 검색 A가 `find()`로 버전 `N`을 읽고 Miss 확인
+2. 검색 A가 DB 조회를 시작해 **변경 전 값**을 읽음(이 시점 update 트랜잭션은 아직 커밋 전이거나 이후 커밋됨)
+3. Restaurant update 트랜잭션 commit → `afterCommit()`에서 버전 `N`→`N+1`
+4. 검색 A가 이제서야 `put()`을 호출하는데, `put()`이 `currentVersion()`을 **다시 읽어** 버전 `N+1`(현재 버전)을 얻음
+5. 검색 A가 2번에서 읽은 **옛 값**을 버전 `N+1` key에 저장 — 커밋 전 bump 경쟁은 없앴지만 "DB 조회와 cache 저장 사이"의 버전 변경 경쟁이 남아 있었다
+
+**해결(2차, 최종)**: `find()`가 조회 시점의 버전을 `Lookup(version, result)`로 함께 반환하고, `put(version, key, result)`가 그 버전을 인자로 받아 **다시 읽지 않고 그대로 사용**하도록 API를 바꿨다. 이제 위 4번 단계에서 검색 A는 자신이 Miss를 확인했던 버전 `N`으로만 저장한다 — 그 사이 버전이 `N+1`로 올라갔어도, `N` namespace는 이미 "현재"가 아니라서 이후 어떤 조회도 그 key를 다시 찾지 않는다. TTL이 지나면 조회되지 않은 채로 자연 소멸한다.
+
+`RestaurantSearchCacheStoreIntegrationTest`에 실제 Redis로 이 정확한 시나리오(Miss 확인 → 버전 bump → 옛 스냅샷 버전으로 put → 현재 버전으로 재조회 시 보이지 않음)를 재현하는 회귀 테스트를 추가했다. `RestaurantServiceTest`의 3개 테스트(register/update/delete가 커밋 후에만 `bumpVersion`을 호출하는지)는 1차 수정을 계속 검증한다.
 
 ## 정합성 회귀 검증
 
-- 전체 테스트: `./gradlew clean :test` → **726개 중 726 PASS, 0 실패, 0 에러**(41개는 환경변수 게이트 통합 테스트로 스킵, 실패 아님).
-- 검색 캐시 버전 무효화가 트랜잭션 커밋 후에만 실행되는지: `RestaurantServiceTest`에 register/update/delete 각각 "트랜잭션 안에서 ~하면 검색 캐시 버전 증가는 커밋 후에만 실행된다" 테스트 3개 추가, 모두 PASS(위 "핵심 트러블슈팅 2" 참고).
+- 전체 테스트(이 PR이 만든 코드 기준, `ManualSmtpSendVerification`처럼 이 PR과 무관하게 로컬에서 수정 중인 파일 제외): `./gradlew clean :test` → **723개 중 723 PASS, 0 실패, 0 에러**(38개는 환경변수 게이트 통합 테스트로 스킵, 실패 아님).
+- 검색 캐시 버전 무효화가 트랜잭션 커밋 후에만 실행되는지: `RestaurantServiceTest`에 register/update/delete 각각 "트랜잭션 안에서 ~하면 검색 캐시 버전 증가는 커밋 후에만 실행된다" 테스트 3개, 모두 PASS.
+- DB 조회 중 버전이 바뀌어도 옛 결과가 새 버전에 다시 저장되지 않는지: `RestaurantSearchCacheStoreIntegrationTest`에 실제 Redis로 재현하는 회귀 테스트 추가, PASS(위 "핵심 트러블슈팅 2" 참고).
 - Redis 명령 timeout이 실제로 적용되는지: `RestaurantSearchCacheStoreIntegrationTest`에 응답 없는 소켓(블랙홀)을 만들어 2초 command timeout 근처에서 실패함을 확인, PASS.
 - 검색 결과: 캐시된 응답도 매번 presigned S3 URL을 새로 생성한다(`toPageResponse`가 캐시 히트 시에도 `restaurantImageService.createGetUrl(item.imageKey())`를 다시 호출) — presigned URL(기본 5분 만료)이 캐시 TTL(60초)보다 오래 노출되는 문제를 피했다. `RestaurantServiceTest`에 이 경로를 검증하는 테스트를 추가했다.
 - date/time이 있는 검색은 캐시를 조회·저장하지 않는다(`RestaurantServiceTest#date나_time이_있는_검색은_캐시를_조회하거나_저장하지_않는다` PASS) — #61 After 코드 그대로 동작한다.

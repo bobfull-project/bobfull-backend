@@ -44,40 +44,63 @@ class RestaurantSearchCacheStoreIntegrationTest {
         RestaurantSearchCacheStore store = store(60);
         RestaurantSearchCacheKey key = key("맛집", 0);
         CachedRestaurantSearchResult result = result(3001L);
+        RestaurantSearchCacheStore.Lookup lookup = store.find(key);
 
-        store.put(key, result);
+        store.put(lookup.version(), key, result);
 
-        assertThat(store.find(key)).isPresent().get().isEqualTo(result);
+        assertThat(store.find(key).result()).isPresent().get().isEqualTo(result);
     }
 
     @Test
     void 저장하지_않은_Key는_조회되지_않는다() {
         RestaurantSearchCacheStore store = store(60);
 
-        assertThat(store.find(key("존재하지-않음", 0))).isEmpty();
+        assertThat(store.find(key("존재하지-않음", 0)).result()).isEmpty();
     }
 
     @Test
     void bumpVersion_이후에는_기존에_저장한_결과가_더이상_조회되지_않는다() {
         RestaurantSearchCacheStore store = store(60);
         RestaurantSearchCacheKey key = key("한식", 0);
-        store.put(key, result(3002L));
-        assertThat(store.find(key)).isPresent();
+        RestaurantSearchCacheStore.Lookup lookup = store.find(key);
+        store.put(lookup.version(), key, result(3002L));
+        assertThat(store.find(key).result()).isPresent();
 
         store.bumpVersion();
 
-        assertThat(store.find(key)).isEmpty();
+        assertThat(store.find(key).result()).isEmpty();
     }
 
     @Test
     void TTL이_지나면_저장한_결과가_자동으로_사라진다() throws InterruptedException {
         RestaurantSearchCacheStore store = store(1);
         RestaurantSearchCacheKey key = key("일식", 0);
-        store.put(key, result(3003L));
+        RestaurantSearchCacheStore.Lookup lookup = store.find(key);
+        store.put(lookup.version(), key, result(3003L));
 
         Thread.sleep(1500);
 
-        assertThat(store.find(key)).isEmpty();
+        assertThat(store.find(key).result()).isEmpty();
+    }
+
+    @Test
+    void DB_조회_도중_다른_변경이_커밋돼_버전이_올라가도_옛_결과가_새_버전에_다시_저장되지_않는다() {
+        // given: 검색 A가 미리 버전을 스냅샷으로 확보한다(find() Miss 시점).
+        RestaurantSearchCacheStore store = store(60);
+        RestaurantSearchCacheKey key = key("경쟁", 0);
+        RestaurantSearchCacheStore.Lookup lookupAtMiss = store.find(key);
+        assertThat(lookupAtMiss.result()).isEmpty();
+
+        // when: 검색 A가 DB를 조회하는 동안 다른 트랜잭션(Restaurant 수정)이 커밋되어 버전이 올라간다.
+        store.bumpVersion();
+
+        // and: 검색 A가 (커밋 전 상태를 반영한) 결과를 이제서야 캐시에 쓴다 — 이때 find() 시점의
+        // 스냅샷 버전을 그대로 쓴다(현재 버전을 다시 읽지 않는다).
+        store.put(lookupAtMiss.version(), key, result(3005L));
+
+        // then: 현재(올라간) 버전으로 다시 조회하면 이 stale 결과가 보이지 않는다 — 옛 버전
+        // namespace에만 저장돼 더 이상 "현재" 캐시로 노출되지 않는다.
+        assertThat(store.find(key).result()).isEmpty();
     }
 
     @Test
@@ -90,8 +113,9 @@ class RestaurantSearchCacheStoreIntegrationTest {
             RestaurantSearchCacheStore store =
                     new RestaurantSearchCacheStore(redisTemplate, JsonMapper.builder().build(), 60);
 
-            assertThat(store.find(key("무관", 0))).isEmpty();
-            store.put(key("무관", 0), result(3004L));
+            RestaurantSearchCacheStore.Lookup lookup = store.find(key("무관", 0));
+            assertThat(lookup.result()).isEmpty();
+            store.put(lookup.version(), key("무관", 0), result(3004L));
             store.bumpVersion();
         } finally {
             unreachableFactory.destroy();
@@ -127,7 +151,7 @@ class RestaurantSearchCacheStoreIntegrationTest {
                         new RestaurantSearchCacheStore(redisTemplate, JsonMapper.builder().build(), 60);
 
                 long start = System.nanoTime();
-                assertThat(store.find(key("블랙홀", 0))).isEmpty();
+                assertThat(store.find(key("블랙홀", 0)).result()).isEmpty();
                 long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
                 // 설정한 command timeout(2초) 근처에서 실패해야 한다 — DB 조회보다 오래 걸리는

@@ -3,6 +3,7 @@ package com.bobfull.restaurant.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
@@ -187,6 +188,8 @@ class RestaurantServiceTest {
         Restaurant restaurant = restaurantOwnedByWithImage(1L, SEARCH_IMAGE_KEY);
         RestaurantSearchRequest request = new RestaurantSearchRequest("흑돼지", "한식", null, null);
         Pageable pageable = PageRequest.of(0, 20);
+        given(restaurantSearchCacheStore.find(any()))
+                .willReturn(new RestaurantSearchCacheStore.Lookup(0L, Optional.empty()));
         given(restaurantRepository.search(eq(request), eq(pageable)))
                 .willReturn(new PageImpl<>(List.of(restaurant), pageable, 1));
         given(restaurantImageService.createGetUrl(SEARCH_IMAGE_KEY)).willReturn("https://search-image.example");
@@ -199,7 +202,7 @@ class RestaurantServiceTest {
         assertThat(response.content().get(0).keyword()).isEqualTo("흑돼지,혼밥");
         assertThat(response.content().get(0).imageUrl()).isEqualTo("https://search-image.example");
         assertThat(response.totalElements()).isEqualTo(1);
-        verify(restaurantSearchCacheStore).put(any(), any());
+        verify(restaurantSearchCacheStore).put(eq(0L), any(), any());
     }
 
     @Test
@@ -218,7 +221,7 @@ class RestaurantServiceTest {
 
         // then
         verify(restaurantSearchCacheStore, never()).find(any());
-        verify(restaurantSearchCacheStore, never()).put(any(), any());
+        verify(restaurantSearchCacheStore, never()).put(anyLong(), any(), any());
     }
 
     @Test
@@ -231,7 +234,8 @@ class RestaurantServiceTest {
                         10L, "밥풀식당", "제주시 애월읍 1", "한식", "흑돼지,혼밥", 10000, SEARCH_IMAGE_KEY);
         com.bobfull.restaurant.cache.CachedRestaurantSearchResult cached =
                 new com.bobfull.restaurant.cache.CachedRestaurantSearchResult(List.of(cachedItem), 0, 20, 1, 1);
-        given(restaurantSearchCacheStore.find(any())).willReturn(Optional.of(cached));
+        given(restaurantSearchCacheStore.find(any()))
+                .willReturn(new RestaurantSearchCacheStore.Lookup(0L, Optional.of(cached)));
         given(restaurantImageService.createGetUrl(SEARCH_IMAGE_KEY)).willReturn("https://fresh-image.example");
 
         // when
@@ -241,7 +245,7 @@ class RestaurantServiceTest {
         assertThat(response.content()).hasSize(1);
         assertThat(response.content().get(0).imageUrl()).isEqualTo("https://fresh-image.example");
         verify(restaurantRepository, never()).search(any(), any());
-        verify(restaurantSearchCacheStore, never()).put(any(), any());
+        verify(restaurantSearchCacheStore, never()).put(anyLong(), any(), any());
     }
 
     @Test
