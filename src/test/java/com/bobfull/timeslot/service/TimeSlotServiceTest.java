@@ -293,8 +293,8 @@ class TimeSlotServiceTest {
                 .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
                         anyCollection(), any(Instant.class), any(Instant.class)))
                 .willReturn(List.of(smallSlot, largeSlot));
-        given(availableCapacityCalculator.calculate(200L, 2)).willReturn(2);
-        given(availableCapacityCalculator.calculate(201L, 4)).willReturn(4);
+        given(availableCapacityCalculator.calculateWithKnownParticipantCount(200L, 2, 0)).willReturn(2);
+        given(availableCapacityCalculator.calculateWithKnownParticipantCount(201L, 4, 0)).willReturn(4);
         given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(200L), anyCollection()))
                 .willReturn(Optional.empty());
         given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(201L), anyCollection()))

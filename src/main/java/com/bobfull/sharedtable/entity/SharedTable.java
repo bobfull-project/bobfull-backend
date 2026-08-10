@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
@@ -15,7 +16,7 @@ import java.time.Instant;
  * 식당의 합석 정원 단위 테이블이다(docs/ERD.md 4.3).
  */
 @Entity
-@Table(name = "shared_table")
+@Table(name = "shared_table", indexes = @Index(name = "idx_shared_table_restaurant_id", columnList = "restaurant_id"))
 public class SharedTable extends BaseTimeEntity {
 
     @Id

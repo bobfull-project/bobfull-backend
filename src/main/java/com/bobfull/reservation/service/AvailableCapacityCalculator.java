@@ -43,13 +43,39 @@ public class AvailableCapacityCalculator {
      * 빠져 점유 합계가 줄어도, 이미 끝난 회차의 좌석이 다시 열려 재예약으로 이어지면 안 된다.
      */
     public int calculate(Long timeSlotId, Integer tableCapacity) {
-        if (reservationRepository.existsByTimeSlotIdAndReservationStatusIn(timeSlotId, CLOSED_STATUS)) {
+        if (isClosed(timeSlotId)) {
             return 0;
         }
-        int currentParticipantCount = reservationRepository
+        int currentParticipantCount = activeParticipantCountFor(timeSlotId);
+        return availableCapacity(timeSlotId, tableCapacity, currentParticipantCount);
+    }
+
+    /**
+     * 호출자가 같은 회차의 활성 예약 참여자 합계를 이미 조회해 알고 있을 때 그 값을 재사용해
+     * {@link #calculate}와 동일한 계산식으로 남은 좌석 수를 반환한다(Issue #61 Track B).
+     * TimeSlotService.toAvailableDiningSessionResponse가 DTO의 currentParticipantCount를 만들기
+     * 위해 이미 실행한 활성 예약 조회·참여자 합계 조회를 이 메서드에서 다시 실행하지 않도록 한다.
+     * 계산식 자체는 바꾸지 않으며, 중복 조회만 제거하는 리팩터링이다.
+     */
+    public int calculateWithKnownParticipantCount(Long timeSlotId, Integer tableCapacity, int currentParticipantCount) {
+        if (isClosed(timeSlotId)) {
+            return 0;
+        }
+        return availableCapacity(timeSlotId, tableCapacity, currentParticipantCount);
+    }
+
+    private boolean isClosed(Long timeSlotId) {
+        return reservationRepository.existsByTimeSlotIdAndReservationStatusIn(timeSlotId, CLOSED_STATUS);
+    }
+
+    private int activeParticipantCountFor(Long timeSlotId) {
+        return reservationRepository
                 .findByTimeSlotIdAndReservationStatusIn(timeSlotId, ACTIVE_STATUSES)
                 .map(this::activeParticipantCount)
                 .orElse(0);
+    }
+
+    private int availableCapacity(Long timeSlotId, Integer tableCapacity, int currentParticipantCount) {
         int pendingHoldCount = paymentHoldReader.sumActiveReadyPartySize(timeSlotId);
         return ReservationCapacityPolicy.availableCapacity(tableCapacity, currentParticipantCount, pendingHoldCount);
     }
