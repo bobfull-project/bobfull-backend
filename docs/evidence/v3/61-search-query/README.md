@@ -5,6 +5,15 @@
 - Track A: `GET /api/restaurants` → `RestaurantSearchRepositoryImpl.search(...)`
 - Track B: 예약 가능 회차 조회 → `TimeSlotService.getAvailableDiningSessions(...)` (내부에서 `AvailableCapacityCalculator.calculate` 호출)
 
+## 측정 계약
+
+- Primary KPI:
+  - Track A: date/time 검색의 `shared_table` 전체 스캔 제거 여부와 실제 사용 Index
+  - Track B: TimeSlot 20건 예약 가능 회차 조회의 SQL PreparedStatement 수
+- Secondary KPI: `EXPLAIN ANALYZE` actual time/actual rows, join 순서, filesort/temporary 여부, TimeSlot당 Query 수
+- Guardrail: 검색 결과·정렬·페이지 계약 유지, `availableCapacity`와 READY Payment 임시 선점 의미 유지, 관련 회귀 테스트 PASS
+- HTTP p50/p95/p99는 이번 Issue의 Primary KPI로 확정하지 않고 #63 K6 Harness에서 별도 측정한다.
+
 ## 기준 코드
 
 - Before SHA: `6f3ea78` (`develop` 최신, 이 Issue 브랜치 `feature/61-search-query-performance`의 분기점)
@@ -14,6 +23,7 @@
 
 - MySQL: `mysql:8.4` Docker 이미지, 버전 `8.4.10`. 개발 DB(`bobfull-mysql`, 포트 3307)와 완전히 분리된 전용 컨테이너(`bobfull-perf-mysql`, 포트 33061, DB `bobfull_perf`)를 이번 Issue 전용으로 새로 띄워 사용했다. 컨테이너는 Evidence 작성 후 폐기한다.
 - 애플리케이션: 로컬 1 인스턴스, 기본 HikariCP 설정(별도 튜닝 없음). 부하 테스트(K6, #63)는 이번 Issue 범위가 아니며 단일 요청/단일 스레드 측정만 수행했다.
+- 현재 Git에 보존된 Track A raw Evidence는 각 시나리오의 Before/After `EXPLAIN ANALYZE` 대표 실행 1회씩이다. 별도 warmup·반복 분포 기록은 없으므로 아래 actual time은 **해당 실행의 관측값**으로만 사용하고 안정적인 latency 배수 개선 주장으로 확대하지 않는다.
 - `spring.jpa.hibernate.ddl-auto=update`(운영과 동일한 방식, Human 결정 Q3)로 스키마를 반영했다.
 - Track A 데이터: Restaurant 5,000건, 각 Restaurant당 SharedTable 1건(총 5,000건), 각 SharedTable당 TimeSlot 2건(총 10,000건). keyword "맛집"이 실제로 포함된 Restaurant는 250건당 1건(20건/5,000건). category는 20종 균등 분포(`perf-category-0`~`perf-category-19`, 각 250건). TimeSlot의 `start_at`은 30일에 걸쳐 균등 분포(day = `i % 30`), 시(hour)도 24시간에 걸쳐 균등 분포(`i % 24`)시켜 date 필터는 약 1/30, time 필터는 약 1/24 선택도를 갖도록 구성했다. Reservation/ReservationParticipant/Payment는 Track A에는 사용하지 않았다(Track A는 `restaurant`·`shared_table`·`time_slot`만 조회).
 - Track B 데이터: Restaurant 1건, SharedTable 1건, TimeSlot 20건, 각 TimeSlot마다 RECRUITING 상태 Reservation 1건 + ReservationParticipant 1건(partySize=2). READY Payment는 이번 측정에 포함하지 않았다(포함해도 duplicate 쿼리 구조 자체는 동일하게 나타난다).
@@ -33,6 +43,8 @@
 | category 등치 | 2 | `PRIMARY`(index scan) | 없음 | 0.075ms |
 | date 필터(3-way join) | 2 | `shared_table`: 없음(PRIMARY 외 인덱스 부재) / `time_slot`: `uk_time_slot_active_start` / `restaurant`: `PRIMARY` | **`shared_table` full scan(5,000행 전체) + Using temporary + Using filesort** | 11.5ms |
 | time 필터(hour/minute, date 없음) | 2 | 위와 동일 | **`shared_table` full scan(5,000행 전체) + Using temporary + Using filesort** | 12.1ms |
+
+> Issue #61이 최소 조합으로 요구한 `date + time`, 별도 정렬 조건, pagination 시나리오는 현재 raw Before Evidence에 없다. 측정 하네스는 보완하되 실제 MySQL Before/After 실행 결과가 추가되기 전까지 해당 세 시나리오는 `NOT_MEASURED`로 취급한다.
 
 핵심 발견: 처음 가설이었던 "`LIKE '%keyword%'` 선두 와일드카드"와 "`hour()/minute()` 함수 래핑"은 이 규모(5,000건)에서 실제 병목이 **아니었다**.
 
@@ -72,12 +84,12 @@
 원본: [`raw/explain-after-trackA.txt`](raw/explain-after-trackA.txt)
 
 | 조건 | 실제 사용 Index | full scan / filesort / temporary | actual time | Before 대비 |
-|---|---|---|---:|---:|
-| 기본(필터 없음) | `PRIMARY`(동일) | 없음(동일) | 0.171ms | 변화 없음(측정 변동 범위) |
-| keyword LIKE | `PRIMARY`(동일) | 없음(동일) | 1.58ms | 변화 없음(측정 변동 범위) |
-| category 등치 | `PRIMARY`(동일) | 없음(동일) | 0.144ms | 변화 없음(측정 변동 범위) |
-| date 필터(3-way join) | `restaurant.PRIMARY`(선행) → `idx_shared_table_restaurant_id`(신규) → `time_slot.uk_time_slot_active_start` | **shared_table full scan 제거.** join 순서가 `restaurant` 선행으로 바뀌어 `r` 스캔도 751행에서 조기 종료 | **3.03ms** | 11.5ms → 3.03ms (약 3.8배) |
-| time 필터(hour/minute) | 위와 동일 순서 | shared_table full scan 제거, `r` 스캔 474행에서 조기 종료 | **1.33ms** | 12.1ms → 1.33ms (약 9.1배) |
+|---|---|---|---:|---|
+| 기본(필터 없음) | `PRIMARY`(동일) | 없음(동일) | 0.171ms | 단일 관측값, 계획 변화 없음 |
+| keyword LIKE | `PRIMARY`(동일) | 없음(동일) | 1.58ms | 단일 관측값, 계획 변화 없음 |
+| category 등치 | `PRIMARY`(동일) | 없음(동일) | 0.144ms | 단일 관측값, 계획 변화 없음 |
+| date 필터(3-way join) | `restaurant.PRIMARY`(선행) → `idx_shared_table_restaurant_id`(신규) → `time_slot.uk_time_slot_active_start` | **shared_table full scan 제거.** join 순서가 `restaurant` 선행으로 바뀌어 `r` 스캔도 751행에서 조기 종료 | **3.03ms** | 11.5ms → 3.03ms의 단일 실행 관측 |
+| time 필터(hour/minute) | 위와 동일 순서 | shared_table full scan 제거, `r` 스캔 474행에서 조기 종료 | **1.33ms** | 12.1ms → 1.33ms의 단일 실행 관측 |
 
 기본/keyword/category 3가지는 이번 인덱스와 무관한 단일 테이블 조회라 계획이 그대로다(의도된 결과 — 이 변경이 다른 조회에 영향을 주지 않았다는 근거).
 
@@ -102,10 +114,12 @@
 
 - Track B는 측정 즉시 명확한 구조적 중복이 확인되어 Query 수준 개선을 적용했다. 계산식은 그대로이므로 기능 리스크가 낮다.
 - Track A는 최초 가설(keyword LIKE, hour/minute 함수)이 **실제로는 이 규모에서 병목이 아니었다** — 측정 없이 바로 "함수 조건이니 인덱스가 안 먹는다"고 인덱스를 추가했다면 틀린 지점에 인덱스를 추가했을 것이다. 실제 병목은 예상 밖의 지점(`shared_table`의 조인 인덱스 부재)이었고, 이는 이 Issue의 "측정 후에만 변경을 선택한다" 원칙이 실제로 값을 낸 사례다.
-- date/time 필터가 있는 검색은 3.8~9배 개선되었지만, 이 개선율은 5,000건 규모의 합성 데이터에서 측정한 것이며 실제 운영 데이터 분포·규모에서는 다를 수 있다.
+- date/time 필터에서는 동일 Fixture의 대표 실행에서 각각 `11.5ms → 3.03ms`, `12.1ms → 1.33ms`가 관측됐고 `shared_table` full scan 제거도 확인됐다. 다만 warmup·반복 분포가 없으므로 **3.8x/9.1x 같은 안정적인 성능 개선율로 일반화하지 않는다.** HTTP 수준 성능은 #63에서 별도 검증한다.
 
 ## 검증 한계
 
+- Issue #61의 Track A 최소 조합 중 `date + time`, 별도 정렬 조건, pagination은 아직 raw Before/After가 없다. 보완 측정 전까지 해당 시나리오의 Evidence 수준은 `NOT_MEASURED`다.
+- Track A raw actual time은 각 시나리오의 대표 실행 1회이며 별도 warmup·반복 분포가 없다. 따라서 full scan 제거·사용 Index 변경은 근거로 사용할 수 있지만 실제 latency 개선율의 일반화에는 사용할 수 없다.
 - 데이터 규모는 Track A 5,000건, Track B 20건 각 1종만 측정했다(Issue 권장 `small/medium/large` 중 medium 1종 위주). 수십만 건 규모의 실제 운영 데이터에서는 옵티마이저의 판단이 달라질 수 있다.
 - HTTP 레벨 p50/p95/p99는 측정하지 않았다 — 이번 Issue는 DB 레벨(SQL/EXPLAIN/쿼리 수)에 한정했고, 부하·응답시간 지표는 #63 K6 Harness의 몫으로 남긴다.
 - keyword LIKE의 "실제 매치가 0건에 가까울 때 전체 스캔에 근접한다"는 위험은 이론적으로는 남아 있으나, 이번 측정에서 확정 병목으로 재현하지 않았다 — Full Text Search 등 검색 방식 변경은 Human 결정 Q2에 따라 이번 Issue에서 다루지 않는다.
@@ -129,6 +143,6 @@ BOBFULL_TEST_MYSQL_PASSWORD=perfpass \
 ## 관련
 
 - Issue: #61
-- PR: (구현 완료 후 연결)
+- PR: #201
 - ADR: 불필요(Issue 본문 "ADR 판단" 참고)
 - Troubleshooting: (필요 시 keyword LIKE 관련 후속 Issue에서 별도 작성)
