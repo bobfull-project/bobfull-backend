@@ -18,6 +18,7 @@ import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ImageErrorCode;
 import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.restaurant.cache.RestaurantSearchCacheStore;
 import com.bobfull.restaurant.dto.OwnerRestaurantDetailResponse;
 import com.bobfull.restaurant.dto.OwnerRestaurantListResponse;
 import com.bobfull.restaurant.dto.RestaurantCreateRequest;
@@ -66,6 +67,9 @@ class RestaurantServiceTest {
     @Mock
     private RestaurantImageService restaurantImageService;
 
+    @Mock
+    private RestaurantSearchCacheStore restaurantSearchCacheStore;
+
     @InjectMocks
     private RestaurantService restaurantService;
 
@@ -96,6 +100,7 @@ class RestaurantServiceTest {
 
         // then
         assertThat(response).isNotNull();
+        verify(restaurantSearchCacheStore).bumpVersion();
     }
 
     @Test
@@ -168,6 +173,49 @@ class RestaurantServiceTest {
         assertThat(response.content().get(0).keyword()).isEqualTo("흑돼지,혼밥");
         assertThat(response.content().get(0).imageUrl()).isEqualTo("https://search-image.example");
         assertThat(response.totalElements()).isEqualTo(1);
+        verify(restaurantSearchCacheStore).put(any(), any());
+    }
+
+    @Test
+    void date나_time이_있는_검색은_캐시를_조회하거나_저장하지_않는다() {
+        // given
+        Restaurant restaurant = restaurantOwnedByWithImage(1L, SEARCH_IMAGE_KEY);
+        RestaurantSearchRequest request =
+                new RestaurantSearchRequest(null, null, java.time.LocalDate.of(2026, 8, 12), null);
+        Pageable pageable = PageRequest.of(0, 20);
+        given(restaurantRepository.search(eq(request), eq(pageable)))
+                .willReturn(new PageImpl<>(List.of(restaurant), pageable, 1));
+        given(restaurantImageService.createGetUrl(SEARCH_IMAGE_KEY)).willReturn("https://search-image.example");
+
+        // when
+        restaurantService.searchRestaurants(request, pageable);
+
+        // then
+        verify(restaurantSearchCacheStore, never()).find(any());
+        verify(restaurantSearchCacheStore, never()).put(any(), any());
+    }
+
+    @Test
+    void 캐시에_저장된_결과가_있으면_DB를_조회하지_않고_이미지_URL만_새로_생성한다() {
+        // given
+        RestaurantSearchRequest request = new RestaurantSearchRequest("흑돼지", "한식", null, null);
+        Pageable pageable = PageRequest.of(0, 20);
+        com.bobfull.restaurant.cache.CachedRestaurantSearchResult.Item cachedItem =
+                new com.bobfull.restaurant.cache.CachedRestaurantSearchResult.Item(
+                        10L, "밥풀식당", "제주시 애월읍 1", "한식", "흑돼지,혼밥", 10000, SEARCH_IMAGE_KEY);
+        com.bobfull.restaurant.cache.CachedRestaurantSearchResult cached =
+                new com.bobfull.restaurant.cache.CachedRestaurantSearchResult(List.of(cachedItem), 0, 20, 1, 1);
+        given(restaurantSearchCacheStore.find(any())).willReturn(Optional.of(cached));
+        given(restaurantImageService.createGetUrl(SEARCH_IMAGE_KEY)).willReturn("https://fresh-image.example");
+
+        // when
+        PageResponse<RestaurantSearchResponse> response = restaurantService.searchRestaurants(request, pageable);
+
+        // then
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).imageUrl()).isEqualTo("https://fresh-image.example");
+        verify(restaurantRepository, never()).search(any(), any());
+        verify(restaurantSearchCacheStore, never()).put(any(), any());
     }
 
     @Test
@@ -225,6 +273,7 @@ class RestaurantServiceTest {
         // then
         assertThat(restaurant.getName()).isEqualTo("새이름");
         assertThat(restaurant.getDepositPerPerson()).isEqualTo(12000);
+        verify(restaurantSearchCacheStore).bumpVersion();
     }
 
     @Test
@@ -371,7 +420,8 @@ class RestaurantServiceTest {
         RestaurantService clockedService = new RestaurantService(
                 restaurantRepository,
                 FIXED_CLOCK,
-                restaurantImageService
+                restaurantImageService,
+                restaurantSearchCacheStore
         );
         Restaurant restaurant = restaurantOwnedByWithImage(1L, DETAIL_IMAGE_KEY);
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
@@ -381,6 +431,7 @@ class RestaurantServiceTest {
 
         // then
         assertThat(restaurant.getDeletedAt()).isEqualTo(FIXED_CLOCK.instant());
+        verify(restaurantSearchCacheStore).bumpVersion();
     }
 
     @Test

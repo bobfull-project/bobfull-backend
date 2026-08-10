@@ -5,6 +5,9 @@ import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ImageErrorCode;
 import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.restaurant.cache.CachedRestaurantSearchResult;
+import com.bobfull.restaurant.cache.RestaurantSearchCacheKey;
+import com.bobfull.restaurant.cache.RestaurantSearchCacheStore;
 import com.bobfull.restaurant.dto.OwnerRestaurantDetailResponse;
 import com.bobfull.restaurant.dto.OwnerRestaurantListResponse;
 import com.bobfull.restaurant.dto.RestaurantCreateRequest;
@@ -17,6 +20,8 @@ import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.image.service.RestaurantImageService;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import java.time.Clock;
+import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -39,15 +44,18 @@ public class RestaurantService {
     private final RestaurantRepository restaurantRepository;
     private final Clock clock;
     private final RestaurantImageService restaurantImageService;
+    private final RestaurantSearchCacheStore restaurantSearchCacheStore;
 
     public RestaurantService(
             RestaurantRepository restaurantRepository,
             Clock clock,
-            RestaurantImageService restaurantImageService
+            RestaurantImageService restaurantImageService,
+            RestaurantSearchCacheStore restaurantSearchCacheStore
     ) {
         this.restaurantRepository = restaurantRepository;
         this.clock = clock;
         this.restaurantImageService = restaurantImageService;
+        this.restaurantSearchCacheStore = restaurantSearchCacheStore;
     }
 
     @Transactional
@@ -65,6 +73,7 @@ public class RestaurantService {
         );
 
         Restaurant savedRestaurant = restaurantRepository.save(restaurant);
+        restaurantSearchCacheStore.bumpVersion();
         return RestaurantIdResponse.from(savedRestaurant);
     }
 
@@ -76,14 +85,59 @@ public class RestaurantService {
                 OwnerRestaurantListResponse.from(restaurant, createImageUrl(restaurant))));
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * date/time이 없는 검색만 Redis에 캐시한다(Issue #62). date/time이 있으면 결과가 TimeSlot
+     * 변경에도 영향을 받아 무효화 대상이 늘어나므로 이번 Issue의 최소 범위에서는 캐시하지 않고
+     * 항상 DB를 조회한다.
+     *
+     * <p>이 메서드 자체는 {@code @Transactional}을 붙이지 않는다. {@code restaurantRepository}는
+     * Spring Data JPA 저장소 프록시라 호출될 때 자체적으로 읽기 전용 트랜잭션을 연다. 캐시 Hit
+     * 경로는 DB를 전혀 만지지 않는데도 바깥 메서드가 {@code @Transactional}이면 매 요청마다
+     * 실제로 실행되는 SQL이 없어도 Hikari Connection을 열고 닫아 동시 요청에서 Pool을 불필요하게
+     * 점유한다는 것을 실측으로 확인했다(Issue #62 Evidence "Warm Hit 동시 반복" 참고).</p>
+     */
     public PageResponse<RestaurantSearchResponse> searchRestaurants(
+            RestaurantSearchRequest request,
+            Pageable pageable
+    ) {
+        if (!RestaurantSearchCacheKey.isCacheEligible(request)) {
+            return searchRestaurantsFromDb(request, pageable);
+        }
+
+        RestaurantSearchCacheKey cacheKey = RestaurantSearchCacheKey.of(request, pageable);
+        Optional<CachedRestaurantSearchResult> cached = restaurantSearchCacheStore.find(cacheKey);
+        if (cached.isPresent()) {
+            return toPageResponse(cached.get());
+        }
+
+        Page<Restaurant> restaurants = restaurantRepository.search(request, pageable);
+        CachedRestaurantSearchResult result = CachedRestaurantSearchResult.from(restaurants);
+        restaurantSearchCacheStore.put(cacheKey, result);
+        return toPageResponse(result);
+    }
+
+    private PageResponse<RestaurantSearchResponse> searchRestaurantsFromDb(
             RestaurantSearchRequest request,
             Pageable pageable
     ) {
         Page<Restaurant> restaurants = restaurantRepository.search(request, pageable);
         return PageResponse.from(restaurants.map(restaurant ->
                 RestaurantSearchResponse.from(restaurant, createImageUrl(restaurant))));
+    }
+
+    private PageResponse<RestaurantSearchResponse> toPageResponse(CachedRestaurantSearchResult result) {
+        List<RestaurantSearchResponse> content = result.items().stream()
+                .map(item -> new RestaurantSearchResponse(
+                        item.restaurantId(),
+                        item.name(),
+                        item.address(),
+                        item.category(),
+                        item.keyword(),
+                        item.depositPerPerson(),
+                        restaurantImageService.createGetUrl(item.imageKey())
+                ))
+                .toList();
+        return new PageResponse<>(content, result.page(), result.size(), result.totalElements(), result.totalPages());
     }
 
     @Transactional(readOnly = true)
@@ -110,6 +164,7 @@ public class RestaurantService {
             restaurant.updateImageKey(newImageKey);
             deletePreviousImageAfterCommit(previousImageKey, newImageKey);
         }
+        restaurantSearchCacheStore.bumpVersion();
         return RestaurantIdResponse.from(restaurant);
     }
 
@@ -121,6 +176,7 @@ public class RestaurantService {
         // 합석 테이블·회차·예약 도메인이 아직 없어 연결 데이터 검사를 하지 않는다.
         // 해당 도메인 구현 시 활성 데이터가 있으면 여기서 RestaurantErrorCode.RESTAURANT_DELETE_NOT_ALLOWED를 던져야 한다(Issue #31 결정 2).
         restaurant.softDelete(clock.instant());
+        restaurantSearchCacheStore.bumpVersion();
         return RestaurantIdResponse.from(restaurant);
     }
 
