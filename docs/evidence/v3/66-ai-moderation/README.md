@@ -40,12 +40,20 @@ Kafka Consumer와 Retry/DLT는 Issue #59 범위이므로 이 Evidence에서 구�
 
 Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기준선으로 고정한다.
 
+## BobFull 40건 Dataset 동기화
+
+- Source of Truth: `demo2/src/test/java/com/example/demo/ModerationEvaluationTest.java`의 `testCases()`
+- 추출 항목: case id, message content, expected result/categories/riskLevel
+- BobFull 위치: `SpringAiModerationAdapterOpenAiEvaluationTest`
+- 계약 검증: 별도 `SpringAiModerationEvaluationDatasetTest`가 총 40건과 SAFE/PROFANITY/PI/SPAM 각 10건을 확인한다.
+- Prompt v2와 Human expected는 demo2 원본에서 변경하지 않았다.
+
 ## BobFull 통합 후 결과
 
 | 지표·현상 | 결과 | 판정 |
 |---|---:|---|
 | 실제 OpenAI 단건 호출 | local IntelliJ 환경에서 Context 기동·Provider 호출·Structured Output 변환·SAFE 기대값 확인 | PASS (Human 실행 결과) |
-| 40건 고정 Dataset 재측정 | `NOT_MEASURED` — 실제 Provider 호출 미실행 | NOT_RUN |
+| 40건 고정 Dataset 재측정 | 동일 Dataset Evaluation Test 구현 완료, 실제 Provider 실행 대기 | NOT_RUN |
 | latency / token / 비용 | `NOT_MEASURED` — 실제 Provider 응답 없음 | NOT_RUN |
 | Core 정상·검증실패·멱등성·AI 장애 격리 | `./gradlew :test --tests com.bobfull.chat.service.ChatModerationServiceTest` 성공 | PASS |
 | 전체 build 및 테스트 | `./gradlew test` 성공 | PASS |
@@ -55,6 +63,8 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 ```bash
 ./gradlew :test --tests com.bobfull.chat.adapter.SpringAiModerationAdapterOpenAiEvaluationTest
 ```
+
+40건 평가는 같은 클래스의 `Prompt_v2를_동일한_40건_Human_labeled_Dataset으로_측정한다` 테스트가 순차 호출로 수행한다. Result/Category/Risk/Exact/Review Actionability 정확도, FAIL case ID와 expected/actual, 요청별 latency의 avg/p95/p99, token 합계와 총 호출 수를 출력한다. 40건 누적 실행 시간은 참고값으로만 출력한다.
 
 Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment·reservation scheduler 및 chat-room/email outbox background job을 모두 비활성화한다. 외부 의존은 OpenAI만 남긴다.
 
