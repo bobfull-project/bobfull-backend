@@ -8,7 +8,7 @@
 ## 기준 코드
 
 - Before SHA: `6f3ea78` (`develop` 최신, 이 Issue 브랜치 `feature/61-search-query-performance`의 분기점)
-- After SHA: 이 Evidence를 포함한 커밋(PR 본문에 기록)
+- After SHA: `d625140`
 
 ## 환경·데이터·실행 조건
 
