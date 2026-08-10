@@ -16,7 +16,7 @@
 
 - Before SHA: `b482607`(`develop` 최신, 이 Issue 브랜치 `feature/62-search-redis-cache`의 분기점. `#61`의 Track A/B 개선이 모두 반영된 상태)
 - #61 결과 링크: `docs/evidence/v3/61-search-query/README.md`
-- After SHA: (구현 완료 후 PR 본문에 기록)
+- After SHA: `c86da4f`
 
 ## 환경·데이터·실행 조건
 
