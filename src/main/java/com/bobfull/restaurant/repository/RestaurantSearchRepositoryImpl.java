@@ -26,6 +26,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 public class RestaurantSearchRepositoryImpl implements RestaurantSearchRepository {
@@ -38,7 +39,15 @@ public class RestaurantSearchRepositoryImpl implements RestaurantSearchRepositor
         this.queryFactory = new JPAQueryFactory(entityManager);
     }
 
+    /**
+     * content/count 두 쿼리를 하나의 읽기 전용 트랜잭션으로 묶는다(PR #202 리뷰 반영). 이 커스텀
+     * fragment 구현은 {@code SimpleJpaRepository}를 상속하지 않아 Spring Data의 기본 트랜잭션
+     * advice가 자동으로 적용되지 않으므로, 명시적으로 선언해야 두 쿼리가 같은 시점의 데이터를
+     * 본다는 보장이 생긴다(그렇지 않으면 두 쿼리 사이에 동시 쓰기가 끼어들어 content와
+     * totalElements가 서로 다른 시점을 반영할 수 있다).
+     */
     @Override
+    @Transactional(readOnly = true)
     public Page<Restaurant> search(RestaurantSearchRequest request, Pageable pageable) {
         QRestaurant restaurant = QRestaurant.restaurant;
         QSharedTable sharedTable = QSharedTable.sharedTable;
