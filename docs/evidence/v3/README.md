@@ -42,8 +42,8 @@ Secondary KPI: query time, rows examined, DB Pool
 Guardrail: 응답 데이터 동일, 오류율 증가 없음
 
 Kafka AI
-Primary KPI: Chat SEND p95 + Consumer Lag
-Secondary KPI: AI 처리 p95, consume rate, Retry/DLT, token/cost
+Primary KPI: Kafka 장애 중 Outbox 보존·복구 성공 건수와 Consumer Lag 회복
+Secondary KPI: Chat SEND p95, AI 처리 p95, consume rate, Retry/DLT, token/cost
 Guardrail: ChatMessage 유실 0, Moderation 중복 저장 0
 ```
 
