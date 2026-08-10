@@ -17,7 +17,7 @@
 ## 기준 코드
 
 - Before SHA: `6f3ea78` (`develop` 최신, 이 Issue 브랜치 `feature/61-search-query-performance`의 분기점)
-- After SHA: `d625140`
+- After SHA: `f0c0161`(date+time/정렬/pagination raw Evidence 보강 커밋. Track B/Track A 핵심 변경 자체는 `d625140`)
 
 ## 환경·데이터·실행 조건
 
