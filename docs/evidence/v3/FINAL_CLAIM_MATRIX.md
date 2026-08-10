@@ -22,6 +22,7 @@ Issue
 - 성능이 아닌 신뢰성 문제는 `N건 중 복구 N건`, `중복 0건`, `PENDING 보존`처럼 검증 가능한 현상을 사용한다.
 - `MERGED`만으로 `MEASURED`라고 표시하지 않는다.
 - Evidence가 부족하면 발표 문구를 `구현함` 또는 `검토함` 수준으로 낮춘다.
+- 아직 실제 Evidence 경로가 확정되지 않은 Issue는 임의 경로를 만들지 않고 `구현 시 확정`으로 둔다.
 
 ## 상태
 
@@ -37,20 +38,20 @@ Issue
 |---|---|---|---|---|---|---|---|
 | #176 ChatRoom Outbox |  |  |  |  |  | `176-chatroom-outbox/README.md` | 반복 JVM kill/restart·유실률 통계는 실제 수행 범위 확인 |
 | #183 Email Outbox |  |  |  |  |  | `183-email-outbox/README.md` | 실제 SMTP 대량 장애·external exactly-once 범위 확인 |
-| #59 Outbox + Kafka AI |  |  |  |  |  | `59-.../README.md` |  |
+| #59 Outbox + Kafka AI |  |  |  |  |  | 구현 시 확정 |  |
 | #60 Reservation Lock |  |  |  |  |  | `60-reservation-lock/README.md` |  |
 | #61 SQL / Index |  |  |  |  |  | `61-search-query/README.md` |  |
 | #62 Redis Cache |  |  |  |  |  | `62-search-cache/README.md` |  |
 | #63 K6 Performance Map |  |  |  |  |  | `63-api-k6/README.md` |  |
 | #65 Settlement |  |  |  |  |  | `65-settlement/README.md` |  |
-| #66 AI Moderation |  |  |  |  |  | `66-.../README.md` | 데이터셋 크기·Provider·PromptVersion 함께 표기 |
-| #142 Reservation Peak |  |  |  |  |  | `142-.../README.md` |  |
-| #143 Payment Completion |  |  |  |  |  | `143-.../README.md` |  |
-| #146 Refund K6 |  |  |  |  |  | `146-.../README.md` |  |
-| #169 ALB / HA / Rolling |  |  |  |  |  | `169-.../README.md` | 애플리케이션 계층 HA와 전체 시스템 HA 구분 |
-| #170 Redis Pub/Sub Chat |  |  |  |  |  | `170-.../README.md` | Pub/Sub은 best-effort, DB cursor가 복구 경로 |
-| #191 Auto Scaling |  |  |  |  |  | `191-.../README.md` | DB·외부 의존성 병목과 구분 |
-| #192 AI Worker Split |  |  |  |  |  | `192-.../README.md` | 같은 총 자원 조건 비교 여부 명시 |
+| #66 AI Moderation |  |  |  |  |  | 구현 시 확정 | 데이터셋 크기·Provider·PromptVersion 함께 표기 |
+| #142 Reservation Peak |  |  |  |  |  | 구현 시 확정 |  |
+| #143 Payment Completion |  |  |  |  |  | 구현 시 확정 |  |
+| #146 Refund K6 |  |  |  |  |  | 구현 시 확정 |  |
+| #169 ALB / HA / Rolling |  |  |  |  |  | 구현 시 확정 | 애플리케이션 계층 HA와 전체 시스템 HA 구분 |
+| #170 Redis Pub/Sub Chat |  |  |  |  |  | 구현 시 확정 | Pub/Sub은 best-effort, DB cursor가 복구 경로 |
+| #191 Auto Scaling |  |  |  |  |  | 구현 시 확정 | DB·외부 의존성 병목과 구분 |
+| #192 AI Worker Split |  |  |  |  |  | 구현 시 확정 | 같은 총 자원 조건 비교 여부 명시 |
 | #198 Schema Migration |  |  |  |  |  | `db-schema-migration/README.md` | 도입 자체가 성공 기준이 아님 |
 
 실제 Evidence 경로가 Issue 구현 과정에서 달라지면 이 Matrix를 실제 경로에 맞게 갱신한다.
