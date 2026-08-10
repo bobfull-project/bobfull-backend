@@ -17,6 +17,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -49,6 +55,7 @@ import org.springframework.test.context.ActiveProfiles;
 class SpringAiModerationAdapterOpenAiEvaluationTest {
     @Autowired private AiModerationPort aiModerationPort;
     @Autowired private ApplicationContext applicationContext;
+    @Autowired @Qualifier("moderationChatClient") private ChatClient moderationChatClient;
 
     @DynamicPropertySource
     static void openAiApiKey(DynamicPropertyRegistry registry) {
@@ -64,6 +71,32 @@ class SpringAiModerationAdapterOpenAiEvaluationTest {
         assertThat(response.provider()).isEqualTo("OpenAI");
         assertThat(response.model()).isNotBlank();
         assertThat(response.result().result()).isEqualTo(ModerationResultType.SAFE);
+    }
+
+    @Test
+    void 실제_OpenAI_RAW와_DTO를_콘솔에서_확인한다() {
+        String input = "내 번호 010-1234-5678이야";
+        ResponseEntity<ChatResponse, ModerationResult> response = moderationChatClient.prompt()
+                .system(ModerationPrompt.SYSTEM_PROMPT)
+                .user(input)
+                .call()
+                .responseEntity(ModerationResult.class, spec -> spec.useProviderStructuredOutput());
+        ChatResponse chatResponse = response.response();
+        ChatResponseMetadata metadata = chatResponse.getMetadata();
+        Usage usage = metadata == null ? null : metadata.getUsage();
+
+        System.out.printf("%n===== INPUT =====%n%s%n%n", input);
+        System.out.printf("===== OPENAI RAW =====%n%s%n%n", chatResponse.getResult().getOutput().getText());
+        System.out.printf("===== PARSED DTO =====%n%s%n%n", response.entity());
+        System.out.printf("===== METADATA =====%nprovider=OpenAI%nmodel=%s%npromptTokens=%s%ncompletionTokens=%s%ntotalTokens=%s%n",
+                metadata == null ? null : metadata.getModel(), usage == null ? null : usage.getPromptTokens(),
+                usage == null ? null : usage.getCompletionTokens(), usage == null ? null : usage.getTotalTokens());
+
+        assertThat(response.entity().result()).isEqualTo(ModerationResultType.FLAGGED);
+        assertThat(response.entity().categories()).containsExactly(ModerationCategory.PERSONAL_INFORMATION);
+        assertThat(response.entity().riskLevel()).isEqualTo(RiskLevel.MEDIUM);
+        assertThat(metadata).isNotNull();
+        assertThat(metadata.getModel()).isNotBlank();
     }
 
     @Test

@@ -21,6 +21,7 @@ Kafka Consumer와 Retry/DLT는 Issue #59 범위이므로 이 Evidence에서 구�
 
 - provider: OpenAI
 - model: `spring.ai.openai.chat.model` ← `OPENAI_CHAT_MODEL` 환경변수, 기본값 `gpt-4o-mini`
+- output token cap: `spring.ai.openai.chat.max-tokens` ← `OPENAI_CHAT_MAX_TOKENS`, 기본값 `128`. Spring AI 2.0.0 metadata에서 확인한 gpt-4o-mini 일반 Chat option이며, reasoning model용 `max-completion-tokens`와 함께 설정하지 않는다.
 - local/prod API Key: `OPENAI_API_KEY` 환경변수. 실제 키는 `application-local.yml`·배포 설정·저장소에 저장하지 않는다.
 - promptVersion: `moderation-prompt-v2`
 - policyVersion: `moderation-policy-v1`
@@ -86,6 +87,15 @@ After의 Result/Category 기준 오탐·미탐은 각각 0건이다. token은 �
 40건 평가는 같은 클래스의 `Prompt_v2를_동일한_40건_Human_labeled_Dataset으로_측정한다` 테스트가 순차 호출로 수행한다. Result/Category/Risk/Exact/Review Actionability 정확도, FAIL case ID와 expected/actual, 요청별 latency의 avg/p95/p99, token 합계와 총 호출 수를 출력한다. 40건 누적 실행 시간은 참고값으로만 출력한다.
 
 Evaluation Test는 H2와 JWT/PortOne/Mail 테스트값만 사용하고, payment·reservation scheduler 및 chat-room/email outbox background job을 모두 비활성화한다. 외부 의존은 OpenAI만 남긴다.
+
+`실제_OpenAI_RAW와_DTO를_콘솔에서_확인한다`는 API Key가 있는 opt-in Evaluation Test에서만 ChatMessage 원문, Provider RAW, Parsed DTO, metadata/token을 stdout으로 출력한다. 운영 Logger에는 원문·RAW를 추가하지 않는다. 콘솔 출력은 다음 명령에서만 활성화한다.
+
+```bash
+./gradlew :test \
+  --tests 'com.bobfull.chat.adapter.SpringAiModerationAdapterOpenAiEvaluationTest.실제_OpenAI_RAW와_DTO를_콘솔에서_확인한다' \
+  --rerun-tasks \
+  -PshowTestOutput
+```
 
 ## 정합성·장애 격리
 

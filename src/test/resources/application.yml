@@ -10,6 +10,7 @@ spring:
       api-key: test-key
       chat:
         model: gpt-4o-mini
+        max-tokens: 128
   retry:
     max-attempts: 1
   mail:

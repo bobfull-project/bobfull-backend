@@ -65,4 +65,9 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	if (project.hasProperty('showTestOutput')) {
+		testLogging {
+			showStandardStreams = true
+		}
+	}
 }
