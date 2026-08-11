@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -27,6 +28,8 @@ import java.util.Set;
 public class ChatModeration extends BaseTimeEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "chat_moderation_id")
     private Long id;
+    @Version @Column(nullable = false)
+    private Long version;
     @Column(name = "chat_message_id", nullable = false, updatable = false)
     private Long messageId;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 24)

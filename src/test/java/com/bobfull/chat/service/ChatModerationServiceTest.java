@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.bobfull.chat.dto.AiModerationResponse;
@@ -27,6 +28,8 @@ import java.util.EnumSet;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 class ChatModerationServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-10T00:00:00Z");
@@ -196,6 +199,52 @@ class ChatModerationServiceTest {
         assertThat(completed.getStatus()).isEqualTo(ModerationProcessingStatus.FLAGGED);
     }
 
+    @Test
+    void 최종_실패_INSERT_충돌_뒤_완료결과가_있으면_예외없이_종료한다() {
+        ChatModeration completed = completed(20L);
+        given(moderations.findByMessageId(20L)).willReturn(Optional.empty(), Optional.of(completed));
+        given(moderations.saveAndFlush(any(ChatModeration.class)))
+                .willThrow(new DataIntegrityViolationException("duplicate messageId"));
+
+        service.recordFinalFailure(20L, "OPENAI_TIMEOUT");
+
+        verify(moderations).saveAndFlush(any(ChatModeration.class));
+        assertThat(completed.getStatus()).isEqualTo(ModerationProcessingStatus.FLAGGED);
+    }
+
+    @Test
+    void 성공_저장_낙관락_충돌후_최신_실패상태에_한번만_재시도한다() {
+        ChatModeration staleFailure = failed(21L);
+        ChatModeration latestFailure = failed(21L);
+        prepareMessage(21L, "재시도 성공");
+        given(moderations.findByMessageId(21L)).willReturn(Optional.of(staleFailure), Optional.of(latestFailure));
+        ai.response = response(ModerationResultType.FLAGGED, EnumSet.of(ModerationCategory.SPAM), RiskLevel.HIGH);
+        given(moderations.saveAndFlush(any(ChatModeration.class)))
+                .willThrow(new OptimisticLockingFailureException("stale version"))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        service.analyze(21L);
+
+        ArgumentCaptor<ChatModeration> captor = ArgumentCaptor.forClass(ChatModeration.class);
+        verify(moderations, times(2)).saveAndFlush(captor.capture());
+        assertThat(captor.getAllValues().get(1).getStatus()).isEqualTo(ModerationProcessingStatus.FLAGGED);
+        assertThat(ai.callCount).isEqualTo(1);
+    }
+
+    @Test
+    void 최종_실패_낙관락_충돌후_이미_실패상태면_재시도하지_않는다() {
+        ChatModeration staleFailure = failed(22L);
+        ChatModeration latestFailure = failed(22L);
+        given(moderations.findByMessageId(22L)).willReturn(Optional.of(staleFailure), Optional.of(latestFailure));
+        given(moderations.saveAndFlush(any(ChatModeration.class)))
+                .willThrow(new OptimisticLockingFailureException("stale version"));
+
+        service.recordFinalFailure(22L, "OPENAI_TIMEOUT");
+
+        verify(moderations).saveAndFlush(any(ChatModeration.class));
+        assertThat(latestFailure.getStatus()).isEqualTo(ModerationProcessingStatus.ANALYSIS_FAILED);
+    }
+
     private ChatMessage prepareMessage(Long id, String content) {
         ChatMessage message = ChatMessage.create(1L, 2L, 3L, content);
         org.springframework.test.util.ReflectionTestUtils.setField(message, "id", id);
@@ -205,6 +254,14 @@ class ChatModerationServiceTest {
     }
     private AiModerationResponse response(ModerationResultType result, EnumSet<ModerationCategory> categories, RiskLevel riskLevel) {
         return new AiModerationResponse(new ModerationResult(result, categories, riskLevel), "OpenAI", "gpt-4o-mini", 1L, 2L, 3L);
+    }
+    private ChatModeration completed(Long messageId) {
+        return ChatModeration.completed(messageId, ModerationResultType.FLAGGED, EnumSet.of(ModerationCategory.SPAM), RiskLevel.HIGH,
+                "OpenAI", "gpt-4o-mini", "moderation-prompt-v2", "moderation-policy-v1", 1L, null, null, null, NOW);
+    }
+    private ChatModeration failed(Long messageId) {
+        return ChatModeration.failed(messageId, "OpenAI", "NOT_MEASURED", "moderation-prompt-v2", "moderation-policy-v1", 0L, NOW,
+                "OPENAI_TIMEOUT");
     }
     private ChatModeration savedModeration() {
         ArgumentCaptor<ChatModeration> captor = ArgumentCaptor.forClass(ChatModeration.class);

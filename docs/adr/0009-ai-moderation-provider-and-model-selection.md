@@ -47,6 +47,18 @@ OpenAI를 단일 Provider로, production 기본 모델은 `gpt-4o-mini`로 유�
 - opt-in 실제 Provider RAW→DTO, 대표 6건, 동일 40건 품질·token·latency 평가
 - 비용은 확인일 공개 가격 × 실측 token으로만 추정
 
+## 동시성 보완
+
+`chat_moderation.chat_message_id`의 UNIQUE 제약은 동일 메시지의 중복 INSERT만 막는다. 이미 `ANALYSIS_FAILED` 행을 읽은 성공 경로와 최종 실패 경로가 동시에 갱신하면, UNIQUE만으로는 늦은 UPDATE가 완료 결과를 덮는 것을 막을 수 없다.
+
+따라서 `ChatModeration`에 JPA `@Version`을 둔다. OpenAI 호출 중에는 DB 락을 보유하지 않고, 저장 시점의 version 불일치만 `OptimisticLockingFailureException`으로 검출한다. 충돌 시 정책은 다음과 같다.
+
+- 최신 행이 SAFE/FLAGGED 완료이면 성공 결과가 이긴 것으로 보고 저장을 종료한다.
+- 최신 행이 `ANALYSIS_FAILED`이면 이미 받은 AI 응답만 새 행에 적용해 DB 저장을 한 번 재시도한다. Provider를 다시 호출하지 않는다.
+- 최종 실패 기록이 충돌하면 최신 행을 재조회하고, 이미 존재하는 완료·실패 행을 덮어쓰지 않고 종료한다.
+
+이는 #59 Kafka Consumer의 retry/DLT 정책을 구현하거나 대체하지 않는다. #59는 분석 실패만 재시도하고, 분석 성공 뒤 DB 저장 충돌은 이 Core의 짧은 DB 재시도 정책으로 해소한다.
+
 ## 재검토 조건
 
 - 품질 KPI 하락 또는 신규 held-out Dataset에서의 유의한 차이

@@ -37,3 +37,21 @@ Prompt는 단순 문자열이 아니라 version 관리되는 실행 계약이다
 ## Retry ownership 경계
 
 Spring AI schema self-correction retry와 향후 Kafka retry를 중첩하면 호출 수·latency·token/cost evidence가 증폭돼 불명확해질 수 있다. #66은 Provider retry를 1회로 제한하고 실패를 retry 가능한 예외로 전파한다. 전체 작업 Retry/DLT와 최종 `ANALYSIS_FAILED` 기록은 #59 Kafka Consumer가 소유하도록 책임 계약만 확정했다. #59는 아직 구현·검증 완료가 아니다.
+
+## 완료 결과가 늦은 최종 실패에 덮일 수 있는 경쟁 상태
+
+### 현상
+
+`chat_moderation.chat_message_id`는 UNIQUE이지만, 이는 중복 INSERT만 막는다. 같은 `ANALYSIS_FAILED` 행을 성공 경로와 최종 실패 경로가 각각 읽은 뒤 UPDATE하면, 먼저 저장된 SAFE/FLAGGED 완료 결과를 늦은 실패 UPDATE가 덮을 수 있다. Kafka의 중복 배달·재시도 연결 뒤에 특히 가능한 경로다.
+
+### 해결
+
+`ChatModeration`에 JPA `@Version`을 추가했다. 저장 시 version이 달라지면 낙관적 락 예외가 발생한다. 성공 경로는 최신 행을 재조회해 완료면 종료하고, 실패 상태일 때만 이미 확보한 AI 응답으로 DB 저장을 한 번 더 시도한다. 최종 실패 경로는 충돌 후 최신 행이 존재하면 덮어쓰지 않고 종료한다. OpenAI 호출 중 DB 락을 잡지 않으며, 충돌 처리 때문에 Provider를 다시 호출하지 않는다.
+
+### 검증
+
+H2/JPA 회귀 테스트에서 동일 실패 행을 별도 트랜잭션으로 두 번 읽고, 첫 번째를 FLAGGED로 저장한 뒤 두 번째 stale UPDATE를 저장했다. 늦은 저장은 `OptimisticLockingFailureException`으로 거절됐고, 최종 행은 FLAGGED로 유지됐다. 서비스 단위 테스트는 INSERT 충돌, 성공 저장 충돌 후 1회 DB 재시도, 최종 실패 충돌의 3개 정책을 검증한다.
+
+### 교훈
+
+UNIQUE는 행 생성 멱등성에 필요하지만, stale UPDATE의 갱신 유실을 막는 장치는 아니다. 외부 호출이 긴 작업에서는 DB 락을 호출 전체에 유지하지 말고, 짧은 저장 구간에서 version 충돌을 검출한 뒤 결과 우선순위를 명시해야 한다.

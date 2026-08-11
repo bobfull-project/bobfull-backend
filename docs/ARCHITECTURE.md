@@ -176,7 +176,7 @@ STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API �
 
 ### AI Moderation Core
 
-`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 Application Validation을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider Native Structured Output을 사용하며, Provider 의존성과 Prompt/Policy metadata는 Port 뒤에 격리한다. AI 실패를 SAFE로 바꾸지 않고 retry 가능한 예외로 전달한다.
+`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 Application Validation을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider Native Structured Output을 사용하며, Provider 의존성과 Prompt/Policy metadata는 Port 뒤에 격리한다. AI 실패를 SAFE로 바꾸지 않고 retry 가능한 예외로 전달한다. `ChatModeration`의 `@Version`은 저장 구간의 stale UPDATE를 거절하며, 완료 결과가 최종 실패 기록에 덮이지 않게 한다.
 
 ```text
 ChatMessage

@@ -14,6 +14,7 @@ import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /** ChatMessage를 짧게 조회한 뒤 트랜잭션 밖에서 AI를 호출하고 결과만 영속화한다. */
@@ -62,10 +63,20 @@ public class ChatModerationService {
         if (existing != null) moderation.complete(response.result().result(), response.result().categories(), response.result().riskLevel(),
                 response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis, response.promptTokens(),
                 response.completionTokens(), response.totalTokens(), now);
-        try { moderations.saveAndFlush(moderation); }
-        catch (DataIntegrityViolationException exception) {
-            if (moderations.findByMessageId(messageId).filter(ChatModeration::isCompleted).isPresent()) return;
-            throw exception;
+        try {
+            moderations.saveAndFlush(moderation);
+        } catch (DataIntegrityViolationException | OptimisticLockingFailureException exception) {
+            ChatModeration latest = moderations.findByMessageId(messageId).orElseThrow(() -> exception);
+            if (latest.isCompleted()) return;
+            latest.complete(response.result().result(), response.result().categories(), response.result().riskLevel(),
+                    response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis,
+                    response.promptTokens(), response.completionTokens(), response.totalTokens(), now);
+            try {
+                moderations.saveAndFlush(latest);
+            } catch (DataIntegrityViolationException | OptimisticLockingFailureException retryException) {
+                if (moderations.findByMessageId(messageId).filter(ChatModeration::isCompleted).isPresent()) return;
+                throw retryException;
+            }
         }
         log.info("event=CHAT_MODERATION_COMPLETED messageId={} result={} categories={} riskLevel={} latencyMillis={}",
                 messageId, response.result().result(), response.result().categories(), response.result().riskLevel(), latencyMillis);
@@ -75,7 +86,12 @@ public class ChatModerationService {
         ChatModeration moderation = existing == null ? ChatModeration.failed(messageId, "OpenAI", "NOT_MEASURED", ModerationPrompt.PROMPT_VERSION,
                 ModerationPrompt.POLICY_VERSION, latencyMillis, now, errorCode) : existing;
         if (existing != null) moderation.fail("OpenAI", "NOT_MEASURED", ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis, now, errorCode);
-        moderations.saveAndFlush(moderation);
+        try {
+            moderations.saveAndFlush(moderation);
+        } catch (DataIntegrityViolationException | OptimisticLockingFailureException exception) {
+            if (moderations.findByMessageId(messageId).isPresent()) return;
+            throw exception;
+        }
         log.warn("event=CHAT_MODERATION_FAILED messageId={} errorCode={} latencyMillis={}", messageId, errorCode, latencyMillis);
     }
     private static long elapsedMillis(long startedAt) { return (System.nanoTime() - startedAt) / 1_000_000; }

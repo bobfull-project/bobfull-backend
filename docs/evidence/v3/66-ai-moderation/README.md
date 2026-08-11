@@ -143,6 +143,8 @@ Guard run mismatch는 `PROFANITY-07` MEDIUM→LOW, `PI-09` MEDIUM→LOW, `SPAM-0
 ## 정합성·장애 격리
 
 - `chat_moderation.chat_message_id`는 UNIQUE다.
+- UNIQUE는 중복 INSERT만 막으므로 `ChatModeration.version`의 JPA 낙관적 락으로 stale UPDATE도 막는다. 충돌 시 완료 상태가 최신이면 종료하고, 최신이 `ANALYSIS_FAILED`일 때만 이미 받은 AI 응답으로 DB 저장을 1회 재시도한다.
+- 2026-08-11 H2/JPA 회귀: 같은 실패 행을 별도 트랜잭션에서 2회 읽고 첫 저장을 FLAGGED로 완료한 뒤 늦은 stale UPDATE를 시도했다. 늦은 저장은 `OptimisticLockingFailureException`으로 거절됐고 최종 상태는 FLAGGED였다. 서비스 정책 테스트 3건(INSERT 충돌, 성공 저장 충돌 후 1회 DB 재시도, 최종 실패 충돌)도 PASS했으며, 충돌 처리 중 Provider 재호출은 0회다.
 - SAFE/FLAGGED 완료 결과가 있으면 AI를 재호출하지 않는다.
 - 외부 AI 호출은 ChatMessage 조회·결과 저장의 짧은 DB 작업 사이에서 수행한다.
 - Provider/구조 검증 실패는 저장 없이 예외를 전파한다. #59 Consumer가 Retry/DLT를 소유하며, Retry 소진 뒤에만 `recordFinalFailure`로 `ANALYSIS_FAILED`를 기록한다.
@@ -158,6 +160,7 @@ Guard run mismatch는 `PROFANITY-07` MEDIUM→LOW, `PI-09` MEDIUM→LOW, `SPAM-0
 - demo2가 Prompt v2를 `BobFull Moderation Policy v2`로 표기한 것은 promptVersion과 policyVersion을 혼용한 과거 sandbox 명명 오류다. BobFull은 Prompt 원문 경계·few-shot·출력 규칙을 복구하되, 공식 계약인 `moderation-prompt-v2`와 `moderation-policy-v1`을 유지한다.
 - Prompt v2는 이 Dataset에 대해 추가 튜닝하거나 `moderation-prompt-v3`를 만들지 않는다. 현재 After 결과를 Prompt v2 기준선으로 동결한다.
 - #59가 아직 `status:draft`이므로 Kafka Consumer/Retry/DLT 연결은 구현하지 않았다.
+- Prompt injection·탐지 회피 입력은 시스템 프롬프트의 "분석 대상 데이터" 지시와 Structured Output 범위로만 완화한다. 악의적 회피를 별도 탐지·차단하는 기능은 현재 #66 범위에 없다.
 
 ## OpenAI Model Selection
 
