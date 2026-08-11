@@ -2,13 +2,30 @@
 
 ## 상태
 
-`MEASUREMENT_COMPLETE — Held-out 80건·Stability 20건×3회·Challenge 24건 raw 결과 기록 완료`.
-측정 Evidence는 완결됐고, Prompt/Policy 개선은 이 Issue 범위가 아니다(후속 Prompt v3 Issue로 분리).
-Held-out 80건 + Challenge 24건 라벨은
-Human 최종 승인으로 동결됐다(아래 "Dataset Freeze" 절). 실제 OpenAI 실행 결과
-(Result/Category/Precision/Recall/F1/Wilson CI/Stability/latency/token/cost)는 이 문서의
-"결과 기록" 절에 실행 후 채운다. 그 전까지 결과 표는 빈 칸으로 둔다(FINAL_CLAIM_MATRIX 기록 규칙 —
-"실행하지 않은 실험의 수치를 소급 생성하지 않는다").
+`CLOSED — Human 최종 결정으로 측정 목적 달성, 종료`. Held-out 80건·Stability 20건×3회·Challenge
+24건 raw 결과 기록을 완료했고, 아래 "최종 결론" 절의 Human 확정 문구로 이 Issue를 마감한다.
+Held-out 80건 + Challenge 24건 라벨은 Human 최종 승인으로 동결됐다(아래 "Dataset Freeze" 절).
+
+## 최종 결론 (Human 확정, 2026-08-11)
+
+> 경계까지 완벽하게 분류하도록 추가 튜닝하지 않고, BobFull에서는 명백한 강한 욕설·개인정보·명시적
+> SPAM 중심으로 Moderation Scope를 조정했다.
+
+이 결론의 근거는 아래 "Human 승인 해석 범위"에 기록한 4개 관측이다 — SPAM 경계에서의 과탐,
+경미한 PROFANITY LOW의 반복적 미탐, 다중 category 경계의 누락/과잉. 이 관측들은 전부 **경계
+사례(Challenge Set, BOUNDARY/ADVERSARIAL 태그)에 집중돼 있고, 명백한 강한 욕설·개인정보·명시적
+SPAM(HOLDOUT-PERSONAL_INFORMATION 전 항목 Precision/Recall/F1 = 1.000/1.000/1.000이 대표적)에서는
+약점이 나타나지 않았다.**
+
+Human은 이 결과를 근거로, 경계 사례까지 완벽하게 분류하도록 Prompt/Policy를 추가 튜닝하지 않고,
+BobFull Moderation의 실제 목표를 "명백한 위험 신호를 확실히 잡아내는 것"으로 재확인하기로
+결정했다. 이에 따라:
+
+- 신규 Prompt v3 개선 Issue를 생성하지 않는다.
+- `ModerationPrompt.java`(Prompt v2, Policy v1)와 production model/128 guard는 이 Issue에서
+  변경하지 않았고 앞으로도 이 Issue 범위에서는 변경하지 않는다.
+- Held-out v1(80건)·Challenge v1(24건)·Stability 결과와 위 4개 해석은 "현재 Scope 안에서
+  Moderation이 무엇을 잘하고 무엇을 의도적으로 포기했는지"를 보여주는 근거로 그대로 보존한다.
 
 ## Dataset Freeze
 
@@ -271,22 +288,31 @@ Challenge Set은 의도적으로 어려운 경계 사례만 모은 것이므로 
 Dataset expected label, Prompt v2, Policy v1, production model/128 guard는 이 결과를 근거로
 수정하지 않았다.
 
-## 브로셔 Claim(실행 후 실제 결과로만 갱신)
+## 브로셔 Claim(최종, Human 확정)
 
 ```text
 Regression Set 40건 → Prompt drift 탐지·회귀 관리(26/40 → 39/40)
-신규 Held-out N건 → Result/Category/Precision/Recall/F1 실제 결과
+신규 Held-out 80건 → Result/Category Exact 74/80(92.5%), FLAGGED P/R/F1 0.961/0.925/0.942
+Challenge 24건(경계 사례) → Result 20/24(83.3%), SPAM Precision 0.500(과탐 존재)
+결론 → 경계까지 완벽하게 분류하도록 추가 튜닝하지 않고, 명백한 강한 욕설·개인정보·명시적 SPAM
+       중심으로 Moderation Scope를 조정
 ```
 
-`AI 정확도 97.5% 보장`, `실사용 전체 정확도` 같은 과장 표현은 사용하지 않는다.
+`AI 정확도 97.5% 보장`, `실사용 전체 정확도` 같은 과장 표현은 사용하지 않는다. Challenge Set(경계
+사례) 수치를 Held-out 전체 정확도처럼 인용하지 않는다 — 경계에서는 과탐/미탐이 있음을 그대로
+같이 밝힌다.
 
-## 한계(현재까지)
+## 한계(최종)
 
-- Held-out/Challenge 문장과 라벨은 AI 초안이며 Human 확정 전이다 — 이 상태의 어떤 수치도 아직 존재하지
+- Held-out 80건은 1회 실행 결과다. 반복 실행 시 일부 변동 가능성은 Stability Subset(20건×3회)으로만
+  확인했고, 나머지 60건의 반복 안정성은 확인하지 않았다.
+- Challenge Set(24건)은 의도적으로 어려운 경계 사례만 모은 것이라 전체 모집단 정확도로 해석하지
   않는다.
-- Stability Subset은 Held-out 안에서만 뽑았다(Challenge Set의 변동성은 별도로 확인하지 않는다).
-- 이번 실험은 production 기본 모델(`gpt-4o-mini` + 128 guard)만 검증한다 — `gpt-5.4-nano` 재비교는
+- 경미한 PROFANITY LOW(친근한 반말 호칭 등 경계 표현)에서 미탐이 반복 확인됐고, SPAM 경계에서
+  과탐이 확인됐다 — 이 약점은 해결하지 않고 "Scope 밖"으로 명시적으로 남겨뒀다(위 "최종 결론" 참고).
+- 이번 실험은 production 기본 모델(`gpt-4o-mini` + 128 guard)만 검증했다 — `gpt-5.4-nano` 재비교는
   범위 밖이다(Issue #213 제외 범위).
+- Kafka Consumer/Retry/DLT(#59)를 통한 E2E 비동기 파이프라인 latency는 이 Issue의 범위가 아니다.
 
 ## 관련
 
