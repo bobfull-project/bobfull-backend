@@ -56,6 +56,7 @@ Evidence 수준은 구현·채택 상태가 아니라, 최종 주장에 연결�
 | #63 K6 Performance Map |  |  |  |  |  |  | `63-api-k6/README.md` |  |
 | #65 Settlement |  |  |  |  |  |  | `65-settlement/README.md` |  |
 | #66 AI Moderation |  |  |  |  |  |  | 구현 시 확정 | 데이터셋 크기·Provider·PromptVersion 함께 표기 |
+| #213 AI Moderation Held-out 재검증 | `DEFERRED` | `MEASURED` | Result/Category/Review Actionability/FLAGGED Precision·Recall·F1 | Regression 40건(#66, 별도 기준선) | Held-out 74/80(92.5%)·Challenge 20/24(83.3%), 세부는 Evidence 참고 | `213-ai-moderation-heldout/README.md` | Held-out/Challenge 라벨 Human Label Freeze 완료 후 측정. Human 최종 결정으로 경계 사례 추가 튜닝은 보류하고 명백한 강한 욕설·개인정보·명시적 SPAM 중심으로 Moderation Scope를 조정(Prompt/Policy 코드 변경 없음, 신규 Prompt v3 Issue 생성 안 함) |
 | #142 Reservation Peak |  |  |  |  |  |  | 구현 시 확정 |  |
 | #143 Payment Completion |  |  |  |  |  |  | 구현 시 확정 |  |
 | #146 Refund K6 |  |  |  |  |  |  | 구현 시 확정 |  |
