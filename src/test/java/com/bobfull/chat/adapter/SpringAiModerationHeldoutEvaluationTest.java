@@ -37,12 +37,14 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * Issue #213 — AI Moderation 신규 Held-out 품질 재검증.
  *
- * <p><b>중요(Label Freeze, Issue #213 핵심 원칙):</b> 아래 {@link #heldoutCases()},
- * {@link #challengeCases()}의 expected 라벨은 담당 AI가 초안 작성했으며 아직 Human이 검토·확정하지
- * 않았다. Issue #213의 Human Label 계약("첫 Provider 실행 전에 Human이 확정·동결한다")에 따라
- * {@link #HELD_OUT_LABELS_HUMAN_CONFIRMED}가 {@code true}로 바뀌기 전까지 실제 OpenAI 호출 테스트는
- * 스스로 skip된다. 라벨을 검토·수정한 뒤 이 상수만 {@code true}로 바꾸고, 그 뒤로는 라벨을 다시
- * 바꾸지 않는다(첫 실행 후 라벨을 바꾸면 해당 case는 평가에서 제외하고 사유를 Evidence에 남긴다).</p>
+ * <p><b>Label Freeze 상태(2026-08-11 기준, Issue #213 핵심 원칙):</b> 아래 {@link #heldoutCases()},
+ * {@link #challengeCases()}의 expected 라벨은 담당 AI가 초안 작성한 뒤 Human이 3라운드 검토를 거쳐
+ * 최종 확정·동결했다({@link #HELD_OUT_LABELS_HUMAN_CONFIRMED} = {@code true}). 동결 이전에는 이 값이
+ * {@code false}인 동안 실제 OpenAI 호출 테스트가 스스로 skip되도록 막아뒀었다. Issue #213 Human
+ * Label 계약에 따라 이 시점 이후로는 라벨을 다시 바꾸지 않는다 — 오류가 뒤늦게 발견되면 해당 case를
+ * 평가에서 제외하고 사유를 Evidence에 남긴 뒤 별도 Held-out v2로 재검증한다. Dataset 내용은
+ * {@code ModerationHeldoutDatasetTest.Dataset_Content_SHA256_해시가_동결된_값과_일치한다()}가 동결
+ * 해시와의 일치를 계속 검증한다.</p>
  */
 @org.junit.jupiter.api.Tag("openai-evaluation")
 @EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
@@ -71,13 +73,14 @@ class SpringAiModerationHeldoutEvaluationTest {
 
     /**
      * Issue #213 Label Freeze 게이트. Held-out/Challenge 라벨을 Human이 검토·확정하기 전에는
-     * 반드시 {@code false}로 유지한다. 실제 OpenAI 호출 테스트 2개는 이 값이 {@code true}가 될 때까지
-     * assumeTrue로 스스로 skip된다(실패가 아니라 skip이며, 사유가 리포트에 남는다).
+     * 반드시 {@code false}로 유지한다. 실제 OpenAI 호출 테스트 3개(Held-out 실행, Challenge 실행,
+     * Stability Run)는 이 값이 {@code true}가 될 때까지 assumeTrue로 스스로 skip된다(실패가 아니라
+     * skip이며, 사유가 리포트에 남는다). Human 최종 승인(2026-08-11)으로 이미 {@code true}로
+     * 동결됐다 — Dataset SHA-256과 기준 Commit SHA는
+     * docs/evidence/v3/213-ai-moderation-heldout/README.md의 "Dataset Freeze" 절 참고. 이 값이
+     * true가 된 이후에는 expected 라벨을 다시 수정하지 않는다(Issue #213 원칙) — 오류가 뒤늦게
+     * 발견되면 해당 case를 제외하고 사유를 Evidence에 기록한다.
      */
-    // Human 최종 승인(2026-08-11)으로 동결. Dataset SHA-256과 기준 Commit SHA는
-    // docs/evidence/v3/213-ai-moderation-heldout/README.md의 "Dataset Freeze" 절 참고.
-    // 이 값이 true가 된 이후에는 expected 라벨을 다시 수정하지 않는다(Issue #213 원칙) —
-    // 오류가 뒤늦게 발견되면 해당 case를 제외하고 사유를 Evidence에 기록한다.
     private static final boolean HELD_OUT_LABELS_HUMAN_CONFIRMED = true;
 
     @Autowired
@@ -346,7 +349,7 @@ class SpringAiModerationHeldoutEvaluationTest {
     }
 
     // ------------------------------------------------------------------
-    // Held-out Set v1 — 80건 (DRAFT, Human 확정 전). Issue #213 Dataset 계약 B.
+    // Held-out Set v1 — 80건 (Human 최종 승인으로 동결됨, 2026-08-11). Issue #213 Dataset 계약 B.
     // ------------------------------------------------------------------
     static List<HeldoutCase> heldoutCases() {
         List<HeldoutCase> cases = new ArrayList<>();
@@ -489,7 +492,7 @@ class SpringAiModerationHeldoutEvaluationTest {
     }
 
     // ------------------------------------------------------------------
-    // Challenge Set — 20~30건 (DRAFT, Human 확정 전). Issue #213 Dataset 계약 C.
+    // Challenge Set — 24건(권장 20~30건 범위 내, Human 최종 승인으로 동결됨, 2026-08-11). Issue #213 Dataset 계약 C.
     // 전체 정확도 모집단에 합산하지 않고 Boundary/Robustness로 별도 보고한다.
     // ------------------------------------------------------------------
     static List<HeldoutCase> challengeCases() {

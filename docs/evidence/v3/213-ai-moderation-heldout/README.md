@@ -14,7 +14,8 @@ Held-out 80건 + Challenge 24건 라벨은 Human 최종 승인으로 동결됐�
 이 결론의 근거는 아래 "Human 승인 해석 범위"에 기록한 4개 관측이다 — SPAM 경계에서의 과탐,
 경미한 PROFANITY LOW의 반복적 미탐, 다중 category 경계의 누락/과잉. 이 관측들은 전부 **경계
 사례(Challenge Set, BOUNDARY/ADVERSARIAL 태그)에 집중돼 있고, 명백한 강한 욕설·개인정보·명시적
-SPAM(HOLDOUT-PERSONAL_INFORMATION 전 항목 Precision/Recall/F1 = 1.000/1.000/1.000이 대표적)에서는
+SPAM(PERSONAL_INFORMATION 카테고리 `HOLDOUT-PI-` 전 항목 Precision/Recall/F1 = 1.000/1.000/1.000이
+대표적)에서는
 약점이 나타나지 않았다.**
 
 Human은 이 결과를 근거로, 경계 사례까지 완벽하게 분류하도록 Prompt/Policy를 추가 튜닝하지 않고,
