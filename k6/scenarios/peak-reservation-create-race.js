@@ -22,6 +22,13 @@
 //
 // 검증 항목(Issue #142 시나리오 B): 성공 인원이 1명을 초과하지 않는지, 중복 예약이 없는지,
 // Reservation·TimeSlot 락 대기시간(서버 로그/Grafana에서 별도 확인), 처리량·오류율.
+//
+// (PR #220 리뷰 반영 — hyeonseung-dev) Counter만으로는 "정확히 1명 성공" 불변식이 깨져도
+// k6 프로세스가 종료 코드 0으로 끝날 수 있었다(예: 경쟁 버그로 2명이 200을 받아도 Counter 값만
+// 달라질 뿐 실행 자체는 실패로 표시되지 않았다). `options.thresholds`로 success/conflict/
+// unexpected Counter와 checks 자체를 실패 조건으로 묶어, 불변식 위반 시 k6가 non-zero 종료
+// 코드로 끝나도록 했다. `teardown()`의 배타 선점 재검증도 `check()`로 바꿔 같은 Gate에 걸리게
+// 했다(기존에는 `console.error`만 남겨 사람이 로그를 읽어야만 발견됐다).
 
 import exec from 'k6/execution';
 import { Counter } from 'k6/metrics';
@@ -42,6 +49,12 @@ export const options = {
             iterations: 1,
             maxDuration: '30s',
         },
+    },
+    thresholds: {
+        peak_create_race_success: ['count==1'],
+        peak_create_race_conflict: [`count==${CONCURRENT_USERS - 1}`],
+        peak_create_race_unexpected: ['count==0'],
+        checks: ['rate==1.0'],
     },
 };
 
@@ -94,12 +107,13 @@ export default function (data) {
 
     if (res.status === 200) {
         createSuccessCount.add(1);
-        check(res, { 'peak_create_race: 성공 응답 body.success': (r) => JSON.parse(r.body).success === true });
+        check(res, { 'peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)': (r) => JSON.parse(r.body).success === true });
     } else if (res.status === 409 && bodyCode(res) === 'ACTIVE_RESERVATION_ALREADY_EXISTS') {
         createConflictCount.add(1);
+        check(res, { 'peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)': () => true });
     } else {
         createUnexpectedCount.add(1);
-        check(res, { [`peak_create_race: 예상 밖 응답(status=${res.status})`]: () => false });
+        check(res, { 'peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)': () => false });
     }
 }
 
@@ -116,7 +130,10 @@ export function teardown(data) {
         partySize: 1,
     }, authHeaders(data.verifierToken), 'peak_create_race_verify');
 
-    if (res.status === 409 && bodyCode(res) === 'ACTIVE_RESERVATION_ALREADY_EXISTS') {
+    const exclusivityHeld = res.status === 409 && bodyCode(res) === 'ACTIVE_RESERVATION_ALREADY_EXISTS';
+    check(res, { 'peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다': () => exclusivityHeld });
+
+    if (exclusivityHeld) {
         console.log(`teardown 검증 성공: 회차 ${data.targetSessionId}는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음).`);
     } else {
         console.error(

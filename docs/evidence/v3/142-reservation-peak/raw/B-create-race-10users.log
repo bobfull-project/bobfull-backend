@@ -19,39 +19,56 @@ peak_create_race   [   0% ]
 
 Run                [ 100% ] setup()
 peak_create_race   [   0% ]
-time="2026-08-11T18:03:51+09:00" level=info msg="teardown 검증 성공: 회차 8841는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+time="2026-08-11T21:03:41+09:00" level=info msg="teardown 검증 성공: 회차 8851는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.0' rate=100.00%
+
+    peak_create_race_conflict
+    ✓ 'count==9' count=9
+
+    peak_create_race_success
+    ✓ 'count==1' count=1
+
+    peak_create_race_unexpected
+    ✓ 'count==0' count=0
 
 
   █ TOTAL RESULTS 
 
-    checks_total.......: 1       0.476908/s
-    checks_succeeded...: 100.00% 1 out of 1
-    checks_failed......: 0.00%   0 out of 1
+    checks_total.......: 11      5.055298/s
+    checks_succeeded...: 100.00% 11 out of 11
+    checks_failed......: 0.00%   0 out of 11
 
-    ✓ peak_create_race: 성공 응답 body.success
+    ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)
+    ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다
 
     CUSTOM
-    peak_create_race_conflict......: 9      4.292173/s
-    peak_create_race_success.......: 1      0.476908/s
+    peak_create_race_conflict......: 9      4.136153/s
+    peak_create_race_success.......: 1      0.459573/s
+    peak_create_race_unexpected....: 0      0/s
 
     HTTP
-    http_req_duration..............: avg=60.84ms min=7.52ms med=78.74ms max=95.51ms p(90)=86.5ms  p(95)=89.34ms
-      { expected_response:true }...: avg=70.53ms min=7.52ms med=80.09ms max=95.51ms p(90)=88.85ms p(95)=89.83ms
+    http_req_duration..............: avg=65.6ms  min=9.9ms   med=82.17ms max=99.06ms p(90)=85.56ms p(95)=89.77ms
+      { expected_response:true }...: avg=72.73ms min=10.05ms med=82.99ms max=99.06ms p(90)=86.77ms p(95)=94.52ms
     http_req_failed................: 25.64% 10 out of 39
-    http_reqs......................: 39     18.599416/s
+    http_reqs......................: 39     17.92333/s
 
     EXECUTION
-    iteration_duration.............: avg=34.36ms min=17.4ms med=34ms    max=51.74ms p(90)=48.51ms p(95)=50.13ms
-    iterations.....................: 10     4.769081/s
+    iteration_duration.............: avg=47.05ms min=22.97ms med=47.09ms max=70.33ms p(90)=66.37ms p(95)=68.35ms
+    iterations.....................: 10     4.595726/s
     vus............................: 0      min=0        max=0 
     vus_max........................: 10     min=10       max=10
 
     NETWORK
-    data_received..................: 24 kB  12 kB/s
-    data_sent......................: 13 kB  6.0 kB/s
+    data_received..................: 24 kB  11 kB/s
+    data_sent......................: 13 kB  5.8 kB/s
 
 
 
 
-running (0m02.1s), 00/10 VUs, 10 complete and 0 interrupted iterations
+running (0m02.2s), 00/10 VUs, 10 complete and 0 interrupted iterations
 peak_create_race ✓ [ 100% ] 10 VUs  00.1s/30s  10/10 iters, 1 per VU

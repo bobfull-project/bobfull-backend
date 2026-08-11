@@ -13,37 +13,62 @@
      scenarios: (100.00%) 1 scenario, 2 max VUs, 1m0s max duration (incl. graceful stop):
               * peak_create_race: 1 iterations for each of 2 VUs (maxDuration: 30s, gracefulStop: 30s)
 
-time="2026-08-11T18:03:35+09:00" level=info msg="teardown 검증 성공: 회차 8837는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-11T21:03:37+09:00" level=info msg="teardown 검증 성공: 회차 8847는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.0' rate=100.00%
+
+    peak_create_race_conflict
+    ✓ 'count==1' count=1
+
+    peak_create_race_success
+    ✓ 'count==1' count=1
+
+    peak_create_race_unexpected
+    ✓ 'count==0' count=0
 
 
   █ TOTAL RESULTS 
 
-    checks_total.......: 1       1.206647/s
-    checks_succeeded...: 100.00% 1 out of 1
-    checks_failed......: 0.00%   0 out of 1
+    checks_total.......: 3       1.265825/s
+    checks_succeeded...: 100.00% 3 out of 3
+    checks_failed......: 0.00%   0 out of 3
 
-    ✓ peak_create_race: 성공 응답 body.success
+    ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)
+    ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다
 
     CUSTOM
-    peak_create_race_conflict......: 1      1.206647/s
-    peak_create_race_success.......: 1      1.206647/s
+    peak_create_race_conflict......: 1      0.421942/s
+    peak_create_race_success.......: 1      0.421942/s
+    peak_create_race_unexpected....: 0      0/s
 
     HTTP
-    http_req_duration..............: avg=55.78ms min=10.06ms med=87.12ms max=102.47ms p(90)=93.8ms  p(95)=97.29ms
-      { expected_response:true }...: avg=61.64ms min=10.06ms med=87.27ms max=102.47ms p(90)=94.44ms p(95)=98.03ms
+    http_req_duration..............: avg=165.13ms min=28.84ms  med=97.68ms  max=718.24ms p(90)=392.93ms p(95)=588.72ms
+      { expected_response:true }...: avg=166.82ms min=28.84ms  med=97.09ms  max=718.24ms p(90)=452.73ms p(95)=607.23ms
     http_req_failed................: 13.33% 2 out of 15
-    http_reqs......................: 15     18.0997/s
+    http_reqs......................: 15     6.329125/s
 
     EXECUTION
-    iteration_duration.............: avg=21.58ms min=18.32ms med=21.58ms max=24.84ms  p(90)=24.19ms p(95)=24.52ms
-    iterations.....................: 2      2.413293/s
+    iteration_duration.............: avg=157.55ms min=131.75ms med=157.55ms max=183.35ms p(90)=178.19ms p(95)=180.77ms
+    iterations.....................: 2      0.843883/s
+    vus............................: 0      min=0       max=0
+    vus_max........................: 2      min=2       max=2
 
     NETWORK
-    data_received..................: 9.2 kB 11 kB/s
-    data_sent......................: 5.0 kB 6.1 kB/s
+    data_received..................: 9.2 kB 3.9 kB/s
+    data_sent......................: 5.0 kB 2.1 kB/s
 
 
 
 
-running (0m00.8s), 0/2 VUs, 2 complete and 0 interrupted iterations
-peak_create_race ✓ [ 100% ] 2 VUs  00.0s/30s  2/2 iters, 1 per VU
+running (0m02.4s), 0/2 VUs, 2 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 2 VUs  00.2s/30s  2/2 iters, 1 per VU

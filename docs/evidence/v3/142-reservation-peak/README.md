@@ -7,7 +7,7 @@
 
 ## 측정·재현 환경
 
-- 기준 Branch/Commit: `feature/142-reservation-peak-test`
+- 기준 Branch: `feature/142-peak-load-test`
 - 환경: 로컬(`./gradlew bootRun`, `spring.profiles.active=local`), `docker-compose`(MySQL 8.4,
   Redis 7) — 운영 환경과 CPU/네트워크 특성이 다르므로 병목 전환점 근거로 쓰지 않는다.
 - Fixture: 시나리오별 `setup()`에서 API로 직접 생성(운영 데이터 없음, 합성 데이터만 사용).
@@ -57,6 +57,21 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 상태다(위 "범위 한계" 참고) — 그래서 실제로는 정상 동작(1명 성공)인데도 매번 "예약이 생성되지
 않았다"는 오탐 에러가 찍혔다. 새 회원으로 CREATE를 한 번 더 시도해 409를 받는지로 검증하는
 방식으로 고쳤다(`peak-reservation-create-race.js` 참고).
+
+### 트러블슈팅 — 불변식 위반이 k6 실행 실패로 이어지지 않던 문제 (PR #220 리뷰, hyeonseung-dev)
+
+처음 구현은 `peak_create_race_success`/`conflict`/`unexpected` Counter만 기록하고
+`options.thresholds`로 묶지 않았다. 그래서 예를 들어 경쟁 버그로 2명이 200을 받아도 Counter
+값만 달라질 뿐 k6는 종료 코드 0으로 끝날 수 있었다 — "정확히 1명만 성공"이라는 이 시나리오의
+핵심 불변식을 자동으로 검증하는 Gate가 없었다. `teardown()`의 배타 선점 재검증도 `console.error`
+로그만 남겨 사람이 로그를 읽어야만 위반을 발견할 수 있었다.
+
+`options.thresholds`에 `peak_create_race_success: ['count==1']`,
+`peak_create_race_conflict: ['count==CONCURRENT_USERS-1']`, `peak_create_race_unexpected: ['count==0']`,
+`checks: ['rate==1.0']`를 추가하고, `teardown()`도 `check()`로 바꿔 같은 Gate에 걸리게 했다.
+실제로 Gate가 동작하는지 별도 실험(threshold를 `count==0`으로 일부러 깨뜨림)으로 확인했다 —
+정상 조건에서는 종료 코드 0, 불변식을 강제로 깨면 종료 코드 99(k6 표준 threshold 실패 코드)로
+끝난다. 2/5/10/20/50 전 단계를 재실행해 모든 threshold가 PASS임을 다시 확인했다(위 결과 표).
 
 ## 남은 작업 (#207 AWS 실행 후)
 
