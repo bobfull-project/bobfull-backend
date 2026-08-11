@@ -1,0 +1,60 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 20 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 20 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-11T18:03:55+09:00" level=info msg="teardown 검증 성공: 회차 8843는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1       0.262693/s
+    checks_succeeded...: 100.00% 1 out of 1
+    checks_failed......: 0.00%   0 out of 1
+
+    ✓ peak_create_race: 성공 응답 body.success
+
+    CUSTOM
+    peak_create_race_conflict......: 19     4.991162/s
+    peak_create_race_success.......: 1      0.262693/s
+
+    HTTP
+    http_req_duration..............: avg=69.82ms min=7.73ms med=81.09ms max=95.07ms p(90)=86.42ms p(95)=88.59ms
+      { expected_response:true }...: avg=75.83ms min=7.73ms med=81.84ms max=95.07ms p(90)=87.03ms p(95)=88.59ms
+    http_req_failed................: 28.98% 20 out of 69
+    http_reqs......................: 69     18.125798/s
+
+    EXECUTION
+    iteration_duration.............: avg=57.12ms min=19.9ms med=57.3ms  max=92.01ms p(90)=85.13ms p(95)=87.97ms
+    iterations.....................: 20     5.253854/s
+    vus............................: 0      min=0        max=0 
+    vus_max........................: 20     min=20       max=20
+
+    NETWORK
+    data_received..................: 43 kB  11 kB/s
+    data_sent......................: 22 kB  5.8 kB/s
+
+
+
+
+running (0m03.8s), 00/20 VUs, 20 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 20 VUs  00.1s/30s  20/20 iters, 1 per VU

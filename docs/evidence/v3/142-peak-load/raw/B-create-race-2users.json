@@ -1,0 +1,135 @@
+{
+    "root_group": {
+        "groups": {},
+        "checks": {
+                "peak_create_race: 성공 응답 body.success": {
+                    "name": "peak_create_race: 성공 응답 body.success",
+                    "path": "::peak_create_race: 성공 응답 body.success",
+                    "id": "08df7d382081027dd8061276e37b985b",
+                    "passes": 1,
+                    "fails": 0
+                }
+            },
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "metrics": {
+        "http_req_waiting": {
+            "p(95)": 96.70409999999998,
+            "avg": 55.4612,
+            "min": 9.466,
+            "med": 86.846,
+            "max": 102.204,
+            "p(90)": 93.2754
+        },
+        "http_req_receiving": {
+            "min": 0.041,
+            "med": 0.256,
+            "max": 0.581,
+            "p(90)": 0.3148,
+            "p(95)": 0.3982999999999998,
+            "avg": 0.2541333333333334
+        },
+        "http_req_failed": {
+            "passes": 2,
+            "fails": 13,
+            "value": 0.13333333333333333
+        },
+        "peak_create_race_conflict": {
+            "count": 1,
+            "rate": 1.2066466926417478
+        },
+        "http_req_tls_handshaking": {
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0
+        },
+        "data_sent": {
+            "count": 5017,
+            "rate": 6053.746456983648
+        },
+        "data_received": {
+            "rate": 11131.315739620124,
+            "count": 9225
+        },
+        "iterations": {
+            "count": 2,
+            "rate": 2.4132933852834957
+        },
+        "http_reqs": {
+            "count": 15,
+            "rate": 18.099700389626218
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 61.64584615384615,
+            "min": 10.06,
+            "med": 87.271,
+            "max": 102.471,
+            "p(90)": 94.4422,
+            "p(95)": 98.0382
+        },
+        "http_req_blocked": {
+            "max": 3.275,
+            "p(90)": 0.23,
+            "p(95)": 1.144899999999998,
+            "avg": 0.26646666666666663,
+            "min": 0.002,
+            "med": 0.004
+        },
+        "http_req_connecting": {
+            "min": 0,
+            "med": 0,
+            "max": 0.558,
+            "p(90)": 0.20199999999999999,
+            "p(95)": 0.3101999999999998,
+            "avg": 0.07506666666666667
+        },
+        "http_req_duration": {
+            "min": 10.06,
+            "med": 87.124,
+            "max": 102.471,
+            "p(90)": 93.8014,
+            "p(95)": 97.29939999999999,
+            "avg": 55.784933333333335
+        },
+        "checks": {
+            "passes": 1,
+            "fails": 0,
+            "value": 1
+        },
+        "iteration_duration": {
+            "med": 21.585749999999997,
+            "max": 24.847209,
+            "p(90)": 24.1949172,
+            "p(95)": 24.5210631,
+            "avg": 21.585749999999997,
+            "min": 18.324291
+        },
+        "http_req_sending": {
+            "max": 0.416,
+            "p(90)": 0.18700000000000003,
+            "p(95)": 0.2892999999999999,
+            "avg": 0.06960000000000001,
+            "min": 0.009,
+            "med": 0.014
+        },
+        "peak_create_race_success": {
+            "count": 1,
+            "rate": 1.2066466926417478
+        }
+    },
+    "setup_data": {
+        "memberTokens": [
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzOThkNzZmZi1jZmViLTQ0ZmQtYjdmZi1iZGRhNmExYzA5N2EiLCJtZW1iZXJJZCI6MTEzLCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDE1LCJleHAiOjE3ODY0NDI2MTV9.VCpf4-u9Mtzbujh4n01xdYSwpaj4iFj-4l3cevkX19c",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkYThhNjYyOC1lZDkzLTRmNWEtOWI0MS1lM2U0Mjk2N2I0OGYiLCJtZW1iZXJJZCI6MTE0LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDE1LCJleHAiOjE3ODY0NDI2MTV9.xWKi18_aO7JYMQH2EyDroYQRVkMzSuxuIpiXDxXkfAs"
+        ],
+        "restaurantId": 9,
+        "targetSessionId": 8837,
+        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiZjQ3ZmNlZi02ZjE5LTQzYjItYmRhYy1mMjVhYzUxMjc0MzUiLCJtZW1iZXJJZCI6MTE1LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDE1LCJleHAiOjE3ODY0NDI2MTV9.0YSgxUut4E9g_LM8WHEND1ovPuaQyRQ9_N2MVa340KQ",
+        "date": "2026-08-12"
+    }
+}

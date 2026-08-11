@@ -1,0 +1,153 @@
+{
+    "metrics": {
+        "http_req_duration{expected_response:true}": {
+            "med": 80.099,
+            "max": 95.519,
+            "p(90)": 88.8562,
+            "p(95)": 89.8336,
+            "avg": 70.53789655172415,
+            "min": 7.522
+        },
+        "http_req_connecting": {
+            "p(90)": 0.6418,
+            "p(95)": 0.6881,
+            "avg": 0.17582051282051284,
+            "min": 0,
+            "med": 0,
+            "max": 0.842
+        },
+        "vus": {
+            "value": 0,
+            "min": 0,
+            "max": 0
+        },
+        "http_req_duration": {
+            "p(90)": 86.503,
+            "p(95)": 89.3431,
+            "avg": 60.848846153846154,
+            "min": 7.522,
+            "med": 78.745,
+            "max": 95.519
+        },
+        "http_reqs": {
+            "count": 39,
+            "rate": 18.59941626447416
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "data_sent": {
+            "count": 12587,
+            "rate": 6002.8423723317
+        },
+        "peak_create_race_success": {
+            "count": 1,
+            "rate": 0.4769081093454913
+        },
+        "iteration_duration": {
+            "min": 17.409833,
+            "med": 34.0002085,
+            "max": 51.748375,
+            "p(90)": 48.514,
+            "p(95)": 50.1311875,
+            "avg": 34.3687207
+        },
+        "http_req_waiting": {
+            "avg": 60.63394871794873,
+            "min": 7.317,
+            "med": 78.553,
+            "max": 95.162,
+            "p(90)": 86.29560000000001,
+            "p(95)": 88.9895
+        },
+        "iterations": {
+            "count": 10,
+            "rate": 4.769081093454914
+        },
+        "peak_create_race_conflict": {
+            "count": 9,
+            "rate": 4.292172984109422
+        },
+        "http_req_blocked": {
+            "p(95)": 0.7569999999999998,
+            "avg": 0.2191794871794871,
+            "min": 0.001,
+            "med": 0.003,
+            "max": 1.559,
+            "p(90)": 0.6938
+        },
+        "http_req_receiving": {
+            "avg": 0.1973333333333333,
+            "min": 0.063,
+            "med": 0.181,
+            "max": 0.393,
+            "p(90)": 0.2924,
+            "p(95)": 0.3417
+        },
+        "http_req_sending": {
+            "p(95)": 0.04459999999999999,
+            "avg": 0.017564102564102575,
+            "min": 0.008,
+            "med": 0.012,
+            "max": 0.103,
+            "p(90)": 0.029400000000000003
+        },
+        "vus_max": {
+            "min": 10,
+            "max": 10,
+            "value": 10
+        },
+        "data_received": {
+            "count": 24067,
+            "rate": 11477.74746761794
+        },
+        "checks": {
+            "passes": 1,
+            "fails": 0,
+            "value": 1
+        },
+        "http_req_failed": {
+            "passes": 10,
+            "fails": 29,
+            "value": 0.2564102564102564
+        }
+    },
+    "setup_data": {
+        "restaurantId": 11,
+        "targetSessionId": 8841,
+        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmMzRjM2I5Zi1lMWZlLTRiOGItYmZiZi05YTMyOGQxNDhlYmIiLCJtZW1iZXJJZCI6MTM0LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMxLCJleHAiOjE3ODY0NDI2MzF9.IDbM7u6mnPwzdXmbZHG4qtMnWH07KNvztr6P2KeOtb0",
+        "date": "2026-08-12",
+        "memberTokens": [
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5YjdmNDEwMi0yMjEzLTQwYTMtYTVjMS0yZTViNTdkODBkMDMiLCJtZW1iZXJJZCI6MTI0LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDI5LCJleHAiOjE3ODY0NDI2Mjl9.sNHoIar_eRHcNWFYSH7oyN3KG6ExH1f1HNwKcYMJdl8",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwNjg3Njg3OC0zZTZhLTQ0N2EtYTgyNS04YzE2YmNmYTQxMDkiLCJtZW1iZXJJZCI6MTI1LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMwLCJleHAiOjE3ODY0NDI2MzB9.aeWSToK7Yl0KMW_1HRAdc12V2hxt7axpZiaGMOcU7fE",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYzEwZTEzOC0zNWVmLTRiYzktODJlYS05Mzc0MWRlODU5ODciLCJtZW1iZXJJZCI6MTI2LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMwLCJleHAiOjE3ODY0NDI2MzB9.JibUE11GtwN04T4GhIWiURCPTOENHLeUK_WPjuAEJ8c",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1Yzk4ZjliMy05OTNkLTQ2NGQtYmUzMC1hMTZlMDFkM2UzYWIiLCJtZW1iZXJJZCI6MTI3LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMwLCJleHAiOjE3ODY0NDI2MzB9.UlSGXpgAxQtM4IwjrZemOkL49-EkJ-a9LJuYCPZzwF8",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3Yjc0ZjhkNy00NGEwLTQ4MjEtOWFmNy1kN2JhZGEzMWMxYmQiLCJtZW1iZXJJZCI6MTI4LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMwLCJleHAiOjE3ODY0NDI2MzB9.OMsS3FB7cWhibTNabZSHcgWTu02G9kD4EoTJw-W2UEg",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MjU2MzU3Ni0zNzI0LTQ4YjgtOWZkNy1mMmQ5YjQ5YmVlOTUiLCJtZW1iZXJJZCI6MTI5LCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMwLCJleHAiOjE3ODY0NDI2MzB9.Ypx0RTgONQaNZeH23HgDDfm6EEGm-jQU5is-8ebIHKg",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1YTdjOGI0OS0wOTFhLTQ2ZmItYmZkMC0yYWE0ZjU5YzE4NWQiLCJtZW1iZXJJZCI6MTMwLCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMwLCJleHAiOjE3ODY0NDI2MzB9.QCShpWUN0nxzKsTu0nie7YYBSem5ArGQMNbdt0RuESM",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzMDRlZjA0OC0zZDJiLTQxMDYtYTc1Yi0yZWE4NmFhYzRkNWUiLCJtZW1iZXJJZCI6MTMxLCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMxLCJleHAiOjE3ODY0NDI2MzF9.SSIR0PicxF-FX2v0Dh-7Oo0-YyjkAjD1fMzW2tkb1yQ",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5ZDUxZWI3MC0xNThhLTQxZGEtODM4Ny02M2I2OWE0OTBjNjMiLCJtZW1iZXJJZCI6MTMyLCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMxLCJleHAiOjE3ODY0NDI2MzF9.n2yotx_u4TeAD88BZlXTsDCryAJwcv4u7e4_DnXSzqk",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwMzA0NzlmYS0wYjUzLTQ0Y2EtOThhMC1jNTMyNjFkNGEyNTEiLCJtZW1iZXJJZCI6MTMzLCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzg2NDM5MDMxLCJleHAiOjE3ODY0NDI2MzF9.v1Xk6Fe1wqJVriGQccs5UqnLoostQMlHJ-g75CrMTx4"
+        ]
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "peak_create_race: 성공 응답 body.success": {
+                    "name": "peak_create_race: 성공 응답 body.success",
+                    "path": "::peak_create_race: 성공 응답 body.success",
+                    "id": "08df7d382081027dd8061276e37b985b",
+                    "passes": 1,
+                    "fails": 0
+                }
+            }
+    }
+}

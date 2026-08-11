@@ -1,0 +1,54 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 5 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 5 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-11T18:03:49+09:00" level=info msg="teardown 검증 성공: 회차 8839는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1       0.760234/s
+    checks_succeeded...: 100.00% 1 out of 1
+    checks_failed......: 0.00%   0 out of 1
+
+    ✓ peak_create_race: 성공 응답 body.success
+
+    CUSTOM
+    peak_create_race_conflict......: 4      3.040937/s
+    peak_create_race_success.......: 1      0.760234/s
+
+    HTTP
+    http_req_duration..............: avg=57.8ms  min=7.74ms  med=82.37ms max=93.5ms  p(90)=91.71ms p(95)=93.21ms
+      { expected_response:true }...: avg=67.4ms  min=10.74ms med=85.25ms max=93.5ms  p(90)=92.08ms p(95)=93.47ms
+    http_req_failed................: 20.83% 5 out of 24
+    http_reqs......................: 24     18.245623/s
+
+    EXECUTION
+    iteration_duration.............: avg=24.14ms min=15.49ms med=24.36ms max=32.81ms p(90)=31.22ms p(95)=32.01ms
+    iterations.....................: 5      3.801171/s
+    vus............................: 0      min=0       max=0
+    vus_max........................: 5      min=5       max=5
+
+    NETWORK
+    data_received..................: 15 kB  11 kB/s
+    data_sent......................: 7.9 kB 6.0 kB/s
+
+
+
+
+running (0m01.3s), 0/5 VUs, 5 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 5 VUs  00.0s/30s  5/5 iters, 1 per VU

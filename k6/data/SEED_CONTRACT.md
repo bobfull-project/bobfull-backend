@@ -40,6 +40,18 @@ Issue #63 "테스트 데이터 계약"에 따라, 시나리오별로 필요한 F
 - 생성된 Reservation/Payment 수가 실제 성공(200) 응답 수와 일치하는지
 - DB에 없는 성공 응답(즉 200을 받았는데 실제로 Reservation/Payment가 없는 경우)이 없는지
 
+## 시나리오 D(#142 A). 예약 페이지 조회 폭주 (`peak-restaurant-view.js`)
+
+- `setup()`에서 Owner 1명 + Restaurant 1개 + SharedTable 1개 + `BASE_DATE` 하루치 회차를 만든다. 시나리오 B(`dining-session-availability.js`)와 구조는 같지만, 목적이 "여러 식당에 걸친 균등 부하"가 아니라 "단 하나의 인기 식당·날짜에 조회가 집중되는" hot-key 패턴이라 별도 시나리오로 분리했다.
+- 조회만 반복하므로 상태 소비가 없다.
+
+## 시나리오 E(#142 B). 예약 버튼 동시 클릭 — CREATE 경쟁 (`peak-reservation-create-race.js`)
+
+- **범위 한계**: 결제 완료 전에는 `Reservation`이 생성되지 않으므로(`ReservationPreparationService` 클래스 Javadoc), JOIN 대상이 되려면 최초 참여자의 결제가 실제로 완료돼야 한다. 이 저장소엔 PortOne을 대신할 Fake 결제 확인 어댑터가 없어(실제 구현체는 `PortOneSdkPaymentReader` 하나) k6로 결제 완료를 자동화할 수 없고, Issue #142 "제외 범위"의 "PortOne 실서비스 반복 결제 요청"과도 충돌한다. 그래서 이 시나리오는 **CREATE 경쟁만** 다룬다 — JOIN 기반 좌석초과 테스트는 별도 Issue(Fake 결제 확인 어댑터 추가)가 필요하다.
+- `setup()`에서 Owner 1명 + Restaurant 1개 + SharedTable 1개(capacity 4) + 경쟁 대상 회차 1개, 그리고 `CONCURRENT_USERS`명의 회원 계정 + 검증용 회원 1명을 만든다.
+- `default()`에서 `CONCURRENT_USERS`명이 정확히 같은 sessionId로 동시에 CREATE를 시도한다(회차를 여러 개 나눠 쓰는 다른 시나리오와 반대로, 이 시나리오는 의도적으로 "같은 대상에 몰리는" 경쟁을 만든다).
+- `teardown()`에서 검증용 회원으로 같은 회차에 CREATE를 한 번 더 시도해 409가 나는지로, 경쟁 종료 후에도 CREATE 배타 선점이 유지되는지 독립 검증한다. 최초 시도 때 GET 회차 조회의 `reservationId`로 검증하려 했으나, CREATE 성공(200)은 결제 완료 전이라 `reservationId`가 채워지지 않아 오탐이 났다(문서 `docs/evidence/v3/142-peak-load/README.md` "트러블슈팅" 참고).
+
 ## AWS 실행 시 추가 사항
 
 Issue #207(AWS 실행 환경 준비)에서 실제 테스트 스택에 대해 실행할 때는 위 Fixture 규칙을 그대로 따르되, `BASE_URL`을 테스트 스택 엔드포인트로 지정하고 `RUN_ID`에 실행 날짜·Commit SHA를 포함해 Evidence와 연결한다.
