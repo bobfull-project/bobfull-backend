@@ -33,13 +33,16 @@ public class ChatModerationDltRecoverer implements ConsumerRecordRecoverer {
             @Value("${bobfull.kafka.chat-message.dlt-topic:bobfull.chat.message-created.dlt.v1}") String dltTopic) {
         this.delegate = new DeadLetterPublishingRecoverer(kafkaTemplate,
                 (record, exception) -> new TopicPartition(dltTopic, record.partition()));
+        // DLT 발행 자체가 실패하면 recordFinalFailure를 호출하지 않아야 하므로,
+        // Spring Kafka 버전 기본값에 암묵적으로 의존하지 않고 명시적으로 강제한다.
+        this.delegate.setFailIfSendResultIsError(true);
         this.chatModerationService = chatModerationService;
         this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Override
     public void accept(ConsumerRecord<?, ?> record, Exception exception) {
-        delegate.accept(record, exception);
+        delegate.accept(record, exception); // DLT 발행 실패 시 예외를 던져 아래 recordFinalFailure를 막는다
         String errorCode = ListenerExceptionUnwrapper.errorCodeOf(exception);
         Long messageId = messageIdOf(record);
         if (messageId != null) {
