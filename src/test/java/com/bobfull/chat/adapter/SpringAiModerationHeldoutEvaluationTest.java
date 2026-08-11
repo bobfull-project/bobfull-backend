@@ -150,6 +150,10 @@ class SpringAiModerationHeldoutEvaluationTest {
         List<EvaluationFailure> failures = new ArrayList<>();
         int resultMatches = 0;
         int categoryExactMatches = 0;
+        long promptTokens = 0;
+        long completionTokens = 0;
+        long totalTokens = 0;
+        int tokenMeasuredCalls = 0;
 
         for (HeldoutCase testCase : cases) {
             long startedAt = System.nanoTime();
@@ -175,13 +179,20 @@ class SpringAiModerationHeldoutEvaluationTest {
                 if (!resultMatch || !categoryMatch) {
                     failures.add(EvaluationFailure.mismatch(testCase, actual, latencyMillis));
                 }
+                if (response.promptTokens() != null && response.completionTokens() != null && response.totalTokens() != null) {
+                    tokenMeasuredCalls++;
+                    promptTokens += response.promptTokens();
+                    completionTokens += response.completionTokens();
+                    totalTokens += response.totalTokens();
+                }
             } catch (RuntimeException exception) {
                 long latencyMillis = elapsedMillis(startedAt);
                 latencies.add(latencyMillis);
                 failures.add(EvaluationFailure.providerFailure(testCase, exception.getClass().getSimpleName(), latencyMillis));
             }
         }
-        return new EvaluationRun(cases.size(), resultMatches, categoryExactMatches, flaggedVsSafe, perCategory, latencies, failures);
+        return new EvaluationRun(cases.size(), resultMatches, categoryExactMatches, flaggedVsSafe, perCategory,
+                latencies, failures, promptTokens, completionTokens, totalTokens, tokenMeasuredCalls);
     }
 
     private AiModerationResponse evaluateWithSelectedModel(String content) {
@@ -220,13 +231,28 @@ class SpringAiModerationHeldoutEvaluationTest {
             System.out.printf("  %-22s Precision/Recall/F1 : %.3f / %.3f / %.3f%n",
                     category, categoryPrf.precision(), categoryPrf.recall(), categoryPrf.f1());
         }
-        System.out.printf("Latency ms                    : avg=%.1f%n", average(run.latencies));
+        System.out.printf("Latency ms                    : avg=%.1f p95=%d p99=%d%n",
+                average(run.latencies), percentile(run.latencies, 0.95), percentile(run.latencies, 0.99));
+        System.out.printf("Token usage                   : measuredCalls=%d prompt=%d completion=%d total=%d%n",
+                run.tokenMeasuredCalls, run.promptTokens, run.completionTokens, run.totalTokens);
+        System.out.printf("Estimated cost(USD, gpt-4o-mini $0.15/$0.60 per 1M in/out, 2026-08-10 공개 단가 기준): $%.6f%n",
+                estimatedCostUsd(run.promptTokens, run.completionTokens));
+        System.out.printf("Provider/Parse failure         : %d%n",
+                run.failures.stream().filter(EvaluationFailure::isProviderFailure).count());
         run.failures.forEach(EvaluationFailure::print);
+    }
+
+    /** gpt-4o-mini 공개 text token 단가(2026-08-10 확인, #66 Evidence와 동일 기준). 실제 청구액이 아니다. */
+    private static double estimatedCostUsd(long promptTokens, long completionTokens) {
+        double inputPricePerMillion = 0.15;
+        double outputPricePerMillion = 0.60;
+        return promptTokens / 1_000_000.0 * inputPricePerMillion + completionTokens / 1_000_000.0 * outputPricePerMillion;
     }
 
     private record EvaluationRun(int total, int resultMatches, int categoryExactMatches,
             ConfusionAccumulator flaggedVsSafe, Map<ModerationCategory, ConfusionAccumulator> perCategory,
-            List<Long> latencies, List<EvaluationFailure> failures) {
+            List<Long> latencies, List<EvaluationFailure> failures,
+            long promptTokens, long completionTokens, long totalTokens, int tokenMeasuredCalls) {
     }
 
     private static double percent(int value, int total) {
@@ -235,6 +261,14 @@ class SpringAiModerationHeldoutEvaluationTest {
 
     private static double average(List<Long> values) {
         return values.stream().mapToLong(Long::longValue).average().orElse(0);
+    }
+
+    private static long percentile(List<Long> values, double percentile) {
+        if (values.isEmpty()) {
+            return 0;
+        }
+        List<Long> sorted = values.stream().sorted().toList();
+        return sorted.get(Math.min(sorted.size() - 1, (int) Math.ceil(percentile * sorted.size()) - 1));
     }
 
     private static long elapsedMillis(long startedAt) {
