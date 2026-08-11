@@ -5,7 +5,7 @@
 이 문서는 확정된 API와 프로젝트 정책을 구현 가능한 관계형 데이터 모델로 표현한다.
 
 - 기준: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md), [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)
-- 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회에 필요한 영속 데이터
+- 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회, V3 채팅 AI moderation에 필요한 영속 데이터
 - 비범위: Java Entity, Migration, SQL Schema, Redis, Kafka, 실제 계좌 송금
 - 원칙: API Response DTO를 테이블로 만들지 않고, 기준 문서에 없는 정책은 확정하지 않는다. Mermaid의 표현 한계가 있으면 아래 엔티티 상세 표를 기준으로 한다.
 
@@ -24,6 +24,7 @@
 | `NoShowHistory` | OWNER의 노쇼 처리·해제 이력 | ReservationParticipant 1:N NoShowHistory | V2 |
 | `ChatRoom` | 예약당 하나의 채팅방 | Reservation 1:0..1 ChatRoom | V2 |
 | `ChatMessage` | DB에 저장되는 채팅 메시지 | ChatRoom 1:N ChatMessage | V2 |
+| `ChatModeration` | 메시지별 AI 분석 결과와 최종 실패 상태 | ChatMessage 1:0..1 ChatModeration | V3 |
 
 관리자 현황·통계와 지급 예정 예약금은 위 데이터의 조회·집계로 제공한다. 별도 `Settlement`, `SeatHold`, `WebhookEvent`, 관리자 전용 엔티티는 현재 계약에 추가하지 않는다.
 
@@ -154,6 +155,14 @@ erDiagram
         varchar(1000) content "메시지 본문"
         datetime created_at "생성 시각"
     }
+    CHAT_MODERATION {
+        bigint chat_moderation_id PK "내부 식별자"
+        bigint chat_message_id UK "메시지당 분석 결과 1건"
+        bigint version "JPA 낙관적 락 version"
+        varchar status "SAFE, FLAGGED, ANALYSIS_FAILED"
+        datetime created_at "생성 시각"
+        datetime updated_at "갱신 시각"
+    }
 
     MEMBER ||--o{ RESTAURANT : owns
     RESTAURANT ||--o{ SHARED_TABLE : has
@@ -173,6 +182,7 @@ erDiagram
     CHAT_ROOM ||--o{ CHAT_MESSAGE : contains
     MEMBER ||--o{ CHAT_MESSAGE : sends
     RESERVATION_PARTICIPANT ||--o{ CHAT_MESSAGE : sends_as
+    CHAT_MESSAGE ||--o| CHAT_MODERATION : is_analyzed_as
 ```
 
 ## 4. 엔티티 상세
@@ -363,7 +373,29 @@ erDiagram
 
 읽음 처리, 이미지·파일, 수정·삭제, 신고·차단은 현재 범위에서 제외한다.
 
-### 4.12 `outbox_event`
+### 4.12 `chat_moderation`
+
+목적: ChatMessage 원문은 바꾸지 않고, 메시지별 AI 분석 완료 결과 또는 Kafka Retry/DLT 소진 뒤의 최종 실패 상태를 보관한다.
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `chat_moderation_id` | BIGINT | N | PK | 내부 식별자 |
+| `chat_message_id` | BIGINT | N | UNIQUE | 메시지당 분석 결과 1건. 현재 Entity는 물리 FK 대신 원본 메시지 식별자를 보관 |
+| `version` | BIGINT | N | JPA `@Version` | stale UPDATE를 거절하는 낙관적 락 version |
+| `status` | VARCHAR(24) | N | 앱 Enum | `SAFE`, `FLAGGED`, `ANALYSIS_FAILED` |
+| `result` | VARCHAR(16) | Y | 앱 Enum | 완료 상태에서 `SAFE` 또는 `FLAGGED`; 실패면 NULL |
+| `risk_level` | VARCHAR(16) | Y | 앱 Enum | 완료 상태에서 `LOW`, `MEDIUM`, `HIGH`; 실패면 NULL |
+| `provider`, `model_name` | VARCHAR | N |  | 분석 Provider와 모델 관측값 |
+| `prompt_version`, `policy_version` | VARCHAR | N |  | 적용한 Prompt·Policy 계약 |
+| `latency_millis` | BIGINT | N |  | 해당 분석 시도 관측값 |
+| `prompt_tokens`, `completion_tokens`, `total_tokens` | BIGINT | Y |  | Provider가 제공한 token 관측값; 실패면 NULL 가능 |
+| `analyzed_at` | DATETIME | N |  | 결과·최종 실패 기록 시각 |
+| `error_code` | VARCHAR(128) | Y |  | 최종 실패 예외 유형; 완료면 NULL |
+| `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
+
+`chat_moderation_category`는 완료 결과의 복수 category를 별도 컬렉션 테이블로 보관한다. UNIQUE는 중복 INSERT를 막고, `version`은 동일 실패 행을 읽은 성공/실패 경로의 늦은 UPDATE가 완료 결과를 덮는 것을 막는다.
+
+### 4.13 `outbox_event`
 
 목적: 최초 예약 결제 확정과 함께 ChatRoom 생성 의도를 영속화해, 커밋 뒤 메모리 signal 유실·재시작 뒤에도 재처리할 근거를 남긴다(#176).
 
@@ -398,6 +430,7 @@ erDiagram
 - `PAYMENT 1:0..1 REFUND`: 결제 전체 환불과 재시도 상태를 한 환불 행으로 관리한다.
 - `RESERVATION 1:0..1 CHAT_ROOM`, `CHAT_ROOM 1:N CHAT_MESSAGE`: 예약당 하나의 채팅방과 여러 메시지다.
 - `MEMBER 1:N CHAT_MESSAGE`: 발신 회원을 추적한다. `sender_participant_id`는 해당 예약의 유효 참여자 여부를 검증한다.
+- `CHAT_MESSAGE 1:0..1 CHAT_MODERATION`: 원문 메시지 하나에 분석 결과·최종 실패 기록을 하나만 둔다. 완료 상태를 최종 실패가 덮지 않도록 `chat_moderation.version`으로 낙관적 락을 적용한다.
 
 ## 6. UNIQUE 및 정합성 제약
 
@@ -412,6 +445,7 @@ erDiagram
 | 유효 CREATE READY Payment | 회차당 최초 예약 결제 준비 1건 | TimeSlot 행 잠금 뒤 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 조회; 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS` |
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
 | `chat_room.reservation_id` | 예약당 채팅방 1개 | DB UNIQUE |
+| `chat_moderation.chat_message_id` | 메시지당 분석 기록 1건 | DB UNIQUE는 INSERT 멱등성, JPA `@Version`은 stale UPDATE 방지 |
 | `payment.payment_id` | Payment 내부 식별자 | PK, AUTO_INCREMENT |
 | `payment.portone_payment_id` | PortOne 외부 결제 식별자 중복 금지 | DB UNIQUE + 상태 전이 멱등 처리 |
 | `payment.reservation_participant_id` | 참여자와 결제의 1:1 연결 | NULL 허용 UNIQUE |
@@ -511,6 +545,7 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | `payment` | `UNIQUE(portone_payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)`, `(payment_status, expires_at, payment_id)` | 외부 결제 식별자 조회·임시 선점 계산·만료 후보의 상태/시각/내부 PK 정렬 |
 | `refund` | `UNIQUE(payment_id)`, `(refund_status)` | 중복 환불 방지·실패 환불 조회 |
 | `chat_message` | `(chat_room_id, chat_message_id)` | messageId cursor 기반 과거 메시지 조회 |
+| `chat_moderation` | `UNIQUE(chat_message_id)` | 메시지별 분석 기록 중복 생성 방지 |
 
 `chat_message(chat_room_id, created_at)`는 createdAt cursor 방식을 채택할 때만 추가 검토한다. 검색·통계용 복합 인덱스는 실제 API 조회량과 실행 계획 측정 전에는 확정하지 않는다.
 

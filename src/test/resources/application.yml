@@ -5,6 +5,14 @@ payment:
     enabled: false
 
 spring:
+  ai:
+    openai:
+      api-key: test-key
+      chat:
+        model: gpt-4o-mini
+  retry:
+    max-attempts: 1
+
   mail:
     host: localhost
     port: 1025
@@ -26,3 +34,8 @@ aws:
     image-bucket: bobfull-test-image-bucket
     upload-url-expiration: 5m
     get-url-expiration: 5m
+
+bobfull:
+  ai:
+    moderation:
+      max-output-tokens: 128
