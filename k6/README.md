@@ -1,8 +1,9 @@
 # #63 공통 K6 Harness
 
-Issue #63(공통 K6 Harness·주요 API Load/Stress·성능 지도) 구현. 이번 구현 범위는 **코드**까지다 —
-실제 AWS 리소스 생성과 그 위에서의 Load/Stress 실행·Prometheus/Grafana Evidence 작성은 별도
-Issue #207(AWS 실행 환경 준비)로 분리했다.
+Issue #63(공통 K6 Harness·주요 API Load/Stress·성능 지도) 구현. 실제 AWS 실행 환경은
+Issue #207에서 별도 Test App EC2 + Test RDS 형태로 준비했다.
+
+AWS 테스트 환경의 구성·접근 방법은 [`docs/infra/K6_AWS_TEST_ENVIRONMENT.md`](../docs/infra/K6_AWS_TEST_ENVIRONMENT.md)를 참고한다.
 
 ## 구조
 
@@ -27,6 +28,7 @@ k6/
 
 - [k6](https://k6.io) 설치(`brew install k6` 등).
 - 대상 서버가 떠 있어야 한다. 로컬 검증은 `./gradlew bootRun`으로 앱을 띄운 뒤 진행한다(기본 포트 8080).
+- AWS 테스트 환경은 실행자의 공인 IPv4가 Test App EC2 Security Group 8080에 `/32`로 허용돼 있어야 한다.
 
 ## 실행 방법
 
@@ -36,9 +38,10 @@ k6 run -e STAGE=smoke k6/scenarios/restaurant-search.js
 k6 run -e STAGE=smoke k6/scenarios/dining-session-availability.js
 k6 run -e STAGE=smoke k6/scenarios/reservation-prepare.js
 
-# Load/Stress — Issue #207에서 준비된 AWS 테스트 스택을 대상으로 실행
-k6 run -e STAGE=load  -e BASE_URL=https://<test-stack-endpoint> k6/scenarios/restaurant-search.js
-k6 run -e STAGE=stress -e BASE_URL=https://<test-stack-endpoint> k6/scenarios/restaurant-search.js
+# AWS Test App EC2
+k6 run -e STAGE=smoke  -e BASE_URL=http://<test-ec2-public-ip>:8080 k6/scenarios/restaurant-search.js
+k6 run -e STAGE=load   -e BASE_URL=http://<test-ec2-public-ip>:8080 k6/scenarios/restaurant-search.js
+k6 run -e STAGE=stress -e BASE_URL=http://<test-ec2-public-ip>:8080 k6/scenarios/restaurant-search.js
 ```
 
 공통 환경변수:
@@ -87,5 +90,4 @@ docs/evidence/v3/63-api-k6/README.md   결과표·병목 전환점·비교 조�
 docs/evidence/v3/63-api-k6/raw/        k6 JSON/요약, Prometheus 쿼리 결과
 ```
 
-이번 코드 구현 단계에서는 로컬 Smoke 실행 로그만 남기고, Load/Stress 실행·결과표·Grafana Evidence는
-Issue #207(AWS 실행 환경 준비)에서 이어서 작성한다.
+Fixture 시딩과 실제 Smoke/Load/Stress 실행·Grafana Evidence 작성은 각 성능 테스트 작업에서 이어서 진행한다.
