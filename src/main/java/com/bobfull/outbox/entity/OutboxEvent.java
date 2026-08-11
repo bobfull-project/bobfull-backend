@@ -87,6 +87,10 @@ public class OutboxEvent extends BaseTimeEntity {
         return new OutboxEvent(OutboxEventType.CHAT_ROOM_CREATION_REQUESTED, "RESERVATION", reservationId, now);
     }
 
+    public static OutboxEvent chatMessageCreated(Long messageId, Instant now) {
+        return new OutboxEvent(OutboxEventType.CHAT_MESSAGE_CREATED, "CHAT_MESSAGE", messageId, now);
+    }
+
     public static OutboxEvent emailNotificationRequested(
             OutboxEventType eventType, String aggregateType, Long aggregateId, Instant now
     ) {
