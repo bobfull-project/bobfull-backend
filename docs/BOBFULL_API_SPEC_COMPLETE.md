@@ -4220,6 +4220,127 @@ OWNER 응답 예시:
 
 ---
 
+## 11-12. 채팅 moderation 회원별 집계 조회 `[V3]`
+
+## 1. INFO
+
+- 설명: `FLAGGED` 채팅 분석 결과를 발신 회원별로 집계한다. 목록에는 원문을 포함하지 않는다.
+- Method: `GET`
+- Path: `/api/admin/moderation/members`
+- Auth: `ADMIN`
+- 담당자: 김현승
+
+## 2. Request
+
+### Query Parameters
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `status` | String | N | `NORMAL` 또는 `REVIEW_REQUIRED`. 생략 시 FLAGGED 이력이 있는 회원 전체 |
+| `page` | Integer | N | 0부터 시작하는 페이지 번호 |
+| `size` | Integer | N | 페이지 크기(기본 20) |
+
+`totalFlaggedCount`는 LOW/MEDIUM/HIGH FLAGGED 메시지를, `reviewTargetCount`는 MEDIUM/HIGH 메시지만 각각 `COUNT(DISTINCT messageId)`로 계산한다. `reviewTargetCount >= 3`이면 `REVIEW_REQUIRED`다. SAFE와 ANALYSIS_FAILED는 집계하지 않는다.
+
+## 3. Response
+
+- Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "content": [
+      {
+        "memberId": 27,
+        "profanityCount": 4,
+        "personalInformationCount": 1,
+        "spamCount": 2,
+        "totalFlaggedCount": 7,
+        "reviewTargetCount": 4,
+        "reviewStatus": "REVIEW_REQUIRED",
+        "lastFlaggedAt": "2026-08-11T00:00:00Z"
+      }
+    ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}
+```
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `400` | `INVALID_INPUT_VALUE` | status 또는 page/size 값이 올바르지 않음 |
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | ADMIN 권한이 없음 |
+
+---
+
+## 11-13. 채팅 moderation 회원별 상세 조회 `[V3]`
+
+## 1. INFO
+
+- 설명: 회원의 moderation 집계와 FLAGGED 근거 메시지를 함께 조회한다. 이 상세 응답에서만 원문을 노출한다.
+- Method: `GET`
+- Path: `/api/admin/moderation/members/{memberId}`
+- Auth: `ADMIN`
+- 담당자: 김현승
+
+## 2. Request
+
+### Path Variables
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `memberId` | Long | Y | 조회할 회원 식별자 |
+
+## 3. Response
+
+- Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "memberId": 27,
+    "reviewStatus": "REVIEW_REQUIRED",
+    "totalFlaggedCount": 4,
+    "reviewTargetCount": 3,
+    "riskCounts": { "LOW": 1, "MEDIUM": 2, "HIGH": 1 },
+    "evidences": [
+      {
+        "messageId": 382,
+        "content": "실제 ChatMessage 원문",
+        "categories": ["PROFANITY"],
+        "riskLevel": "MEDIUM",
+        "countedForReview": true,
+        "sentAt": "2026-08-11T00:00:00Z",
+        "analyzedAt": "2026-08-11T00:00:01Z"
+      }
+    ]
+  }
+}
+```
+
+- evidences는 FLAGGED 메시지만 포함하며 SAFE와 ANALYSIS_FAILED는 제외한다.
+- REVIEW_REQUIRED은 자동 제재나 처리 완료 상태를 뜻하지 않으며, 관리자 확인 대상이라는 누적 신호다.
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | ADMIN 권한이 없음 |
+| `404` | `MEMBER_ID_NOT_FOUND` | memberId에 해당하는 회원이 없음 |
+
+---
+
 # 12. 예약 참여자 채팅 API
 
 ## 12-1. 예약 채팅방 조회 `[V2]`
@@ -4796,6 +4917,8 @@ OWNER 응답 예시:
 | 관리자 | V2 | 전체 운영 지표 조회 | `GET` | `/api/admin/statistics/overview` | 정용태 |
 | 관리자 | V2 | 식당별 예약 성사율 조회 | `GET` | `/api/admin/statistics/restaurants` | 정용태 |
 | 관리자 | V2 | 사용자별 노쇼율 조회 | `GET` | `/api/admin/statistics/members/no-show-rates` | 정용태 |
+| 관리자 | V3 | 채팅 moderation 회원별 집계 조회 | `GET` | `/api/admin/moderation/members` | 김현승 |
+| 관리자 | V3 | 채팅 moderation 회원별 상세 조회 | `GET` | `/api/admin/moderation/members/{memberId}` | 김현승 |
 | 예약 참여자 채팅 | V2 | 예약 채팅방 조회 | `GET` | `/api/reservations/{reservationId}/chat-room` | 김현승 |
 | 예약 참여자 채팅 | V2 | 채팅 메시지 목록 조회 | `GET` | `/api/chat/rooms/{chatRoomId}/messages` | 김현승 |
 
