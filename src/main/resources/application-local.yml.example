@@ -12,6 +12,9 @@ spring:
   retry:
     max-attempts: 1
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
   config:
     import: optional:file:.env[.properties]
 
@@ -96,6 +99,10 @@ outbox:
     enabled: ${OUTBOX_EMAIL_ENABLED:true}
     fixed-delay: ${OUTBOX_EMAIL_FIXED_DELAY:5s}
     batch-size: ${OUTBOX_EMAIL_BATCH_SIZE:100}
+  chat-message:
+    enabled: ${OUTBOX_CHAT_MESSAGE_ENABLED:true}
+    fixed-delay: ${OUTBOX_CHAT_MESSAGE_FIXED_DELAY:5s}
+    batch-size: ${OUTBOX_CHAT_MESSAGE_BATCH_SIZE:100}
 
 logging:
   level:
@@ -105,3 +112,13 @@ bobfull:
   ai:
     moderation:
       max-output-tokens: ${OPENAI_MODERATION_MAX_TOKENS:128}
+  kafka:
+    chat-message:
+      topic: ${KAFKA_CHAT_MESSAGE_TOPIC:bobfull.chat.message-created.v1}
+      dlt-topic: ${KAFKA_CHAT_MESSAGE_DLT_TOPIC:bobfull.chat.message-created.dlt.v1}
+      partitions: ${KAFKA_CHAT_MESSAGE_PARTITIONS:3}
+      replicas: ${KAFKA_CHAT_MESSAGE_REPLICAS:1}
+      consumer-enabled: ${KAFKA_CHAT_MESSAGE_CONSUMER_ENABLED:true}
+      consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
+      consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
+      producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}

@@ -78,3 +78,4 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 - [ADR 0007: S3 Presigned URL 식당 이미지 검증 구조](./0007-s3-presigned-restaurant-image-validation.md)
 - [ADR 0008: ChatRoom 생성 의도의 Transactional Outbox](./0008-chat-room-transactional-outbox.md)
 - [ADR 0009: AI Moderation Provider 및 모델 선택](./0009-ai-moderation-provider-and-model-selection.md)
+- [ADR 0010: ChatMessage → AI Moderation Outbox + Kafka 전달 파이프라인](./0010-chat-message-outbox-kafka-pipeline.md)

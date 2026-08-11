@@ -7,7 +7,7 @@
 
 ## 측정·재현 환경
 
-- 기준 Branch/Commit: `feature/142-peak-load-test`
+- 기준 Branch/Commit: `feature/142-reservation-peak-test`
 - 환경: 로컬(`./gradlew bootRun`, `spring.profiles.active=local`), `docker-compose`(MySQL 8.4,
   Redis 7) — 운영 환경과 CPU/네트워크 특성이 다르므로 병목 전환점 근거로 쓰지 않는다.
 - Fixture: 시나리오별 `setup()`에서 API로 직접 생성(운영 데이터 없음, 합성 데이터만 사용).

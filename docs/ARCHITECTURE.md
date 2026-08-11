@@ -187,7 +187,20 @@ ChatMessage
 → ChatModeration
 ```
 
-Kafka 자동 연결·Retry/DLT·E2E pipeline은 #59 범위다. 현재 #66은 Consumer가 호출할 수 있는 Core와 최종 실패 기록 연결 지점만 제공하며, Kafka가 이미 연결됐다고 보지 않는다.
+### Outbox + Kafka 전달 파이프라인 (#59)
+
+ChatMessage 생성과 `OutboxEvent(CHAT_MESSAGE_CREATED)` 저장은 같은 트랜잭션에서 이뤄지며, `ChatRoomOutboxProcessor`/`EmailOutboxProcessor`와 같은 형태의 `ChatMessageOutboxProcessor`가 커밋 후 신호를 받아 Kafka에 발행하고 Broker ACK 후에만 COMPLETED로 표시한다. `ChatModerationConsumer`는 위 AI Moderation Core의 `analyze(messageId)`만 호출하며, Provider/ChatClient를 직접 다루지 않는다.
+
+```text
+ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
+→ 커밋 후 signal
+→ ChatMessageOutboxProcessor → Kafka(bobfull.chat.message-created.v1)
+→ ChatModerationConsumer
+→ ChatModerationService.analyze(messageId)  (위 AI Moderation Core 흐름)
+→ 실패 시 최대 3회 재시도 → 소진 시 DLT(bobfull.chat.message-created.dlt.v1) + recordFinalFailure
+```
+
+DB→Broker 구간 유실 방지는 Outbox가, Broker 이후 AI 처리 실패의 재시도/격리는 Kafka Retry/DLT가 담당한다. 상세 근거는 [ADR 0010](./adr/0010-chat-message-outbox-kafka-pipeline.md)을 따른다.
 
 ## 8. 저장값·계산값과 운영 관찰
 
@@ -202,11 +215,11 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 다음 항목은 기준 문서에서 확정되지 않았거나 이번 문서 범위가 아니므로 구조를 구체화하지 않는다.
 
 - 배포 구조, 최종 AWS 구성, 프론트엔드 배포 방식, V1·V2·V3별 물리 아키텍처
-- Redis의 배포·클러스터 구성(로컬 단일 인스턴스만 구성됨), Kafka 도입 구조, 채팅 Pub/Sub
+- Redis의 배포·클러스터 구성(로컬 단일 인스턴스만 구성됨), 채팅 Pub/Sub
 - Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
-- Kafka 기반 이벤트 재처리, 범용 Outbox Framework — 별도 V3 Issue 범위(이메일 Outbox 전환 자체는 §6-1, Issue #183에서 완료)
+- Kafka를 AI Moderation 외 다른 이벤트로 확대 적용하는 것, 범용 Outbox Framework, Consumer 독립 Worker 분리(#192에서 측정 후 판단) — Chat AI Moderation의 Outbox+Kafka 연결 자체는 #59에서 완료
 - 개별 ADR의 사전 생성, API·ERD 상세 복제, 클래스·패키지 구조
 
 새 기술 선택이나 중요한 구조 변경이 실제로 필요해지면 [ADR 운영 기준](./adr/README.md)에 따라 별도 ADR을 작성한다.
