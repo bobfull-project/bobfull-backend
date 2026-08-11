@@ -236,6 +236,7 @@ required_parameters=(
   "DB_PASSWORD:db-password"
   "REDIS_HOST:redis-host"
   "KAFKA_BOOTSTRAP_SERVERS:kafka-bootstrap-servers"
+  "OPENAI_API_KEY:openai-api-key"
   "JWT_SECRET:jwt-secret"
   "PORTONE_API_SECRET:portone-api-secret"
   "PORTONE_STORE_ID:portone-store-id"
