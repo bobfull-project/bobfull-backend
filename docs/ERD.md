@@ -25,6 +25,7 @@
 | `ChatRoom` | 예약당 하나의 채팅방 | Reservation 1:0..1 ChatRoom | V2 |
 | `ChatMessage` | DB에 저장되는 채팅 메시지 | ChatRoom 1:N ChatMessage | V2 |
 | `ChatModeration` | 메시지별 AI 분석 결과와 최종 실패 상태 | ChatMessage 1:0..1 ChatModeration | V3 |
+| `ChatRoomMemberReport` | 채팅방 상대 회원 신고와 Human Review 이력 | ChatRoom·Member·nullable ChatMessage(anchor) 연결 | V3 |
 
 관리자 현황·통계와 지급 예정 예약금은 위 데이터의 조회·집계로 제공한다. 별도 `Settlement`, `SeatHold`, `WebhookEvent`, 관리자 전용 엔티티는 현재 계약에 추가하지 않는다.
 
@@ -179,6 +180,19 @@ erDiagram
         bigint chat_moderation_id FK "ChatModeration 컬렉션 소유자"
         varchar category "ModerationCategory Enum"
     }
+    CHAT_ROOM_MEMBER_REPORT {
+        bigint chat_room_member_report_id PK "신고 식별자"
+        bigint chat_room_id FK "대상 채팅방"
+        bigint reporter_member_id FK "신고자"
+        bigint reported_member_id FK "피신고자"
+        bigint anchor_message_id FK "선택 근거 메시지"
+        varchar reason "ABUSE, SPAM, PERSONAL_INFORMATION, OTHER"
+        varchar status "PENDING, REVIEWED"
+        varchar decision "NO_VIOLATION, VIOLATION_CONFIRMED; PENDING은 NULL"
+        bigint reviewed_by_member_id FK "검토 ADMIN; PENDING은 NULL"
+        datetime reviewed_at "검토 시각; PENDING은 NULL"
+        bigint version "JPA 낙관적 락"
+    }
 
     MEMBER ||--o{ RESTAURANT : owns
     RESTAURANT ||--o{ SHARED_TABLE : has
@@ -200,6 +214,11 @@ erDiagram
     RESERVATION_PARTICIPANT ||--o{ CHAT_MESSAGE : sends_as
     CHAT_MESSAGE ||--o| CHAT_MODERATION : is_analyzed_as
     CHAT_MODERATION ||--o{ CHAT_MODERATION_CATEGORY : has_categories
+    CHAT_ROOM ||--o{ CHAT_ROOM_MEMBER_REPORT : has_reports
+    CHAT_MESSAGE o|--o{ CHAT_ROOM_MEMBER_REPORT : anchors
+    MEMBER ||--o{ CHAT_ROOM_MEMBER_REPORT : reports
+    MEMBER ||--o{ CHAT_ROOM_MEMBER_REPORT : is_reported
+    MEMBER o|--o{ CHAT_ROOM_MEMBER_REPORT : reviews
 ```
 
 ## 4. 엔티티 상세
@@ -388,7 +407,7 @@ erDiagram
 | `content` | VARCHAR(1000) | N |  | 메시지 본문 |
 | `created_at` | DATETIME | N |  | 생성 시각 |
 
-읽음 처리, 이미지·파일, 수정·삭제, 신고·차단은 현재 범위에서 제외한다.
+읽음 처리, 이미지·파일, 수정·삭제, 차단은 현재 범위에서 제외한다. 사용자 신고는 V3 #218에 포함하며, AI Moderation과 신고 누적은 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN 경로로 사용하지 않는다.
 
 ### 4.12 `chat_moderation`
 
@@ -420,6 +439,10 @@ erDiagram
 | `category` | VARCHAR(32) | N | 앱 Enum | `ModerationCategory` 값 |
 
 `version`은 동일 실패 행을 읽은 성공/실패 경로의 늦은 UPDATE가 완료 결과를 덮는 것을 막는다.
+
+### 4.12.1 `chat_room_member_report`
+
+채팅방의 상대 회원에 대한 사용자 신고와 ADMIN Human Review 기록이다. `chat_room_member_report_id`가 PK이며, `chat_room_id`, `reporter_member_id`, `reported_member_id`, nullable `anchor_message_id`, `reason`, nullable `detail`, `status`, nullable `decision`, nullable `reviewed_by_member_id`, nullable `reviewed_at`, `version`, `created_at`을 저장한다. `UNIQUE(reporter_member_id, chat_room_id, reported_member_id)`로 같은 신고자·방·대상 중복을 막는다. `status`는 `PENDING`에서 `REVIEWED`로만 전이하며 `decision`은 `NO_VIOLATION` 또는 `VIOLATION_CONFIRMED`다. 판단은 회원 상태를 자동 변경하지 않는다.
 
 ### 4.13 `outbox_event`
 

@@ -164,7 +164,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
 - HTTP 조회 경로는 `GET /api/chat/rooms/{chatRoomId}/messages`다.
-- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
+- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 차단, Redis Pub/Sub, Kafka는 범위에서 제외한다. V3 #218 사용자 신고는 채팅방의 상대 회원을 대상으로 하며, AI Moderation과 신고 누적은 관리자 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN/정지/퇴장에 사용하지 않는다.
 
 ## 8. 버전 범위
 
