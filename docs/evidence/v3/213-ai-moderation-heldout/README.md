@@ -16,7 +16,7 @@ Human 최종 승인으로 동결됐다(아래 "Dataset Freeze" 절). 실제 Open
 - Dataset Content SHA-256(id/message/expectedResult/expectedCategories/expectedRiskLevel/caseType
   canonical 직렬화 기준, `ModerationHeldoutDatasetTest.datasetContentSha256()`로 재현 가능):
   `78a072fae2d208da79defeb9f7c260594f77c9e964f94d56e1615a55c840527e`
-- Held-out Dataset 기준 Commit SHA(Label Freeze를 반영한 커밋): `PENDING_COMMIT_SHA`(직후 커밋에서 확정)
+- Held-out Dataset 기준 Commit SHA(Label Freeze를 반영한 커밋): `9b42d54ad19c66d6cc710dab58388e800c59b966`
 - 이 SHA 이후 Provider 실행 전까지 `SpringAiModerationHeldoutEvaluationTest`의 expected 라벨은
   변경하지 않는다. 뒤늦게 라벨 오류가 확인되면 코드를 고치지 않고 해당 case를 결과 집계에서 제외한
   뒤 사유를 이 문서에 기록한다(Issue #213 원칙).
