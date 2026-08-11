@@ -68,15 +68,23 @@ Held-out Set v1(80건)과 Challenge Set(24건)으로 production 설정(`Prompt v
 
 ### 라벨 출처와 확정 상태
 
+> **최종 상태(2026-08-11 기준)**: 아래는 초안 → Human 검토·확정에 이르는 **과정을 시간 순서로 남긴
+> 이력 기록**이다. 현재 시점의 확정 상태는 "Dataset Freeze" 절이 SSOT다 —
+> `HELD_OUT_LABELS_HUMAN_CONFIRMED = true`, Dataset Content SHA-256과 기준 Commit SHA가 이미
+> 기록·동결됐고, `ModerationHeldoutDatasetTest.Dataset_Content_SHA256_해시가_동결된_값과_일치한다()`가
+> 이후 어떤 라벨 변경도 자동으로 실패시킨다(PR #217 리뷰 반영). 아래 "`false`인 동안 skip", "Human
+> 검토 후 true로 변경" 같은 서술은 **동결 이전 시점**의 절차 설명이며 지금은 이미 완료된 과거형으로
+> 읽어야 한다.
+
 - 80 + 24건의 문장과 예상 라벨은 **담당 AI가 초안 작성**했다(Issue #213 본문의 경계 유형 요구사항에
   맞춰 작성).
 - Issue #213 Human Label 계약에 따라 **AI가 만든 라벨을 그대로 정답으로 사용하지 않는다.** 이 초안은
-  Human이 검토·확정하기 전까지 `humanLabelStatus = DRAFT`다.
+  Human이 검토·확정하기 전까지 `humanLabelStatus = DRAFT`였다.
 - 코드 레벨 안전장치: `SpringAiModerationHeldoutEvaluationTest.HELD_OUT_LABELS_HUMAN_CONFIRMED`가
   `false`인 동안 실제 OpenAI 호출 테스트 3개(Held-out 실행, Challenge 실행, Stability Run)는
-  `Assumptions.assumeTrue`로 자동 skip된다. Human 검토 후 이 상수를 `true`로 바꿔야 실행된다.
+  `Assumptions.assumeTrue`로 자동 skip되도록 만들었고, Human 검토 후 이 상수를 `true`로 바꿔 실행했다.
 - 첫 Provider 실행 후에는 라벨을 바꾸지 않는다. 바꿔야 하면 해당 case를 평가에서 제외하고 사유를
-  이 문서에 기록한 뒤, 별도 Held-out v2로 재검증한다(Issue #213 원칙).
+  이 문서에 기록한 뒤, 별도 Held-out v2로 재검증한다(Issue #213 원칙, 계속 유효).
 - **(라운드 2 추가, 2026-08-11)** Human Label 확정 시 메시지에 드러나지 않은 숨은 의도를 추정하지
   않고, 문장에 명시적으로 드러난 근거를 우선한다(예: "제가 운영하는"처럼 자기 운영을 밝힌 표현,
   "사장님 개인폰"처럼 개인 소유를 명시한 표현). 이 기준으로도 본질적으로 정답이 불명확한 Challenge

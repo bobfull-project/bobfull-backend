@@ -74,15 +74,26 @@ class ModerationHeldoutDatasetTest {
     }
 
     /**
-     * Issue #213 Label Freeze 이후 Provider 실행 기준으로 Evidence에 기록할 Dataset 내용 해시를
-     * 계산·출력한다. id/message/expectedResult/expectedCategories/expectedRiskLevel/caseType을
-     * canonical하게 직렬화해 SHA-256을 계산하므로, 라벨이 조금이라도 바뀌면 해시도 바뀐다.
+     * Issue #213 Human 최종 승인(2026-08-11)으로 동결된 Held-out/Challenge Dataset 내용 해시다.
+     * docs/evidence/v3/213-ai-moderation-heldout/README.md "Dataset Freeze" 절과 동일한 값이며,
+     * 이 상수는 Provider 실행 기준을 고정하는 SSOT다. Held-out v1의 expected 라벨은 이 값이 존재하는 한
+     * 다시 바꾸지 않는다 — 정당한 라벨 변경이 필요하면 이 상수를 그대로 두고 별도 Held-out v2 +
+     * 새 Evidence로 분리한다(PR #217 리뷰 MAJOR 반영).
+     */
+    private static final String FROZEN_DATASET_SHA256 =
+            "78a072fae2d208da79defeb9f7c260594f77c9e964f94d56e1615a55c840527e";
+
+    /**
+     * Issue #213 Label Freeze 이후 Provider 실행 기준으로 Evidence에 기록한 Dataset 내용 해시가
+     * 지금도 동일한지 검증한다. id/message/expectedResult/expectedCategories/expectedRiskLevel/
+     * caseType을 canonical하게 직렬화해 SHA-256을 계산하므로, expected 라벨이 조금이라도 바뀌면
+     * 이 테스트가 실패해 Label Freeze 위반을 자동으로 잡아낸다.
      */
     @Test
-    void Dataset_Content_SHA256_해시를_출력한다() throws NoSuchAlgorithmException {
+    void Dataset_Content_SHA256_해시가_동결된_값과_일치한다() throws NoSuchAlgorithmException {
         String sha256 = datasetContentSha256();
         System.out.println("HELDOUT_CHALLENGE_DATASET_SHA256=" + sha256);
-        assertThat(sha256).hasSize(64);
+        assertThat(sha256).isEqualTo(FROZEN_DATASET_SHA256);
     }
 
     static String datasetContentSha256() throws NoSuchAlgorithmException {
