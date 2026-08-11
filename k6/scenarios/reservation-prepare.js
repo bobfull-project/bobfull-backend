@@ -14,8 +14,15 @@
 //
 // SESSION_POOL_SIZE는 (VU 수 * 예상 iteration 수) 이상으로 넉넉히 잡아야 한다. 풀이 부족하면
 // setup()이 예외로 즉시 실패한다(무음으로 409만 쌓이는 것보다 실행 실패가 안전하다).
+//
+// (PR #208 리뷰 반영) 예약 준비 API는 호출당 수십ms라 think-time 없이 돌리면 VU 수 대비
+// iteration이 지나치게 빨라져, 아무리 SESSION_POOL_SIZE를 키워도 5분 안정 구간을 버티기 전에
+// 풀이 바닥날 수 있다(hyeonseung-dev 재검토, MAJOR). load/stress에는 실제 사용자의 "생각하는
+// 시간"에 해당하는 THINK_TIME_SECONDS(기본 1초) sleep을 넣어 소비 속도를 현실적인 범위로
+// 낮췄다 — smoke는 스크립트 동작 검증만 하면 되므로 think-time을 넣지 않는다.
 
 import exec from 'k6/execution';
+import { sleep } from 'k6';
 import { post, parseData } from '../common/helpers.js';
 import { checkStatus, checkApiSuccess } from '../common/checks.js';
 import { STAGE, RUN_ID } from '../common/config.js';
@@ -50,10 +57,13 @@ export const options = {
     scenarios: { reservation_prepare: STAGE_OPTIONS[STAGE] },
 };
 
-// Smoke=vus*iterations, load/stress는 duration 기반이라 총량을 미리 알 수 없으므로 여유 있게 잡는다.
-const SESSION_POOL_SIZE = Number(__ENV.SESSION_POOL_SIZE || (STAGE === 'smoke' ? 10 : 500));
+// Smoke=vus*iterations로 정확히 계산 가능. load/stress는 duration 기반이라 총량을 미리
+// 정확히 알 수 없으므로, THINK_TIME_SECONDS로 소비 속도를 낮춘 뒤에도 넉넉하도록 잡는다.
+// 그래도 실제 실행(#207)에서는 VU×duration/(latency+think-time)으로 다시 계산해 조정해야 한다.
+const SESSION_POOL_SIZE = Number(__ENV.SESSION_POOL_SIZE || { smoke: 10, load: 8000, stress: 50000 }[STAGE]);
 const MEMBER_POOL_SIZE = Number(__ENV.MEMBER_POOL_SIZE || 20);
 const BASE_DATE = __ENV.BASE_DATE || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const THINK_TIME_SECONDS = Number(__ENV.THINK_TIME_SECONDS || (STAGE === 'smoke' ? 0 : 1));
 
 export function setup() {
     const { restaurantId, sessionIds } = buildCreateTargetPool('prepare', SESSION_POOL_SIZE, BASE_DATE);
@@ -92,4 +102,8 @@ export default function (data) {
 
     checkStatus(res, 200, 'reservation_prepare');
     checkApiSuccess(res, 'reservation_prepare');
+
+    if (THINK_TIME_SECONDS > 0) {
+        sleep(THINK_TIME_SECONDS);
+    }
 }

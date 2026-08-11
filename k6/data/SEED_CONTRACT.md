@@ -26,7 +26,10 @@ Issue #63 "테스트 데이터 계약"에 따라, 시나리오별로 필요한 F
   - `SESSION_POOL_SIZE`(기본: smoke=10, load/stress=500, `-e SESSION_POOL_SIZE=`로 조정) 이상의 미사용 회차를 여러 날짜에 걸쳐 만든다.
   - `MEMBER_POOL_SIZE`(기본 20)명의 회원 계정을 만들어 로그인해둔다. CREATE의 중복 방지 제약은 회차 단위이지 회원 단위가 아니므로(코드 확인: `validateNoActiveCreate(timeSlotId)`), 회원 계정은 재사용해도 된다.
   - 각 반복은 `exec.scenario.iterationInTest`(전역 반복 번호)로 회차 풀에서 겹치지 않게 하나씩 소비한다.
-- **주의**: `SESSION_POOL_SIZE`는 실제 계획한 VU×iteration(또는 duration 기반이면 예상 총 요청 수) 이상으로 넉넉히 잡아야 한다. 부족하면 스크립트가 예외로 즉시 실패한다(조용히 409만 쌓이는 것보다 실행 실패가 안전하다는 판단).
+- **주의(PR #208 리뷰로 발견)**: 처음 구현은 테이블 1개 × 최대 30일 × 30분 간격으로만 회차를 만들어 최대 1,440개까지밖에 확보하지 못했다. 예약 준비 API는 호출당 수십ms라 `constant-vus`/`ramping-vus`로 think-time 없이 돌리면 5분 안에도 수만 건이 소비될 수 있어, 풀이 Load duration을 버티지 못하고 중간에 소진돼버렸다. 지금은 두 가지로 고쳤다.
+  - `buildCreateTargetPool()`이 필요한 만큼 **여러 테이블**에 나눠 회차를 만든다(`FIXTURE_INTERVAL_MINUTES` 기본 15분·`FIXTURE_MAX_DAYS` 기본 60일·`FIXTURE_MAX_TABLES` 기본 30개 — 기본값 기준 최대 약 17만 건까지 확보 가능). 요청한 `SESSION_POOL_SIZE`가 이 상한을 넘으면 API를 하나도 부르지 않고 즉시 실패한다.
+  - `reservation-prepare.js`의 load/stress 단계에는 실제 사용자의 "생각하는 시간"에 해당하는 `THINK_TIME_SECONDS`(기본 1초) sleep을 넣어 소비 속도 자체를 낮췄다.
+  - 그래도 `SESSION_POOL_SIZE`는 실제 계획한 VU×duration/(응답시간+think-time) 이상으로 넉넉히 잡아야 한다. 부족하면 스크립트가 예외로 즉시 실패한다(조용히 409만 쌓이는 것보다 실행 실패가 안전하다는 판단). #207에서 실제 실행 전에 이 값을 다시 계산해 조정한다.
 - Cleanup: 이번 시나리오가 만든 Reservation/Payment(READY)는 시간이 지나면 만료 스케줄러가 정리하거나(`docs/PROJECT_CONTEXT.md`의 READY 만료 정책 참고), 별도 테스트 스택이면 스택 자체를 폐기해도 된다. 운영 DB에서는 절대 실행하지 않는다.
 
 ## 실행 후 정합성 확인 (Issue #63 "정합성 검증")

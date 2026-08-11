@@ -38,15 +38,19 @@ export function createOwnerRestaurantTable(prefix, capacity) {
     }
     const restaurantId = parseData(restaurantRes).restaurantId;
 
-    const tableRes = post('fixture', `/api/owner/restaurants/${restaurantId}/tables`, {
-        capacity: capacity || 8,
-    }, ownerHeaders, 'fixture_create_table');
-    if (tableRes.status !== 201) {
-        throw new Error(`Fixture 테이블 생성 실패: status=${tableRes.status} body=${tableRes.body}`);
-    }
-    const tableId = parseData(tableRes).tableId;
+    const tableId = createTable(ownerHeaders, restaurantId, capacity);
 
     return { ownerHeaders, restaurantId, tableId };
+}
+
+export function createTable(ownerHeaders, restaurantId, capacity) {
+    const res = post('fixture', `/api/owner/restaurants/${restaurantId}/tables`, {
+        capacity: capacity || 8,
+    }, ownerHeaders, 'fixture_create_table');
+    if (res.status !== 201) {
+        throw new Error(`Fixture 테이블 생성 실패: status=${res.status} body=${res.body}`);
+    }
+    return parseData(res).tableId;
 }
 
 /**
@@ -77,22 +81,57 @@ export function listAvailableSessionIds(restaurantId, date) {
 
 /**
  * poolSize 이상의 미사용 DiningSession을 만들어 sessionId 배열로 돌려준다.
- * 하루 24시간을 intervalMinutes 간격으로 나눠도 부족하면 dates를 늘려 재시도한다.
+ *
+ * (PR #208 리뷰 반영) 이전 구현은 테이블 1개 × 최대 30일 × 30분 간격으로 만들어 최대
+ * 1,440개까지만 확보할 수 있었다. 예약 준비 API는 호출당 수십ms 수준이라, `constant-vus`
+ * 20 VU로 5분(300s)만 돌려도 이론상 수만 건이 소비될 수 있어 실제 Load duration을 버티기
+ * 전에 풀이 바닥나 버렸다(hyeonseung-dev 재검토, MAJOR). 이번엔 필요한 테이블 수를 먼저
+ * 계산해 여러 테이블에 나눠 만들어, poolSize를 훨씬 크게(FIXTURE_MAX_* 상한 안에서) 확보할
+ * 수 있게 했다.
+ *
+ * 상한(FIXTURE_MAX_TABLES × FIXTURE_MAX_DAYS × 하루 슬롯 수)을 넘는 poolSize는 API를 하나도
+ * 호출하지 않고 즉시 실패한다 — 대량의 Fixture를 만들다가 뒤늦게 실패하는 것보다 안전하다.
  */
 export function buildCreateTargetPool(prefix, poolSize, baseDate) {
-    const { ownerHeaders, restaurantId, tableId } = createOwnerRestaurantTable(prefix, 8);
+    const intervalMinutes = Number(__ENV.FIXTURE_INTERVAL_MINUTES || 15);
+    const maxDays = Number(__ENV.FIXTURE_MAX_DAYS || 60);
+    const maxTables = Number(__ENV.FIXTURE_MAX_TABLES || 30);
+    const slotsPerTablePerDay = Math.floor((24 * 60) / intervalMinutes);
 
-    const intervalMinutes = 30;
-    let dayOffset = 0;
-    let sessionIds = [];
-    while (sessionIds.length < poolSize && dayOffset < 30) {
-        const date = addDays(baseDate, dayOffset);
-        createSessionsBulk(ownerHeaders, tableId, [date], '00:00', '23:30', intervalMinutes);
-        sessionIds = sessionIds.concat(listAvailableSessionIds(restaurantId, date));
-        dayOffset += 1;
+    const maxAchievablePool = slotsPerTablePerDay * maxDays * maxTables;
+    if (poolSize > maxAchievablePool) {
+        throw new Error(
+            `요청한 poolSize(${poolSize})가 현재 상한(FIXTURE_MAX_TABLES=${maxTables} × ` +
+            `FIXTURE_MAX_DAYS=${maxDays} × 하루 ${slotsPerTablePerDay}회차 = ${maxAchievablePool})을 넘는다. ` +
+            `FIXTURE_MAX_TABLES/FIXTURE_MAX_DAYS/FIXTURE_INTERVAL_MINUTES를 조정해 재실행하라.`
+        );
     }
+
+    const tablesNeeded = Math.min(maxTables, Math.max(1, Math.ceil(poolSize / (slotsPerTablePerDay * maxDays))));
+    const daysNeeded = Math.min(maxDays, Math.max(1, Math.ceil(poolSize / (slotsPerTablePerDay * tablesNeeded))));
+
+    const { ownerHeaders, restaurantId, tableId: firstTableId } = createOwnerRestaurantTable(prefix, 8);
+    const tableIds = [firstTableId];
+    for (let i = 1; i < tablesNeeded; i += 1) {
+        tableIds.push(createTable(ownerHeaders, restaurantId, 8));
+    }
+
+    let sessionIds = [];
+    for (let dayOffset = 0; dayOffset < daysNeeded && sessionIds.length < poolSize; dayOffset += 1) {
+        const date = addDays(baseDate, dayOffset);
+        // 이 날짜에 대해 모든 테이블에 회차를 만든 뒤 한 번만 조회한다(테이블별로 따로
+        // 조회하면 restaurant 단위 응답에 이미 만든 다른 테이블의 회차가 섞여 중복 집계된다).
+        tableIds.forEach((tableId) => {
+            createSessionsBulk(ownerHeaders, tableId, [date], '00:00', '23:45', intervalMinutes);
+        });
+        sessionIds = sessionIds.concat(listAvailableSessionIds(restaurantId, date));
+    }
+
     if (sessionIds.length < poolSize) {
-        throw new Error(`Fixture 회차 풀이 부족하다: 필요=${poolSize} 생성=${sessionIds.length} (dayOffset 상한 30일 도달)`);
+        throw new Error(
+            `Fixture 회차 풀이 부족하다: 필요=${poolSize} 생성=${sessionIds.length} ` +
+            `(테이블 ${tableIds.length}개 × ${daysNeeded}일 사용, 상한 테이블 ${maxTables}/일 ${maxDays})`
+        );
     }
     return { restaurantId, sessionIds };
 }

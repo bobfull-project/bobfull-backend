@@ -55,9 +55,13 @@ k6 run -e STAGE=stress -e BASE_URL=https://<test-stack-endpoint> k6/scenarios/re
 
 | 변수 | 의미 | 기본값 |
 |---|---|---|
-| `SESSION_POOL_SIZE` | Fixture로 만들 미사용 회차 수(총 반복 수 이상 필요) | smoke=10, load/stress=500 |
+| `SESSION_POOL_SIZE` | Fixture로 만들 미사용 회차 수(총 반복 수 이상 필요) | smoke=10, load=8000, stress=50000 |
 | `MEMBER_POOL_SIZE` | Fixture로 만들 회원 계정 수 | 20 |
 | `BASE_DATE` | 회차를 만들 기준 날짜(YYYY-MM-DD) | 실행일+1일 |
+| `THINK_TIME_SECONDS` | 반복마다 넣는 sleep(회차 풀 소비 속도를 낮춰 duration을 버티게 함) | smoke=0, load/stress=1 |
+| `FIXTURE_INTERVAL_MINUTES` / `FIXTURE_MAX_DAYS` / `FIXTURE_MAX_TABLES` | 회차 풀을 만들 때 쓸 간격·최대 날짜 수·최대 테이블 수(이 세 값의 곱이 확보 가능한 최대 풀 크기) | 15 / 60 / 30 |
+
+`SESSION_POOL_SIZE`가 `FIXTURE_MAX_TABLES × FIXTURE_MAX_DAYS × (1440/FIXTURE_INTERVAL_MINUTES)`를 넘으면 Fixture 생성 자체를 시작하지 않고 즉시 실패한다. 기본값 기준 최대 약 172,800건까지 확보 가능하다.
 
 ## 부하 모델 (Issue #63 Q3 Human 결정)
 
