@@ -2,10 +2,24 @@
 
 ## 상태
 
-`DRAFT — Human Label Freeze 대기 중`. 이 문서는 Held-out/Challenge Dataset 구조와 실행 계획만 기록한
-스켈레톤이며, 실제 OpenAI 실행 결과(Result/Category/Precision/Recall/F1/Wilson CI/Stability)는
-Human이 아래 "Dataset 확정" 절차를 마친 뒤 채운다. 그 전까지 이 문서의 결과 표는 빈 칸으로 둔다
-(FINAL_CLAIM_MATRIX 기록 규칙 — "실행하지 않은 실험의 수치를 소급 생성하지 않는다").
+`FROZEN — Human Label Freeze 완료, Provider 실행 대기`. Held-out 80건 + Challenge 24건 라벨은
+Human 최종 승인으로 동결됐다(아래 "Dataset Freeze" 절). 실제 OpenAI 실행 결과
+(Result/Category/Precision/Recall/F1/Wilson CI/Stability/latency/token/cost)는 이 문서의
+"결과 기록" 절에 실행 후 채운다. 그 전까지 결과 표는 빈 칸으로 둔다(FINAL_CLAIM_MATRIX 기록 규칙 —
+"실행하지 않은 실험의 수치를 소급 생성하지 않는다").
+
+## Dataset Freeze
+
+- Held-out/Challenge 104건(80+24) 라벨은 Human 검토 3라운드(초안 → CH-01/04/05/06 확정 →
+  104건 Consistency Sweep 5쌍 확정)를 거쳐 **2026-08-11 Human 최종 승인으로 동결**했다.
+- `SpringAiModerationHeldoutEvaluationTest.HELD_OUT_LABELS_HUMAN_CONFIRMED = true`
+- Dataset Content SHA-256(id/message/expectedResult/expectedCategories/expectedRiskLevel/caseType
+  canonical 직렬화 기준, `ModerationHeldoutDatasetTest.datasetContentSha256()`로 재현 가능):
+  `78a072fae2d208da79defeb9f7c260594f77c9e964f94d56e1615a55c840527e`
+- Held-out Dataset 기준 Commit SHA(Label Freeze를 반영한 커밋): `PENDING_COMMIT_SHA`(직후 커밋에서 확정)
+- 이 SHA 이후 Provider 실행 전까지 `SpringAiModerationHeldoutEvaluationTest`의 expected 라벨은
+  변경하지 않는다. 뒤늦게 라벨 오류가 확인되면 코드를 고치지 않고 해당 case를 결과 집계에서 제외한
+  뒤 사유를 이 문서에 기록한다(Issue #213 원칙).
 
 ## 목적과 범위
 

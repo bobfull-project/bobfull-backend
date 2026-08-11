@@ -3,6 +3,9 @@ package com.bobfull.chat.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bobfull.chat.adapter.SpringAiModerationHeldoutEvaluationTest.HeldoutCase;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -68,5 +71,39 @@ class ModerationHeldoutDatasetTest {
     @Test
     void 기존_40건_중복_검사용_사본은_정확히_40건이다() {
         assertThat(SpringAiModerationHeldoutEvaluationTest.existingRegressionSetMessagesForDuplicateCheck()).hasSize(40);
+    }
+
+    /**
+     * Issue #213 Label Freeze 이후 Provider 실행 기준으로 Evidence에 기록할 Dataset 내용 해시를
+     * 계산·출력한다. id/message/expectedResult/expectedCategories/expectedRiskLevel/caseType을
+     * canonical하게 직렬화해 SHA-256을 계산하므로, 라벨이 조금이라도 바뀌면 해시도 바뀐다.
+     */
+    @Test
+    void Dataset_Content_SHA256_해시를_출력한다() throws NoSuchAlgorithmException {
+        String sha256 = datasetContentSha256();
+        System.out.println("HELDOUT_CHALLENGE_DATASET_SHA256=" + sha256);
+        assertThat(sha256).hasSize(64);
+    }
+
+    static String datasetContentSha256() throws NoSuchAlgorithmException {
+        List<HeldoutCase> all = new ArrayList<>();
+        all.addAll(SpringAiModerationHeldoutEvaluationTest.heldoutCases());
+        all.addAll(SpringAiModerationHeldoutEvaluationTest.challengeCases());
+
+        List<String> canonicalLines = all.stream()
+                .map(c -> c.id() + "|" + c.message() + "|" + c.expectedResult() + "|"
+                        + c.expectedCategories().stream().map(Enum::name).sorted().collect(Collectors.joining(","))
+                        + "|" + c.expectedRiskLevel() + "|" + c.caseType())
+                .sorted()
+                .toList();
+        String canonical = String.join("\n", canonicalLines);
+
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] hashBytes = digest.digest(canonical.getBytes(StandardCharsets.UTF_8));
+        StringBuilder hex = new StringBuilder();
+        for (byte b : hashBytes) {
+            hex.append(String.format("%02x", b));
+        }
+        return hex.toString();
     }
 }

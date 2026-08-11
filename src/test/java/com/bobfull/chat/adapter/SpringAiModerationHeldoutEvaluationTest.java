@@ -74,7 +74,11 @@ class SpringAiModerationHeldoutEvaluationTest {
      * 반드시 {@code false}로 유지한다. 실제 OpenAI 호출 테스트 2개는 이 값이 {@code true}가 될 때까지
      * assumeTrue로 스스로 skip된다(실패가 아니라 skip이며, 사유가 리포트에 남는다).
      */
-    private static final boolean HELD_OUT_LABELS_HUMAN_CONFIRMED = false;
+    // Human 최종 승인(2026-08-11)으로 동결. Dataset SHA-256과 기준 Commit SHA는
+    // docs/evidence/v3/213-ai-moderation-heldout/README.md의 "Dataset Freeze" 절 참고.
+    // 이 값이 true가 된 이후에는 expected 라벨을 다시 수정하지 않는다(Issue #213 원칙) —
+    // 오류가 뒤늦게 발견되면 해당 case를 제외하고 사유를 Evidence에 기록한다.
+    private static final boolean HELD_OUT_LABELS_HUMAN_CONFIRMED = true;
 
     @Autowired
     @Qualifier("moderationChatClient")
