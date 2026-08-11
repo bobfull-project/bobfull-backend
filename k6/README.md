@@ -61,7 +61,7 @@ k6 run -e STAGE=stress -e BASE_URL=https://<test-stack-endpoint> k6/scenarios/re
 | `THINK_TIME_SECONDS` | 반복마다 넣는 sleep(회차 풀 소비 속도를 낮춰 duration을 버티게 함) | smoke=0, load/stress=1 |
 | `FIXTURE_INTERVAL_MINUTES` / `FIXTURE_MAX_DAYS` / `FIXTURE_MAX_TABLES` | 회차 풀을 만들 때 쓸 간격·최대 날짜 수·최대 테이블 수(이 세 값의 곱이 확보 가능한 최대 풀 크기) | 15 / 60 / 30 |
 
-`SESSION_POOL_SIZE`가 `FIXTURE_MAX_TABLES × FIXTURE_MAX_DAYS × (1440/FIXTURE_INTERVAL_MINUTES)`를 넘으면 Fixture 생성 자체를 시작하지 않고 즉시 실패한다. 기본값 기준 최대 약 172,800건까지 확보 가능하다.
+`SESSION_POOL_SIZE`가 `FIXTURE_MAX_TABLES × FIXTURE_MAX_DAYS × 하루 슬롯 수`를 넘으면 Fixture 생성 자체를 시작하지 않고 즉시 실패한다. 하루 슬롯 수는 `24:00`을 endTime으로 쓸 수 없어(서버가 `currentStart < endTime`으로 슬롯을 만듦) `1440/interval`이 아니라 `1439`을 interval로 나눈 몫이다(15분 간격이면 96이 아니라 95). 기본값(15분·60일·30테이블) 기준 최대 약 171,000건까지 확보 가능하다.
 
 ## 부하 모델 (Issue #63 Q3 Human 결정)
 

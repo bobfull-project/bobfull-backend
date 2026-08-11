@@ -91,12 +91,28 @@ export function listAvailableSessionIds(restaurantId, date) {
  *
  * 상한(FIXTURE_MAX_TABLES × FIXTURE_MAX_DAYS × 하루 슬롯 수)을 넘는 poolSize는 API를 하나도
  * 호출하지 않고 즉시 실패한다 — 대량의 Fixture를 만들다가 뒤늦게 실패하는 것보다 안전하다.
+ *
+ * (PR #208 2차 재검토 반영) `slotsPerTablePerDay`를 "하루 24시간 ÷ interval"로 어림잡았더니
+ * 실제 서버(`TimeSlotService#toIntervalTimeRanges`, `while (currentStart.isBefore(endTime))`)가
+ * 만드는 개수와 1칸 어긋났다(15분 간격이면 24:00을 endTime으로 쓸 수 없어 실제로는 95개인데
+ * 96개로 계산). `dailyEndTime()`으로 실제 API에 넘길 endTime과 슬롯 수를 같은 값에서 계산해
+ * 다시는 벌어지지 않게 했다.
  */
+function dailyEndTime(intervalMinutes) {
+    const totalMinutes = Math.floor((24 * 60 - 1) / intervalMinutes) * intervalMinutes;
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    return {
+        slotsPerDay: totalMinutes / intervalMinutes,
+        endTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+    };
+}
+
 export function buildCreateTargetPool(prefix, poolSize, baseDate) {
     const intervalMinutes = Number(__ENV.FIXTURE_INTERVAL_MINUTES || 15);
     const maxDays = Number(__ENV.FIXTURE_MAX_DAYS || 60);
     const maxTables = Number(__ENV.FIXTURE_MAX_TABLES || 30);
-    const slotsPerTablePerDay = Math.floor((24 * 60) / intervalMinutes);
+    const { slotsPerDay: slotsPerTablePerDay, endTime } = dailyEndTime(intervalMinutes);
 
     const maxAchievablePool = slotsPerTablePerDay * maxDays * maxTables;
     if (poolSize > maxAchievablePool) {
@@ -122,7 +138,7 @@ export function buildCreateTargetPool(prefix, poolSize, baseDate) {
         // 이 날짜에 대해 모든 테이블에 회차를 만든 뒤 한 번만 조회한다(테이블별로 따로
         // 조회하면 restaurant 단위 응답에 이미 만든 다른 테이블의 회차가 섞여 중복 집계된다).
         tableIds.forEach((tableId) => {
-            createSessionsBulk(ownerHeaders, tableId, [date], '00:00', '23:45', intervalMinutes);
+            createSessionsBulk(ownerHeaders, tableId, [date], '00:00', endTime, intervalMinutes);
         });
         sessionIds = sessionIds.concat(listAvailableSessionIds(restaurantId, date));
     }
