@@ -160,8 +160,24 @@ erDiagram
         bigint chat_message_id UK "메시지당 분석 결과 1건"
         bigint version "JPA 낙관적 락 version"
         varchar status "SAFE, FLAGGED, ANALYSIS_FAILED"
+        varchar result "SAFE, FLAGGED; 실패면 NULL"
+        varchar risk_level "LOW, MEDIUM, HIGH; 실패면 NULL"
+        varchar provider "분석 Provider"
+        varchar model_name "분석 모델"
+        varchar prompt_version "적용 Prompt 계약"
+        varchar policy_version "적용 Policy 계약"
+        bigint latency_millis "분석 시도 지연 시간"
+        bigint prompt_tokens "Provider token 관측값"
+        bigint completion_tokens "Provider token 관측값"
+        bigint total_tokens "Provider token 관측값"
+        datetime analyzed_at "결과 또는 최종 실패 기록 시각"
+        varchar error_code "최종 실패 예외 유형; 완료면 NULL"
         datetime created_at "생성 시각"
         datetime updated_at "갱신 시각"
+    }
+    CHAT_MODERATION_CATEGORY {
+        bigint chat_moderation_id FK "ChatModeration 컬렉션 소유자"
+        varchar category "ModerationCategory Enum"
     }
 
     MEMBER ||--o{ RESTAURANT : owns
@@ -183,6 +199,7 @@ erDiagram
     MEMBER ||--o{ CHAT_MESSAGE : sends
     RESERVATION_PARTICIPANT ||--o{ CHAT_MESSAGE : sends_as
     CHAT_MESSAGE ||--o| CHAT_MODERATION : is_analyzed_as
+    CHAT_MODERATION ||--o{ CHAT_MODERATION_CATEGORY : has_categories
 ```
 
 ## 4. 엔티티 상세
@@ -393,7 +410,16 @@ erDiagram
 | `error_code` | VARCHAR(128) | Y |  | 최종 실패 예외 유형; 완료면 NULL |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
-`chat_moderation_category`는 완료 결과의 복수 category를 별도 컬렉션 테이블로 보관한다. UNIQUE는 중복 INSERT를 막고, `version`은 동일 실패 행을 읽은 성공/실패 경로의 늦은 UPDATE가 완료 결과를 덮는 것을 막는다.
+#### `chat_moderation_category` (`@ElementCollection`)
+
+`ChatModeration.categories`는 별도 Entity가 아닌 `@ElementCollection(fetch = EAGER)`이며, 완료 결과의 복수 `ModerationCategory`를 다음 컬렉션 테이블에 저장한다.
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `chat_moderation_id` | BIGINT | N | FK `fk_chat_moderation_category_moderation` → `chat_moderation.chat_moderation_id` | 컬렉션 소유 `ChatModeration` 식별자 |
+| `category` | VARCHAR(32) | N | 앱 Enum | `ModerationCategory` 값 |
+
+`version`은 동일 실패 행을 읽은 성공/실패 경로의 늦은 UPDATE가 완료 결과를 덮는 것을 막는다.
 
 ### 4.13 `outbox_event`
 
@@ -475,9 +501,13 @@ erDiagram
 | `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |
 | `reservationConfirmationRate`, `confirmationRate` | 계산값 | 전체 예약 수 대비 확정 예약 수 비율 |
 | `totalReservationCount`, `confirmedReservationCount`, `reservationCount`, `refundCount` | 계산값 | 조건에 맞는 예약·환불 건수 집계 |
+| `profanityCount`, `personalInformationCount`, `spamCount` | 계산값 | `FLAGGED` 메시지를 발신 회원별·category별로 `COUNT(DISTINCT messageId)` 집계. 하나의 메시지가 복수 category여도 각 category 집계에는 포함한다. |
+| `totalFlaggedCount` | 계산값 | 발신 회원의 `LOW`/`MEDIUM`/`HIGH` `FLAGGED` 메시지를 `COUNT(DISTINCT messageId)` 집계. `LOW`도 포함한다. |
+| `reviewTargetCount` | 계산값 | 발신 회원의 `MEDIUM`/`HIGH` `FLAGGED` 메시지만 `COUNT(DISTINCT messageId)` 집계한다. `LOW`는 제외한다. |
+| `reviewStatus` | 계산값 | `reviewTargetCount >= 3`이면 `REVIEW_REQUIRED`, 아니면 `NORMAL`. `REVIEW_REQUIRED`는 DB 저장 상태·자동 제재·BAN·Review Case가 아닌 조회 시 계산되는 관리자 검토 후보다. |
 | `party_size`, `amount`, `expires_at`, `restaurant.image_key`, 상태값 | 저장값 | 결제·참여 이력, 식당 이미지 Object Key, 임시 선점·환불·정산 조회의 원천 데이터 |
 
-위 집계값은 API 응답에 포함되더라도 중복 컬럼으로 저장하지 않는다. 성능·동시성 문제로 별도 저장이 필요해지면 갱신 책임과 정합성 전략을 별도 결정해야 한다.
+회원 moderation 집계에서는 `SAFE`와 `ANALYSIS_FAILED`를 제외한다. 위 집계값은 API 응답에 포함되더라도 중복 컬럼으로 저장하지 않으며, `MemberModerationSummary`, `ReviewCase`, Redis Counter 같은 별도 영속 모델도 현재 범위에 추가하지 않는다. 성능·동시성 문제로 별도 저장이 필요해지면 갱신 책임과 정합성 전략을 별도 결정해야 한다.
 
 ## 8. 상태 Enum
 
