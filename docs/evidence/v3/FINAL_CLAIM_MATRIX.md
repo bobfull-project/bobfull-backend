@@ -56,6 +56,7 @@ Evidence 수준은 구현·채택 상태가 아니라, 최종 주장에 연결�
 | #63 K6 Performance Map |  |  |  |  |  |  | `63-api-k6/README.md` |  |
 | #65 Settlement |  |  |  |  |  |  | `65-settlement/README.md` |  |
 | #66 AI Moderation |  |  |  |  |  |  | 구현 시 확정 | 데이터셋 크기·Provider·PromptVersion 함께 표기 |
+| #213 AI Moderation Held-out 재검증 | | `NOT_VERIFIED` | `NOT_MEASURED` | Result/Category/Review Actionability/FLAGGED Precision·Recall·F1 | 미실행 | 미실행 | `213-ai-moderation-heldout/README.md` | Held-out/Challenge 라벨은 Human Label Freeze 확정 전(DRAFT) — 확정·실행 전까지 수치 기록 금지 |
 | #142 Reservation Peak |  |  |  |  |  |  | 구현 시 확정 |  |
 | #143 Payment Completion |  |  |  |  |  |  | 구현 시 확정 |  |
 | #146 Refund K6 |  |  |  |  |  |  | 구현 시 확정 |  |
