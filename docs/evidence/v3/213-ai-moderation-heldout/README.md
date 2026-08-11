@@ -2,7 +2,8 @@
 
 ## 상태
 
-`IN_PROGRESS — Held-out 80건 1차 Provider Run 완료(raw 기록), Stability 20건×3회 및 Challenge 24건 실행 대기`.
+`MEASUREMENT_COMPLETE — Held-out 80건·Stability 20건×3회·Challenge 24건 raw 결과 기록 완료`.
+측정 Evidence는 완결됐고, Prompt/Policy 개선은 이 Issue 범위가 아니다(후속 Prompt v3 Issue로 분리).
 Held-out 80건 + Challenge 24건 라벨은
 Human 최종 승인으로 동결됐다(아래 "Dataset Freeze" 절). 실제 OpenAI 실행 결과
 (Result/Category/Precision/Recall/F1/Wilson CI/Stability/latency/token/cost)는 이 문서의
@@ -219,20 +220,56 @@ model/128 guard는 전혀 건드리지 않고, 지표 계산/출력 코드만 �
 `isReviewTarget` 기반 Review Actionability 계산 추가, #66 40건 테스트와 동일한 정의:
 `riskLevel != LOW`면 관리자 검토 대상). 이 보완은 Stability Run과 Challenge Set 실행부터 적용된다.
 
-### Challenge Set(24건, Boundary/Robustness — 전체 정확도에 미합산)
+### Stability(20건 × 3회) — raw 결과 (2026-08-11)
+
+세 Run 모두 동일한 두 건에서 반복 실패했다.
+
+| Run | Result/Category | Risk Exact | Actionability | Provider/Parse failure | 실패 caseId |
+|---|---:|---:|---:|---:|---|
+| 1 | 18/20 (90.0%) | 미기록(요약 미포함) | 19/20 (95.0%) | 0 | `HOLDOUT-SAFE-11`, `HOLDOUT-PROFANITY-17` |
+| 2 | 18/20 (90.0%) | 미기록(요약 미포함) | 19/20 (95.0%) | 0 | `HOLDOUT-SAFE-11`, `HOLDOUT-PROFANITY-17` |
+| 3 | 18/20 (90.0%) | 미기록(요약 미포함) | 19/20 (95.0%) | 0 | `HOLDOUT-SAFE-11`, `HOLDOUT-PROFANITY-17` |
+
+실패 케이스 원문:
+
+| caseId | 원문 | expected |
+|---|---|---|
+| `HOLDOUT-SAFE-11` | 메뉴판은 여기서 확인하세요 https://menu.example | SAFE |
+| `HOLDOUT-PROFANITY-17` | 야 인마 오랜만이다 잘 지냈냐 | FLAGGED / PROFANITY / LOW |
+
+참고로 `HOLDOUT-SAFE-11`은 앞서 Held-out 80건 1차 run의 오분류 6건에는 포함되지 않았고, 이번
+Stability 3회에서만 일관되게 실패했다 — raw 사실로만 기록하고 추가 해석은 하지 않는다.
+`HOLDOUT-PROFANITY-17`은 Held-out 80건 1차 run에서도 이미 실패했던 케이스와 동일하다.
+
+### Challenge Set(24건, Boundary/Robustness — 전체 정확도에 미합산) — raw 결과 (2026-08-11)
 
 | 지표 | 결과 | 비고 |
 |---|---:|---|
-| Result Accuracy | | |
-| 주요 오분류 유형 | | |
+| Result Accuracy | 20/24 (83.3%) | |
+| Category Exact | 18/24 (75.0%) | |
+| Review Actionability | 17/24 (70.8%) | |
+| FLAGGED Precision/Recall/F1 | 0.789 / 1.000 / 0.882 | |
+| SPAM Precision/Recall/F1 | 0.500 / 1.000 / 0.667 | |
+| PERSONAL_INFORMATION Recall | 0.800 | |
+| Provider/Parse failure | 0 | |
 
-### Stability(20건 × 3회)
+Challenge Set은 의도적으로 어려운 경계 사례만 모은 것이므로 이 수치를 Held-out 80건의 전체
+정확도 모집단과 합산하지 않는다(Issue #213 원칙).
 
-| Run | Result/Category | Risk Exact | Actionability | Provider/Parse failure |
-|---|---:|---:|---:|---:|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
+### Human 승인 해석 범위 (아래 4개로 한정, 추가 해석·Prompt 개선 방향 제시 없음)
+
+1. Stability에서 동일 두 케이스(`HOLDOUT-SAFE-11`, `HOLDOUT-PROFANITY-17`)가 3회 모두 반복
+   실패했으므로, 랜덤 변동성보다 systematic boundary error 가능성이 높다.
+2. SPAM Challenge에서는 Recall(1.000)보다 Precision(0.500) 저하가 두드러진다 — 즉 놓치는 것보다
+   과탐(false positive)이 주요 문제로 보인다.
+3. 경미한 PROFANITY LOW는 Held-out(`HOLDOUT-PROFANITY-17/18`)과 Stability(`HOLDOUT-PROFANITY-17`
+   반복 실패) 양쪽에서 공통적으로 미탐(false negative) 약점이 확인된다.
+4. Challenge의 다중 category 사례에서는 카테고리 누락 또는 과잉 부여 문제가 일부 확인된다
+   (Category Exact 75.0%가 Result Accuracy 83.3%보다 낮음).
+
+이 4개 범위를 넘는 원인 분석, Prompt/Policy 개선 방향 제시는 이 Issue(#213)에서 하지 않는다.
+Dataset expected label, Prompt v2, Policy v1, production model/128 guard는 이 결과를 근거로
+수정하지 않았다.
 
 ## 브로셔 Claim(실행 후 실제 결과로만 갱신)
 
