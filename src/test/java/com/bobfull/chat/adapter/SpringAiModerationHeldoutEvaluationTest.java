@@ -440,13 +440,13 @@ class SpringAiModerationHeldoutEvaluationTest {
     // ------------------------------------------------------------------
     static List<HeldoutCase> challengeCases() {
         return List.of(
-                // SPAM 경계 (6)
-                flagged("CH-01", "제가 운영하는 채널인데 관심있으면 놀러오세요", of(ModerationCategory.SPAM), RiskLevel.MEDIUM, CaseType.ADVERSARIAL),
+                // SPAM 경계 (6) — Human 검토 라운드 2 반영(2026-08-11): CH-01/04/06 라벨 확정
+                flagged("CH-01", "제가 운영하는 채널인데 관심있으면 놀러오세요", of(ModerationCategory.SPAM), RiskLevel.LOW, CaseType.ADVERSARIAL),
                 flagged("CH-02", "이 링크 눌러보시면 재밌는거 있어요 https://example.link", of(ModerationCategory.SPAM), RiskLevel.MEDIUM, CaseType.ADVERSARIAL),
                 safe("CH-03", "여기 맛집인데 사장님이 저희 이모예요 가서 이모 찾으시면 서비스 줘요", CaseType.ADVERSARIAL),
-                flagged("CH-04", "이 제품 써보니 정말 좋아서 공유해요, 저처럼 후회 안 하실거예요", of(ModerationCategory.SPAM), RiskLevel.LOW, CaseType.ADVERSARIAL),
+                safe("CH-04", "이 제품 써보니 정말 좋아서 공유해요, 저처럼 후회 안 하실거예요", CaseType.ADVERSARIAL),
                 safe("CH-05", "이 앱 진짜 유용해서 알려드려요, 저도 잘 쓰고 있어요", CaseType.ADVERSARIAL),
-                flagged("CH-06", "이 모임 참여하면 서로 도움되는 정보 나눠요, 관심있으면 연락주세요", of(ModerationCategory.SPAM), RiskLevel.MEDIUM, CaseType.ADVERSARIAL),
+                safe("CH-06", "이 모임 참여하면 서로 도움되는 정보 나눠요, 관심있으면 연락주세요", CaseType.ADVERSARIAL),
                 // 우회 표기 욕설 (6)
                 flagged("CH-07", "ㅁㅊ ㄴㅕ 진짜", of(ModerationCategory.PROFANITY), RiskLevel.HIGH, CaseType.ADVERSARIAL),
                 flagged("CH-08", "개 노 답 이 네 진짜", of(ModerationCategory.PROFANITY), RiskLevel.MEDIUM, CaseType.ADVERSARIAL),
