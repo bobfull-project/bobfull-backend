@@ -75,6 +75,7 @@ class ChatModerationConsumerIntegrationTest {
     @Autowired private ChatModerationRepository chatModerationRepository;
     @Autowired private KafkaOperations<Object, Object> kafkaTemplate;
     @Autowired private FakeAiModerationPort fakePort;
+    @Autowired private io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @AfterEach
     void cleanUp() {
@@ -151,6 +152,26 @@ class ChatModerationConsumerIntegrationTest {
                 assertThat(chatModerationRepository.findByMessageId(message.getId()))
                         .isPresent().get().extracting(m -> m.getStatus()).isEqualTo(ModerationProcessingStatus.ANALYSIS_FAILED));
         assertThat(fakePort.callCount()).isZero();
+    }
+
+    @Test
+    void 메시지_처리_후_Kafka_Consumer_Lag_메트릭이_Micrometer에_노출된다() {
+        // given
+        fakePort.succeedWith(ModerationResultType.SAFE, Set.of());
+        ChatMessage message = chatMessage("메트릭 노출 확인 테스트");
+
+        // when
+        publish(event(message.getId()));
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() ->
+                assertThat(chatModerationRepository.findByMessageId(message.getId())).isPresent());
+
+        // then: Spring Boot의 Kafka Micrometer 바인더가 별도 코드 없이 Consumer Lag/consume rate를 노출하는지 확인
+        java.util.List<String> kafkaMeterNames = meterRegistry.getMeters().stream()
+                .map(meter -> meter.getId().getName())
+                .filter(name -> name.startsWith("kafka.consumer") || name.startsWith("kafka.producer"))
+                .distinct().sorted().toList();
+        assertThat(kafkaMeterNames).isNotEmpty();
+        assertThat(kafkaMeterNames.stream().anyMatch(name -> name.contains("records.lag") || name.contains("records.consumed"))).isTrue();
     }
 
     private ChatMessage chatMessage(String content) {
