@@ -4453,9 +4453,15 @@ OWNER 응답 예시:
 - 메시지는 DB에 저장한다.
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
-- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
+- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 사용자 차단, Redis Pub/Sub, Kafka는 범위에서 제외한다. 사용자 신고는 V3 Issue #218 범위에 포함하며, AI Moderation과 사용자 신고는 관리자 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN/정지/퇴장에 사용하지 않는다.
 
 ---
+
+# 12.1 V3 채팅방 사용자 신고와 관리자 Human Review
+
+`POST /api/chat-rooms/{chatRoomId}/members/{reportedMemberId}/reports`는 JWT 회원이 같은 채팅방 참여 이력이 있는 상대 회원을 신고한다. 요청은 `reason`(`ABUSE`, `SPAM`, `PERSONAL_INFORMATION`, `OTHER`), nullable `anchorMessageId`, nullable `detail`이며 `OTHER`는 `detail`이 필수다. 신고자 ID는 Body가 아닌 JWT에서 결정하고, 자기 신고·중복 신고·다른 방 또는 다른 작성자의 anchor는 거절한다.
+
+ADMIN 전용 API는 `GET /api/admin/moderation/reports?status=PENDING&page=0&size=20`, `GET /api/admin/moderation/reports/{reportId}`, `PATCH /api/admin/moderation/reports/{reportId}/review`다. 상세는 anchor가 있으면 전후 최대 5건, 없으면 신고 생성 시각 이전 최대 20건의 같은 방 Context와 메시지별 AI Moderation, 회원 moderation 집계, 신고 누적 신호를 반환한다. Review 요청은 `decision`(`NO_VIOLATION`, `VIOLATION_CONFIRMED`)이고 `PENDING → REVIEWED`만 허용한다. AI Moderation·신고 신호·결정은 Human Review 참고 정보이며 자동 제재 점수 또는 자동 BAN/정지/퇴장으로 사용하지 않는다.
 
 # 13. V2 내부 구현 정책
 
