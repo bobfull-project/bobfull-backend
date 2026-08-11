@@ -150,6 +150,7 @@ class SpringAiModerationHeldoutEvaluationTest {
         List<EvaluationFailure> failures = new ArrayList<>();
         int resultMatches = 0;
         int categoryExactMatches = 0;
+        int reviewActionabilityMatches = 0;
         long promptTokens = 0;
         long completionTokens = 0;
         long totalTokens = 0;
@@ -174,8 +175,10 @@ class SpringAiModerationHeldoutEvaluationTest {
 
                 boolean resultMatch = actual.result() == testCase.expectedResult();
                 boolean categoryMatch = actual.categories().equals(testCase.expectedCategories());
+                boolean reviewActionabilityMatch = isReviewTarget(actual.riskLevel()) == isReviewTarget(testCase.expectedRiskLevel());
                 resultMatches += resultMatch ? 1 : 0;
                 categoryExactMatches += categoryMatch ? 1 : 0;
+                reviewActionabilityMatches += reviewActionabilityMatch ? 1 : 0;
                 if (!resultMatch || !categoryMatch) {
                     failures.add(EvaluationFailure.mismatch(testCase, actual, latencyMillis));
                 }
@@ -191,8 +194,13 @@ class SpringAiModerationHeldoutEvaluationTest {
                 failures.add(EvaluationFailure.providerFailure(testCase, exception.getClass().getSimpleName(), latencyMillis));
             }
         }
-        return new EvaluationRun(cases.size(), resultMatches, categoryExactMatches, flaggedVsSafe, perCategory,
-                latencies, failures, promptTokens, completionTokens, totalTokens, tokenMeasuredCalls);
+        return new EvaluationRun(cases.size(), resultMatches, categoryExactMatches, reviewActionabilityMatches,
+                flaggedVsSafe, perCategory, latencies, failures, promptTokens, completionTokens, totalTokens, tokenMeasuredCalls);
+    }
+
+    /** #66 40건 테스트와 동일한 정의: LOW가 아니면 관리자 검토 대상이다. */
+    private static boolean isReviewTarget(RiskLevel riskLevel) {
+        return riskLevel != RiskLevel.LOW;
     }
 
     private AiModerationResponse evaluateWithSelectedModel(String content) {
@@ -222,6 +230,7 @@ class SpringAiModerationHeldoutEvaluationTest {
         System.out.printf("N                             : %d%n", run.total);
         System.out.printf("Result Accuracy               : %d/%d (%.1f%%)%n", run.resultMatches, run.total, percent(run.resultMatches, run.total));
         System.out.printf("Category Exact Accuracy       : %d/%d (%.1f%%)%n", run.categoryExactMatches, run.total, percent(run.categoryExactMatches, run.total));
+        System.out.printf("Review Actionability          : %d/%d (%.1f%%)%n", run.reviewActionabilityMatches, run.total, percent(run.reviewActionabilityMatches, run.total));
         System.out.printf("FLAGGED Precision/Recall/F1   : %.3f / %.3f / %.3f%n", flaggedPrf.precision(), flaggedPrf.recall(), flaggedPrf.f1());
         System.out.printf("FLAGGED Recall 95%% Wilson CI  : [%.3f, %.3f]%n", recallCi.lowerBound(), recallCi.upperBound());
         System.out.printf("Confusion(TP/FP/FN/TN)        : %d/%d/%d/%d%n",
@@ -249,7 +258,7 @@ class SpringAiModerationHeldoutEvaluationTest {
         return promptTokens / 1_000_000.0 * inputPricePerMillion + completionTokens / 1_000_000.0 * outputPricePerMillion;
     }
 
-    private record EvaluationRun(int total, int resultMatches, int categoryExactMatches,
+    private record EvaluationRun(int total, int resultMatches, int categoryExactMatches, int reviewActionabilityMatches,
             ConfusionAccumulator flaggedVsSafe, Map<ModerationCategory, ConfusionAccumulator> perCategory,
             List<Long> latencies, List<EvaluationFailure> failures,
             long promptTokens, long completionTokens, long totalTokens, int tokenMeasuredCalls) {

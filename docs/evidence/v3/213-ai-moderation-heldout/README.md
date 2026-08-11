@@ -2,7 +2,8 @@
 
 ## 상태
 
-`FROZEN — Human Label Freeze 완료, Provider 실행 대기`. Held-out 80건 + Challenge 24건 라벨은
+`IN_PROGRESS — Held-out 80건 1차 Provider Run 완료(raw 기록), Stability 20건×3회 및 Challenge 24건 실행 대기`.
+Held-out 80건 + Challenge 24건 라벨은
 Human 최종 승인으로 동결됐다(아래 "Dataset Freeze" 절). 실제 OpenAI 실행 결과
 (Result/Category/Precision/Recall/F1/Wilson CI/Stability/latency/token/cost)는 이 문서의
 "결과 기록" 절에 실행 후 채운다. 그 전까지 결과 표는 빈 칸으로 둔다(FINAL_CLAIM_MATRIX 기록 규칙 —
@@ -161,29 +162,62 @@ Held-out Set v1(80건)과 Challenge Set(24건)으로 production 설정(`Prompt v
 OPENAI_API_KEY=... ./gradlew :test --tests "com.bobfull.chat.adapter.SpringAiModerationHeldoutEvaluationTest" --info
 ```
 
-## 결과 기록 (Human 확정·실행 후 채움)
+## 결과 기록
 
-### 신규 Held-out(80건)
+### 신규 Held-out(80건) — 1차 Provider Run raw 결과 (2026-08-11)
+
+- 실행 환경: Human 로컬(`OPENAI_API_KEY` 보유), production 설정(`gpt-4o-mini` + Prompt v2 + Policy v1 +
+  128 output token guard) 동결 상태에서 실행. Dataset은 위 "Dataset Freeze" 절 SHA-256 기준 그대로.
+- 이 결과를 본 뒤 Dataset expected label, Prompt v2, Policy v1, production model/128 guard를
+  수정하지 않았다. 재실행해서 다른(개선된) 수치를 만들지 않았다 — 아래는 **최초 1회 실행의 raw 결과**다.
+- 기존 Regression Set(40건, #66)과 합산하지 않는다. 서로 다른 Dataset의 latency를 Before/After
+  성능 개선처럼 비교하지 않는다 — 이 Held-out 결과는 그 자체로 독립된 1회 관측치다.
 
 | 지표 | 결과 | 95% CI | 비고 |
 |---|---:|---|---|
-| Result Accuracy | | | |
-| Category Exact | | | |
-| Review Actionability | | | |
-| FLAGGED Precision | | | |
-| FLAGGED Recall | | | |
-| FLAGGED F1 | | - | |
-| Risk Exact | | | |
-| Provider Failure | | - | |
-| Parse Failure | | - | |
+| N | 80 | - | |
+| Result Accuracy | 74/80 (92.5%) | - | |
+| Category Exact | 74/80 (92.5%) | - | |
+| Review Actionability | **NOT_MEASURED_FOR_THIS_RUN** | - | 실행 시점 하네스에 이 지표 계산이 누락돼 있었다. 실행 직후 발견해 하네스만 보완했고(Dataset/Prompt/Policy 미변경), 이 1차 run은 소급 계산하지 않는다. Stability/Challenge부터는 정상 출력된다 |
+| FLAGGED Precision | 0.961 | - | |
+| FLAGGED Recall | 0.925 | [0.821, 0.970] | |
+| FLAGGED F1 | 0.942 | - | |
+| Confusion(TP/FP/FN/TN) | 49/2/4/25 | - | |
+| Provider Failure | 0 | - | |
+| Parse Failure | 0 | - | |
+| Latency | avg 843.8ms / p95 1170ms / p99 2516ms | - | 이 Dataset 단독 관측치. 다른 Dataset·다른 실행과의 Before/After 비교 근거 아님 |
+| Token | prompt 62,061 / completion 1,335 / total 63,396 | - | |
+| 추정 비용 | $0.010110 | - | gpt-4o-mini 공개 단가($0.15/$0.60 per 1M in/out) 기준, 실제 청구액 아님 |
 
 ### 카테고리별
 
 | Category | N | Precision | Recall | F1 | 주요 오분류 |
 |---|---:|---:|---:|---:|---|
-| PROFANITY | 20 | | | | |
-| PERSONAL_INFORMATION | 20 | | | | |
-| SPAM | 20 | | | | |
+| PROFANITY | 20 | 0.950 | 0.905 | 0.927 | 아래 오분류 6건 중 2건(HOLDOUT-PROFANITY-17/18) |
+| PERSONAL_INFORMATION | 20 | 1.000 | 1.000 | 1.000 | 없음 |
+| SPAM | 20 | 0.933 | 0.875 | 0.903 | 아래 오분류 6건 중 2건(HOLDOUT-SPAM-03/12) |
+
+### Held-out 오분류 6건 (raw, 수정 없음)
+
+| caseId | 원문 | expected | actual |
+|---|---|---|---|
+| `HOLDOUT-SAFE-15` | 리뷰 남겨주시면 감사하겠습니다 https://review.example | SAFE | FLAGGED / SPAM / MEDIUM |
+| `HOLDOUT-SAFE-19` | 죽이는 맛이에요 여기 진짜 | SAFE | FLAGGED / PROFANITY / HIGH |
+| `HOLDOUT-PROFANITY-17` | 야 인마 오랜만이다 잘 지냈냐 | FLAGGED / PROFANITY / LOW | SAFE |
+| `HOLDOUT-PROFANITY-18` | 이 자식 오늘따라 왜 이렇게 웃기냐 | FLAGGED / PROFANITY / LOW | SAFE |
+| `HOLDOUT-SPAM-03` | 매장 오픈 기념 반값 이벤트 진행중입니다 | FLAGGED / SPAM / MEDIUM | SAFE |
+| `HOLDOUT-SPAM-12` | 저희 카페 신메뉴 나왔어요 많이 이용해주세요 | FLAGGED / SPAM / MEDIUM | SAFE |
+
+이 6건에 대해 Prompt/Policy/expected label을 수정하거나 재실행하지 않았다. 해석은 Human 검토
+이후로 남긴다.
+
+### 하네스 보완 기록 (Dataset/Prompt/Policy 미변경)
+
+1차 Held-out run 직후, Issue #213 Primary Metric인 `Review Actionability`가 `printHeldoutSummary`에서
+계산·출력되지 않고 있음을 확인했다. Dataset(expected label)·Prompt v2·Policy v1·production
+model/128 guard는 전혀 건드리지 않고, 지표 계산/출력 코드만 보완했다(`SpringAiModerationHeldoutEvaluationTest`에
+`isReviewTarget` 기반 Review Actionability 계산 추가, #66 40건 테스트와 동일한 정의:
+`riskLevel != LOW`면 관리자 검토 대상). 이 보완은 Stability Run과 Challenge Set 실행부터 적용된다.
 
 ### Challenge Set(24건, Boundary/Robustness — 전체 정확도에 미합산)
 
