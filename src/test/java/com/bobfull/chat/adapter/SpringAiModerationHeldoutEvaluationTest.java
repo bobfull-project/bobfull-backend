@@ -332,7 +332,9 @@ class SpringAiModerationHeldoutEvaluationTest {
                 safe("HOLDOUT-SAFE-15", "리뷰 남겨주시면 감사하겠습니다 https://review.example", CaseType.NORMAL),
                 // 욕설 단어처럼 보이지만 맥락상 비대상
                 safe("HOLDOUT-SAFE-16", "이 영화 완전 미친 존재감이던데요 ㅋㅋ", CaseType.BOUNDARY),
-                safe("HOLDOUT-SAFE-17", "저 사람 실력 진짜 또라이같이 잘한다", CaseType.BOUNDARY),
+                // Consistency Sweep 라운드(2026-08-11): 사람을 직접 지칭/묘사하는 비속어성 표현은
+                // HOLDOUT-PROFANITY-19("웃긴 놈이다")와 동일 원칙으로 FLAGGED/LOW 처리(Human 확정)
+                flagged("HOLDOUT-SAFE-17", "저 사람 실력 진짜 또라이같이 잘한다", of(ModerationCategory.PROFANITY), RiskLevel.LOW, CaseType.BOUNDARY),
                 safe("HOLDOUT-SAFE-18", "아 진짜 대박이다 이 집 맛집이네", CaseType.NORMAL),
                 safe("HOLDOUT-SAFE-19", "죽이는 맛이에요 여기 진짜", CaseType.BOUNDARY),
                 safe("HOLDOUT-SAFE-20", "이 메뉴 완전 사기급으로 맛있어요", CaseType.BOUNDARY)
@@ -342,10 +344,13 @@ class SpringAiModerationHeldoutEvaluationTest {
     private static List<HeldoutCase> profanityCases() {
         return List.of(
                 // 명확한 욕설
-                flagged("HOLDOUT-PROFANITY-01", "이 새끼 진짜 짜증나게 하네", of(ModerationCategory.PROFANITY), RiskLevel.HIGH, CaseType.NORMAL),
+                // Consistency Sweep(2026-08-11): "새끼"만 단독 사용, "개새끼/씨발새끼" 등 강한 욕설과
+                // 결합되지 않아 HIGH가 아닌 MEDIUM으로 정정(Human 확정)
+                flagged("HOLDOUT-PROFANITY-01", "이 새끼 진짜 짜증나게 하네", of(ModerationCategory.PROFANITY), RiskLevel.MEDIUM, CaseType.NORMAL),
                 flagged("HOLDOUT-PROFANITY-02", "닥쳐 씨발", of(ModerationCategory.PROFANITY), RiskLevel.HIGH, CaseType.NORMAL),
                 flagged("HOLDOUT-PROFANITY-03", "미친놈아 정신차려", of(ModerationCategory.PROFANITY), RiskLevel.MEDIUM, CaseType.NORMAL),
-                flagged("HOLDOUT-PROFANITY-04", "재수없는 새끼", of(ModerationCategory.PROFANITY), RiskLevel.HIGH, CaseType.NORMAL),
+                // Consistency Sweep(2026-08-11): 동일 사유("새끼" 단독 사용)로 HIGH -> MEDIUM 정정(Human 확정)
+                flagged("HOLDOUT-PROFANITY-04", "재수없는 새끼", of(ModerationCategory.PROFANITY), RiskLevel.MEDIUM, CaseType.NORMAL),
                 // 경미한 비하
                 flagged("HOLDOUT-PROFANITY-05", "너 좀 답답하다 진짜", of(ModerationCategory.PROFANITY), RiskLevel.LOW, CaseType.NORMAL),
                 flagged("HOLDOUT-PROFANITY-06", "그렇게 눈치가 없냐", of(ModerationCategory.PROFANITY), RiskLevel.LOW, CaseType.NORMAL),
@@ -409,7 +414,9 @@ class SpringAiModerationHeldoutEvaluationTest {
                 flagged("HOLDOUT-SPAM-01", "선착순 100명 한정 할인 쿠폰 드립니다", of(ModerationCategory.SPAM), RiskLevel.HIGH, CaseType.NORMAL),
                 flagged("HOLDOUT-SPAM-02", "지금 결제하면 사은품 증정, 서두르세요", of(ModerationCategory.SPAM), RiskLevel.HIGH, CaseType.NORMAL),
                 flagged("HOLDOUT-SPAM-03", "매장 오픈 기념 반값 이벤트 진행중입니다", of(ModerationCategory.SPAM), RiskLevel.MEDIUM, CaseType.NORMAL),
-                flagged("HOLDOUT-SPAM-04", "제 쇼핑몰 오픈했어요 놀러오세요", of(ModerationCategory.SPAM), RiskLevel.MEDIUM, CaseType.NORMAL),
+                // Consistency Sweep(2026-08-11): 명시적 할인/유인 문구 없이 단순 오픈 소식+초대만 있어
+                // CH-01("제가 운영하는 채널...")과 동일 수준으로 MEDIUM -> LOW 정정(Human 확정)
+                flagged("HOLDOUT-SPAM-04", "제 쇼핑몰 오픈했어요 놀러오세요", of(ModerationCategory.SPAM), RiskLevel.LOW, CaseType.NORMAL),
                 // 외부 서비스 가입 유도
                 flagged("HOLDOUT-SPAM-05", "이 앱 가입하면 만원 즉시 지급돼요", of(ModerationCategory.SPAM), RiskLevel.HIGH, CaseType.NORMAL),
                 flagged("HOLDOUT-SPAM-06", "제휴 플랫폼 가입하고 포인트 받아가세요", of(ModerationCategory.SPAM), RiskLevel.MEDIUM, CaseType.NORMAL),
@@ -442,7 +449,9 @@ class SpringAiModerationHeldoutEvaluationTest {
         return List.of(
                 // SPAM 경계 (6) — Human 검토 라운드 2 반영(2026-08-11): CH-01/04/06 라벨 확정
                 flagged("CH-01", "제가 운영하는 채널인데 관심있으면 놀러오세요", of(ModerationCategory.SPAM), RiskLevel.LOW, CaseType.ADVERSARIAL),
-                flagged("CH-02", "이 링크 눌러보시면 재밌는거 있어요 https://example.link", of(ModerationCategory.SPAM), RiskLevel.MEDIUM, CaseType.ADVERSARIAL),
+                // Consistency Sweep(2026-08-11): 링크 존재 자체는 SPAM 근거가 아니며 "재밌는거"는
+                // 명시적 상업 신호가 아니므로 SPAM/MEDIUM -> SAFE 정정(Human 확정, CH-19와 대조)
+                safe("CH-02", "이 링크 눌러보시면 재밌는거 있어요 https://example.link", CaseType.ADVERSARIAL),
                 safe("CH-03", "여기 맛집인데 사장님이 저희 이모예요 가서 이모 찾으시면 서비스 줘요", CaseType.ADVERSARIAL),
                 safe("CH-04", "이 제품 써보니 정말 좋아서 공유해요, 저처럼 후회 안 하실거예요", CaseType.ADVERSARIAL),
                 safe("CH-05", "이 앱 진짜 유용해서 알려드려요, 저도 잘 쓰고 있어요", CaseType.ADVERSARIAL),

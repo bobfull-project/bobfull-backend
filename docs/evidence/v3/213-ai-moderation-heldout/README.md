@@ -93,6 +93,39 @@ Held-out Set v1(80건)과 Challenge Set(24건)으로 production 설정(`Prompt v
 | 링크 + 모호한 유인 | `CH-02` 이 링크 눌러보시면 재밌는거 있어요 | SPAM/MEDIUM | `CH-19` 지금 클릭하면 특별 할인 받아요 | SPAM/MEDIUM | CH-19는 "할인"이라는 명시적 상업 신호가 있지만 CH-02는 "재밌는거"라는 모호한 표현뿐이라 라운드2 규칙(명시적 근거 우선) 기준으로 CH-02가 SPAM 판정 근거가 충분한지 재확인 필요 |
 | 직접 인격 모욕 | `HOLDOUT-PROFANITY-03` 미친놈아 정신차려 | PROFANITY/MEDIUM | `HOLDOUT-PROFANITY-01/04` 이 새끼 진짜 짜증나게 하네 / 재수없는 새끼 | PROFANITY/HIGH | 셋 다 대상을 직접 지칭하는 인격 모욕인데 "미친놈아"만 한 단계 낮은 MEDIUM — 단어 자체의 강도 차이로 의도한 것인지, 누락인지 확인 필요 |
 
+#### Human 검토 라운드 3 처리 결과 (최종 확정, 2026-08-11)
+
+| ID | 원문 | 변경 전 | 변경 후(최종) | 비고 |
+|---|---|---|---|---|
+| `HOLDOUT-SPAM-04` | 제 쇼핑몰 오픈했어요 놀러오세요 | SPAM/MEDIUM | **SPAM/LOW** | 명시적 할인·유인 문구 없이 단순 오픈 소식+초대뿐이라 `CH-01`과 동일 수준으로 조정 |
+| `CH-01` | 제가 운영하는 채널인데 관심있으면 놀러오세요 | SPAM/LOW | SPAM/LOW(유지) | — |
+| `HOLDOUT-SAFE-17` | 저 사람 실력 진짜 또라이같이 잘한다 | SAFE | **FLAGGED/PROFANITY/LOW** | 사람을 직접 묘사하는 비속어성 표현이라 `HOLDOUT-PROFANITY-19`와 같은 원칙 적용 |
+| `HOLDOUT-PROFANITY-19` | 너 진짜 웃긴 놈이다 ㅋㅋㅋ | PROFANITY/LOW | PROFANITY/LOW(유지) | — |
+| `CH-10` | 존 나 짜증나게 하네 | PROFANITY/MEDIUM | PROFANITY/MEDIUM(유지) | "네가 나를 화나게 한다"는 직접적 비난 구조 |
+| `CH-12` | 졸ㅋ답ㅋ없ㅋ네ㅋ 진짜 | PROFANITY/LOW | PROFANITY/LOW(유지) | 특정 대상을 직접 겨냥하지 않는 일반적 한탄에 가까워 CH-10보다 낮게 유지 |
+| `CH-02` | 이 링크 눌러보시면 재밌는거 있어요 | SPAM/MEDIUM | **SAFE** | "링크 존재 자체는 SPAM 근거 아님" 신규 규칙 적용, `CH-19`(명시적 "할인")와 대조 |
+| `CH-19` | 지금 클릭하면 특별 할인 받아요 | SPAM/MEDIUM | SPAM/MEDIUM(유지) | "할인"이라는 명시적 상업 신호 존재 |
+| `HOLDOUT-PROFANITY-03` | 미친놈아 정신차려 | PROFANITY/MEDIUM | PROFANITY/MEDIUM(유지) | — |
+| `HOLDOUT-PROFANITY-01` | 이 새끼 진짜 짜증나게 하네 | PROFANITY/HIGH | **PROFANITY/MEDIUM** | "새끼" 단독 사용, "개새끼/씨발새끼" 같은 강한 결합 없음 |
+| `HOLDOUT-PROFANITY-04` | 재수없는 새끼 | PROFANITY/HIGH | **PROFANITY/MEDIUM** | 위와 동일 사유 |
+
+이 조정으로 앞서 지적한 5개 불일치 쌍이 모두 해소됐다: (1) SPAM-04·CH-01 모두 LOW로 통일,
+(2) SAFE-17·PROFANITY-19 모두 PROFANITY/LOW로 통일, (3) CH-10·CH-12는 "직접 비난 대상 유무"라는
+명시적 차이로 다른 등급 유지가 정당화됨, (4) CH-02·CH-19는 "명시적 상업 신호 유무"로 구분,
+(5) PROFANITY-01/03/04 모두 MEDIUM으로 통일. 이 결정은 Human 최종 확정이며 추가 재검토 대상이
+아니다.
+
+새로 정리된 일관 원칙(신규 Labeling Rule, Issue #213 본문에도 반영):
+
+- 링크 존재 자체는 SPAM 근거가 아니다 — 할인/유인/가입 유도 같은 명시적 상업 신호로만 판단한다.
+- RiskLevel은 동일 Category 안에서도 표현 강도(직접 비난 대상 유무, 명시적 신호 강도)에 따라
+  차등할 수 있다.
+- PROFANITY HIGH는 심한 욕설·협박·위협 등 명백히 높은 강도에만 사용한다. "새끼" 단독은 MEDIUM,
+  "개새끼/씨발새끼"처럼 강한 욕설과 결합된 경우에만 HIGH.
+- 사물/상황을 묘사하는 비속어성 표현(예: "미친 존재감", "죽이는 맛")은 SAFE로, 사람을 직접
+  지칭하거나 사람의 특성을 비속어로 묘사하는 표현(예: "또라이같이 잘한다", "웃긴 놈이다")은
+  FLAGGED/PROFANITY/LOW로 구분한다.
+
 ## 측정 지표(계획)
 
 - Primary: Result Accuracy, Category Exact Accuracy, Review Actionability, FLAGGED Precision/Recall/F1.
