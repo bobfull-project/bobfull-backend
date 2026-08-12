@@ -160,14 +160,42 @@ After를 재측정해 이 표와 비교한다.
 정상 조건에서는 종료 코드 0, 불변식을 강제로 깨면 종료 코드 99(k6 표준 threshold 실패 코드)로
 끝난다. 2/5/10/20/50 전 단계를 재실행해 모든 threshold가 PASS임을 다시 확인했다(위 결과 표).
 
+## A 개선 조치 — HikariCP 커넥션 풀 크기 설정화
+
+`hikaricp_connections_max=10`이 실측(위 "근본 원인 확인")으로 확인됐는데,
+`application-prod.yml`/`application-local.yml.example`에는 `spring.datasource.hikari.*`
+설정 자체가 없었다 — 즉 10은 애플리케이션이 의도적으로 튜닝한 값이 아니라 **HikariCP
+자체의 기본값**이었다.
+
+```yaml
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+```
+
+기존 `REDIS_TIMEOUT` 등과 같은 패턴으로 env var 오버라이드를 추가했다. **기본값은 그대로
+10으로 유지**해 이 변경만으로는 운영 동작이 바뀌지 않는다 — #142에서 발견한 값을 근거로
+운영 풀 크기를 임의로 올리는 결정은 하지 않았다(쿼리·DB 자원 계획은 #61/#62·Human 판단
+영역).
+
+**검증 범위와 한계**: 이 커밋에서 한 것은 "설정을 외부화"한 것뿐이다. 실제로 더 큰 값(예:
+`DB_POOL_MAX_SIZE=30`)으로 `bobfull-k6-test-app`을 재배포해 Stress를 다시 돌려보는
+**검증까지는 하지 못했다** — 이 환경에서는 그 인스턴스를 재배포할 권한이 없다(AWS 계정이
+분리돼 있음, Issue #207 참고). 재배포는 인프라 담당자(김홍기)와 조율이 필요하고, RDS의
+`max_connections` 여유도 먼저 확인해야 한다(여러 개선 후보 중 하나가 다른 자원을 옮겨서
+포화시킬 수 있음).
+
 ## 남은 작업
 
 - (완료) 시나리오 A AWS Load/Stress 실행, 첫 병목 전환점(HTTP 레벨) 확인
+- (완료) Prometheus 연결로 근본 원인 확인(CPU+DB Pool 동시 포화)
+- (완료) HikariCP 풀 크기 env var 설정화(기본값 10 유지, 실제 조정은 후속)
+- (완료) 시나리오 B 동시성 100/200/500까지 확장 확인, 1000은 하네스 setup 한계로 기록
+- **재배포 후 재측정 필요**: `DB_POOL_MAX_SIZE`를 늘려 `bobfull-k6-test-app`을 재배포한 뒤
+  같은 Stress를 재실행해 실제로 병목이 개선되는지 확인(김홍기 조율 필요, RDS `max_connections`
+  여유 확인 필요)
 - #60(예약 좌석 락 전략 재설계) 결과가 나오면 시나리오 B를 동일 조건으로 재검증(Before는 이번
   결과, After는 #60 이후 재실행)
-- Prometheus/Grafana를 이 AWS 스택에 연결해 같은 시간축으로 CPU/DB Pool active·pending/lock
-  wait 기록 — 시나리오 A Stress에서 발견한 병목이 App CPU인지 DB Pool/Lock인지 원인 특정
-- 시나리오 B도 CREATE 레이스뿐 아니라 더 높은 동시성(100/200/500 등)에서 배타 선점이 여전히
-  정확한지 확인 — 현재는 최대 50까지만 확인했다
-- A/B 결과가 정리되면 시나리오 C(Redis ZSet 대기열) 도입 여부 판단으로 이어감(팀 합의)
+- A/B 개선·재측정 결과가 정리되면 시나리오 C(Redis ZSet 대기열) 도입 여부 판단으로 이어감(팀 합의)
 - JOIN 기반 좌석초과 테스트는 Fake 결제 확인 어댑터 도입 여부를 별도 결정한 뒤 진행
