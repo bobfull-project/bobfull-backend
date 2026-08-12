@@ -124,6 +124,7 @@ bobfull:
       partitions: ${KAFKA_CHAT_MESSAGE_PARTITIONS:3}
       replicas: ${KAFKA_CHAT_MESSAGE_REPLICAS:1}
       consumer-enabled: ${KAFKA_CHAT_MESSAGE_CONSUMER_ENABLED:true}
+      consumer-concurrency: ${KAFKA_CHAT_MESSAGE_CONSUMER_CONCURRENCY:1}
       consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
       consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
       producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}

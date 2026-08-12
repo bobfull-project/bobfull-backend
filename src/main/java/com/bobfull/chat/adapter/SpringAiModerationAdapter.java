@@ -9,10 +9,12 @@ import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /** BobFull 정책 Prompt와 Spring AI Structured Output 호출을 격리하는 OpenAI Adapter다. */
 @Component
+@ConditionalOnProperty(prefix = "bobfull.ai.moderation", name = "fake-enabled", havingValue = "false", matchIfMissing = true)
 public class SpringAiModerationAdapter implements AiModerationPort {
     private final ChatClient chatClient;
     private final String configuredModel;
