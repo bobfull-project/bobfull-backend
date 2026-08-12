@@ -36,6 +36,8 @@ fetch_parameter() {
     --output text
 }
 
+declare -A REQUIRED_PARAMETER_VALUES=()
+
 validate_required_parameters() {
   local missing_parameters=()
   local item
@@ -48,6 +50,8 @@ validate_required_parameters() {
         || [ -z "${parameter_value}" ] \
         || [ "${parameter_value}" = "None" ]; then
       missing_parameters+=("${PARAMETER_PREFIX}/${parameter_name}")
+    else
+      REQUIRED_PARAMETER_VALUES["${parameter_name}"]="${parameter_value}"
     fi
   done
 
@@ -72,6 +76,11 @@ append_parameter() {
 
   if [ -n "${!env_key:-}" ]; then
     append_env_value "${env_key}" "${!env_key}"
+    return
+  fi
+
+  if [ "${required}" = "true" ] && [[ -v "REQUIRED_PARAMETER_VALUES[${parameter_name}]" ]]; then
+    append_env_value "${env_key}" "${REQUIRED_PARAMETER_VALUES[${parameter_name}]}"
     return
   fi
 
@@ -409,10 +418,8 @@ if ! docker run -d \
   exit 1
 fi
 
-sleep 10
-
 if ! container_running "${CONTAINER_NAME}"; then
-  echo "Backend container '${CONTAINER_NAME}' exited or did not reach running state within 10 seconds." >&2
+  echo "Backend container '${CONTAINER_NAME}' exited immediately after start." >&2
   print_container_logs "${CONTAINER_NAME}" 200
   print_docker_ps_all
   exit 1
