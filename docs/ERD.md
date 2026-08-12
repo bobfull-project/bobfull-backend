@@ -26,6 +26,8 @@
 | `ChatMessage` | DB에 저장되는 채팅 메시지 | ChatRoom 1:N ChatMessage | V2 |
 | `ChatModeration` | 메시지별 AI 분석 결과와 최종 실패 상태 | ChatMessage 1:0..1 ChatModeration | V3 |
 | `ChatRoomMemberReport` | 채팅방 상대 회원 신고와 Human Review 이력 | ChatRoom·Member·nullable ChatMessage(anchor) 연결 | V3 |
+| `OutboxEvent` | ChatRoom 생성·채팅 메시지 후속 처리·이메일 발송 의도의 공통 영속 이벤트 | `aggregateType`+`aggregateId` 값 기반(Reservation/ChatMessage/ReservationParticipant), 물리 FK 아님 | V2/V3 |
+| `EmailOutboxDelivery` | 이메일 발송 대상 수신자별 성공 여부 이력 | `OutboxEvent`·Reservation·ReservationParticipant·Member 값 기반 연결, 물리 FK 아님 | V3 |
 
 관리자 현황·통계와 지급 예정 예약금은 위 데이터의 조회·집계로 제공한다. 별도 `Settlement`, `SeatHold`, `WebhookEvent`, 관리자 전용 엔티티는 현재 계약에 추가하지 않는다.
 
@@ -139,14 +141,28 @@ erDiagram
         bigint chat_room_id PK "채팅방 식별자"
         bigint reservation_id FK "예약당 1개"
         datetime created_at "최초 예약 결제 완료 후 생성"
+        datetime updated_at "BaseTimeEntity 상속 컬럼. 별도 갱신 로직 없음"
     }
     OUTBOX_EVENT {
         bigint outbox_event_id PK "Outbox 내부 식별자"
         varchar event_id UK "이벤트 UUID"
-        varchar event_type "CHAT_ROOM_CREATION_REQUESTED"
-        varchar aggregate_type "RESERVATION"
-        bigint aggregate_id "reservation_id"
+        varchar event_type "CHAT_ROOM_CREATION_REQUESTED 등 6종. Chat/Email 공통 유형"
+        varchar aggregate_type "RESERVATION, CHAT_MESSAGE, RESERVATION_PARTICIPANT"
+        bigint aggregate_id "event_type별 대상 식별자 값. 물리 FK 아님"
         varchar status "PENDING, PROCESSING, COMPLETED, FAILED"
+        datetime created_at "생성 시각"
+        datetime updated_at "수정 시각"
+    }
+    EMAIL_OUTBOX_DELIVERY {
+        bigint email_outbox_delivery_id PK "내부 식별자"
+        bigint outbox_event_id "대상 OutboxEvent. 물리 FK 아님"
+        bigint reservation_id "대상 예약. 물리 FK 아님"
+        bigint reservation_participant_id "대상 참여자. 물리 FK 아님"
+        bigint recipient_member_id "수신 회원. 물리 FK 아님"
+        varchar status "PENDING, SENT"
+        datetime sent_at "SENT 전환 시각. PENDING은 NULL"
+        datetime created_at "생성 시각"
+        datetime updated_at "수정 시각"
     }
     CHAT_MESSAGE {
         bigint chat_message_id PK "커서 조회 기준 식별자"
@@ -155,6 +171,7 @@ erDiagram
         bigint sender_participant_id FK "유효 참여자 검증"
         varchar(1000) content "메시지 본문"
         datetime created_at "생성 시각"
+        datetime updated_at "BaseTimeEntity 상속 컬럼. 별도 갱신 로직 없음"
     }
     CHAT_MODERATION {
         bigint chat_moderation_id PK "내부 식별자"
@@ -187,11 +204,14 @@ erDiagram
         bigint reported_member_id FK "피신고자"
         bigint anchor_message_id FK "선택 근거 메시지"
         varchar reason "ABUSE, SPAM, PERSONAL_INFORMATION, OTHER"
+        varchar detail "신고 상세. NULL 허용"
         varchar status "PENDING, REVIEWED"
         varchar decision "NO_VIOLATION, VIOLATION_CONFIRMED; PENDING은 NULL"
         bigint reviewed_by_member_id FK "검토 ADMIN; PENDING은 NULL"
         datetime reviewed_at "검토 시각; PENDING은 NULL"
         bigint version "JPA 낙관적 락"
+        datetime created_at "생성 시각"
+        datetime updated_at "수정 시각"
     }
 
     MEMBER ||--o{ RESTAURANT : owns
@@ -393,6 +413,7 @@ erDiagram
 | `chat_room_id` | BIGINT | N | PK | 채팅방 식별자 |
 | `reservation_id` | BIGINT | N | FK → `reservation.reservation_id`, UNIQUE | 예약당 1개 |
 | `created_at` | DATETIME | N |  | 최초 예약 결제 완료 후 생성 |
+| `updated_at` | DATETIME | N |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
 
 ### 4.11 `chat_message`
 
@@ -406,6 +427,7 @@ erDiagram
 | `sender_participant_id` | BIGINT | N | FK → `reservation_participant.reservation_participant_id` | 유효 참여자 검증 |
 | `content` | VARCHAR(1000) | N |  | 메시지 본문 |
 | `created_at` | DATETIME | N |  | 생성 시각 |
+| `updated_at` | DATETIME | N |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
 
 읽음 처리, 이미지·파일, 수정·삭제, 차단은 현재 범위에서 제외한다. 사용자 신고는 V3 #218에 포함하며, AI Moderation과 신고 누적은 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN 경로로 사용하지 않는다.
 
@@ -442,28 +464,45 @@ erDiagram
 
 ### 4.12.1 `chat_room_member_report`
 
-채팅방의 상대 회원에 대한 사용자 신고와 ADMIN Human Review 기록이다. `chat_room_member_report_id`가 PK이며, `chat_room_id`, `reporter_member_id`, `reported_member_id`, nullable `anchor_message_id`, `reason`, nullable `detail`, `status`, nullable `decision`, nullable `reviewed_by_member_id`, nullable `reviewed_at`, `version`, `created_at`을 저장한다. `UNIQUE(reporter_member_id, chat_room_id, reported_member_id)`로 같은 신고자·방·대상 중복을 막는다. `status`는 `PENDING`에서 `REVIEWED`로만 전이하며 `decision`은 `NO_VIOLATION` 또는 `VIOLATION_CONFIRMED`다. 판단은 회원 상태를 자동 변경하지 않는다.
+채팅방의 상대 회원에 대한 사용자 신고와 ADMIN Human Review 기록이다. `chat_room_member_report_id`가 PK이며, `chat_room_id`, `reporter_member_id`, `reported_member_id`, nullable `anchor_message_id`, `reason`, nullable `detail`, `status`, nullable `decision`, nullable `reviewed_by_member_id`, nullable `reviewed_at`, `version`, `created_at`, `updated_at`을 저장한다. `chat_room_id`·`reporter_member_id`·`reported_member_id`·`anchor_message_id`·`reviewed_by_member_id`는 물리 FK가 아닌 원본 식별자 값이다. `UNIQUE(reporter_member_id, chat_room_id, reported_member_id)`로 같은 신고자·방·대상 중복을 막는다. `status`는 `PENDING`에서 `REVIEWED`로만 전이하며 `decision`은 `NO_VIOLATION` 또는 `VIOLATION_CONFIRMED`다. 판단은 회원 상태를 자동 변경하지 않는다.
 
 ### 4.13 `outbox_event`
 
-목적: 최초 예약 결제 확정과 함께 ChatRoom 생성 의도를 영속화해, 커밋 뒤 메모리 signal 유실·재시작 뒤에도 재처리할 근거를 남긴다(#176).
+목적: 핵심 상태 변경과 함께 후속 처리 의도(ChatRoom 생성, 채팅 메시지 후속 처리, 이메일 발송)를 같은 트랜잭션에 영속화해, 커밋 뒤 메모리 signal 유실·재시작 뒤에도 재처리할 근거를 남긴다(#176). V3에서 채팅 메시지 후속 처리(`CHAT_MESSAGE_CREATED`)와 이메일 발송(`EMAIL_*`, #183)이 같은 공통 Outbox를 재사용하도록 확장됐다.
 
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `outbox_event_id` | BIGINT | N | PK | 내부 식별자 |
 | `event_id` | VARCHAR(36) | N | UNIQUE | UUID 이벤트 식별자 |
-| `event_type` | VARCHAR(64) | N | UNIQUE(event_type, aggregate_type, aggregate_id) | `CHAT_ROOM_CREATION_REQUESTED` |
-| `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE | `RESERVATION` |
-| `aggregate_id` | BIGINT | N | 위 복합 UNIQUE | 대상 `reservation_id` |
+| `event_type` | VARCHAR(64) | N | UNIQUE(event_type, aggregate_type, aggregate_id) | 앱 Enum: `CHAT_ROOM_CREATION_REQUESTED`, `CHAT_MESSAGE_CREATED`, `EMAIL_RESERVATION_CREATED`, `EMAIL_PARTICIPATION_COMPLETED`, `EMAIL_RECRUITMENT_CONFIRMED`, `EMAIL_RECRUITMENT_CANCELLED` |
+| `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE | `RESERVATION`(ChatRoom 생성·`EMAIL_RECRUITMENT_*`), `CHAT_MESSAGE`(`CHAT_MESSAGE_CREATED`), `RESERVATION_PARTICIPANT`(`EMAIL_RESERVATION_CREATED`, `EMAIL_PARTICIPATION_COMPLETED`) 중 하나 |
+| `aggregate_id` | BIGINT | N | 위 복합 UNIQUE | `aggregate_type`에 대응하는 `reservation_id`, `chat_message_id`, 또는 `reservation_participant_id` 값. 물리 FK가 아닌 값 기반 참조 |
 | `payload_version` | INT | N |  | 현재 1. Payload 원문·개인정보는 저장하지 않음 |
 | `status` | VARCHAR(16) | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 선행 컬럼 | `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` |
-| `attempt_count` | INT | N |  | 실제 ChatRoom 생성 실패 횟수. 최초 처리 뒤 5회 재시도 후 다음 실패에서 FAILED |
+| `attempt_count` | INT | N |  | 해당 이벤트의 처리 실패 횟수. 최초 처리 뒤 5회 재시도 후 다음 실패에서 FAILED |
 | `next_attempt_at` | DATETIME | N | 복합 INDEX `idx_outbox_event_status_next_attempt(status, next_attempt_at, outbox_event_id)` | 다음 처리 가능 시각 |
 | `processing_started_at` | DATETIME | Y |  | stale PROCESSING 회수 기준 |
 | `processing_token` | VARCHAR(36) | Y |  | claim 소유자 토큰. 오래된 작업자의 상태 덮어쓰기를 방지 |
 | `last_error_code` | VARCHAR(128) | Y |  | 예외 유형만 기록하며 민감 payload는 저장하지 않음 |
 | `processed_at` | DATETIME | Y |  | COMPLETED 처리 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
+
+### 4.14 `email_outbox_delivery`
+
+목적: 이메일 주소 원문을 저장하지 않고, `outbox_event` 하나가 대표하는 이메일 발송 의도에 대해 수신자별 발송 성공 여부만 별도로 추적한다(#183). 공통 Outbox의 재시도·`FAILED` 판정은 `outbox_event` 쪽 상태로 관리하며, 이 표는 수신자별 부분 성공만 구분한다.
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `email_outbox_delivery_id` | BIGINT | N | PK | 내부 식별자 |
+| `outbox_event_id` | BIGINT | N | UNIQUE(outbox_event_id, recipient_member_id)의 선행 컬럼. 물리 FK 아님 | 대상 `outbox_event.outbox_event_id` 값 |
+| `reservation_id` | BIGINT | N |  | 대상 예약. 물리 FK 아님 |
+| `reservation_participant_id` | BIGINT | N |  | 대상 참여자. 물리 FK 아님 |
+| `recipient_member_id` | BIGINT | N | 위 복합 UNIQUE | 수신 회원. 물리 FK 아님 |
+| `status` | VARCHAR(16) | N | 복합 INDEX `idx_email_outbox_delivery_event_status`의 선행 컬럼 | 앱 Enum: `PENDING`, `SENT` |
+| `sent_at` | DATETIME | Y |  | `SENT` 전환 시각. `PENDING`은 NULL |
+| `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
+
+`UNIQUE(outbox_event_id, recipient_member_id)`로 같은 발송 의도에 대한 같은 수신자 중복 생성을 막는다. `idx_email_outbox_delivery_event_status(outbox_event_id, status)`는 이벤트별 미발송(`PENDING`) 수신자 조회에 사용한다. `outbox_event_id`, `reservation_id`, `reservation_participant_id`, `recipient_member_id`는 모두 원본 식별자 값이며 JPA 연관관계·물리 FK로 매핑하지 않는다.
 
 ## 5. 관계와 Cardinality
 
