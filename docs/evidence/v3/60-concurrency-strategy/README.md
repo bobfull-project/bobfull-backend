@@ -61,6 +61,19 @@
 - 대상: `ChatRoomOutboxProcessorIntegrationTest`
 - 결과: `tests="9" failures="0" errors="0"` (동시 claim 단일 선점, stale 복구 시나리오 포함)
 
+## 2.5 실패 재현 — 보호장치 임시 제거 후 같은 테스트 재실행
+
+2절까지의 결과는 "현재 구현이 통과한다"만 보여준다. 통과가 실제로 보호장치 덕분인지(우연히 순차 실행돼서 통과한 게 아닌지) 확인하기 위해, 각 도메인의 핵심 보호장치를 로컬에서 잠깐 제거하고 **같은 기존 테스트**를 재실행해 실패를 재현했다. 각 실험은 재현 즉시 코드를 원복했고(`git diff` 로 원복 확인), `develop`/`feature/60-concurrency-strategy`에는 무보호 상태가 커밋되지 않았다.
+
+| 도메인 | 제거한 보호장치 | 재실행한 테스트 | 결과 |
+|---|---|---|---|
+| AI Moderation | `ChatModeration.version`의 `@Version` 제거 | `ChatModerationRepositoryTest` | `AssertionError: Expecting code to raise a throwable` — 낙관락 예외가 안 던져져 늦은 실패가 조용히 SAFE/FLAGGED를 덮어씀(Lost Update 재현) |
+| 환불 완료 | `RefundRepository`의 락 3종(`findWithLockById/ByCancellationId/ByPayment_Id`) 제거만으로는 **재현 안 됨**(Participant 조건부 UPDATE가 2차 방어로 여전히 막음) → `ReservationParticipantRepository.completeCancelIfRequested`의 `WHERE participationStatus = CANCEL_REQUESTED` 조건까지 함께 제거 | `RefundTransactionIntegrationTest.웹훅과_즉시응답_동시완료도_Participant를_한번만_완료한다` | `ExecutionException: CustomException: 대상 회차 또는 예약을 찾을 수 없습니다` — 두 경로 모두 완료 처리권을 얻었다고 착각해 이미 종료된 예약을 재처리하려다 예외 발생 |
+| Outbox | `OutboxEventRepository.claimByTypes`의 `and e.status = :pending` 조건 제거 | `ChatRoomOutboxProcessorIntegrationTest.동시에_Claim하면_같은_이벤트는_한_Processor만_선점한다` | `AssertionError: Expecting actual: [true] not to be equal to: [true]`류 — 두 스레드 모두 선점 성공(중복 claim 재현) |
+| 예약 좌석 | `TimeSlotRepository.findWithLockByIdAndDeletedAtIsNull` + `ReservationRepository.findWithLockById`의 `@Lock(PESSIMISTIC_WRITE)` 제거, 실제 MySQL(임시 컨테이너) | `ReservationPreparationConcurrencyIntegrationTest` 3건 전부 | 3건 모두 `expected: 1L but was: 2L` — CREATE 중복 생성, JOIN 정원 초과, 동일 회원 중복 참여가 실제로 재현됨 |
+
+**해석:** 4개 도메인 모두 "현재 방어를 없애면 실제로 이 코드베이스·이 테스트에서 실패가 재현된다"는 인과관계를 확인했다. 특히 환불 도메인은 단일 계층(Refund 락)만 제거해서는 재현되지 않고 두 번째 방어 계층(Participant 조건부 UPDATE)이 독립적으로 막아낸다는 것까지 확인했다 — 이는 방어가 이중화돼 있다는 추가로 유의미한 발견이다.
+
 ## 3. 재검토한 잠재 위험 — Outbox Kafka 발행 자체의 멱등 키 부재
 
 조사 중 "Outbox Kafka Publisher 자체에는 발행 멱등 키가 없다"는 사실을 발견했으나, 재검토 결과 **결함이 아니라 정상 설계**로 판단한다.
@@ -87,7 +100,7 @@
 
 ## 6. 검증 한계
 
-- 이번 검증은 "기존 구현이 대상 경쟁을 통과시키는가"를 확인한 것이며, "보호장치를 제거하면 실제로 깨지는가"를 별도로 재현하지는 않았다(대부분 이미 잘 알려진 실패 양상이라 별도 무보호 비교를 추가하지 않기로 판단 — 필요 시 후속으로 추가 가능).
+- "기존 구현이 대상 경쟁을 통과시키는가"와 "보호장치를 제거하면 실제로 깨지는가"(2.5절) 둘 다 확인했다. 다만 2.5절 재현은 각 도메인당 가장 핵심적인 보호장치 하나(조합)만 제거해 확인한 것이라, 나머지 보조 방어장치(예: 환불의 엔티티 Terminal 상태 가드 자체, AI Moderation의 `isCompleted()` 가드 자체)를 단독으로 제거했을 때의 개별 실패 양상까지 전부 조합해 확인하지는 않았다.
 - 환불/AI Moderation/Outbox 테스트는 H2(MySQL 모드)로 실행되어 실제 MySQL 락 대기·데드락 타이밍까지는 검증하지 못했다(AGENTS.md 원칙상 "H2 결과만으로 MySQL 락 동작을 확정하지 않는다" — 예약만 실제 MySQL로 검증, 나머지는 상태 전이/멱등 로직 검증에 한정).
 - 아래 P1 항목은 이번 라운드에서 조사하지 않았다: 결제 완료 시 PortOne 외부 조회 중복(#143 연계), 식당 테이블 표시번호 할당, Cache Stampede.
 - 다중 인스턴스 환경에서의 동작(여러 App 인스턴스가 동시에 Outbox를 claim하는 경우 등)은 코드 리뷰로는 원자적 UPDATE 기반이라 안전할 것으로 판단하나, 실제 다중 인스턴스 실행으로 검증하지 않았다.
