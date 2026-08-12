@@ -17,7 +17,7 @@
 
 ## 환경·데이터·실행 조건
 
-- Phase A: 로컬 Docker의 Redis(`redis:7-alpine`)에 독립 `RedisMessageListenerContainer` 두 개(A/B)를 연결한다. publisher 1개가 방 10·11 payload를 발행하고, 각 subscriber의 로컬 `SimpMessagingTemplate` 전달을 검증한다. DB 저장과 실제 WebSocket/STOMP handshake는 이 자동 검증의 범위가 아니다.
+- Phase A: 로컬 Docker의 MySQL·Redis를 공유하는 Spring Boot App A(`8080`)·App B(`8081`)와 인증된 native STOMP client A/B를 기동한다. 별도 Redis listener A/B 자동 검증도 유지한다.
 - Phase B: `NOT_RUN` — #169 또는 동등한 ALB/WSS 다중 EC2 환경이 아직 이 작업 트리에 제공되지 않았다.
 
 ## Before 결과
@@ -41,7 +41,7 @@
 | Redis publish 실패 시 저장 경로 예외 전파 | 해당 없음 | publisher가 catch+metric | PASS |
 | A→B / B→A Redis subscriber 수신·인스턴스별 1회 전달 | NOT_RUN | 실제 Redis와 독립 A/B listener container에서 방별 각각 1회 | PASS |
 | 같은 인스턴스 local fan-out 회귀·다른 방 destination 격리 | NOT_RUN | A/B 모두 `/sub/chat/rooms/10`, `/sub/chat/rooms/11` 각 1회 | PASS |
-| 실제 App A:8080 ↔ App B:8081 STOMP client, ChatMessage DB 1건 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 실제 App A:8080 ↔ App B:8081 STOMP client, ChatMessage DB 1건 | NOT_RUN | A→B·B→A 각 1회, 메시지별 DB 행 1건 | PASS |
 | Redis 중단·복구, cursor N/N 복구, ALB/WSS 검증 | NOT_RUN | NOT_RUN | NOT_RUN |
 
 ## 정합성 회귀 검증
@@ -76,6 +76,14 @@ rm -rf build
 
 결과: `BUILD SUCCESSFUL` (2026-08-12, exit code 0). `redis:7-alpine` Testcontainers와 독립 listener container A/B가 동일 Redis channel을 구독한다. 두 방 메시지를 각각 발행해 A/B의 local STOMP destination 수신이 정확히 1회인지 검증한다.
 
+실제 2-instance Phase A 실행 결과(2026-08-12):
+
+- Docker network `bobfull-backend_default`에서 App A는 host `8080`, App B는 host `8081`로 기동했고 같은 MySQL·Redis를 사용했다.
+- App A의 MEMBER(6)가 room 4에 `phase-a-from-a`를 SEND하면 App A/B 모두 messageId `17`을 정확히 1회 수신했다.
+- App B의 MEMBER(7)가 같은 room 4에 `phase-a-from-b`를 SEND하면 App A/B 모두 messageId `18`을 정확히 1회 수신했다.
+- App A가 room 5에 `phase-a-other-room`을 SEND하면 App A만 messageId `19`를 수신했고 App B는 수신하지 않았다.
+- 공유 MySQL 조회에서 ChatMessage `17`, `18`, `19`는 각각 정확히 1행이었다. raw STOMP 수신 집합에서 room 4 messageId의 총 수신 수는 고유 ID 수의 정확히 두 배(A/B 각 1회)였다.
+
 ## 구조화 로그·메트릭
 
 - 로그: `CHAT_REALTIME_PUBLISH_FAILED`, `CHAT_REALTIME_SUBSCRIBE_FAILED`는 `messageId`·`chatRoomId` 또는 예외 유형만 기록하며 token·Authorization·원문은 기록하지 않는다.
@@ -83,11 +91,10 @@ rm -rf build
 
 ## 결과 해석
 
-Phase A는 Redis Pub/Sub의 핵심 cross-instance fan-out과 방별 local STOMP 목적지 격리를 실제 Redis로 검증한다. 다만 두 Spring Boot 프로세스의 포트·인증·STOMP client 및 ChatMessage DB 저장은 아직 실측하지 않았으며, 유실률·성능 또는 운영 WSS 성공을 주장하지 않는다.
+Phase A는 Redis Pub/Sub의 핵심 cross-instance fan-out, 두 Spring Boot 프로세스의 인증 STOMP A↔B 전달, 방별 local STOMP 목적지 격리 및 ChatMessage 단일 저장을 검증한다. 유실률·성능 또는 운영 WSS 성공은 주장하지 않는다.
 
 ## 검증 한계
 
-- Phase A의 실제 App A:8080/App B:8081, 인증된 STOMP client, ChatMessage DB 1건은 `NOT_RUN`이다.
 - #169 환경 부재로 서로 다른 EC2 A/B, ALB WSS, Redis 실제 재연결과 장애 중 cursor 복구는 `NOT_RUN`이다.
 - 반복 N건 latency/throughput 측정은 `NOT_RUN`이다.
 - Pub/Sub 단절 구간의 메시지는 재생되지 않으며 DB cursor 조회가 복구 경로다.
