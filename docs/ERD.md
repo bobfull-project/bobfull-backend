@@ -494,11 +494,11 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `email_outbox_delivery_id` | BIGINT | N | PK | 내부 식별자 |
-| `outbox_event_id` | BIGINT | N | UNIQUE(outbox_event_id, recipient_member_id)의 선행 컬럼. 물리 FK 아님 | 대상 `outbox_event.outbox_event_id` 값 |
+| `outbox_event_id` | BIGINT | N | UNIQUE(outbox_event_id, recipient_member_id)의 선행 컬럼, 복합 INDEX `idx_email_outbox_delivery_event_status(outbox_event_id, status)`의 선행 컬럼. 물리 FK 아님 | 대상 `outbox_event.outbox_event_id` 값 |
 | `reservation_id` | BIGINT | N |  | 대상 예약. 물리 FK 아님 |
 | `reservation_participant_id` | BIGINT | N |  | 대상 참여자. 물리 FK 아님 |
 | `recipient_member_id` | BIGINT | N | 위 복합 UNIQUE | 수신 회원. 물리 FK 아님 |
-| `status` | VARCHAR(16) | N | 복합 INDEX `idx_email_outbox_delivery_event_status`의 선행 컬럼 | 앱 Enum: `PENDING`, `SENT` |
+| `status` | VARCHAR(16) | N | 복합 INDEX `idx_email_outbox_delivery_event_status`의 후행 컬럼(선행 컬럼은 `outbox_event_id`) | 앱 Enum: `PENDING`, `SENT` |
 | `sent_at` | DATETIME | Y |  | `SENT` 전환 시각. `PENDING`은 NULL |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
