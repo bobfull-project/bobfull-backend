@@ -82,6 +82,15 @@ notification:
   email:
     from-address: ${NOTIFICATION_EMAIL_FROM_ADDRESS:no-reply@bobfull.com}
 
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: "readinessState,db,redis"
+
 outbox:
   chat-room:
     enabled: ${OUTBOX_CHAT_ROOM_ENABLED:true}
