@@ -58,7 +58,15 @@
   --rerun-tasks
 ```
 
-결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. 격리해 실행한 전체 `./gradlew clean build --no-daemon --console=plain`은 exit code `1`로 종료했다. 실패 원인은 테스트 assertion이 아니라 `:test` 결과 파일 `build/test-results/test/binary/in-progress-results-generic.bin`의 `NoSuchFileException`이며, 실행 중 해당 파일이 외부 `clean`에 의해 삭제되는 충돌과 일치한다. 따라서 전체 build는 `PASS`가 아니며 재현 가능한 단일 실행 환경에서 다시 확인할 때까지 `NOT_RUN`으로 유지한다.
+결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. Human이 아래 단일 실행 명령으로 전체 build exit code 0을 확인했다. 이전 `NoSuchFileException`은 병렬 실행 중 test-result 삭제 충돌이었으며, 이 결과로 해소한다.
+
+```bash
+./gradlew --stop
+rm -rf build
+./gradlew clean build --no-daemon --no-parallel --max-workers=1 --console=plain --stacktrace
+```
+
+결과: `BUILD SUCCESSFUL in 2m 1s`, `14 actionable tasks: 12 executed, 2 up-to-date` — 전체 clean build `PASS`.
 
 추가 Phase A 실행 명령:
 
