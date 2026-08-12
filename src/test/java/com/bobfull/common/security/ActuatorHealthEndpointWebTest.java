@@ -54,6 +54,27 @@ class ActuatorHealthEndpointWebTest {
     }
 
     @Test
+    void actuator_prometheus는_시작직후_미발생_비즈니스_이벤트_Counter도_0으로_반환한다() throws Exception {
+        // when
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/actuator/prometheus")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        // then
+        assertThat(response.statusCode()).isEqualTo(200);
+        for (BusinessMetricEvent event : BusinessMetricEvent.values()) {
+            assertThat(response.body()).contains("event=\"" + event.name() + "\"");
+        }
+
+        String compensationCounter = response.body().lines()
+                .filter(line -> line.startsWith("bobfull_business_events_total{"))
+                .filter(line -> line.contains("event=\"PAYMENT_COMPENSATION_REQUIRED\""))
+                .findFirst()
+                .orElseThrow();
+        assertThat(compensationCounter).endsWith(" 0.0");
+    }
+
+    @Test
     void actuator_prometheus는_인증없이_Prometheus_텍스트를_반환한다() throws Exception {
         businessMetricRecorder.increment(BusinessMetricEvent.LOGIN_FAILED);
 

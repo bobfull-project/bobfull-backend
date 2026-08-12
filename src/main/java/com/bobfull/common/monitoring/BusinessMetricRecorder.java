@@ -2,6 +2,8 @@ package com.bobfull.common.monitoring;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -18,21 +20,41 @@ public class BusinessMetricRecorder {
     private static final Logger log = LoggerFactory.getLogger(BusinessMetricRecorder.class);
 
     private final MeterRegistry meterRegistry;
+    private final Map<BusinessMetricEvent, Counter> counters = new ConcurrentHashMap<>();
 
     public BusinessMetricRecorder(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
+        prewarmCounters();
     }
 
     public void increment(BusinessMetricEvent event) {
         try {
-            Counter.builder(METRIC_NAME)
-                    .description("BobFull business event occurrences")
-                    .tag("event", event.name())
-                    .register(meterRegistry)
-                    .increment();
+            counterFor(event).increment();
         } catch (RuntimeException exception) {
             log.warn("businessMetricRecordFailed event={} reason={}", event.name(),
                     exception.getClass().getSimpleName());
         }
+    }
+
+    private void prewarmCounters() {
+        for (BusinessMetricEvent event : BusinessMetricEvent.values()) {
+            try {
+                counterFor(event);
+            } catch (RuntimeException exception) {
+                log.warn("businessMetricPrewarmFailed event={} reason={}", event.name(),
+                        exception.getClass().getSimpleName());
+            }
+        }
+    }
+
+    private Counter counterFor(BusinessMetricEvent event) {
+        return counters.computeIfAbsent(event, this::registerCounter);
+    }
+
+    private Counter registerCounter(BusinessMetricEvent event) {
+        return Counter.builder(METRIC_NAME)
+                .description("BobFull business event occurrences")
+                .tag("event", event.name())
+                .register(meterRegistry);
     }
 }
