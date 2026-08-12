@@ -1,0 +1,128 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 100 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-12T15:08:15+09:00" level=info msg="teardown 검증 성공: 회차 601는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.0' rate=100.00%
+
+    peak_create_race_conflict
+    ✓ 'count==99' count=99
+
+    peak_create_race_success
+    ✓ 'count==1' count=1
+
+    peak_create_race_unexpected
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 101     4.832954/s
+    checks_succeeded...: 100.00% 101 out of 101
+    checks_failed......: 0.00%   0 out of 101
+
+    ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)
+    ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다
+
+    CUSTOM
+    peak_create_race_conflict......: 99     4.737252/s
+    peak_create_race_success.......: 1      0.047851/s
+    peak_create_race_unexpected....: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=135.53ms min=13.19ms med=95.42ms  max=372.85ms p(90)=276.63ms p(95)=319.92ms p(99)=360.99ms
+      { expected_response:true }...: avg=97.83ms  min=14.08ms med=93.22ms  max=352.68ms p(90)=107.15ms p(95)=131.77ms p(99)=210.72ms
+    http_req_failed................: 32.36% 100 out of 309
+    http_reqs......................: 309    14.78597/s
+
+    EXECUTION
+    iteration_duration.............: avg=225.45ms min=43.59ms med=227.44ms max=382.81ms p(90)=351.12ms p(95)=368.67ms p(99)=379.81ms
+    iterations.....................: 100    4.785103/s
+    vus............................: 0      min=0          max=0  
+    vus_max........................: 100    min=100        max=100
+
+    NETWORK
+    data_received..................: 192 kB 9.2 kB/s
+    data_sent......................: 99 kB  4.7 kB/s
+
+
+
+
+running (0m20.9s), 000/100 VUs, 100 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 100 VUs  00.4s/30s  100/100 iters, 1 per VU

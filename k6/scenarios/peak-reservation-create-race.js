@@ -47,6 +47,8 @@ export const options = {
     // 기준 왕복 약 80~150ms x 1,002회 ≈ 60초 근접). 넉넉히 잡아 하네스 자체의 순차 setup
     // 한계 때문에 실행이 실패하지 않게 한다 — 이건 서버 성능이 아니라 테스트 스크립트의 한계다.
     setupTimeout: '180s',
+    // Issue #142 "공통 측정 지표"가 p99를 요구한다(PR #220 재검토 반영) — k6 기본값은 p99가 없다.
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
     scenarios: {
         peak_create_race: {
             executor: 'per-vu-iterations',

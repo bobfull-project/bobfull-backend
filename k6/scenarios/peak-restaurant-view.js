@@ -50,6 +50,9 @@ const STAGE_OPTIONS = {
 };
 
 export const options = {
+    // k6 기본 summaryTrendStats는 p99를 포함하지 않는다 — Issue #142 "공통 측정 지표"가
+    // p50·p90·p95·p99를 요구해 명시적으로 추가한다(PR #220 재검토 반영).
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
     scenarios: { peak_restaurant_view: STAGE_OPTIONS[STAGE] },
 };
 

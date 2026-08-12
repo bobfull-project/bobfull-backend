@@ -1,0 +1,112 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-restaurant-view.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 5 max VUs, 50s max duration (incl. graceful stop):
+              * peak_restaurant_view: 1.00 iterations/s for 20s (maxVUs: 2-5, gracefulStop: 30s)
+
+
+Run                    [ 100% ] setup()
+peak_restaurant_view   [   0% ]
+
+running (02.0s), 1/2 VUs, 0 complete and 0 interrupted iterations
+peak_restaurant_view   [   2% ] 1/2 VUs  00.4s/20s  1.00 iters/s
+
+running (03.0s), 0/2 VUs, 2 complete and 0 interrupted iterations
+peak_restaurant_view   [   7% ] 0/2 VUs  01.4s/20s  1.00 iters/s
+
+running (04.0s), 0/2 VUs, 3 complete and 0 interrupted iterations
+peak_restaurant_view   [  12% ] 0/2 VUs  02.4s/20s  1.00 iters/s
+
+running (05.0s), 0/2 VUs, 4 complete and 0 interrupted iterations
+peak_restaurant_view   [  17% ] 0/2 VUs  03.4s/20s  1.00 iters/s
+
+running (06.0s), 0/2 VUs, 5 complete and 0 interrupted iterations
+peak_restaurant_view   [  22% ] 0/2 VUs  04.4s/20s  1.00 iters/s
+
+running (07.0s), 0/2 VUs, 6 complete and 0 interrupted iterations
+peak_restaurant_view   [  27% ] 0/2 VUs  05.4s/20s  1.00 iters/s
+
+running (08.0s), 0/2 VUs, 7 complete and 0 interrupted iterations
+peak_restaurant_view   [  32% ] 0/2 VUs  06.4s/20s  1.00 iters/s
+
+running (09.0s), 0/2 VUs, 8 complete and 0 interrupted iterations
+peak_restaurant_view   [  37% ] 0/2 VUs  07.4s/20s  1.00 iters/s
+
+running (10.0s), 0/2 VUs, 9 complete and 0 interrupted iterations
+peak_restaurant_view   [  42% ] 0/2 VUs  08.4s/20s  1.00 iters/s
+
+running (11.0s), 0/2 VUs, 10 complete and 0 interrupted iterations
+peak_restaurant_view   [  47% ] 0/2 VUs  09.4s/20s  1.00 iters/s
+
+running (12.0s), 0/2 VUs, 11 complete and 0 interrupted iterations
+peak_restaurant_view   [  52% ] 0/2 VUs  10.4s/20s  1.00 iters/s
+
+running (13.0s), 0/2 VUs, 12 complete and 0 interrupted iterations
+peak_restaurant_view   [  57% ] 0/2 VUs  11.4s/20s  1.00 iters/s
+
+running (14.0s), 0/2 VUs, 13 complete and 0 interrupted iterations
+peak_restaurant_view   [  62% ] 0/2 VUs  12.4s/20s  1.00 iters/s
+
+running (15.0s), 0/2 VUs, 14 complete and 0 interrupted iterations
+peak_restaurant_view   [  67% ] 0/2 VUs  13.4s/20s  1.00 iters/s
+
+running (16.0s), 0/2 VUs, 15 complete and 0 interrupted iterations
+peak_restaurant_view   [  72% ] 0/2 VUs  14.4s/20s  1.00 iters/s
+
+running (17.0s), 0/2 VUs, 16 complete and 0 interrupted iterations
+peak_restaurant_view   [  77% ] 0/2 VUs  15.4s/20s  1.00 iters/s
+
+running (18.0s), 0/2 VUs, 17 complete and 0 interrupted iterations
+peak_restaurant_view   [  82% ] 0/2 VUs  16.4s/20s  1.00 iters/s
+
+running (19.0s), 0/2 VUs, 18 complete and 0 interrupted iterations
+peak_restaurant_view   [  87% ] 0/2 VUs  17.4s/20s  1.00 iters/s
+
+running (20.0s), 0/2 VUs, 19 complete and 0 interrupted iterations
+peak_restaurant_view   [  92% ] 0/2 VUs  18.4s/20s  1.00 iters/s
+
+running (21.0s), 0/2 VUs, 20 complete and 0 interrupted iterations
+peak_restaurant_view   [  97% ] 0/2 VUs  19.4s/20s  1.00 iters/s
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 84      3.85032/s
+    checks_succeeded...: 100.00% 84 out of 84
+    checks_failed......: 0.00%   0 out of 84
+
+    ✓ peak_restaurant_detail status is 200
+    ✓ peak_restaurant_detail body.success is true
+    ✓ peak_dining_sessions status is 200
+    ✓ peak_dining_sessions body.success is true
+
+    HTTP
+    http_req_duration..............: avg=147.09ms min=11.62ms  med=181.09ms max=539.85ms p(90)=294.82ms p(95)=434.35ms
+      { expected_response:true }...: avg=147.09ms min=11.62ms  med=181.09ms max=539.85ms p(90)=294.82ms p(95)=434.35ms
+    http_req_failed................: 0.00%  0 out of 47
+    http_reqs......................: 47     2.154346/s
+
+    EXECUTION
+    iteration_duration.............: avg=256.57ms min=200.73ms med=236.98ms max=517.64ms p(90)=318.02ms p(95)=334.31ms
+    iterations.....................: 21     0.96258/s
+    vus............................: 0      min=0       max=1
+    vus_max........................: 2      min=2       max=2
+
+    NETWORK
+    data_received..................: 401 kB 18 kB/s
+    data_sent......................: 6.5 kB 299 B/s
+
+
+
+
+running (21.8s), 0/2 VUs, 21 complete and 0 interrupted iterations
+peak_restaurant_view ✓ [ 100% ] 0/2 VUs  20s  1.00 iters/s

@@ -1,0 +1,176 @@
+{
+    "metrics": {
+        "http_req_duration": {
+            "min": 11.935,
+            "med": 88.219,
+            "max": 113.83,
+            "p(90)": 96.7136,
+            "p(95)": 102.75179999999999,
+            "p(99)": 111.61435999999999,
+            "avg": 61.48673333333333
+        },
+        "http_req_tls_handshaking": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0
+        },
+        "data_received": {
+            "count": 9239,
+            "rate": 9560.945725411791
+        },
+        "iteration_duration": {
+            "max": 37.566125,
+            "p(90)": 37.15245,
+            "p(95)": 37.3592875,
+            "p(99)": 37.5247575,
+            "avg": 35.497749999999996,
+            "min": 33.429375,
+            "med": 35.497749999999996
+        },
+        "checks": {
+            "passes": 3,
+            "fails": 0,
+            "thresholds": {
+                "rate==1.0": false
+            },
+            "value": 1
+        },
+        "http_req_connecting": {
+            "avg": 4.628133333333333,
+            "min": 0,
+            "med": 0,
+            "max": 51.289,
+            "p(90)": 6.531000000000001,
+            "p(95)": 20.459599999999973,
+            "p(99)": 45.12311999999999
+        },
+        "http_req_failed": {
+            "passes": 2,
+            "fails": 13,
+            "value": 0.13333333333333333
+        },
+        "http_req_receiving": {
+            "max": 0.153,
+            "p(90)": 0.12020000000000002,
+            "p(95)": 0.13899999999999998,
+            "p(99)": 0.1502,
+            "avg": 0.06066666666666668,
+            "min": 0.028,
+            "med": 0.046
+        },
+        "data_sent": {
+            "count": 5070,
+            "rate": 5246.671157899966
+        },
+        "peak_create_race_success": {
+            "count": 1,
+            "rate": 1.03484638222879,
+            "thresholds": {
+                "count==1": false
+            }
+        },
+        "http_req_duration{expected_response:true}": {
+            "med": 88.948,
+            "max": 113.83,
+            "p(90)": 97.3588,
+            "p(95)": 104.33439999999999,
+            "p(99)": 111.93088,
+            "avg": 67.57376923076923,
+            "min": 16.477
+        },
+        "iterations": {
+            "count": 2,
+            "rate": 2.06969276445758
+        },
+        "peak_create_race_unexpected": {
+            "count": 0,
+            "rate": 0,
+            "thresholds": {
+                "count==0": false
+            }
+        },
+        "http_reqs": {
+            "rate": 15.52269573343185,
+            "count": 15
+        },
+        "http_req_waiting": {
+            "avg": 61.37433333333333,
+            "min": 11.839,
+            "med": 88.139,
+            "max": 113.27,
+            "p(90)": 96.66279999999999,
+            "p(95)": 102.54879999999999,
+            "p(99)": 111.12576
+        },
+        "http_req_blocked": {
+            "p(95)": 21.118499999999973,
+            "p(99)": 46.942899999999995,
+            "avg": 4.777933333333334,
+            "min": 0.001,
+            "med": 0.003,
+            "max": 53.399,
+            "p(90)": 6.5624
+        },
+        "http_req_sending": {
+            "p(99)": 0.37981999999999994,
+            "avg": 0.05173333333333334,
+            "min": 0.009,
+            "med": 0.014,
+            "max": 0.427,
+            "p(90)": 0.07680000000000001,
+            "p(95)": 0.19109999999999977
+        },
+        "peak_create_race_conflict": {
+            "count": 1,
+            "rate": 1.03484638222879,
+            "thresholds": {
+                "count==1": false
+            }
+        }
+    },
+    "setup_data": {
+        "memberTokens": [
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkMTQ3ZTlkOC00MTI3LTRmOTItYmI2NS1hYzZiZjhjMWQ3ZTUiLCJtZW1iZXJJZCI6MjA4Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1NiwiZXhwIjoxNzg2NTE4NDU2fQ.tSrZhQel92zFcRdUk2_NFpM81Afyb_fqiHiqJUiXM7M",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3ODNiYzAyMy0yZDNmLTQ2YzQtOTMzMS02MTc2NzJiNjc1MzEiLCJtZW1iZXJJZCI6MjA4Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1NiwiZXhwIjoxNzg2NTE4NDU2fQ.KxG_HkxUrsnVsmXdH6PkTZ5gP39okmtd0vzrsgPogGA"
+        ],
+        "restaurantId": 17,
+        "targetSessionId": 591,
+        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5NjgzMTc3Zi1kOTAyLTQ5NmEtODIyMC0yMmI1MzJmYzljYjAiLCJtZW1iZXJJZCI6MjA4OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1NiwiZXhwIjoxNzg2NTE4NDU2fQ.RIfQFG-cx0OW1eyG42ILqZzOzwX0HA7RvMSkBHOeHL4",
+        "date": "2026-08-13"
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "teardown": {
+                "id": "a8a9942382e8ffe2e56ef29e664b8229",
+                "groups": {},
+                "checks": {
+                        "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+                            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+                            "id": "72ee86e493a705c57357954724f8ed6a",
+                            "passes": 1,
+                            "fails": 0,
+                            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다"
+                        }
+                    },
+                "name": "teardown",
+                "path": "::teardown"
+            }
+        },
+        "checks": {
+            "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+                "fails": 0,
+                "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+                "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+                "id": "e932986fb0e444a272fc4b0130cfaf01",
+                "passes": 2
+            }
+        }
+    }
+}
