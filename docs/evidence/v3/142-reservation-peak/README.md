@@ -36,8 +36,8 @@ Baseline**으로 측정한다. #60(예약 좌석 락 전략 재설계, 2026-08-1
 |---|---|---|
 | 로컬 Smoke(`STAGE=smoke`) | PASS — checks 84/84(100%), http_req_failed 0% | `raw/A-peak-restaurant-view-smoke.log`, `.json` |
 | AWS Smoke(`BASE_URL=http://15.164.48.39:8080`) | PASS — checks 84/84(100%), http_req_failed 0%, p95≈434ms(로컬 대비 네트워크 왕복 포함) | `raw/A-peak-restaurant-view-AWS-smoke.log`, `.json` |
-| AWS Load(`STAGE=load`, 20 RPS·5분, p99 포함 재실행) | 안정 처리 구간(실패율 0.00%)이지만 여유는 크지 않음 | `raw/A-peak-restaurant-view-AWS-load-2.log`, `.json`(최신, p99 포함) |
-| AWS Stress(`STAGE=stress`, 20→320 RPS 계단식·13분, p99+Prometheus 포함 재실행) | **첫 병목 전환점 확인 + 근본 원인 확인** — 아래 "결과 표 비교" 참고 | `raw/A-peak-restaurant-view-AWS-stress-3.log`, `.json`(최신, p99+Prometheus 포함) |
+| AWS Load(`STAGE=load`, 20 iter/s·5분, p99 포함 재실행) | 안정 처리 구간(실패율 0.00%)이지만 여유는 크지 않음 | `raw/A-peak-restaurant-view-AWS-load-2.log`, `.json`(최신, p99 포함) |
+| AWS Stress(`STAGE=stress`, 20→320 iter/s 계단식·13분, p99+Prometheus 포함 재실행) | **첫 병목 전환점 확인 + 근본 원인 확인** — 아래 "결과 표 비교" 참고 | `raw/A-peak-restaurant-view-AWS-stress-3.log`, `.json`(최신, p99+Prometheus 포함) |
 
 이전 실행(`A-peak-restaurant-view-AWS-load.*`, `-stress.*`, `-stress-2.*`)은 p99가 없는 k6
 기본 `summaryTrendStats`로 실행한 초기 기록이라 raw로만 남기고, 아래 비교표는 p99를 포함한
@@ -82,13 +82,13 @@ Stress 시작 시각(`05:49:44Z`) 기준 경과 시간별 관측값(`query_range
 이전 실행(`-stress-2`, raw로 별도 보존)에서도 같은 시점 기준 CPU 88~98%, `active=10`(고정),
 `pending` 190건 전후로 거의 동일한 값이 나와 재현 가능함을 확인했다.
 
-**결론**: CPU와 DB Connection Pool(HikariCP `maximum-pool-size=10`)이 목표 부하가 40 RPS
-단계에 도달한 시점(경과 약 2분 30초, 아직 Stress 최고 단계 320 RPS에 훨씬 못 미친 지점)부터
-**거의 동시에 포화**되고, 이후 160·320 RPS 단계까지도 그 상태가 그대로 유지된다(더 나빠지지도
+**결론**: CPU와 DB Connection Pool(HikariCP `maximum-pool-size=10`)이 목표 부하가 40 iter/s
+단계에 도달한 시점(경과 약 2분 30초, 아직 Stress 최고 단계 320 iter/s에 훨씬 못 미친 지점)부터
+**거의 동시에 포화**되고, 이후 160·320 iter/s 단계까지도 그 상태가 그대로 유지된다(더 나빠지지도
 않음 — 이미 최대치라 더 나빠질 여지가 없다). Tomcat 스레드도 232에서 고정돼 요청이 스레드
 단계에서부터 쌓이고 있음을 보여준다. 즉 **"어느 시점 이후 갑자기 무너진 병목"이 아니라
-"t3.small(2 vCPU) 인스턴스 자체의 CPU·커넥션 풀 용량이 hot-key 조회 40 RPS 수준에서 이미
-한계"**라는 게 이번 기록의 근거 있는 결론이다. `hikaricp_connections_pending`이 약 190건으로
+"t3.small(2 vCPU) 인스턴스 자체의 CPU·커넥션 풀 용량이 hot-key 조회 40 iter/s(약 80 req/s)
+수준에서 이미 한계"**라는 게 이번 기록의 근거 있는 결론이다. `hikaricp_connections_pending`이 약 190건으로
 안정된 것도 "더 큰 장애로 확산"되지 않고 일정한 대기 상태로 버티는 것으로 해석된다(요청이
 실패하지 않고 느려지기만 하는 이유).
 
@@ -122,26 +122,55 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 | 20 | 1 | 19 | 0 | PASS | PASS | `raw/B-create-race-20users.*` |
 | 50 | 1 | 49 | 0 | PASS | PASS | `raw/B-create-race-50users.*` |
 
-### 결과 — AWS(`bobfull-k6-test-app`, 동일 동시성 단계, p99 포함 재실행)
+### 결과 — AWS(`bobfull-k6-test-app`, 동일 동시성 단계, 지표 분리 재실행)
 
-| 동시 사용자 수 | 성공(200) | 충돌(409) | 예상 밖 응답 | p95(`http_req_duration`) | p99 | threshold Gate | teardown 독립 검증 | Raw |
+**(PR #220 재검토 반영, hyeonseung-dev MAJOR 1) 아래 p95/p99는 CREATE 경쟁 요청만 기록하는
+`peak_create_race_duration` Trend 기준이다.** 이전 표(`-AWS-v2.*`)의 p95/p99는 `setup()`의
+회원가입·로그인 요청(500명 실행 기준 1,002회)까지 합산된 전역 `http_req_duration`이었다 —
+리뷰가 지적한 대로 이 값만으로는 "500명 동시 경쟁"의 실제 지연을 대표한다고 보기 어려웠다.
+`peak-reservation-create-race.js`에 CREATE 요청 하나만 기록하는 별도 Trend를 추가해
+재실행했다(`-AWS-v3.*`).
+
+| 동시 사용자 수 | 성공(200) | 충돌(409) | 예상 밖 응답 | p95(`peak_create_race_duration`, 경쟁 요청만) | p99 | threshold Gate | teardown 독립 검증 | Raw |
 |---:|---:|---:|---:|---:|---:|---|---|---|
-| 2 | 1 | 1 | 0 | 102.8ms | 111.6ms | PASS | PASS | `raw/B-create-race-2users-AWS-v2.*` |
-| 5 | 1 | 4 | 0 | 98.4ms | 100.6ms | PASS | PASS | `raw/B-create-race-5users-AWS-v2.*` |
-| 10 | 1 | 9 | 0 | 94.6ms | 98.8ms | PASS | PASS | `raw/B-create-race-10users-AWS-v2.*` |
-| 20 | 1 | 19 | 0 | 96.7ms | 98.0ms | PASS | PASS | `raw/B-create-race-20users-AWS-v2.*` |
-| 50 | 1 | 49 | 0 | 162.4ms | 178.2ms | PASS | PASS | `raw/B-create-race-50users-AWS-v2.*` |
-| 100 | 1 | 99 | 0 | 319.9ms | 361.0ms | PASS | — | `raw/B-create-race-100users-AWS-v2.*` |
-| 200 | 1 | 199 | 0 | 553.8ms | 619.2ms | PASS | — | `raw/B-create-race-200users-AWS-v2.*` |
-| 500 | 1 | 499 | 0 | 1.35s | 1.52s | PASS | — | `raw/B-create-race-500users-AWS-v2.*`(`setupTimeout=180s` 필요, 아래 참고) |
+| 2 | 1 | 1 | 0 | 24.74ms | 24.98ms | PASS | PASS | `raw/B-create-race-2users-AWS-v3.*` |
+| 5 | 1 | 4 | 0 | 37.81ms | 38.30ms | PASS | PASS | `raw/B-create-race-5users-AWS-v3.*` |
+| 10 | 1 | 9 | 0 | 47.20ms | 48.52ms | PASS | PASS | `raw/B-create-race-10users-AWS-v3.*`(1차 시도는 아래 "네트워크 타임아웃" 참고, 표 값은 재시도 결과) |
+| 20 | 1 | 19 | 0 | 75.66ms | 78.62ms | PASS | PASS | `raw/B-create-race-20users-AWS-v3.*` |
+| 50 | 1 | 49 | 0 | 200.57ms | 205.68ms | PASS | PASS | `raw/B-create-race-50users-AWS-v3.*` |
+| 100 | 1 | 99 | 0 | 342.16ms | 353.09ms | PASS | — | `raw/B-create-race-100users-AWS-v3.*` |
+| 200 | 1 | 199 | 0 | 655.13ms | 684.47ms | PASS | — | `raw/B-create-race-200users-AWS-v3.*` |
+| 500 | 1 | 499 | 0 | 1.79s | 1.84s | PASS | — | `raw/B-create-race-500users-AWS-v3.*`(`setupTimeout=180s` 필요, 아래 참고) |
 
-이전 실행(p99 미포함, `-AWS.*`/`-AWS.log` 접미사, `setupTimeout` 조정 전 500명 최초 실패
-포함)은 raw로 보존하고, 위 표는 `summaryTrendStats`에 p99를 추가한 재실행(`-AWS-v2.*`)
-기준으로 작성했다. p95/성공-충돌 수는 이전 실행과 동일해 재현 가능함을 재확인했다.
+이전 표(`-AWS-v2.*`, p95 102.8ms~1.35s)는 raw로 보존하고, 위 표를 최종 기준으로 삼는다. 흥미롭게도
+경쟁 요청만 분리해도 지연은 여전히 동시 사용자 수에 비례해 늘어난다(2명 25ms → 500명 1.79초) —
+즉 이전 결과가 setup 트래픽과 섞여서 "우연히 비슷하게" 나온 게 아니라, **경쟁 자체가 동시성이
+커질수록 느려지는 게 실제로 관측된다**는 뜻이다. 다만 이는 서버의 락/DB Pool 지표(아래 "B의
+DB Pool·Lock 지표" 참고 — HikariCP active 최대 1, pending 항상 0, 락 호출당 평균 시간도
+40→28ms로 오히려 낮아짐)와는 맞지 않는다 — 서버 내부는 여유가 있는데 클라이언트가 관측하는
+요청 지연은 동시성에 비례해 늘어난다는 뜻이며, 500개 HTTP 연결을 동시에 열고 응답을 기다리는
+**Tomcat 커넥션·스레드 수준의 대기이거나 k6 클라이언트 자체가 500개 연결을 동시에 처리하며
+받는 부하**일 가능성이 높다(둘 다 정확히 구분하려면 서버 쪽 Tomcal thread pool 지표와
+k6 클라이언트 리소스 사용률을 함께 봐야 하는데, 이번 범위에서는 하지 못했다 — 후속 과제).
 
-**동시 사용자 수가 늘수록 p95/p99가 함께 늘어난다**(2명 103ms → 500명 1.35s) — 이는 서버
-지연이 아니라 **VU 준비·요청 발사 자체가 순차적으로 이뤄지는 k6 클라이언트 측 특성**과
-네트워크 왕복이 섞인 결과로 보인다(아래 DB Pool/Lock 지표에서 서버 쪽은 여유가 있음을 확인).
+**`vus`(활성 VU 게이지) vs `vus_max`(설정된 최대 VU) 구분(PR #220 재검토 반영)**: 리뷰가 인용한
+"vus.max=219"는 실행 중 **순간적으로 동시에 활성 상태였던 VU 수의 피크**(`vus` 게이지, 이번
+500명 v3 재실행에서는 461)를 가리킨 것으로 보인다 — `per-vu-iterations` executor는 VU를 순간
+전부가 아니라 점진적으로 기동하므로 이 게이지는 설정값보다 낮게 나오는 게 정상이다. 500명
+모두가 실제로 CREATE를 1회씩 시도했는지는 이 게이지가 아니라 `iterations` 카운터(500)와
+`peak_create_race_success+conflict+unexpected` 세 Counter의 합(1+499+0=500)으로 확인해야
+하고, 모든 실행에서 이 합은 정확히 `CONCURRENT_USERS`와 일치했다(`vus_max`도 항상
+`CONCURRENT_USERS`와 정확히 일치 — 위 표의 각 raw 파일에서 확인 가능).
+
+**오류율 지표 사용 시 주의(PR #220 재검토 반영, hyeonseung-dev MINOR)**: k6 기본 `http_req_failed`는
+2xx가 아닌 응답을 전부 "실패"로 집계하므로, 이 시나리오에서는 **의도된 경쟁 패자의 409
+응답까지 실패로 잡힌다** — 예를 들어 500명 실행에서 `http_req_failed`는 약 33%이지만 이건
+실제 서버 오류가 아니라 "500명 중 499명이 예상대로 409를 받았다"는 정상 결과다. 실제 오류
+여부를 판단할 때는 `http_req_failed`가 아니라 `peak_create_race_unexpected` Counter(200도
+409도 아닌 응답만 집계, 모든 실행에서 0)를 봐야 한다. `peak_create_race_success`(항상 1)·
+`peak_create_race_conflict`(항상 `CONCURRENT_USERS-1`)·`peak_create_race_unexpected`(항상 0)
+세 Counter의 합이 실제 완료된 CREATE 시도 수와 같아야 하고, `options.thresholds`가 이 세
+불변식을 자동으로 강제한다(트러블슈팅 섹션 참고).
 
 ### B의 DB Pool·Lock 지표 (Prometheus, 100/200명 및 500명 재실행 중 수집)
 
@@ -218,6 +247,22 @@ After를 재측정해 이 표와 비교한다.
 정상 조건에서는 종료 코드 0, 불변식을 강제로 깨면 종료 코드 99(k6 표준 threshold 실패 코드)로
 끝난다. 2/5/10/20/50 전 단계를 재실행해 모든 threshold가 PASS임을 다시 확인했다(위 결과 표).
 
+### 트러블슈팅 — Gate가 실제로 잡아낸 네트워크 타임아웃 (지표 분리 재실행 중 발생)
+
+지표 분리 재실행(위 "결과 — AWS" 참고) 중 `CONCURRENT_USERS=10` 1차 시도에서 threshold Gate가
+실제로 실패했다(`checks 90.90%`, `peak_create_race_unexpected=1`, 종료 코드 99). 로그에서 원인을
+확인하니 서버 응답이 아니라 `Post "http://.../api/reservations/prepare": dial: i/o timeout` —
+10개 동시 연결 중 1개가 클라이언트→서버 연결 수립 단계에서 타임아웃난 것으로, 애플리케이션
+로직이나 락 처리와는 무관한 **일시적 네트워크 오류**다(같은 요청이 서버에 도달해 처리됐다는
+증거가 없다 — dial 단계 실패이므로 서버 로그 쪽에는 아예 안 남을 수 있다). Counter만 있었다면
+이 1건이 조용히 `peak_create_race_unexpected`에 1로 기록되고 넘어갔을 것을 Gate가 종료 코드
+99로 확실히 실패시켰다 — 이 트러블슈팅 항목 자체가 threshold Gate(바로 위 항목)가 설계대로
+동작한다는 방증이다. 즉시 재시도했을 때는 10명 전원 정상(성공 1·충돌 9·예상 밖 0)으로 끝났고, 위 결과 표의 10명
+행은 이 재시도 결과다. 1차(실패) 시도의 콘솔 로그는 `raw/B-create-race-10users-AWS-v3.log`에
+그대로 남겼고, 재시도(성공) 로그는 `raw/B-create-race-10users-AWS-v3-retry.log`다 — summary
+JSON(`raw/B-create-race-10users-AWS-v3.json`)은 재시도 시점에 같은 경로로 다시 내보내져
+재시도(성공) 결과로 덮어써졌다.
+
 ## A 개선 조치 — HikariCP 커넥션 풀 크기 설정화
 
 `hikaricp_connections_max=10`이 실측(위 "근본 원인 확인")으로 확인됐는데,
@@ -250,6 +295,9 @@ spring:
 - (완료) Prometheus 연결로 근본 원인 확인(CPU+DB Pool 동시 포화)
 - (완료) HikariCP 풀 크기 env var 설정화(기본값 10 유지, 실제 조정은 후속)
 - (완료) 시나리오 B 동시성 100/200/500까지 확장 확인, 1000은 하네스 setup 한계로 기록
+- (완료, PR #220 재검토 반영) raw Evidence JSON에 남아있던 실제 JWT 토큰 제거 + `handleSummary()`로
+  재발 방지(BLOCKER), B의 p95/p99를 경쟁 요청만의 별도 Trend로 분리 재측정(MAJOR 1), 잔여
+  RPS/iter-s 표기 정리(MAJOR 2), 오류율 지표 해석 주의사항 문서화(MINOR)
 - **재배포 후 재측정 필요**: `DB_POOL_MAX_SIZE`를 늘려 `bobfull-k6-test-app`을 재배포한 뒤
   같은 Stress를 재실행해 실제로 병목이 개선되는지 확인(김홍기 조율 필요, RDS `max_connections`
   여유 확인 필요)

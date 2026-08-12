@@ -1,0 +1,49 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 5 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 5 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-12T16:02:26+09:00" level=info msg="teardown 검증 성공: 회차 617는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+[32m     ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)[0m
+
+     █ teardown
+
+[32m       ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다[0m
+
+   [32m✓[0m checks[2m.........................:[0m [36m100.00%[0m [36;2m✓ 6[0m         [36;2m✗ 0[0m  
+     data_received[2m..................:[0m [36m15 kB[0m   [36;2m9.0 kB/s[0m
+     data_sent[2m......................:[0m [36m7.9 kB[0m  [36;2m4.8 kB/s[0m
+     http_req_blocked[2m...............:[0m avg=[36m1.87ms[0m   min=[36m1µs[0m     med=[36m3.5µs[0m    max=[36m6.92ms[0m   p(90)=[36m6.82ms[0m   p(95)=[36m6.89ms[0m   p(99)=[36m6.91ms[0m  
+     http_req_connecting[2m............:[0m avg=[36m1.86ms[0m   min=[36m0s[0m      med=[36m0s[0m       max=[36m6.88ms[0m   p(90)=[36m6.79ms[0m   p(95)=[36m6.87ms[0m   p(99)=[36m6.88ms[0m  
+     http_req_duration[2m..............:[0m avg=[36m72.44ms[0m  min=[36m11.06ms[0m med=[36m103.28ms[0m max=[36m117.09ms[0m p(90)=[36m112.36ms[0m p(95)=[36m115.1ms[0m  p(99)=[36m116.69ms[0m
+       { expected_response:true }[2m...:[0m avg=[36m84.01ms[0m  min=[36m13.75ms[0m med=[36m104.85ms[0m max=[36m117.09ms[0m p(90)=[36m113.96ms[0m p(95)=[36m115.54ms[0m p(99)=[36m116.78ms[0m
+     http_req_failed[2m................:[0m [36m20.83%[0m  [36;2m✓ 5[0m         [36;2m✗ 19[0m 
+     http_req_receiving[2m.............:[0m avg=[36m139.62µs[0m min=[36m18µs[0m    med=[36m41.5µs[0m   max=[36m2.19ms[0m   p(90)=[36m89.6µs[0m   p(95)=[36m148.94µs[0m p(99)=[36m1.72ms[0m  
+     http_req_sending[2m...............:[0m avg=[36m24.87µs[0m  min=[36m7µs[0m     med=[36m17.5µs[0m   max=[36m132µs[0m    p(90)=[36m45.1µs[0m   p(95)=[36m56.2µs[0m   p(99)=[36m114.98µs[0m
+     http_req_tls_handshaking[2m.......:[0m avg=[36m0s[0m       min=[36m0s[0m      med=[36m0s[0m       max=[36m0s[0m       p(90)=[36m0s[0m       p(95)=[36m0s[0m       p(99)=[36m0s[0m      
+     http_req_waiting[2m...............:[0m avg=[36m72.27ms[0m  min=[36m10.98ms[0m med=[36m103.21ms[0m max=[36m117.05ms[0m p(90)=[36m111.95ms[0m p(95)=[36m113.5ms[0m  p(99)=[36m116.25ms[0m
+     http_reqs[2m......................:[0m [36m24[0m      [36;2m14.519197/s[0m
+     iteration_duration[2m.............:[0m avg=[36m37.78ms[0m  min=[36m29.26ms[0m med=[36m36.87ms[0m  max=[36m45.52ms[0m  p(90)=[36m44.31ms[0m  p(95)=[36m44.92ms[0m  p(99)=[36m45.4ms[0m  
+     iterations[2m.....................:[0m [36m5[0m       [36;2m3.024833/s[0m
+   [32m✓[0m peak_create_race_conflict[2m......:[0m [36m4[0m       [36;2m2.419866/s[0m
+     peak_create_race_duration[2m......:[0m avg=[36m30.7284[0m  min=[36m22.319[0m  med=[36m29.803[0m   max=[36m38.428[0m   p(90)=[36m37.1976[0m  p(95)=[36m37.8128[0m  p(99)=[36m38.30496[0m
+   [32m✓[0m peak_create_race_success[2m.......:[0m [36m1[0m       [36;2m0.604967/s[0m
+   [32m✓[0m peak_create_race_unexpected[2m....:[0m [36m0[0m       [36;2m0/s[0m
+     vus[2m............................:[0m [36m0[0m       [36;2mmin=0[0m       [36;2mmax=0[0m
+     vus_max[2m........................:[0m [36m5[0m       [36;2mmin=5[0m       [36;2mmax=5[0m
+
+running (0m01.7s), 0/5 VUs, 5 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 5 VUs  00.0s/30s  5/5 iters, 1 per VU

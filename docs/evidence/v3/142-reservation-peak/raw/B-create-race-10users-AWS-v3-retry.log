@@ -1,0 +1,52 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 10 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 10 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-12T16:03:29+09:00" level=info msg="teardown 검증 성공: 회차 625는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+[32m     ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)[0m
+
+     █ teardown
+
+[32m       ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다[0m
+
+   [32m✓[0m checks[2m.........................:[0m [36m100.00%[0m [36;2m✓ 11[0m        [36;2m✗ 0[0m   
+     data_received[2m..................:[0m [36m24 kB[0m   [36;2m8.9 kB/s[0m
+     data_sent[2m......................:[0m [36m13 kB[0m   [36;2m4.7 kB/s[0m
+     http_req_blocked[2m...............:[0m avg=[36m2.6ms[0m   min=[36m1µs[0m     med=[36m3µs[0m     max=[36m18.48ms[0m p(90)=[36m7.9ms[0m    p(95)=[36m8.12ms[0m   p(99)=[36m14.78ms[0m 
+     http_req_connecting[2m............:[0m avg=[36m2.57ms[0m  min=[36m0s[0m      med=[36m0s[0m      max=[36m18.45ms[0m p(90)=[36m7.76ms[0m   p(95)=[36m7.98ms[0m   p(99)=[36m14.74ms[0m 
+     http_req_duration[2m..............:[0m avg=[36m77.24ms[0m min=[36m14.63ms[0m med=[36m93.84ms[0m max=[36m131.2ms[0m p(90)=[36m118.31ms[0m p(95)=[36m118.92ms[0m p(99)=[36m127.26ms[0m
+       { expected_response:true }[2m...:[0m avg=[36m90.98ms[0m min=[36m14.63ms[0m med=[36m98.85ms[0m max=[36m131.2ms[0m p(90)=[36m118.51ms[0m p(95)=[36m119.98ms[0m p(99)=[36m128.3ms[0m 
+     http_req_failed[2m................:[0m [36m25.64%[0m  [36;2m✓ 10[0m        [36;2m✗ 29[0m  
+     http_req_receiving[2m.............:[0m avg=[36m48.23µs[0m min=[36m13µs[0m    med=[36m39µs[0m    max=[36m141µs[0m   p(90)=[36m89.4µs[0m   p(95)=[36m97.59µs[0m  p(99)=[36m140.24µs[0m
+     http_req_sending[2m...............:[0m avg=[36m32.94µs[0m min=[36m8µs[0m     med=[36m15µs[0m    max=[36m180µs[0m   p(90)=[36m81.4µs[0m   p(95)=[36m121.79µs[0m p(99)=[36m174.3µs[0m 
+     http_req_tls_handshaking[2m.......:[0m avg=[36m0s[0m      min=[36m0s[0m      med=[36m0s[0m      max=[36m0s[0m      p(90)=[36m0s[0m       p(95)=[36m0s[0m       p(99)=[36m0s[0m      
+     http_req_waiting[2m...............:[0m avg=[36m77.16ms[0m min=[36m14.53ms[0m med=[36m93.78ms[0m max=[36m131.1ms[0m p(90)=[36m118.18ms[0m p(95)=[36m118.87ms[0m p(99)=[36m127.17ms[0m
+     http_reqs[2m......................:[0m [36m39[0m      [36;2m14.378177/s[0m
+     iteration_duration[2m.............:[0m avg=[36m47.02ms[0m min=[36m33.5ms[0m  med=[36m46.92ms[0m max=[36m60.23ms[0m p(90)=[36m58.21ms[0m  p(95)=[36m59.22ms[0m  p(99)=[36m60.02ms[0m 
+     iterations[2m.....................:[0m [36m10[0m      [36;2m3.686712/s[0m
+   [32m✓[0m peak_create_race_conflict[2m......:[0m [36m9[0m       [36;2m3.318041/s[0m
+     peak_create_race_duration[2m......:[0m avg=[36m37.9671[0m min=[36m25.915[0m  med=[36m39.148[0m  max=[36m48.855[0m  p(90)=[36m45.5493[0m  p(95)=[36m47.20215[0m p(99)=[36m48.52443[0m
+   [32m✓[0m peak_create_race_success[2m.......:[0m [36m1[0m       [36;2m0.368671/s[0m
+   [32m✓[0m peak_create_race_unexpected[2m....:[0m [36m0[0m       [36;2m0/s[0m
+     vus[2m............................:[0m [36m0[0m       [36;2mmin=0[0m       [36;2mmax=0[0m 
+     vus_max[2m........................:[0m [36m10[0m      [36;2mmin=10[0m      [36;2mmax=10[0m
+
+running (0m02.7s), 00/10 VUs, 10 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 10 VUs  00.1s/30s  10/10 iters, 1 per VU

@@ -18,7 +18,10 @@
 // 회차가 막 공개된 순간이기 때문이다.
 //
 // 실행 예(Issue #142 "초기 후보 단계": 2 → 5 → 10 → 20 → 50):
-//   k6 run -e CONCURRENT_USERS=10 k6/scenarios/peak-reservation-create-race.js
+//   k6 run -e CONCURRENT_USERS=10 -e SUMMARY_EXPORT_PATH=result.json k6/scenarios/peak-reservation-create-race.js
+// SUMMARY_EXPORT_PATH를 생략하면 파일을 쓰지 않고 콘솔 요약만 출력한다. 이제 --summary-export
+// CLI 플래그는 쓰지 않는다(handleSummary()가 setup_data의 실제 JWT를 제거해야 하기 때문 — 아래
+// BLOCKER 항목 참고).
 //
 // 검증 항목(Issue #142 시나리오 B): 성공 인원이 1명을 초과하지 않는지, 중복 예약이 없는지,
 // Reservation·TimeSlot 락 대기시간(서버 로그/Grafana에서 별도 확인), 처리량·오류율.
@@ -30,8 +33,18 @@
 // 코드로 끝나도록 했다. `teardown()`의 배타 선점 재검증도 `check()`로 바꿔 같은 Gate에 걸리게
 // 했다(기존에는 `console.error`만 남겨 사람이 로그를 읽어야만 발견됐다).
 
+// (PR #220 재검토 반영 — hyeonseung-dev BLOCKER) setup()이 돌려주는 memberTokens/verifierToken
+// (실제 JWT)이 k6 기본 --summary-export에 setup_data로 그대로 직렬화돼 raw Evidence 파일에
+// 커밋되고 있었다. handleSummary()로 내보낼 JSON을 직접 만들어 setup_data를 제거한다 — 이제
+// --summary-export 플래그 대신 -e SUMMARY_EXPORT_PATH=<path>로 내보낼 파일을 지정한다.
+//
+// (PR #220 재검토 반영 — hyeonseung-dev MAJOR 1) 기존 p95/p99는 setup()의 회원가입·로그인
+// 요청까지 섞인 전역 http_req_duration이었다. CREATE 경쟁 요청만의 지연을 별도 Trend
+// (`peak_create_race_duration`)로 분리해 기록한다.
+
 import exec from 'k6/execution';
-import { Counter } from 'k6/metrics';
+import { Counter, Trend } from 'k6/metrics';
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.1.0/index.js';
 import { post } from '../common/helpers.js';
 import { check } from 'k6';
 import { authHeaders, login, signupMember, uniquePhoneNumber } from '../common/auth.js';
@@ -68,6 +81,11 @@ export const options = {
 export const createSuccessCount = new Counter('peak_create_race_success');
 export const createConflictCount = new Counter('peak_create_race_conflict');
 export const createUnexpectedCount = new Counter('peak_create_race_unexpected');
+// (PR #220 재검토 반영 — hyeonseung-dev MAJOR 1) 전역 http_req_duration은 setup()의 회원가입·
+// 로그인 요청(CONCURRENT_USERS명당 2회 왕복)까지 합산돼 있어 "CREATE 동시 경쟁 자체의 지연"을
+// 대표하지 못한다. default()의 실제 CREATE 요청 하나만 이 Trend에 기록해 p95/p99를 분리한다 —
+// teardown()의 검증 재시도는 경쟁이 아니므로 포함하지 않는다.
+export const createRaceDuration = new Trend('peak_create_race_duration');
 
 export function setup() {
     const { ownerHeaders, restaurantId, tableId } = createOwnerRestaurantTable('peak-race', 4);
@@ -111,6 +129,7 @@ export default function (data) {
         targetId: data.targetSessionId,
         partySize: 1,
     }, authHeaders(token));
+    createRaceDuration.add(res.timings.duration);
 
     if (res.status === 200) {
         createSuccessCount.add(1);
@@ -156,4 +175,21 @@ function bodyCode(res) {
     } catch (e) {
         return null;
     }
+}
+
+// (PR #220 재검토 반영 — hyeonseung-dev BLOCKER) handleSummary()를 정의하면 k6가 --summary-export
+// 파일 쓰기를 직접 하지 않고 이 함수의 반환값에 맡긴다. setup_data(memberTokens·verifierToken)를
+// 제거한 사본만 파일로 내보내 raw Evidence에 실제 JWT가 다시 섞여 들어가는 걸 코드 레벨에서
+// 막는다. 실행은 기존 `--summary-export=<path>.json` 대신 `-e SUMMARY_EXPORT_PATH=<path>.json`로
+// 내보낼 파일을 지정한다(값을 안 주면 파일을 쓰지 않고 콘솔 요약만 출력한다).
+export function handleSummary(data) {
+    const sanitized = JSON.parse(JSON.stringify(data));
+    delete sanitized.setup_data;
+
+    const result = { stdout: textSummary(data, { indent: ' ', enableColors: true }) + '\n' };
+    const exportPath = __ENV.SUMMARY_EXPORT_PATH;
+    if (exportPath) {
+        result[exportPath] = JSON.stringify(sanitized, null, 2);
+    }
+    return result;
 }
