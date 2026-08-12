@@ -87,7 +87,7 @@ rm -rf build
 
 ## 구조화 로그·메트릭
 
-- 로그: `CHAT_REALTIME_PUBLISH_FAILED`, `CHAT_REALTIME_SUBSCRIBE_FAILED`는 `messageId`·`chatRoomId` 또는 예외 유형만 기록하며 token·Authorization·원문은 기록하지 않는다.
+- 로그: `CHAT_REALTIME_PUBLISH_FAILED`, `CHAT_REALTIME_SUBSCRIBE_FAILED`는 `messageId`·`chatRoomId` 또는 예외 유형만 기록하며 token·Authorization·원문은 기록하지 않는다. subscription 연결 실패는 `RedisMessageListenerContainer.handleSubscriptionException`에서 기록한 뒤 기존 재연결 흐름을 계속 사용한다.
 - 메트릭: `bobfull_business_events{event=CHAT_REALTIME_PUBLISH_FAILED|CHAT_REALTIME_SUBSCRIBE_FAILED}`. 메시지 ID를 label로 사용하지 않는다.
 
 ## 결과 해석
