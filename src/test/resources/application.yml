@@ -64,3 +64,8 @@ bobfull:
   kafka:
     chat-message:
       consumer-enabled: false
+
+chat:
+  redis-pubsub:
+    # 단위·기존 통합 테스트가 외부 Redis listener를 띄우지 않도록 한다. publisher는 테스트 double로 검증한다.
+    subscriber-enabled: false

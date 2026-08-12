@@ -170,6 +170,8 @@ SMTP 호출은 수신자마다 정확히 한 번만 시도한다. 재시도와 �
 
 최초 예약 결제가 완료되면 예약당 `ChatRoom` 하나를 생성한다. `Payment`·`Reservation`·`ReservationParticipant`를 확정하는 핵심 트랜잭션에는 ChatRoom 생성 의도만 `OutboxEvent(PENDING)`으로 함께 저장한다. 커밋 뒤 즉시 signal은 빠른 처리 경로이고, scheduler는 남은 `PENDING`과 5분 이상 고착된 `PROCESSING`을 다시 처리한다. 실제 ChatRoom 저장은 별도 짧은 트랜잭션에서 `createIfAbsent(reservationId)`로 수행하므로 실패가 결제·예약을 롤백시키지 않으며, at-least-once 재처리도 `chat_room.reservation_id` UNIQUE로 한 건을 유지한다(#176, ADR 0008).
 
+ChatMessage는 저장과 동시에 AI 분석용 `CHAT_MESSAGE_CREATED` Outbox를 같은 DB 트랜잭션에 보존한다. 커밋 후 Redis Pub/Sub(`bobfull:chat:messages`)은 실시간 전파만 한 번 수행하고, 모든 인스턴스의 subscriber가 자기 Simple Broker 세션으로 fan-out한다. Controller의 직접 STOMP 발행은 두지 않아 발행 인스턴스도 subscriber 경로로 한 번만 수신한다. Redis는 best-effort·재생 불가이므로 publish/subscribe 실패는 DB 메시지를 되돌리지 않으며 cursor 조회로 복구한다. AI용 Outbox→Kafka와 Redis 경로는 서로 독립적이다(ADR 0010, ADR 0011).
+
 결제 완료 후 취소되지 않은 유효 참여자만 접근할 수 있고 OWNER와 ADMIN은 참여하지 않는다. 예약 또는 참여가 취소되면 해당 참여자의 접근은 종료되며, 예약이 `CANCELLED` 또는 `CLOSED`가 되면 새 메시지 전송을 종료한다. 기존 `ChatMessage`는 DB에 보관하고 cursor 기반으로 조회한다.
 
 STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 참조한다.
@@ -215,7 +217,7 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 다음 항목은 기준 문서에서 확정되지 않았거나 이번 문서 범위가 아니므로 구조를 구체화하지 않는다.
 
 - 배포 구조, 최종 AWS 구성, 프론트엔드 배포 방식, V1·V2·V3별 물리 아키텍처
-- Redis의 배포·클러스터 구성(로컬 단일 인스턴스만 구성됨), 채팅 Pub/Sub
+- Redis Cluster·Replica·자동 장애 전환과 다중 EC2 운영 Evidence
 - Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
