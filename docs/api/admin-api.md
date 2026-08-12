@@ -25,9 +25,9 @@
 
 | Method | Path | Request | Response | Status |
 |---|---|---|---|---:|
-| `GET` | `/api/admin/moderation/members` | Query `status?(NORMAL|REVIEW_REQUIRED)`, `page?`, `size?`, `sort?` | `ApiResponse<PageResponse<AdminMemberModerationListItemResponse>>` | 200 |
+| `GET` | `/api/admin/moderation/members` | Query `status?(NORMAL\|REVIEW_REQUIRED)`, `page?`, `size?`, `sort?` | `ApiResponse<PageResponse<AdminMemberModerationListItemResponse>>` | 200 |
 | `GET` | `/api/admin/moderation/members/{memberId}` | Path `memberId` | `ApiResponse<AdminMemberModerationDetailResponse>` | 200 |
-| `GET` | `/api/admin/moderation/reports` | Query `status?(PENDING|REVIEWED)`, `page?`, `size?`, `sort?` | `ApiResponse<PageResponse<AdminModerationReportResponse>>` | 200 |
+| `GET` | `/api/admin/moderation/reports` | Query `status?(PENDING\|REVIEWED)`, `page?`, `size?`, `sort?` | `ApiResponse<PageResponse<AdminModerationReportResponse>>` | 200 |
 | `GET` | `/api/admin/moderation/reports/{reportId}` | Path `reportId` | `ApiResponse<AdminModerationReportDetailResponse>` | 200 |
 | `PATCH` | `/api/admin/moderation/reports/{reportId}/review` | Path `reportId`; `AdminReportReviewRequest` | `ApiResponse<AdminModerationReportResponse>` | 200 |
 
