@@ -1,0 +1,185 @@
+{
+    "metrics": {
+        "vus": {
+            "value": 0,
+            "min": 0,
+            "max": 0
+        },
+        "http_req_receiving": {
+            "max": 0.247,
+            "p(90)": 0.0984,
+            "p(95)": 0.12639999999999998,
+            "avg": 0.06407692307692307,
+            "min": 0.019,
+            "med": 0.051
+        },
+        "peak_create_race_conflict": {
+            "count": 9,
+            "rate": 3.2543349549563882,
+            "thresholds": {
+                "count==9": false
+            }
+        },
+        "http_req_failed": {
+            "passes": 10,
+            "fails": 29,
+            "value": 0.2564102564102564
+        },
+        "peak_create_race_success": {
+            "count": 1,
+            "rate": 0.36159277277293206,
+            "thresholds": {
+                "count==1": false
+            }
+        },
+        "peak_create_race_unexpected": {
+            "count": 0,
+            "rate": 0,
+            "thresholds": {
+                "count==0": false
+            }
+        },
+        "http_req_tls_handshaking": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0
+        },
+        "data_received": {
+            "count": 24038,
+            "rate": 8691.96707191574
+        },
+        "http_req_sending": {
+            "p(90)": 0.0984,
+            "p(95)": 0.1305999999999999,
+            "avg": 0.037487179487179494,
+            "min": 0.008,
+            "med": 0.014,
+            "max": 0.311
+        },
+        "http_req_duration": {
+            "min": 22.07,
+            "med": 99.545,
+            "max": 137.887,
+            "p(90)": 117.3994,
+            "p(95)": 121.7312,
+            "avg": 90.77976923076923
+        },
+        "vus_max": {
+            "min": 10,
+            "max": 10,
+            "value": 10
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 90.45896551724138,
+            "min": 22.07,
+            "med": 99.545,
+            "max": 137.887,
+            "p(90)": 106.4632,
+            "p(95)": 113.41999999999999
+        },
+        "data_sent": {
+            "count": 12676,
+            "rate": 4583.549987669687
+        },
+        "checks": {
+            "passes": 11,
+            "fails": 0,
+            "thresholds": {
+                "rate==1.0": false
+            },
+            "value": 1
+        },
+        "http_reqs": {
+            "count": 39,
+            "rate": 14.10211813814435
+        },
+        "http_req_waiting": {
+            "avg": 90.67820512820512,
+            "min": 22.009,
+            "med": 99.39,
+            "max": 137.631,
+            "p(90)": 117.3032,
+            "p(95)": 121.48310000000001
+        },
+        "iterations": {
+            "count": 10,
+            "rate": 3.6159277277293205
+        },
+        "http_req_connecting": {
+            "p(90)": 8.6656,
+            "p(95)": 9.101199999999999,
+            "avg": 3.0427692307692307,
+            "min": 0,
+            "med": 0,
+            "max": 35.042
+        },
+        "http_req_blocked": {
+            "p(95)": 9.1352,
+            "avg": 3.0691025641025638,
+            "min": 0.001,
+            "med": 0.003,
+            "max": 35.129,
+            "p(90)": 8.711400000000001
+        },
+        "iteration_duration": {
+            "avg": 104.2343625,
+            "min": 71.652708,
+            "med": 105.0861455,
+            "max": 132.423125,
+            "p(90)": 129.356825,
+            "p(95)": 130.889975
+        }
+    },
+    "setup_data": {
+        "date": "2026-08-13",
+        "memberTokens": [
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYjY5MzY1Yy1jZDBjLTQzYTEtYTczYS1jZDVhYmMwNzhjMDIiLCJtZW1iZXJJZCI6MTQsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzUsImV4cCI6MTc4NjUwMTg3NX0.4u3k8otUAsqwenQ2vO_U2fXAJuw87FCAOimg4gqmykI",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmNGRkMzYyYS1kZjYyLTQ3ZTUtOWZiNy03YjM4Njg4MTg5MjgiLCJtZW1iZXJJZCI6MTUsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzUsImV4cCI6MTc4NjUwMTg3NX0.16m1Rd_hVL69duBDRNUc1kFJAHZkM1Wprkdji-iUSJI",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmMWU3OTA3ZS01YTk4LTQyYWMtODk3NC0xYTIwZDdiMDllZDMiLCJtZW1iZXJJZCI6MTYsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzUsImV4cCI6MTc4NjUwMTg3NX0.QInvjvCYB9oJ7cHuwQlv45MoFEA_fYVV4C1Cr-vyXrk",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjOGRkNzkyMC0wYWZhLTRkYjctYTgwMC05Y2Y3MzVjYjNiNWQiLCJtZW1iZXJJZCI6MTcsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzYsImV4cCI6MTc4NjUwMTg3Nn0.ZPl92ME2uzRqiGfExSTWF8NxdA1yNEgwptaGlJ2mGeg",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyMjdhMTViMi00OWNhLTRjNDMtOWZiMS04NDJjYzU1YmFjMTkiLCJtZW1iZXJJZCI6MTgsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzYsImV4cCI6MTc4NjUwMTg3Nn0.Wq07YSY4u9sA9IwdAx4FzADooSu6Y4dgI2XNb5yUPBQ",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlNTAzYTFmNy03MTZjLTQ3Y2EtOTNhMS0xOTU0YWI3MmM3ZTEiLCJtZW1iZXJJZCI6MTksInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzYsImV4cCI6MTc4NjUwMTg3Nn0.Wzf0Mm0On-H_Hqhg_SLuRoaijrcR1Jy8DoLd5fgqq-k",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2ODFkYTVjNy0wOWY5LTQ4MzItYmMwZS1kNGJhZGZiZjg1ZTIiLCJtZW1iZXJJZCI6MjAsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzYsImV4cCI6MTc4NjUwMTg3Nn0.mw80SWCg75HjBKcNhnecGj50EUD8_h4mikU9HMLSak0",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwNTNkYzVmOS0yY2Q0LTRmN2EtODE2MS1mYmM0NThjNzAzZjEiLCJtZW1iZXJJZCI6MjEsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzYsImV4cCI6MTc4NjUwMTg3Nn0.XHnST1xuJKc4CIsC6UNIa1P1mYAZaM41T7EGiQjmKu0",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2NzVjNjIzZi0wNzdkLTQzY2YtYWQ4NS1lZTg4M2UzNmFmNjAiLCJtZW1iZXJJZCI6MjIsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzcsImV4cCI6MTc4NjUwMTg3N30.0JADckSEMQ4qSM5jClDQAf9Yk-ROteDHNLGQ2NRrIoQ",
+            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwYTEzNWExZi05NTQ1LTQxOGQtYjc2Zi00ZTgwNjliOTY4MTEiLCJtZW1iZXJJZCI6MjMsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzcsImV4cCI6MTc4NjUwMTg3N30.ZUZoGihPf7ocE4WVw1JxD1LCLNZar8ynVl4ZEMQoV7s"
+        ],
+        "restaurantId": 4,
+        "targetSessionId": 100,
+        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwODQ3ZGEyOC0wMzZmLTQzZmItOWMwZi03NGYwOTA1MmY1M2EiLCJtZW1iZXJJZCI6MjQsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzcsImV4cCI6MTc4NjUwMTg3N30.tZPjGw9t3romJwOaKfNzpy7FM6qOEip-iG0k90bTWxY"
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "teardown": {
+                "name": "teardown",
+                "path": "::teardown",
+                "id": "a8a9942382e8ffe2e56ef29e664b8229",
+                "groups": {},
+                "checks": {
+                        "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+                            "id": "72ee86e493a705c57357954724f8ed6a",
+                            "passes": 1,
+                            "fails": 0,
+                            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+                            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다"
+                        }
+                    }
+            }
+        },
+        "checks": {
+            "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+                "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+                "id": "e932986fb0e444a272fc4b0130cfaf01",
+                "passes": 10,
+                "fails": 0,
+                "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)"
+            }
+        }
+    }
+}

@@ -1,15 +1,21 @@
-# #142 인기 회차 예약 부하 측정 — 시나리오 A·B (코드 + 로컬 검증)
+# #142 인기 회차 예약 부하 측정 — 시나리오 A·B (코드 + 로컬/AWS 기능 검증)
 
-이번 실행 범위는 **코드 + 로컬 검증**까지다. 실제 AWS 위에서의 Load/Stress 실행, 관측 시간축
-연결(Prometheus/Grafana), 결과 표·병목 전환점 기록은 #207(AWS 실행 환경 준비)이 끝난 뒤 이어서
-진행한다. 아래는 스크립트가 실제로 의도대로 동작하는지 로컬에서 검증한 기록이다 — 성능 결론으로
-쓰지 않는다.
+이번 실행 범위는 **코드 + 기능 검증(로컬, 이어서 AWS 연결 확인)**까지다. #207(AWS 실행 환경
+준비, `bobfull-k6-test-app` EC2)이 완료돼 실제 AWS 대상으로도 실행해봤지만, 아래 AWS 실행은
+여전히 2~50명 수준의 **동작 검증**이다 — 관측 시간축 연결(Prometheus/Grafana), 진짜 Load/Stress
+규모, 결과 표·병목 전환점 기록은 별도로 이어서 진행한다. 성능 결론으로 쓰지 않는다.
+
+시나리오 B의 결과는 Issue #142 "보강 계약"의 #60(예약 좌석 락 전략 재설계, 2026-08-11 기준
+DRAFT) 선행조건이 아직 확정되지 않아 **현재 락 전략 기준의 임시 결과**다. #60이 끝나면 동일
+조건으로 재검증한다.
 
 ## 측정·재현 환경
 
 - 기준 Branch: `feature/142-peak-load-test`
-- 환경: 로컬(`./gradlew bootRun`, `spring.profiles.active=local`), `docker-compose`(MySQL 8.4,
+- 로컬 환경: `./gradlew bootRun`(`spring.profiles.active=local`), `docker-compose`(MySQL 8.4,
   Redis 7) — 운영 환경과 CPU/네트워크 특성이 다르므로 병목 전환점 근거로 쓰지 않는다.
+- AWS 환경: `bobfull-k6-test-app` EC2(`http://15.164.48.39:8080`, `/actuator/health` UP 확인) —
+  실행자 로컬 PC에서 직접 실행. Prometheus/Grafana 시간축 연결은 아직 하지 않았다.
 - Fixture: 시나리오별 `setup()`에서 API로 직접 생성(운영 데이터 없음, 합성 데이터만 사용).
 
 ## 시나리오 A — 예약 페이지 조회 폭주 (`peak-restaurant-view.js`)
@@ -19,7 +25,8 @@
 
 | 실행 | 결과 | Raw |
 |---|---|---|
-| Smoke(`STAGE=smoke`) | PASS — checks 84/84(100%), http_req_failed 0% | `raw/A-peak-restaurant-view-smoke.log`, `.json` |
+| 로컬 Smoke(`STAGE=smoke`) | PASS — checks 84/84(100%), http_req_failed 0% | `raw/A-peak-restaurant-view-smoke.log`, `.json` |
+| AWS Smoke(`BASE_URL=http://15.164.48.39:8080`) | PASS — checks 84/84(100%), http_req_failed 0%, p95≈434ms(로컬 대비 네트워크 왕복 포함) | `raw/A-peak-restaurant-view-AWS-smoke.log`, `.json` |
 
 ## 시나리오 B — 예약 버튼 동시 클릭 (`peak-reservation-create-race.js`)
 
@@ -35,20 +42,34 @@ ReservationParticipant를 생성하지 않는다"고 명시돼 있어, JOIN 대�
 CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 회차가 열리는 순간 몰리는" 상황을
 오히려 더 정확히 모사한다.
 
-### 결과 (Issue #142 "초기 후보 단계": 2 → 5 → 10 → 20 → 50)
+### 결과 — 로컬 (Issue #142 "초기 후보 단계": 2 → 5 → 10 → 20 → 50)
 
-| 동시 사용자 수 | 성공(200) | 충돌(409 ACTIVE_RESERVATION_ALREADY_EXISTS) | 예상 밖 응답 | teardown 독립 검증 | Raw |
-|---:|---:|---:|---:|---|---|
-| 2 | 1 | 1 | 0 | PASS(배타 선점 유지 확인) | `raw/B-create-race-2users.*` |
-| 5 | 1 | 4 | 0 | PASS | `raw/B-create-race-5users.*` |
-| 10 | 1 | 9 | 0 | PASS | `raw/B-create-race-10users.*` |
-| 20 | 1 | 19 | 0 | PASS | `raw/B-create-race-20users.*` |
-| 50 | 1 | 49 | 0 | PASS | `raw/B-create-race-50users.*` |
+| 동시 사용자 수 | 성공(200) | 충돌(409 ACTIVE_RESERVATION_ALREADY_EXISTS) | 예상 밖 응답 | threshold Gate | teardown 독립 검증 | Raw |
+|---:|---:|---:|---:|---|---|---|
+| 2 | 1 | 1 | 0 | PASS | PASS(배타 선점 유지 확인) | `raw/B-create-race-2users.*` |
+| 5 | 1 | 4 | 0 | PASS | PASS | `raw/B-create-race-5users.*` |
+| 10 | 1 | 9 | 0 | PASS | PASS | `raw/B-create-race-10users.*` |
+| 20 | 1 | 19 | 0 | PASS | PASS | `raw/B-create-race-20users.*` |
+| 50 | 1 | 49 | 0 | PASS | PASS | `raw/B-create-race-50users.*` |
 
-모든 동시성 단계에서 정확히 1명만 성공하고 나머지는 전부 `409 ACTIVE_RESERVATION_ALREADY_EXISTS`였다.
-`checks_succeeded`는 매 실행 100%(성공 응답의 `body.success` 확인)였고 `peak_create_race_unexpected`
-카운터는 항상 0이었다. `teardown()`에서 새 회원으로 같은 회차에 CREATE를 한 번 더 시도해도
-409가 나, 경쟁 종료 후에도 배타 선점이 깨지지 않음을 독립적으로 재확인했다.
+### 결과 — AWS(`bobfull-k6-test-app`, 동일 동시성 단계)
+
+| 동시 사용자 수 | 성공(200) | 충돌(409) | 예상 밖 응답 | threshold Gate | teardown 독립 검증 | Raw |
+|---:|---:|---:|---:|---|---|---|
+| 2 | 1 | 1 | 0 | PASS | PASS | `raw/B-create-race-2users-AWS.*` |
+| 5 | 1 | 4 | 0 | PASS | PASS | `raw/B-create-race-5users-AWS.*` |
+| 10 | 1 | 9 | 0 | PASS | PASS | `raw/B-create-race-10users-AWS.*` |
+| 20 | 1 | 19 | 0 | PASS | PASS | `raw/B-create-race-20users-AWS.*` |
+| 50 | 1 | 49 | 0 | PASS | PASS | `raw/B-create-race-50users-AWS.*` |
+
+로컬·AWS 모든 동시성 단계에서 정확히 1명만 성공하고 나머지는 전부
+`409 ACTIVE_RESERVATION_ALREADY_EXISTS`였다. `checks_succeeded`는 매 실행 100%였고
+`peak_create_race_unexpected` 카운터는 항상 0이었다. `teardown()`에서 새 회원으로 같은
+회차에 CREATE를 한 번 더 시도해도 409가 나, 경쟁 종료 후에도 배타 선점이 깨지지 않음을
+독립적으로 재확인했다. AWS 실행에서는 동시성이 올라갈수록 iteration_duration이 늘었다
+(2명 128ms → 50명 233ms 평균) — 로컬보다 네트워크 왕복이 포함돼 그런 것으로 보이며, 이 규모
+(최대 50)에서는 DB Pool pending/lock wait 등 실제 병목 신호는 관측하지 않았다(Prometheus/Grafana
+미연결, 별도 진행 필요).
 
 ### 트러블슈팅 — teardown 검증 로직 최초 버그
 
@@ -73,9 +94,10 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 정상 조건에서는 종료 코드 0, 불변식을 강제로 깨면 종료 코드 99(k6 표준 threshold 실패 코드)로
 끝난다. 2/5/10/20/50 전 단계를 재실행해 모든 threshold가 PASS임을 다시 확인했다(위 결과 표).
 
-## 남은 작업 (#207 AWS 실행 후)
+## 남은 작업
 
-- 동일 시나리오를 AWS 테스트 스택 대상으로 Load/Stress 규모까지 실행
+- #60(예약 좌석 락 전략 재설계) 결과가 나오면 시나리오 B를 동일 조건으로 재검증
+- 동일 시나리오를 AWS 대상으로 Load/Stress 규모(2~50명이 아니라 #63 "부하 모델" 계단식)까지 실행
 - Prometheus/Grafana와 같은 시간축으로 Reservation·TimeSlot 락 대기시간, DB Pool active/pending 기록
 - 결과 표(p95/p99/RPS/오류율)와 병목 전환점 기록
 - JOIN 기반 좌석초과 테스트는 Fake 결제 확인 어댑터 도입 여부를 별도 결정한 뒤 진행
