@@ -160,11 +160,11 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - V2에서 최초 예약 결제 완료 시 예약당 채팅방 1개를 생성한다. 별도 생성 API는 없다.
 - 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료되고 OWNER와 ADMIN은 참여하지 않는다.
 - 예약이 `CANCELLED` 또는 `CLOSED`면 새 메시지 전송을 종료하고, 기존 메시지는 조회할 수 있다. `CONFIRMED → CLOSED` 전이는 스케줄러가 처리하지만, 스케줄러 지연과 무관하게 `now >= TimeSlot.endAt`부터는 새 메시지 전송을 즉시 차단한다(Issue #175).
-- 메시지는 DB에 저장하며 과거 메시지는 cursor 기반으로 조회한다.
+- 메시지는 DB에 저장하며 과거 메시지는 cursor 기반으로 조회한다. V3 #170은 DB 커밋 후 Redis Pub/Sub(`bobfull:chat:messages`)으로 각 애플리케이션 인스턴스에 실시간 전파한다. Pub/Sub은 best-effort이며 재생하지 않으므로, 단절 중 놓친 메시지는 DB cursor 조회가 공식 복구 경로다. Redis 발행 실패는 저장된 메시지를 롤백하지 않는다.
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
 - HTTP 조회 경로는 `GET /api/chat/rooms/{chatRoomId}/messages`다.
-- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 차단, Redis Pub/Sub, Kafka는 범위에서 제외한다. V3 #218 사용자 신고는 채팅방의 상대 회원을 대상으로 하며, AI Moderation과 신고 누적은 관리자 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN/정지/퇴장에 사용하지 않는다.
+- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 차단, Redis Streams·Redis Pub/Sub 재전송 Outbox는 범위에서 제외한다. AI Moderation의 Kafka는 채팅 실시간 전파와 분리된 비동기 분석·재처리 경로다. V3 #218 사용자 신고는 채팅방의 상대 회원을 대상으로 하며, AI Moderation과 신고 누적은 관리자 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN/정지/퇴장에 사용하지 않는다.
 
 ## 8. 버전 범위
 
@@ -189,7 +189,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - 실패 결제·환불 재처리, 정산 데이터 재집계
 - 부하 테스트, 검색 성능·이벤트 처리·모니터링·배포 고도화
 
-Redis는 현재 확정 기능·ERD 선행 계약에 포함하지 않으며, 채팅에는 Redis Pub/Sub나 Kafka를 사용하지 않는다. Kafka는 V3 확정 기술로, 좌석 차감·예약 확정·결제 검증·환불 상태 변경은 동기 트랜잭션 안에서 완료하고, 트랜잭션 완료 후 알림·운영 지표 집계·정산 후속 처리·실패 이벤트 재처리에 사용한다. Consumer는 중복 수신을 고려해 멱등성을 보장한다.
+Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 fan-out만 수행하고, 영속·재처리·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Redis Pub/Sub과 서로 대체하지 않는다.
 
 ## 9. API 공통 계약
 
