@@ -44,7 +44,7 @@
 {"success":false,"message":"에러 메시지","code":"ERROR_CODE"}
 ```
 
-`null` 필드는 `@JsonInclude(NON_NULL)`로 응답에서 제외된다.
+`null` 필드는 `@JsonInclude(NON_NULL)` 적용 범위에서 응답에서 제외된다.
 
 ### 2.2 페이징
 
@@ -84,7 +84,7 @@ Security 예외:
 
 ## 3. 전체 HTTP API
 
-아래 `Response` 열은 Controller의 **실제 제네릭 반환 타입**이다. 개별 Response DTO의 필드 정의는 같은 기준 Commit의 DTO 소스를 최종 Source of Truth로 사용한다.
+아래 `Response` 열은 Controller의 **실제 제네릭 반환 타입**이다. `ApiResponse<T>.data`의 구체 필드·중첩 구조는 **3.2 Response DTO Catalog**에 같은 기준 Commit의 실제 DTO 소스 기준으로 명시한다.
 
 | 도메인 | Method | Path | Auth | Request | Response | Status | Controller |
 |---|---|---|---|---|---|---:|---|
@@ -165,6 +165,82 @@ Security 예외:
 |---|---|---|---|---|
 | `GET` | `/actuator/health` | PUBLIC | Spring Boot Actuator Health JSON | `ApiResponse` 미사용 |
 | `GET` | `/actuator/prometheus` | PUBLIC | Prometheus text exposition | `ApiResponse` 미사용 |
+
+### 3.2 Response DTO Catalog
+
+70개 Application API의 `ApiResponse<T>.data`에 사용되는 Response DTO를 실제 `develop` DTO 선언 기준으로 정리한다. `PageResponse<T>` 자체의 `content/page/size/totalElements/totalPages` 계약은 2.2를 따른다. Java 소스에서 null 가능성이 직접 드러나는 경우만 비고에 표시하며, 그 외는 임의로 nullable 여부를 추정하지 않는다.
+
+| DTO | 실제 필드 계약 | Nullable / 중첩 / 비고 |
+|---|---|---|
+| `SignupResponse` | `memberId: Long`, `email: String`, `name: String`, `role: MemberRole` | 소스에서 nullable 명시 없음 |
+| `LoginResponse` | `accessToken: String`, `tokenType: String`, `refreshToken: String` | `tokenType`은 factory 기준 `Bearer` |
+| `ReissueResponse` | `accessToken: String`, `refreshToken: String` | 소스에서 nullable 명시 없음 |
+| `LogoutResponse` | `result: boolean` | 성공 factory는 `true` |
+| `MemberResponse` | `memberId: Long`, `email: String`, `name: String`, `phoneNumber: String`, `role: MemberRole`, `businessNumber: String` | `businessNumber`는 MEMBER일 때 null이며 `NON_NULL`로 생략 |
+| `MemberUpdateResponse` | `result: boolean` | 성공 factory는 `true` |
+| `RestaurantSearchResponse` | `restaurantId: Long`, `name: String`, `address: String`, `category: String`, `keyword: String`, `depositPerPerson: Integer`, `imageUrl: String` | factory가 `imageUrl=null`을 허용 |
+| `RestaurantDetailResponse` | `restaurantId: Long`, `name: String`, `address: String`, `category: String`, `description: String`, `keyword: String`, `depositPerPerson: Integer`, `imageUrl: String` | factory가 `imageUrl=null`을 허용 |
+| `RestaurantIdResponse` | `restaurantId: Long` | 소스에서 nullable 명시 없음 |
+| `OwnerRestaurantListResponse` | `restaurantId: Long`, `name: String`, `address: String`, `category: String`, `depositPerPerson: Integer`, `status: RestaurantStatus`, `imageUrl: String` | factory가 `imageUrl=null`을 허용 |
+| `OwnerRestaurantDetailResponse` | `restaurantId: Long`, `name: String`, `address: String`, `category: String`, `description: String`, `keyword: String`, `depositPerPerson: Integer`, `status: RestaurantStatus`, `imageUrl: String` | factory가 `imageUrl=null`을 허용 |
+| `RestaurantImageUploadUrlResponse` | `uploadUrl: String`, `tempImageKey: String`, `finalImageKey: String` | 소스에서 nullable 명시 없음 |
+| `SharedTableIdResponse` | `tableId: Long`, `displayNumber: Integer` | 소스에서 nullable 명시 없음 |
+| `SharedTableBulkResponse` | `createdTableCount: int`, `tables: List<SharedTableResponse>` | `tables` 중첩 DTO는 아래 행 참조 |
+| `SharedTableResponse` | `tableId: Long`, `restaurantId: Long`, `displayNumber: Integer`, `capacity: Integer`, `status: SharedTableStatus` | 소스에서 nullable 명시 없음 |
+| `DiningSessionIdResponse` | `sessionId: Long` | 소스에서 nullable 명시 없음 |
+| `DiningSessionBulkResponse` | `tableId: Long`, `createdSessionCount: Integer` | 소스에서 nullable 명시 없음 |
+| `DiningSessionResponse` | `sessionId: Long`, `tableId: Long`, `capacity: Integer`, `startAt: OffsetDateTime`, `endAt: OffsetDateTime` | 소스에서 nullable 명시 없음 |
+| `AvailableDiningSessionListResponse` | `restaurantId: Long`, `content: List<AvailableDiningSessionResponse>` | `content` 중첩 DTO는 아래 행 참조 |
+| `AvailableDiningSessionResponse` | `sessionId: Long`, `tableId: Long`, `capacity: Integer`, `startAt: OffsetDateTime`, `endAt: OffsetDateTime`, `availableCapacity: Integer`, `reservationId: Long`, `currentParticipantCount: Integer` | 활성 Reservation이 없으면 `reservationId=null` |
+| `ReservationSearchResponse` | `reservationId: Long`, `restaurantId: Long`, `restaurantName: String`, `sessionId: Long`, `tableId: Long`, `capacity: Integer`, `startAt: OffsetDateTime`, `endAt: OffsetDateTime`, `reservationStatus: ReservationStatus`, `recruitmentStatus: RecruitmentStatus`, `currentParticipantCount: Integer`, `availableCapacity: Integer`, `confirmationThreshold: Integer` | 소스에서 nullable 명시 없음 |
+| `ReservationAvailabilityResponse` | `available: boolean`, `availableCapacity: Integer`, `reason: String` | available factory에서는 `reason=null` |
+| `ReservationPrepareResponse` | `paymentId: String`, `paymentStatus: PaymentStatus`, `amount: BigDecimal`, `expiresAt: OffsetDateTime` | 소스에서 nullable 명시 없음 |
+| `ReservationCancellationResponse` | `reservationId: Long`, `participationId: Long`, `participationStatus: ParticipationStatus`, `cancellationScope: CancellationScope`, `refundStatus: String` | 소스에서 nullable 명시 없음 |
+| `MyReservationListItemResponse` | `reservationId: Long`, `restaurantId: Long`, `restaurantName: String`, `sessionId: Long`, `startAt: OffsetDateTime`, `endAt: OffsetDateTime`, `reservationStatus: ReservationStatus`, `recruitmentStatus: RecruitmentStatus`, `participationId: Long`, `partySize: Integer`, `participationStatus: ParticipationStatus`, `paymentStatus: PaymentStatus` | 소스에서 nullable 명시 없음 |
+| `MyReservationDetailResponse` | `reservationId: Long`, `restaurantId: Long`, `restaurantName: String`, `sessionId: Long`, `startAt: OffsetDateTime`, `endAt: OffsetDateTime`, `reservationStatus: ReservationStatus`, `recruitmentStatus: RecruitmentStatus`, `participationId: Long`, `partySize: Integer`, `participationStatus: ParticipationStatus`, `paymentId: String`, `paymentStatus: PaymentStatus` | 소스에서 nullable 명시 없음 |
+| `OwnerReservationListItemResponse` | `reservationId: Long`, `sessionId: Long`, `tableId: Long`, `capacity: Integer`, `startAt: OffsetDateTime`, `endAt: OffsetDateTime`, `reservationStatus: ReservationStatus`, `recruitmentStatus: RecruitmentStatus`, `currentParticipantCount: Integer`, `availableCapacity: Integer`, `confirmationThreshold: Integer` | 소스에서 nullable 명시 없음 |
+| `OwnerReservationDetailResponse` | `reservationId: Long`, `restaurantId: Long`, `sessionId: Long`, `tableId: Long`, `capacity: Integer`, `startAt: OffsetDateTime`, `endAt: OffsetDateTime`, `reservationStatus: ReservationStatus`, `recruitmentStatus: RecruitmentStatus`, `currentParticipantCount: Integer`, `availableCapacity: Integer`, `confirmationThreshold: Integer` | 소스에서 nullable 명시 없음 |
+| `OwnerReservationParticipantResponse` | `participationId: Long`, `memberId: Long`, `name: String`, `partySize: Integer`, `participationStatus: ParticipationStatus` | 이름은 운영 조회용 원문 |
+| `OwnerReservationCancellationResponse` | `reservationId: Long` | 소스에서 nullable 명시 없음 |
+| `PaymentCompletionResponse` | `paymentId: String`, `paymentStatus: PaymentStatus`, `reservationId: Long`, `participationId: Long` | factory가 `reservationId`/`participationId` null을 거부 |
+| `PaymentDetailResponse` | `paymentId: String`, `reservationId: Long`, `participationId: Long`, `paymentPurpose: PaymentPurpose`, `partySize: Integer`, `paymentStatus: PaymentStatus`, `amount: BigDecimal`, `currency: String`, `expiresAt: OffsetDateTime`, `paidAt: OffsetDateTime` | 미결제면 `paidAt=null` 가능 |
+| `PaymentListResponse` | `paymentId: String`, `reservationId: Long`, `participationId: Long`, `paymentPurpose: PaymentPurpose`, `partySize: Integer`, `amount: BigDecimal`, `currency: String`, `paymentStatus: PaymentStatus`, `paidAt: OffsetDateTime` | 미결제면 `paidAt=null` 가능 |
+| `RefundResponse` | `refundId: Long`, `paymentId: String`, `reservationId: Long`, `amount: BigDecimal`, `refundStatus: RefundStatus`, `requestedAt: OffsetDateTime`, `completedAt: OffsetDateTime` | `requestedAt`/`completedAt`은 상태에 따라 null 가능 |
+| `ExpectedSettlementResponse` | `totalPaidAmount: BigDecimal`, `totalRefundedAmount: BigDecimal`, `expectedSettlementAmount: BigDecimal` | 소스에서 nullable 명시 없음 |
+| `SettlementReservationResponse` | `reservationId: Long`, `diningSessionAt: OffsetDateTime`, `totalPaidAmount: BigDecimal`, `totalRefundedAmount: BigDecimal`, `expectedSettlementAmount: BigDecimal` | 소스에서 nullable 명시 없음 |
+| `SettlementReservationDetailResponse` | `reservationId: Long`, `expectedSettlementAmount: BigDecimal`, `payments: List<PaymentItem>`, `refunds: List<RefundItem>` | 중첩 item은 아래 두 행 참조 |
+| `SettlementReservationDetailResponse.PaymentItem` | `paymentId: String`, `paymentStatus: String`, `amount: BigDecimal` | 소스에서 nullable 명시 없음 |
+| `SettlementReservationDetailResponse.RefundItem` | `refundId: Long`, `refundStatus: String`, `amount: BigDecimal` | 소스에서 nullable 명시 없음 |
+| `NoShowCandidateResponse` | `participationId: Long`, `memberId: Long`, `name: String`, `partySize: Integer`, `participationStatus: ParticipationStatus` | `name`은 마스킹됨 |
+| `NoShowProcessResponse` | `reservationId: Long`, `participationId: Long` | 소스에서 nullable 명시 없음 |
+| `NoShowHistoryResponse` | `noShowHistoryId: Long`, `participationId: Long`, `memberId: Long`, `name: String`, `partySize: Integer`, `isMarked: boolean`, `processedByMemberId: Long`, `processedAt: OffsetDateTime` | `name`은 마스킹됨 |
+| `NoShowCustomerResponse` | `memberId: Long`, `name: String`, `noShowCount: long`, `latestNoShowAt: OffsetDateTime`, `reservationId: Long`, `participationId: Long`, `partySize: Integer` | `name`은 마스킹됨 |
+| `ChatRoomResponse` | `chatRoomId: Long`, `reservationId: Long` | 소스에서 nullable 명시 없음 |
+| `ChatMessageSliceResponse` | `content: List<ChatMessageResponse>`, `nextCursor: Long` | `content` 중첩 DTO는 아래 행 참조; `nextCursor` nullable 여부는 소스 선언만으로 확정하지 않음 |
+| `ChatMessageResponse` | `messageId: Long`, `senderMemberId: Long`, `senderName: String`, `content: String`, `sentAt: OffsetDateTime` | 소스에서 nullable 명시 없음 |
+| `ChatRoomMemberReportResponse` | `reportId: Long`, `chatRoomId: Long`, `reporterMemberId: Long`, `reportedMemberId: Long`, `anchorMessageId: Long`, `reason: ReportReason`, `detail: String`, `status: ReportStatus`, `createdAt: Instant` | `anchorMessageId`/`detail`은 요청에서 optional; 응답 DTO는 엔티티 값을 그대로 전달 |
+| `AdminMemberListItemResponse` | `memberId: Long`, `email: String`, `name: String`, `role: MemberRole`, `noShowCount: long`, `createdAt: OffsetDateTime`, `deletedAt: OffsetDateTime` | `deletedAt` nullable 여부는 소스 선언만으로 확정하지 않음 |
+| `AdminMemberDetailResponse` | `memberId: Long`, `email: String`, `name: String`, `phoneNumber: String`, `role: MemberRole`, `noShowCount: long`, `createdAt: OffsetDateTime`, `deletedAt: OffsetDateTime` | `deletedAt` nullable 여부는 소스 선언만으로 확정하지 않음 |
+| `AdminRestaurantListItemResponse` | `restaurantId: Long`, `ownerMemberId: Long`, `ownerName: String`, `name: String`, `category: String`, `status: RestaurantStatus`, `createdAt: OffsetDateTime` | 소스에서 nullable 명시 없음 |
+| `AdminRestaurantDetailResponse` | `restaurantId: Long`, `ownerMemberId: Long`, `ownerName: String`, `name: String`, `address: String`, `category: String`, `description: String`, `keyword: String`, `depositPerPerson: Integer`, `status: RestaurantStatus`, `createdAt: OffsetDateTime`, `deletedAt: OffsetDateTime` | `deletedAt` nullable 여부는 소스 선언만으로 확정하지 않음 |
+| `AdminReservationListItemResponse` | `reservationId: Long`, `restaurantId: Long`, `restaurantName: String`, `creatorMemberId: Long`, `startAt: OffsetDateTime`, `reservationStatus: ReservationStatus`, `recruitmentStatus: RecruitmentStatus`, `currentParticipantCount: long`, `capacity: Integer` | 소스에서 nullable 명시 없음 |
+| `AdminPaymentListItemResponse` | `paymentId: String`, `memberId: Long`, `reservationId: Long`, `amount: BigDecimal`, `currency: String`, `paymentStatus: PaymentStatus`, `paidAt: OffsetDateTime` | 미결제면 `paidAt=null` 가능 |
+| `AdminRefundListItemResponse` | `refundId: Long`, `paymentId: String`, `memberId: Long`, `reservationId: Long`, `amount: BigDecimal`, `refundStatus: RefundStatus`, `requestedAt: OffsetDateTime`, `completedAt: OffsetDateTime` | `requestedAt`/`completedAt`은 상태에 따라 null 가능 |
+| `AdminNoShowListItemResponse` | `noShowHistoryId: Long`, `memberId: Long`, `memberName: String`, `restaurantId: Long`, `restaurantName: String`, `reservationId: Long`, `participationId: Long`, `partySize: Integer`, `processedAt: OffsetDateTime` | `memberName`은 마스킹됨 |
+| `AdminOverviewStatisticsResponse` | `totalReservationCount: long`, `reservationConfirmationRate: double`, `noShowRate: double` | primitive 필드 |
+| `AdminRestaurantStatisticsResponse` | `restaurantId: Long`, `restaurantName: String`, `totalReservationCount: long`, `confirmedReservationCount: long`, `confirmationRate: double` | 소스에서 nullable 명시 없음 |
+| `AdminMemberNoShowRateResponse` | `memberId: Long`, `name: String`, `totalReservationCount: long`, `noShowCount: long`, `noShowRate: double` | `name`은 마스킹됨 |
+| `AdminMemberModerationListItemResponse` | `memberId: Long`, `profanityCount: long`, `personalInformationCount: long`, `spamCount: long`, `totalFlaggedCount: long`, `reviewTargetCount: long`, `reviewStatus: MemberModerationReviewStatus`, `lastFlaggedAt: Instant` | 소스에서 nullable 명시 없음 |
+| `AdminMemberModerationDetailResponse` | `memberId: Long`, `reviewStatus: MemberModerationReviewStatus`, `totalFlaggedCount: long`, `reviewTargetCount: long`, `riskCounts: Map<String, Long>`, `evidences: List<AdminMemberModerationEvidenceResponse>` | evidence 중첩 DTO는 아래 행 참조 |
+| `AdminMemberModerationEvidenceResponse` | `messageId: Long`, `content: String`, `categories: Set<ModerationCategory>`, `riskLevel: RiskLevel`, `countedForReview: boolean`, `sentAt: Instant`, `analyzedAt: Instant` | 소스에서 nullable 명시 없음 |
+| `AdminModerationReportResponse` | `reportId: Long`, `chatRoomId: Long`, `reporterMemberId: Long`, `reportedMemberId: Long`, `reason: ReportReason`, `status: ReportStatus`, `anchorMessageId: Long`, `createdAt: Instant`, `decision: ReviewDecision`, `reviewedByMemberId: Long`, `reviewedAt: Instant` | nullable 여부는 엔티티 상태에 따라 달라질 수 있으나 DTO 선언만으로 단정하지 않음 |
+| `AdminModerationReportDetailResponse` | `reportId: Long`, `chatRoomId: Long`, `reason: ReportReason`, `detail: String`, `reporterMemberId: Long`, `reportedMemberId: Long`, `anchorMessageId: Long`, `createdAt: Instant`, `status: ReportStatus`, `context: List<ContextMessage>`, `moderationSignals: ModerationSignals`, `reportSignals: ReportSignals` | 중첩 DTO는 아래 행 참조 |
+| `AdminModerationReportDetailResponse.ContextMessage` | `messageId: Long`, `senderMemberId: Long`, `content: String`, `sentAt: Instant`, `moderation: Moderation` | 소스에서 nullable 명시 없음 |
+| `AdminModerationReportDetailResponse.Moderation` | `status: ModerationProcessingStatus`, `categories: Set<ModerationCategory>`, `riskLevel: RiskLevel`, `promptVersion: String`, `policyVersion: String`, `analyzedAt: Instant` | 소스에서 nullable 명시 없음 |
+| `AdminModerationReportDetailResponse.ModerationSignals` | `totalFlaggedCount: long`, `reviewTargetCount: long`, `profanityCount: long`, `personalInformationCount: long`, `spamCount: long` | primitive 집계 필드 |
+| `AdminModerationReportDetailResponse.ReportSignals` | `pendingReportCount: long`, `reviewedReportCount: long`, `confirmedViolationCount: long` | primitive 집계 필드 |
+
+PortOne Webhook의 `ResponseEntity<Void>`는 `ApiResponse` 및 Response DTO를 사용하지 않으므로 Catalog 대상에서 제외한다.
 
 ## 4. Request Body DTO / Validation
 
@@ -321,6 +397,7 @@ Controller에서 `@Valid`로 검증되는 Body DTO의 현재 필드 계약이다
 - `src/main/java/**/controller/*Controller.java`: 30개 `@RestController`, 70개 HTTP mapping
 - `SecurityConfig`: 공개/인증/OWNER/ADMIN 경계
 - Body Request DTO: `@Valid` 및 Jakarta Validation 제약
+- Response DTO: 70개 Application API가 참조하는 top-level·중첩 응답 필드 계약
 - `GlobalExceptionHandler`: Validation, Query 타입 오류, optimistic lock, unhandled exception 처리
 - `Common/Member/Restaurant/SharedTable/TimeSlot/Reservation/Payment/Chat/ImageErrorCode`
 - `ApiResponse`, `PageResponse` 공통 응답 구조
