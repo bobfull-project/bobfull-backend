@@ -1,0 +1,174 @@
+{
+  "metrics": {
+    "peak_create_race_unexpected": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "data_sent": {
+      "rate": 4685.164336399511,
+      "count": 50916
+    },
+    "http_req_tls_handshaking": {
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0,
+      "p(95)": 0
+    },
+    "http_req_receiving": {
+      "max": 2.83,
+      "p(90)": 0.16080000000000005,
+      "p(95)": 0.33999999999999897,
+      "avg": 0.13763522012578613,
+      "min": 0.012,
+      "med": 0.051
+    },
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.0920175256579368,
+      "thresholds": {
+        "count==1": false
+      }
+    },
+    "vus": {
+      "min": 0,
+      "max": 0,
+      "value": 0
+    },
+    "http_req_connecting": {
+      "avg": 2.857610062893082,
+      "min": 0,
+      "med": 0,
+      "max": 32.724,
+      "p(90)": 8.1304,
+      "p(95)": 9.09509999999999
+    },
+    "http_req_duration": {
+      "p(95)": 308.61409999999995,
+      "avg": 136.3710377358491,
+      "min": 15.219,
+      "med": 99.77,
+      "max": 346.745,
+      "p(90)": 269.63220000000007
+    },
+    "http_req_failed": {
+      "passes": 50,
+      "fails": 109,
+      "value": 0.31446540880503143
+    },
+    "http_req_sending": {
+      "avg": 0.10301257861635217,
+      "min": 0.008,
+      "med": 0.016,
+      "max": 2.203,
+      "p(90)": 0.07440000000000001,
+      "p(95)": 0.11239999999999997
+    },
+    "vus_max": {
+      "value": 50,
+      "min": 50,
+      "max": 50
+    },
+    "checks": {
+      "passes": 51,
+      "fails": 0,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
+    },
+    "http_reqs": {
+      "count": 159,
+      "rate": 14.630786579611954
+    },
+    "http_req_waiting": {
+      "avg": 136.13038993710688,
+      "min": 15.157,
+      "med": 99.545,
+      "max": 345.773,
+      "p(90)": 269.3184,
+      "p(95)": 308.5227
+    },
+    "iterations": {
+      "rate": 4.600876282896841,
+      "count": 50
+    },
+    "peak_create_race_conflict": {
+      "count": 49,
+      "rate": 4.508858757238904,
+      "thresholds": {
+        "count==49": false
+      }
+    },
+    "iteration_duration": {
+      "avg": 233.21685492,
+      "min": 77.36125,
+      "med": 236.4986045,
+      "max": 357.946125,
+      "p(90)": 339.1006913,
+      "p(95)": 350.7040535
+    },
+    "http_req_duration{expected_response:true}": {
+      "med": 96.646,
+      "max": 190.104,
+      "p(90)": 106.1214,
+      "p(95)": 110.9356,
+      "avg": 96.31275229357799,
+      "min": 18.016
+    },
+    "http_req_blocked": {
+      "min": 0.001,
+      "med": 0.004,
+      "max": 32.772,
+      "p(90)": 8.141800000000002,
+      "p(95)": 9.12589999999999,
+      "avg": 2.926283018867925
+    },
+    "data_received": {
+      "count": 98256,
+      "rate": 9041.274001046238
+    }
+  },
+  "setup_data": {
+    "targetSessionId": 104,
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]",
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 50 JWT tokens removed — see PR #220 review]",
+    "restaurantId": 6
+  },
+  "root_group": {
+    "groups": {
+      "teardown": {
+        "name": "teardown",
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
+        "checks": {
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "fails": 0,
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1
+          }
+        }
+      }
+    },
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "passes": 50,
+        "fails": 0,
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01"
+      }
+    },
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e"
+  }
+}

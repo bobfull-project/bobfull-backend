@@ -1,0 +1,174 @@
+{
+  "metrics": {
+    "data_received": {
+      "count": 191236,
+      "rate": 8364.103093881893
+    },
+    "http_reqs": {
+      "count": 309,
+      "rate": 13.514755882833278
+    },
+    "http_req_duration{expected_response:true}": {
+      "med": 97.319,
+      "max": 458.977,
+      "p(90)": 124.4016,
+      "p(95)": 132.61839999999995,
+      "avg": 106.53763157894727,
+      "min": 16.666
+    },
+    "http_req_duration": {
+      "p(95)": 456.1213999999999,
+      "avg": 173.6473915857605,
+      "min": 16.666,
+      "med": 106.711,
+      "max": 509.475,
+      "p(90)": 402.69040000000007
+    },
+    "peak_create_race_conflict": {
+      "count": 99,
+      "rate": 4.329970331393186,
+      "thresholds": {
+        "count==99": false
+      }
+    },
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.043737074054476625,
+      "thresholds": {
+        "count==1": false
+      }
+    },
+    "http_req_waiting": {
+      "min": 16.57,
+      "med": 106.595,
+      "max": 509.408,
+      "p(90)": 402.57560000000007,
+      "p(95)": 456.0431999999999,
+      "avg": 173.51567961165054
+    },
+    "vus_max": {
+      "max": 100,
+      "value": 100,
+      "min": 100
+    },
+    "http_req_failed": {
+      "passes": 100,
+      "fails": 209,
+      "value": 0.32362459546925565
+    },
+    "vus": {
+      "max": 0,
+      "value": 0,
+      "min": 0
+    },
+    "peak_create_race_unexpected": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "iteration_duration": {
+      "avg": 324.64743465,
+      "min": 76.952917,
+      "med": 330.0532085,
+      "max": 521.943625,
+      "p(90)": 483.1648622,
+      "p(95)": 501.81276104999995
+    },
+    "http_req_connecting": {
+      "avg": 3.377796116504856,
+      "min": 0,
+      "med": 0,
+      "max": 44.581,
+      "p(90)": 11.145,
+      "p(95)": 11.4562
+    },
+    "http_req_tls_handshaking": {
+      "p(95)": 0,
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0
+    },
+    "http_req_receiving": {
+      "avg": 0.1058284789644013,
+      "min": 0.022,
+      "med": 0.07,
+      "max": 3.596,
+      "p(90)": 0.13720000000000007,
+      "p(95)": 0.2073999999999999
+    },
+    "iterations": {
+      "count": 100,
+      "rate": 4.373707405447663
+    },
+    "checks": {
+      "passes": 101,
+      "fails": 0,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
+    },
+    "http_req_sending": {
+      "p(90)": 0.03940000000000001,
+      "p(95)": 0.05519999999999997,
+      "avg": 0.02588349514563104,
+      "min": 0.006,
+      "med": 0.019,
+      "max": 0.781
+    },
+    "http_req_blocked": {
+      "avg": 3.4029223300970863,
+      "min": 0.001,
+      "med": 0.004,
+      "max": 45.696,
+      "p(90)": 11.157200000000001,
+      "p(95)": 11.529399999999999
+    },
+    "data_sent": {
+      "count": 98823,
+      "rate": 4322.228869285544
+    }
+  },
+  "setup_data": {
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 100 JWT tokens removed — see PR #220 review]",
+    "restaurantId": 10,
+    "targetSessionId": 391,
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]"
+  },
+  "root_group": {
+    "groups": {
+      "teardown": {
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
+        "checks": {
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1,
+            "fails": 0,
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다"
+          }
+        },
+        "name": "teardown"
+      }
+    },
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "id": "e932986fb0e444a272fc4b0130cfaf01",
+        "passes": 100,
+        "fails": 0,
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)"
+      }
+    },
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e"
+  }
+}

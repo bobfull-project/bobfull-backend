@@ -1,0 +1,174 @@
+{
+  "root_group": {
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": {
+      "teardown": {
+        "name": "teardown",
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
+        "checks": {
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1,
+            "fails": 0
+          }
+        }
+      }
+    },
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01",
+        "passes": 500,
+        "fails": 0
+      }
+    }
+  },
+  "metrics": {
+    "http_req_waiting": {
+      "avg": 434.2498376408215,
+      "min": 0,
+      "med": 97.739,
+      "max": 2004.496,
+      "p(90)": 1480.392,
+      "p(95)": 1746.8639999999998
+    },
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.010380743993942877,
+      "thresholds": {
+        "count==1": false
+      }
+    },
+    "http_req_tls_handshaking": {
+      "p(95)": 0,
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0
+    },
+    "peak_create_race_unexpected": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "http_req_failed": {
+      "passes": 500,
+      "fails": 1009,
+      "value": 0.3313452617627568
+    },
+    "http_req_connecting": {
+      "max": 40.366,
+      "p(90)": 14.2322,
+      "p(95)": 16.771,
+      "avg": 4.300395626242546,
+      "min": 0,
+      "med": 0
+    },
+    "iteration_duration": {
+      "avg": 1133.3749014979992,
+      "min": 75.562041,
+      "med": 1140.091583,
+      "max": 2019.519167,
+      "p(90)": 1852.4559539,
+      "p(95)": 1945.9733152000001
+    },
+    "checks": {
+      "passes": 501,
+      "fails": 0,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
+    },
+    "http_reqs": {
+      "count": 1509,
+      "rate": 15.664542686859802
+    },
+    "vus_max": {
+      "value": 500,
+      "min": 500,
+      "max": 500
+    },
+    "http_req_duration": {
+      "med": 97.832,
+      "max": 2004.541,
+      "p(90)": 1485.7992000000002,
+      "p(95)": 1753.6661999999994,
+      "avg": 435.90725579854256,
+      "min": 0.056
+    },
+    "http_req_sending": {
+      "max": 31.253,
+      "p(90)": 2.5052000000000008,
+      "p(95)": 11.959200000000001,
+      "avg": 1.572742213386349,
+      "min": 0.005,
+      "med": 0.017
+    },
+    "http_req_receiving": {
+      "avg": 0.08467594433399632,
+      "min": 0.013,
+      "med": 0.063,
+      "max": 9.531,
+      "p(90)": 0.112,
+      "p(95)": 0.15459999999999993
+    },
+    "peak_create_race_conflict": {
+      "count": 499,
+      "rate": 5.179991252977495,
+      "thresholds": {
+        "count==499": false
+      }
+    },
+    "data_sent": {
+      "rate": 5016.463392840913,
+      "count": 483247
+    },
+    "data_received": {
+      "count": 935624,
+      "rate": 9712.47321858881
+    },
+    "vus": {
+      "value": 54,
+      "min": 0,
+      "max": 331
+    },
+    "http_req_duration{expected_response:true}": {
+      "max": 461.177,
+      "p(90)": 104.46540000000002,
+      "p(95)": 113.3898,
+      "avg": 96.87620317145688,
+      "min": 0.056,
+      "med": 94
+    },
+    "iterations": {
+      "rate": 5.190371996971439,
+      "count": 500
+    },
+    "http_req_blocked": {
+      "avg": 5.507173624917165,
+      "min": 0.001,
+      "med": 0.004,
+      "max": 43.083,
+      "p(90)": 16.7364,
+      "p(95)": 22.47059999999996
+    }
+  },
+  "setup_data": {
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 500 JWT tokens removed — see PR #220 review]",
+    "restaurantId": 13,
+    "targetSessionId": 397,
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]"
+  }
+}

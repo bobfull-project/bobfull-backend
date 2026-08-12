@@ -16,9 +16,11 @@ k6/
 │  ├─ checks.js     공통 check(status, ApiResponse.success)
 │  └─ fixture.js    Restaurant/SharedTable/DiningSession Fixture 생성
 ├─ scenarios/
-│  ├─ restaurant-search.js            P0-A. GET /api/restaurants
-│  ├─ dining-session-availability.js  P0-B. GET /api/restaurants/{id}/dining-sessions
-│  └─ reservation-prepare.js          P0-C. POST /api/reservations/prepare (CREATE)
+│  ├─ restaurant-search.js               P0-A. GET /api/restaurants
+│  ├─ dining-session-availability.js     P0-B. GET /api/restaurants/{id}/dining-sessions
+│  ├─ reservation-prepare.js             P0-C. POST /api/reservations/prepare (CREATE)
+│  ├─ peak-restaurant-view.js            #142 시나리오 A. 같은 식당·날짜 hot-key 조회 폭주
+│  └─ peak-reservation-create-race.js    #142 시나리오 B. 같은 회차 동시 CREATE 경쟁
 ├─ data/
 │  └─ SEED_CONTRACT.md   Fixture seed·cleanup 계약(Issue #63 "테스트 데이터 계약")
 └─ README.md
@@ -86,8 +88,31 @@ k6 run -e STAGE=stress -e BASE_URL=http://<test-ec2-public-ip>:8080 k6/scenarios
 ## 결과 저장
 
 ```text
-docs/evidence/v3/63-api-k6/README.md   결과표·병목 전환점·비교 조건
-docs/evidence/v3/63-api-k6/raw/        k6 JSON/요약, Prometheus 쿼리 결과
+docs/evidence/v3/63-api-k6/README.md    #63 결과표·병목 전환점·비교 조건
+docs/evidence/v3/63-api-k6/raw/         #63 k6 JSON/요약, Prometheus 쿼리 결과
+docs/evidence/v3/142-reservation-peak/README.md   #142 결과표·병목 전환점·비교 조건
+docs/evidence/v3/142-reservation-peak/raw/        #142 k6 JSON/요약, Prometheus 쿼리 결과
 ```
 
 Fixture 시딩과 실제 Smoke/Load/Stress 실행·Grafana Evidence 작성은 각 성능 테스트 작업에서 이어서 진행한다.
+
+## #142 인기 회차 예약 부하 (시나리오 A·B)
+
+Issue #142는 #63의 Harness를 그대로 재사용한다. 이번 구현 범위도 #63과 동일하게 **코드 +
+로컬 검증**까지다.
+
+```bash
+k6 run -e STAGE=smoke k6/scenarios/peak-restaurant-view.js
+k6 run -e CONCURRENT_USERS=10 k6/scenarios/peak-reservation-create-race.js
+```
+
+`peak-reservation-create-race.js` 전용:
+
+| 변수 | 의미 | 기본값 |
+|---|---|---|
+| `CONCURRENT_USERS` | 같은 회차에 동시에 CREATE를 시도할 회원 수(Issue #142 "초기 후보 단계": 2→5→10→20→50) | 10 |
+| `BASE_DATE` | 경쟁 대상 회차를 만들 기준 날짜(YYYY-MM-DD) | 실행일+1일 |
+
+**범위 한계**: 이 시나리오는 CREATE 경쟁만 다룬다. JOIN 기반 좌석초과 테스트는 결제 완료가
+전제(`ReservationPreparationService` Javadoc)라 Fake 결제 확인 어댑터 없이는 k6로 자동화할 수
+없다. 상세 근거와 로컬 검증 결과는 `docs/evidence/v3/142-reservation-peak/README.md` 참고.

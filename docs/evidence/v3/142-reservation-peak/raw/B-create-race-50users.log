@@ -1,0 +1,95 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 50 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 50 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-11T21:03:55+09:00" level=info msg="teardown 검증 성공: 회차 8855는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.0' rate=100.00%
+
+    peak_create_race_conflict
+    ✓ 'count==49' count=49
+
+    peak_create_race_success
+    ✓ 'count==1' count=1
+
+    peak_create_race_unexpected
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 51      5.34333/s
+    checks_succeeded...: 100.00% 51 out of 51
+    checks_failed......: 0.00%   0 out of 51
+
+    ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)
+    ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다
+
+    CUSTOM
+    peak_create_race_conflict......: 49     5.133788/s
+    peak_create_race_success.......: 1      0.104771/s
+    peak_create_race_unexpected....: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=101.81ms min=10.13ms med=87.22ms  max=276.22ms p(90)=183.2ms  p(95)=233.34ms
+      { expected_response:true }...: avg=84.91ms  min=10.84ms med=86.39ms  max=147.67ms p(90)=97.23ms  p(95)=101.59ms
+    http_req_failed................: 31.44% 50 out of 159
+    http_reqs......................: 159    16.658617/s
+
+    EXECUTION
+    iteration_duration.............: avg=141.38ms min=22.6ms  med=131.03ms max=280.42ms p(90)=252.06ms p(95)=265.58ms
+    iterations.....................: 50     5.238559/s
+    vus............................: 0      min=0         max=0 
+    vus_max........................: 50     min=50        max=50
+
+    NETWORK
+    data_received..................: 98 kB  10 kB/s
+    data_sent......................: 51 kB  5.3 kB/s
+
+
+
+
+running (0m09.5s), 00/50 VUs, 50 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 50 VUs  00.3s/30s  50/50 iters, 1 per VU

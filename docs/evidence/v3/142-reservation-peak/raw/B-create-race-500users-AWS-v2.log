@@ -1,0 +1,359 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 500 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 500 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+running (1m37.0s), 219/500 VUs, 281 complete and 0 interrupted iterations
+peak_create_race   [  56% ] 500 VUs  01.0s/30s  281/500 iters, 1 per VU
+time="2026-08-12T15:10:44+09:00" level=info msg="teardown 검증 성공: 회차 605는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.0' rate=100.00%
+
+    peak_create_race_conflict
+    ✓ 'count==499' count=499
+
+    peak_create_race_success
+    ✓ 'count==1' count=1
+
+    peak_create_race_unexpected
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 501     5.131099/s
+    checks_succeeded...: 100.00% 501 out of 501
+    checks_failed......: 0.00%   0 out of 501
+
+    ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)
+    ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다
+
+    CUSTOM
+    peak_create_race_conflict......: 499    5.110616/s
+    peak_create_race_success.......: 1      0.010242/s
+    peak_create_race_unexpected....: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=341.02ms min=12.16ms med=95.17ms  max=1.56s    p(90)=1.13s    p(95)=1.35s    p(99)=1.51s  
+      { expected_response:true }...: avg=94.85ms  min=13.79ms med=92.58ms  max=384.21ms p(90)=100.11ms p(95)=109.28ms p(99)=142.7ms
+    http_req_failed................: 33.13% 500 out of 1509
+    http_reqs......................: 1509   15.454748/s
+
+    EXECUTION
+    iteration_duration.............: avg=856.45ms min=68.95ms med=843.88ms max=1.59s    p(90)=1.45s    p(95)=1.52s    p(99)=1.57s  
+    iterations.....................: 500    5.120858/s
+    vus............................: 219    min=0           max=219
+    vus_max........................: 500    min=500         max=500
+
+    NETWORK
+    data_received..................: 937 kB 9.6 kB/s
+    data_sent......................: 484 kB 5.0 kB/s
+
+
+
+
+running (1m37.6s), 000/500 VUs, 500 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 500 VUs  01.6s/30s  500/500 iters, 1 per VU
