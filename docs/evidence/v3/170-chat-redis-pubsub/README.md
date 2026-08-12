@@ -17,7 +17,7 @@
 
 ## 환경·데이터·실행 조건
 
-- Phase A: 로컬 JVM 단위 테스트, H2 기반 기존 테스트 설정. Redis 연결은 사용하지 않고 `StringRedisTemplate`과 `SimpMessagingTemplate`을 Mock으로 대체한다.
+- Phase A: 로컬 Docker의 Redis(`redis:7-alpine`)에 독립 `RedisMessageListenerContainer` 두 개(A/B)를 연결한다. publisher 1개가 방 10·11 payload를 발행하고, 각 subscriber의 로컬 `SimpMessagingTemplate` 전달을 검증한다. DB 저장과 실제 WebSocket/STOMP handshake는 이 자동 검증의 범위가 아니다.
 - Phase B: `NOT_RUN` — #169 또는 동등한 ALB/WSS 다중 EC2 환경이 아직 이 작업 트리에 제공되지 않았다.
 
 ## Before 결과
@@ -39,8 +39,10 @@
 | 커밋 전·롤백 Redis 발행 | 해당 없음 | TransactionSynchronization 테스트에서 0회 | PASS |
 | subscriber local STOMP fan-out | 없음 | destination 1회 단위 테스트 | PASS |
 | Redis publish 실패 시 저장 경로 예외 전파 | 해당 없음 | publisher가 catch+metric | PASS |
-| A→B / B→A 다중 인스턴스 수신·중복 | NOT_RUN | NOT_RUN | NOT_RUN |
-| Redis 중단·복구, cursor N/N 복구, WSS 검증 | NOT_RUN | NOT_RUN | NOT_RUN |
+| A→B / B→A Redis subscriber 수신·인스턴스별 1회 전달 | NOT_RUN | 실제 Redis와 독립 A/B listener container에서 방별 각각 1회 | PASS |
+| 같은 인스턴스 local fan-out 회귀·다른 방 destination 격리 | NOT_RUN | A/B 모두 `/sub/chat/rooms/10`, `/sub/chat/rooms/11` 각 1회 | PASS |
+| 실제 App A:8080 ↔ App B:8081 STOMP client, ChatMessage DB 1건 | NOT_RUN | NOT_RUN | NOT_RUN |
+| Redis 중단·복구, cursor N/N 복구, ALB/WSS 검증 | NOT_RUN | NOT_RUN | NOT_RUN |
 
 ## 정합성 회귀 검증
 
@@ -56,7 +58,15 @@
   --rerun-tasks
 ```
 
-결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. 전체 `clean build`는 테스트 단계까지 실행했지만 도구가 종료 코드를 반환하지 않아 `NOT_RUN`으로 분리한다. 다중 인스턴스 전달률·latency·재연결과 WSS Upgrade는 검증하지 않았다.
+결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. 격리해 실행한 전체 `./gradlew clean build --no-daemon --console=plain`은 exit code `1`로 종료했다. 실패 원인은 테스트 assertion이 아니라 `:test` 결과 파일 `build/test-results/test/binary/in-progress-results-generic.bin`의 `NoSuchFileException`이며, 실행 중 해당 파일이 외부 `clean`에 의해 삭제되는 충돌과 일치한다. 따라서 전체 build는 `PASS`가 아니며 재현 가능한 단일 실행 환경에서 다시 확인할 때까지 `NOT_RUN`으로 유지한다.
+
+추가 Phase A 실행 명령:
+
+```bash
+./gradlew :test --tests 'com.bobfull.chat.realtime.RedisChatCrossInstanceIntegrationTest' --rerun-tasks --no-daemon --console=plain
+```
+
+결과: `BUILD SUCCESSFUL` (2026-08-12, exit code 0). `redis:7-alpine` Testcontainers와 독립 listener container A/B가 동일 Redis channel을 구독한다. 두 방 메시지를 각각 발행해 A/B의 local STOMP destination 수신이 정확히 1회인지 검증한다.
 
 ## 구조화 로그·메트릭
 
@@ -65,12 +75,13 @@
 
 ## 결과 해석
 
-Phase A는 단일 인스턴스에서 Redis 경로 전환과 실패 격리의 코드 계약만 검증한다. Redis Pub/Sub의 다중 인스턴스 실시간 전달 보장, 유실률, 성능 또는 운영 WSS 성공을 주장하지 않는다.
+Phase A는 Redis Pub/Sub의 핵심 cross-instance fan-out과 방별 local STOMP 목적지 격리를 실제 Redis로 검증한다. 다만 두 Spring Boot 프로세스의 포트·인증·STOMP client 및 ChatMessage DB 저장은 아직 실측하지 않았으며, 유실률·성능 또는 운영 WSS 성공을 주장하지 않는다.
 
 ## 검증 한계
 
+- Phase A의 실제 App A:8080/App B:8081, 인증된 STOMP client, ChatMessage DB 1건은 `NOT_RUN`이다.
 - #169 환경 부재로 서로 다른 EC2 A/B, ALB WSS, Redis 실제 재연결과 장애 중 cursor 복구는 `NOT_RUN`이다.
-- 실제 Redis 서버를 사용하는 integration test와 반복 N건 latency/throughput 측정은 `NOT_RUN`이다.
+- 반복 N건 latency/throughput 측정은 `NOT_RUN`이다.
 - Pub/Sub 단절 구간의 메시지는 재생되지 않으며 DB cursor 조회가 복구 경로다.
 
 ## 관련
