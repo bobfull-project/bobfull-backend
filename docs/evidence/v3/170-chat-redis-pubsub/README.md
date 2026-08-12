@@ -13,7 +13,8 @@
 ## 기준 코드
 
 - Before SHA: `a467fd9` (Issue #170 시작 시 최신 `develop`)
-- After SHA: `e90edaf5e3f7ee2d5247b5a5545bb2ccc400dcd7`
+- 구현 기준 SHA: `e90edaf5e3f7ee2d5247b5a5545bb2ccc400dcd7`
+- 최종 Phase A 검증 SHA: `8de1b43feb0662a32f6ff86658fed9dff83ddf30`
 
 ## 환경·데이터·실행 조건
 
@@ -58,7 +59,7 @@
   --rerun-tasks
 ```
 
-결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. Human이 아래 단일 실행 명령으로 전체 build exit code 0을 확인했다. 이전 `NoSuchFileException`은 병렬 실행 중 test-result 삭제 충돌이었으며, 이 결과로 해소한다.
+결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. Human이 아래 단일 실행 명령으로 전체 build exit code 0을 확인했다. 이전 `NoSuchFileException`의 원인은 확정하지 않았으며, 아래 격리 실행에서는 재현되지 않았다.
 
 ```bash
 ./gradlew --stop
