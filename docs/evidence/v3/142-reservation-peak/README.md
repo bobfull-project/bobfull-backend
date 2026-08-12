@@ -1,13 +1,15 @@
-# #142 인기 회차 예약 부하 측정 — 시나리오 A·B (코드 + 로컬/AWS 기능 검증)
+# #142 인기 회차 예약 부하 측정 — 시나리오 A·B
 
-이번 실행 범위는 **코드 + 기능 검증(로컬, 이어서 AWS 연결 확인)**까지다. #207(AWS 실행 환경
-준비, `bobfull-k6-test-app` EC2)이 완료돼 실제 AWS 대상으로도 실행해봤지만, 아래 AWS 실행은
-여전히 2~50명 수준의 **동작 검증**이다 — 관측 시간축 연결(Prometheus/Grafana), 진짜 Load/Stress
-규모, 결과 표·병목 전환점 기록은 별도로 이어서 진행한다. 성능 결론으로 쓰지 않는다.
+#207(AWS 실행 환경 준비, `bobfull-k6-test-app` EC2)이 완료돼 실제 AWS 대상으로 시나리오 A는
+Load/Stress까지 실행해 첫 병목 전환점을 확인했다(아래 "결과 표 비교" 참고). Prometheus/Grafana
+시간축 연결은 아직 하지 않아 CPU/DB Pool/Lock 등 서버 내부 지표는 이번 기록에 없다 — HTTP
+레벨 지표만으로 병목의 "존재"는 확인했지만 "원인"은 특정하지 않는다(Issue #142 "K6 summary만으로
+병목을 단정하지 않는다" 원칙).
 
-시나리오 B의 결과는 Issue #142 "보강 계약"의 #60(예약 좌석 락 전략 재설계, 2026-08-11 기준
-DRAFT) 선행조건이 아직 확정되지 않아 **현재 락 전략 기준의 임시 결과**다. #60이 끝나면 동일
-조건으로 재검증한다.
+시나리오 B는 팀 합의(Human 결정, Issue #142 댓글)에 따라 **현재 비관적 락 전략 기준의 Before
+Baseline**으로 측정한다. #60(예약 좌석 락 전략 재설계, 2026-08-11 기준 DRAFT)이 끝나 락 전략이
+바뀌면, 이번 결과를 Before로 두고 동일 조건으로 After를 재측정한다. A는 #60과 무관해 최종
+결과로 취급한다.
 
 ## 측정·재현 환경
 
@@ -27,6 +29,24 @@ DRAFT) 선행조건이 아직 확정되지 않아 **현재 락 전략 기준의 
 |---|---|---|
 | 로컬 Smoke(`STAGE=smoke`) | PASS — checks 84/84(100%), http_req_failed 0% | `raw/A-peak-restaurant-view-smoke.log`, `.json` |
 | AWS Smoke(`BASE_URL=http://15.164.48.39:8080`) | PASS — checks 84/84(100%), http_req_failed 0%, p95≈434ms(로컬 대비 네트워크 왕복 포함) | `raw/A-peak-restaurant-view-AWS-smoke.log`, `.json` |
+| AWS Load(`STAGE=load`, 20 RPS·5분) | 안정 처리 구간(실패율 0.04%)이지만 여유는 크지 않음 | `raw/A-peak-restaurant-view-AWS-load.log`, `.json` |
+| AWS Stress(`STAGE=stress`, 20→320 RPS 계단식·13분) | **첫 병목 전환점 확인** — 아래 "결과 표 비교" 참고 | `raw/A-peak-restaurant-view-AWS-stress.log`, `.json` |
+
+### 결과 표 비교 — AWS Load vs Stress (`bobfull-k6-test-app`, t3.small)
+
+| 단계 | 목표 부하 | 실제 RPS | p50 | p90 | p95 | max | 오류율(http_req_failed) | dropped_iterations | CPU/DB Pool/Lock | 정합성 | 병목 후보 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
+| Load | constant-arrival-rate 20/s, 5분 | 39.8/s(요청 기준, 조회 2건/iteration) | 188ms | 385ms | 533ms | 2.26s | 0.04%(5/11,959) | 23(0.08/s) | 미관측(Prometheus 미연결) | 목록·상세 응답 정상(checks 99.95%) | 아직 없음 — 안정 구간이나 여유가 크지 않음 |
+| Stress | ramping-arrival-rate 20→40→80→160→320/s, 13분 | 48.5/s(목표 320/s 대비 크게 못 미침) | 2.52s | 10.66s | 13.90s | 33.33s | 0.02%(8/38,351) | **63,026(79.6/s)** | 미관측(Prometheus 미연결) | checks 99.98%(오류로 인한 정합성 위반 아님) | **App/DB 자원 포화 추정**(t3.small, 2 vCPU) |
+
+**해석**: Stress 단계에서 오류율은 오히려 Load보다 낮았지만(0.02% vs 0.04%), p95가 533ms →
+13.9초로 26배 급증했고 `dropped_iterations`가 63,026건(목표 iteration의 상당수가 시작조차
+못 함)까지 치솟았다. 즉 서버가 **에러를 내며 실패하는 게 아니라, 요청이 쌓여 점점 느려지는
+방식으로 포화**됐다 — 전형적인 자원 고갈(saturation) 신호다. VU가 300(설정 상한)까지 늘었다가
+후반부에 오히려 줄어든 것(대기 중인 요청이 워낙 느려 VU가 다음 iteration을 못 돌림)도 이
+해석과 일치한다. 다만 CPU/DB Connection Pool/Lock 지표가 없어 **App CPU인지 DB Pool인지
+lock wait인지는 이번 기록만으로 확정하지 않는다** — Prometheus/Grafana 연결 후 재확인이
+필요하다(#207 후속).
 
 ## 시나리오 B — 예약 버튼 동시 클릭 (`peak-reservation-create-race.js`)
 
@@ -71,6 +91,10 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 (최대 50)에서는 DB Pool pending/lock wait 등 실제 병목 신호는 관측하지 않았다(Prometheus/Grafana
 미연결, 별도 진행 필요).
 
+**이 결과는 현재 비관적 락 전략 기준의 Before Baseline이다(팀 합의, Human 결정).** #60(예약
+좌석 락 전략 재설계)이 끝나면 동일 조건(같은 동시성 단계 2/5/10/20/50, 같은 Fixture 방식)으로
+After를 재측정해 이 표와 비교한다.
+
 ### 트러블슈팅 — teardown 검증 로직 최초 버그
 
 처음 작성한 `teardown()`은 GET 회차 조회 응답의 `reservationId` 필드가 채워졌는지로 성공을
@@ -96,8 +120,12 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 
 ## 남은 작업
 
-- #60(예약 좌석 락 전략 재설계) 결과가 나오면 시나리오 B를 동일 조건으로 재검증
-- 동일 시나리오를 AWS 대상으로 Load/Stress 규모(2~50명이 아니라 #63 "부하 모델" 계단식)까지 실행
-- Prometheus/Grafana와 같은 시간축으로 Reservation·TimeSlot 락 대기시간, DB Pool active/pending 기록
-- 결과 표(p95/p99/RPS/오류율)와 병목 전환점 기록
+- (완료) 시나리오 A AWS Load/Stress 실행, 첫 병목 전환점(HTTP 레벨) 확인
+- #60(예약 좌석 락 전략 재설계) 결과가 나오면 시나리오 B를 동일 조건으로 재검증(Before는 이번
+  결과, After는 #60 이후 재실행)
+- Prometheus/Grafana를 이 AWS 스택에 연결해 같은 시간축으로 CPU/DB Pool active·pending/lock
+  wait 기록 — 시나리오 A Stress에서 발견한 병목이 App CPU인지 DB Pool/Lock인지 원인 특정
+- 시나리오 B도 CREATE 레이스뿐 아니라 더 높은 동시성(100/200/500 등)에서 배타 선점이 여전히
+  정확한지 확인 — 현재는 최대 50까지만 확인했다
+- A/B 결과가 정리되면 시나리오 C(Redis ZSet 대기열) 도입 여부 판단으로 이어감(팀 합의)
 - JOIN 기반 좌석초과 테스트는 Fake 결제 확인 어댑터 도입 여부를 별도 결정한 뒤 진행
