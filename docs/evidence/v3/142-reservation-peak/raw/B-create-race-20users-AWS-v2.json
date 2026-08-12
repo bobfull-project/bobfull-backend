@@ -1,204 +1,183 @@
 {
-    "root_group": {
-        "groups": {
-            "teardown": {
-                "path": "::teardown",
-                "id": "a8a9942382e8ffe2e56ef29e664b8229",
-                "groups": {},
-                "checks": {
-                        "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
-                            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "id": "72ee86e493a705c57357954724f8ed6a",
-                            "passes": 1,
-                            "fails": 0,
-                            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다"
-                        }
-                    },
-                "name": "teardown"
-            }
-        },
+  "root_group": {
+    "groups": {
+      "teardown": {
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
         "checks": {
-            "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
-                "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "id": "e932986fb0e444a272fc4b0130cfaf01",
-                "passes": 20,
-                "fails": 0
-            }
-        },
-        "name": "",
-        "path": "",
-        "id": "d41d8cd98f00b204e9800998ecf8427e"
-    },
-    "metrics": {
-        "http_req_failed": {
-            "fails": 49,
-            "passes": 20,
-            "value": 0.2898550724637681
-        },
-        "http_req_duration": {
-            "p(90)": 95.0526,
-            "p(95)": 96.6528,
-            "p(99)": 98.02784,
-            "avg": 73.42489855072462,
-            "min": 11.855,
-            "med": 89.293,
-            "max": 98.325
-        },
-        "http_req_waiting": {
-            "p(99)": 97.94892,
-            "avg": 73.31498550724635,
-            "min": 11.753,
-            "med": 89.164,
-            "max": 98.242,
-            "p(90)": 94.88340000000001,
-            "p(95)": 96.4298
-        },
-        "data_received": {
-            "count": 42703,
-            "rate": 9997.932657064799
-        },
-        "peak_create_race_unexpected": {
-            "count": 0,
-            "rate": 0,
-            "thresholds": {
-                "count==0": false
-            }
-        },
-        "http_req_receiving": {
-            "max": 0.444,
-            "p(90)": 0.14500000000000002,
-            "p(95)": 0.17259999999999998,
-            "p(99)": 0.33179999999999993,
-            "avg": 0.08675362318840579,
-            "min": 0.016,
-            "med": 0.07
-        },
-        "http_req_duration{expected_response:true}": {
-            "p(99)": 98.11524,
-            "avg": 84.40761224489793,
-            "min": 13.437,
-            "med": 91.434,
-            "max": 98.325,
-            "p(90)": 95.93459999999999,
-            "p(95)": 97.0446
-        },
-        "vus_max": {
-            "value": 20,
-            "min": 20,
-            "max": 20
-        },
-        "http_reqs": {
-            "count": 69,
-            "rate": 16.15477491833059
-        },
-        "vus": {
-            "value": 0,
-            "min": 0,
-            "max": 0
-        },
-        "data_sent": {
-            "count": 22308,
-            "rate": 5222.908969248098
-        },
-        "http_req_tls_handshaking": {
-            "avg": 0,
-            "min": 0,
-            "med": 0,
-            "max": 0,
-            "p(90)": 0,
-            "p(95)": 0,
-            "p(99)": 0
-        },
-        "http_req_sending": {
-            "min": 0.008,
-            "med": 0.016,
-            "max": 0.082,
-            "p(90)": 0.048400000000000006,
-            "p(95)": 0.0672,
-            "p(99)": 0.07519999999999999,
-            "avg": 0.02315942028985507
-        },
-        "checks": {
-            "passes": 21,
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1,
             "fails": 0,
-            "thresholds": {
-                "rate==1.0": false
-            },
-            "value": 1
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다"
+          }
         },
-        "peak_create_race_conflict": {
-            "count": 19,
-            "rate": 4.448416281859148,
-            "thresholds": {
-                "count==19": false
-            }
-        },
-        "http_req_blocked": {
-            "p(95)": 15.0998,
-            "p(99)": 22.12435999999999,
-            "avg": 4.549333333333334,
-            "min": 0.001,
-            "med": 0.004,
-            "max": 36.556,
-            "p(90)": 14.9902
-        },
-        "http_req_connecting": {
-            "avg": 4.537101449275363,
-            "min": 0,
-            "med": 0,
-            "max": 36.487,
-            "p(90)": 14.9672,
-            "p(95)": 15.0794,
-            "p(99)": 22.04175999999999
-        },
-        "iterations": {
-            "count": 20,
-            "rate": 4.6825434545885765
-        },
-        "iteration_duration": {
-            "avg": 60.690020849999996,
-            "min": 25.788,
-            "med": 62.88131250000001,
-            "max": 90.779375,
-            "p(90)": 83.7453667,
-            "p(95)": 88.02358364999999,
-            "p(99)": 90.22821673
-        },
-        "peak_create_race_success": {
-            "count": 1,
-            "rate": 0.23412717272942885,
-            "thresholds": {
-                "count==1": false
-            }
-        }
+        "name": "teardown"
+      }
     },
-    "setup_data": {
-        "date": "2026-08-13",
-        "memberTokens": [
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxOGNmZGYwNS1mZmE2LTQ2NTMtOTE5Yi1kZjY2ZWJiOTcxNmYiLCJtZW1iZXJJZCI6MjEwOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MCwiZXhwIjoxNzg2NTE4NDYwfQ.CVHZikcWSnPXl1eGqRfZvkMCfiEZrjnwQ6Q4mP4mUYA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxYjZjYmU0MS0zZDJkLTQ1NDAtOTFmOS00Y2EzN2I5NWM2OTMiLCJtZW1iZXJJZCI6MjExMCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MSwiZXhwIjoxNzg2NTE4NDYxfQ.-vtBkhSDquMT6HxeLI6BQeX8ufQwugL_NEqGKAmxGdY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxYzgwODY4ZS04MmZiLTQ4OWMtODQ5MS04NmNmZjg4NDEyNWMiLCJtZW1iZXJJZCI6MjExMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MSwiZXhwIjoxNzg2NTE4NDYxfQ.qmNUZmZoQNPl2XEcMXDyJ4PZ9ot1sWI2K_V816dItrs",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiYTdiYjlkMS1jMDdiLTRkNzItYmY4NC0wNWNjNTFiYmYzODUiLCJtZW1iZXJJZCI6MjExMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MSwiZXhwIjoxNzg2NTE4NDYxfQ.TQKJF6sl0D3IaoVZyMiaG_3--LAdImw1QM706mjvJPg",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3OTI4ODQ3MS1iN2I2LTQwYjAtOGNlZC0zYmI4MGY0NmE1NjkiLCJtZW1iZXJJZCI6MjExMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MSwiZXhwIjoxNzg2NTE4NDYxfQ.3SLNldFIlITUI_e8LCPlxZStI3DH1N_OYuyToNeWR_c",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4MmMwZmFmMy01YTU5LTRlMzUtYmQwZS1hY2I0MTk3YzllNjUiLCJtZW1iZXJJZCI6MjExNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MSwiZXhwIjoxNzg2NTE4NDYxfQ.t5mb16xbgkV63b3KXeQtwZOSACR3CfXyALTaIKcsZtc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmOWNkNGJkMC0xYTE4LTQ5YmEtYWUxYi0yYWEwMWU3NWNjY2UiLCJtZW1iZXJJZCI6MjExNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MSwiZXhwIjoxNzg2NTE4NDYxfQ.ew7F_PY_YcChjrNtzUuh7-iWioMPX1QI__HrhwGw_Is",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkMTU4ZDgxOC00NWZjLTRiNjEtYWM2NC00YzFjZGVjZGZiZmIiLCJtZW1iZXJJZCI6MjExNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MiwiZXhwIjoxNzg2NTE4NDYyfQ.ZU58Kb-73wrU09KVc7QCP5SeHB9TubVXAzWMXWN6bV4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0ZWY3Y2UzYy0yN2Q5LTRmZDgtOTJhMS0wYTgzMjVhNjNkZTUiLCJtZW1iZXJJZCI6MjExNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MiwiZXhwIjoxNzg2NTE4NDYyfQ.9t2XjrtQ_PIg1J02wI06vZGY2U0dyleo_SufMF6lnWw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkNDQ1YzM0MS01ZDM1LTQ1YzYtYmNhYS02ZGE5OThiMDJjYmUiLCJtZW1iZXJJZCI6MjExOCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MiwiZXhwIjoxNzg2NTE4NDYyfQ._HcMJhFM5UbB_BoVxMFzEumEoWNJMBYIOh7fHaJbbZ4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4NzY4NDZkNS05NDg0LTRmMjgtYWIwZS01MjE0MTQzOWYzMTgiLCJtZW1iZXJJZCI6MjExOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MiwiZXhwIjoxNzg2NTE4NDYyfQ.PF_v0CmQDK8nqdO4VhK8GzNONUR3Aj793HfNyhw4VUQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3ZjFiMzdlYS0zNDQzLTQwZTMtYTYzZS1hOGE0ZjI2NDVhZDYiLCJtZW1iZXJJZCI6MjEyMCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MiwiZXhwIjoxNzg2NTE4NDYyfQ.6DSn-OQMNEgdxPOqhjZFq3NGIEXzQJA1UtpLXVrCtig",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhOTI1NTI5Yi1mNzBmLTRkNDYtODExYi1iMjllZDcwMTEwMWQiLCJtZW1iZXJJZCI6MjEyMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MywiZXhwIjoxNzg2NTE4NDYzfQ.F14tNjUg8Dsgkj_KmsbL8ask0wtKIkVANAIlElIiEPA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiYTg3MGNiNi0yNWI4LTQ0MGEtYjBmZC04MWRhYmUzNmRhN2YiLCJtZW1iZXJJZCI6MjEyMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MywiZXhwIjoxNzg2NTE4NDYzfQ.1eJ9U8hHbQZvadcskLdags6Xm8MtYGdo8I7FnSstBEI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmNGMzNzQxNC04MGRhLTQxMTYtOTdiNi01N2Q3NjQyNzg3MjMiLCJtZW1iZXJJZCI6MjEyMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MywiZXhwIjoxNzg2NTE4NDYzfQ.Wdd8gVO5XfUaigoGp5KsQG94ajIxL5uhni50Gl_EChk",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlOGVjYTc5Yi1lYmM1LTRjYmItYmU2ZS02Yzg1MGVlOWFjNDciLCJtZW1iZXJJZCI6MjEyNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MywiZXhwIjoxNzg2NTE4NDYzfQ.uoXN-sP11TXzekTWN98c4Yy4TLwyU_kxgmtBkaalTa0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiYmVmNjFiYi05MDZkLTRkMmMtOTgzYi1hOGQyZjQ3ZTBmZmYiLCJtZW1iZXJJZCI6MjEyNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MywiZXhwIjoxNzg2NTE4NDYzfQ.oIwpvP6I-7hEW6IJuHZdKoAt7Px_OgH0gjtjhEwjqEE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0NDdmMjI1My0wNmEwLTRiYWUtYjZlOC04YmI3YWJhYzk5YjYiLCJtZW1iZXJJZCI6MjEyNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MywiZXhwIjoxNzg2NTE4NDYzfQ.eSVXTuGXPHRUkX6EFjONkACN-izJ8tClWlM8Hmv7s7E",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyNjVhZTJjZC0zY2VlLTQwZWMtYjJjMC02YzVkYmE2NjZiYTEiLCJtZW1iZXJJZCI6MjEyNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NCwiZXhwIjoxNzg2NTE4NDY0fQ.Z9PEo7jOquNwAOI27wG2r4bRTlgRz9yMRHBwGOGttvQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwYzZiMTU4Yi0wMTNiLTQxMjctOTU4MS1jNjVhNTYzZTI4ZTkiLCJtZW1iZXJJZCI6MjEyOCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NCwiZXhwIjoxNzg2NTE4NDY0fQ._brW6GLe8VHYUz7kSTBHZemvDRgQIcmY7GomsxnUp2M"
-        ],
-        "restaurantId": 20,
-        "targetSessionId": 597,
-        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyZGRlM2I2ZS0wYTlmLTRhN2EtOWQ4MS1lZGM5YmRiMjA5NzAiLCJtZW1iZXJJZCI6MjEyOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NCwiZXhwIjoxNzg2NTE4NDY0fQ.seC1NTD2QMV8dFaHE-FEkic3vuLdQZVadUHzytKDsJQ"
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01",
+        "passes": 20,
+        "fails": 0
+      }
+    },
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "metrics": {
+    "http_req_failed": {
+      "fails": 49,
+      "passes": 20,
+      "value": 0.2898550724637681
+    },
+    "http_req_duration": {
+      "p(90)": 95.0526,
+      "p(95)": 96.6528,
+      "p(99)": 98.02784,
+      "avg": 73.42489855072462,
+      "min": 11.855,
+      "med": 89.293,
+      "max": 98.325
+    },
+    "http_req_waiting": {
+      "p(99)": 97.94892,
+      "avg": 73.31498550724635,
+      "min": 11.753,
+      "med": 89.164,
+      "max": 98.242,
+      "p(90)": 94.88340000000001,
+      "p(95)": 96.4298
+    },
+    "data_received": {
+      "count": 42703,
+      "rate": 9997.932657064799
+    },
+    "peak_create_race_unexpected": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "http_req_receiving": {
+      "max": 0.444,
+      "p(90)": 0.14500000000000002,
+      "p(95)": 0.17259999999999998,
+      "p(99)": 0.33179999999999993,
+      "avg": 0.08675362318840579,
+      "min": 0.016,
+      "med": 0.07
+    },
+    "http_req_duration{expected_response:true}": {
+      "p(99)": 98.11524,
+      "avg": 84.40761224489793,
+      "min": 13.437,
+      "med": 91.434,
+      "max": 98.325,
+      "p(90)": 95.93459999999999,
+      "p(95)": 97.0446
+    },
+    "vus_max": {
+      "value": 20,
+      "min": 20,
+      "max": 20
+    },
+    "http_reqs": {
+      "count": 69,
+      "rate": 16.15477491833059
+    },
+    "vus": {
+      "value": 0,
+      "min": 0,
+      "max": 0
+    },
+    "data_sent": {
+      "count": 22308,
+      "rate": 5222.908969248098
+    },
+    "http_req_tls_handshaking": {
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0,
+      "p(95)": 0,
+      "p(99)": 0
+    },
+    "http_req_sending": {
+      "min": 0.008,
+      "med": 0.016,
+      "max": 0.082,
+      "p(90)": 0.048400000000000006,
+      "p(95)": 0.0672,
+      "p(99)": 0.07519999999999999,
+      "avg": 0.02315942028985507
+    },
+    "checks": {
+      "passes": 21,
+      "fails": 0,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
+    },
+    "peak_create_race_conflict": {
+      "count": 19,
+      "rate": 4.448416281859148,
+      "thresholds": {
+        "count==19": false
+      }
+    },
+    "http_req_blocked": {
+      "p(95)": 15.0998,
+      "p(99)": 22.12435999999999,
+      "avg": 4.549333333333334,
+      "min": 0.001,
+      "med": 0.004,
+      "max": 36.556,
+      "p(90)": 14.9902
+    },
+    "http_req_connecting": {
+      "avg": 4.537101449275363,
+      "min": 0,
+      "med": 0,
+      "max": 36.487,
+      "p(90)": 14.9672,
+      "p(95)": 15.0794,
+      "p(99)": 22.04175999999999
+    },
+    "iterations": {
+      "count": 20,
+      "rate": 4.6825434545885765
+    },
+    "iteration_duration": {
+      "avg": 60.690020849999996,
+      "min": 25.788,
+      "med": 62.88131250000001,
+      "max": 90.779375,
+      "p(90)": 83.7453667,
+      "p(95)": 88.02358364999999,
+      "p(99)": 90.22821673
+    },
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.23412717272942885,
+      "thresholds": {
+        "count==1": false
+      }
     }
+  },
+  "setup_data": {
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 20 JWT tokens removed — see PR #220 review]",
+    "restaurantId": 20,
+    "targetSessionId": 597,
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]"
+  }
 }

@@ -1,284 +1,183 @@
 {
-    "root_group": {
-        "path": "",
-        "id": "d41d8cd98f00b204e9800998ecf8427e",
-        "groups": {
-            "teardown": {
-                "id": "a8a9942382e8ffe2e56ef29e664b8229",
-                "groups": {},
-                "checks": {
-                        "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
-                            "id": "72ee86e493a705c57357954724f8ed6a",
-                            "passes": 1,
-                            "fails": 0,
-                            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다"
-                        }
-                    },
-                "name": "teardown",
-                "path": "::teardown"
-            }
-        },
+  "root_group": {
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": {
+      "teardown": {
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
         "checks": {
-            "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
-                "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "id": "e932986fb0e444a272fc4b0130cfaf01",
-                "passes": 100,
-                "fails": 0
-            }
-        },
-        "name": ""
-    },
-    "metrics": {
-        "http_req_receiving": {
-            "p(99)": 0.5559599999999997,
-            "avg": 0.07145631067961164,
-            "min": 0.013,
-            "med": 0.048,
-            "max": 2.361,
-            "p(90)": 0.10080000000000003,
-            "p(95)": 0.13879999999999998
-        },
-        "http_req_duration": {
-            "min": 13.193,
-            "med": 95.423,
-            "max": 372.851,
-            "p(90)": 276.63680000000005,
-            "p(95)": 319.92379999999997,
-            "p(99)": 360.99284,
-            "avg": 135.53041423948224
-        },
-        "http_req_failed": {
-            "passes": 100,
-            "fails": 209,
-            "value": 0.32362459546925565
-        },
-        "http_req_connecting": {
-            "max": 34.191,
-            "p(90)": 14.2802,
-            "p(95)": 14.477,
-            "p(99)": 20.10444,
-            "avg": 3.607705501618122,
-            "min": 0,
-            "med": 0
-        },
-        "vus_max": {
-            "value": 100,
-            "min": 100,
-            "max": 100
-        },
-        "iteration_duration": {
-            "p(99)": 379.81443592,
-            "avg": 225.45960123999993,
-            "min": 43.598708,
-            "med": 227.4457495,
-            "max": 382.819375,
-            "p(90)": 351.12074170000005,
-            "p(95)": 368.67125625
-        },
-        "iterations": {
-            "count": 100,
-            "rate": 4.785103398906795
-        },
-        "http_req_waiting": {
-            "max": 372.812,
-            "p(90)": 276.5966000000001,
-            "p(95)": 319.853,
-            "p(99)": 360.94615999999996,
-            "avg": 135.438284789644,
-            "min": 13.102,
-            "med": 95.243
-        },
-        "http_req_blocked": {
-            "med": 0.003,
-            "max": 34.256,
-            "p(90)": 14.305800000000001,
-            "p(95)": 14.5128,
-            "p(99)": 20.11976,
-            "avg": 3.6372427184466014,
-            "min": 0.001
-        },
-        "http_req_sending": {
-            "min": 0.007,
-            "med": 0.013,
-            "max": 0.163,
-            "p(90)": 0.03840000000000001,
-            "p(95)": 0.05439999999999988,
-            "p(99)": 0.108,
-            "avg": 0.020673139158576024
-        },
-        "data_sent": {
-            "count": 99028,
-            "rate": 4738.592193869421
-        },
-        "http_req_duration{expected_response:true}": {
-            "med": 93.225,
-            "max": 352.689,
-            "p(90)": 107.15500000000002,
-            "p(95)": 131.77779999999998,
-            "p(99)": 210.7215599999999,
-            "avg": 97.83005263157897,
-            "min": 14.084
-        },
-        "peak_create_race_success": {
-            "count": 1,
-            "rate": 0.047851033989067954,
-            "thresholds": {
-                "count==1": false
-            }
-        },
-        "checks": {
-            "passes": 101,
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1,
             "fails": 0,
-            "thresholds": {
-                "rate==1.0": false
-            },
-            "value": 1
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다"
+          }
         },
-        "data_received": {
-            "count": 191541,
-            "rate": 9165.434901300065
-        },
-        "peak_create_race_unexpected": {
-            "count": 0,
-            "rate": 0,
-            "thresholds": {
-                "count==0": false
-            }
-        },
-        "http_reqs": {
-            "count": 309,
-            "rate": 14.785969502621997
-        },
-        "peak_create_race_conflict": {
-            "count": 99,
-            "rate": 4.737252364917728,
-            "thresholds": {
-                "count==99": false
-            }
-        },
-        "vus": {
-            "value": 0,
-            "min": 0,
-            "max": 0
-        },
-        "http_req_tls_handshaking": {
-            "p(99)": 0,
-            "avg": 0,
-            "min": 0,
-            "med": 0,
-            "max": 0,
-            "p(90)": 0,
-            "p(95)": 0
-        }
+        "name": "teardown",
+        "path": "::teardown"
+      }
     },
-    "setup_data": {
-        "restaurantId": 22,
-        "targetSessionId": 601,
-        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmYTZmZGYwZC1iZTdiLTQyMzQtYjFhOS0yOTFhMjUzOWUxNTkiLCJtZW1iZXJJZCI6MjI4Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5NSwiZXhwIjoxNzg2NTE4NDk1fQ.vZ7C0P76C8oUqtPBY8k7ePUrw2K2tU29dIBoHSqWPMU",
-        "date": "2026-08-13",
-        "memberTokens": [
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyMGQ3OGY5Zi02ZGY2LTRiODQtYmQ3Yy01OWRhYTI3NThiMzUiLCJtZW1iZXJJZCI6MjE4Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NSwiZXhwIjoxNzg2NTE4NDc1fQ.Iyu_ZBuOkBJ5GQtT6VPZ4VevbKQeF1x2DN1MqpZDJsE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiMWNkNzdjNi1kZDZjLTQ4MGItOGE5My05OGM3MzQ4MTE2YTMiLCJtZW1iZXJJZCI6MjE4NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NSwiZXhwIjoxNzg2NTE4NDc1fQ.MNlNsIo7aDkXqKZQnwsSEdTgsg7gwmFsuAQZNc7pShU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmZWM2YmFlMS1lNTVhLTQyZGEtYTVlMi00NTc0MzU5NWMzZDMiLCJtZW1iZXJJZCI6MjE4NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NSwiZXhwIjoxNzg2NTE4NDc1fQ.dYzN4rkVBcAwQDN4mwdQTswIIZsS6EjbyUvrujmnFso",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1NjBkMzUzYi03NWY2LTQ4NGYtYjU3Mi1jOTdlYmQ2MjM0ZjciLCJtZW1iZXJJZCI6MjE4Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NSwiZXhwIjoxNzg2NTE4NDc1fQ.jGCYbqXbCTD1QGyedKD-pCVbGpvrDXBeek19-14kRvU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0N2M1M2Y4ZC1mNzNjLTQ5ZGQtOTY1MC00YWVkZDUwZWRkOTAiLCJtZW1iZXJJZCI6MjE4Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NiwiZXhwIjoxNzg2NTE4NDc2fQ.hWm44JdxFKdHDLI-bqpCVEq2nQG67lgIeLfFG7R_krc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0ZWExNzUwMi04ZmNmLTQ2MTItYTNhYS1jNTViYmM0OGU4ZGYiLCJtZW1iZXJJZCI6MjE4OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NiwiZXhwIjoxNzg2NTE4NDc2fQ.fgmJPisUmRLPrSb7D356Qiuud7X23arBkwhL0Phffes",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmMTE5Mjk3Zi01MTg5LTRkOWUtOGQ0My1iNWEzODU0NjEyMjUiLCJtZW1iZXJJZCI6MjE4OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NiwiZXhwIjoxNzg2NTE4NDc2fQ.5hD_U3EeXsekww3ti27QXw0Ufv8gVW6xWUv3LPezr1Q",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkNDg3MTBiZi02OWIyLTQzNGUtYTVkNy1iZmY2YThhNDkyZDgiLCJtZW1iZXJJZCI6MjE5MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NiwiZXhwIjoxNzg2NTE4NDc2fQ.hSizbkdpera-aaT8T0BWcR5CzJeiOdHvaKviFn6-K4g",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2NTk4NjE3ZS1mZjFhLTRlOTAtYWM4ZS0yNjg4MGEwYzRlMTAiLCJtZW1iZXJJZCI6MjE5MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NiwiZXhwIjoxNzg2NTE4NDc2fQ.D13sBadtakeFbv3GBbHhzL95tqpEQbBs2WgQ8Ifn0BI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlMDNkMTU0MC04NzI3LTRiOTgtYWMwYS1hODcwYjVjOTkyNWEiLCJtZW1iZXJJZCI6MjE5Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NiwiZXhwIjoxNzg2NTE4NDc2fQ.wK6n7oTLUavoylwezHWpLgTECszgxQVywdgsh0G21UI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkODhkYzcyZS1hZTRiLTQ3MjEtYjIyMC1hMDg5YThjOTNiN2YiLCJtZW1iZXJJZCI6MjE5Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NywiZXhwIjoxNzg2NTE4NDc3fQ.db9UsnUnJOulnpbcHCxkN0qV9gACGYh2LL7-YbxRtcQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5NjhhMThhMS1mNmYwLTQ0ZGYtYjk2NC1mZmFlYjIyNzkwOTgiLCJtZW1iZXJJZCI6MjE5NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NywiZXhwIjoxNzg2NTE4NDc3fQ.pVbJJ5U64_X26-fQqPb87vAqm-S9xFzbln4n0W9X9j8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyNGE5OTA5YS04NzFkLTRjZDEtOGIxYi00OWE3OGMzODFmMzkiLCJtZW1iZXJJZCI6MjE5NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NywiZXhwIjoxNzg2NTE4NDc3fQ.hKcKlS7xuIe2lOb85GVbGDIluWECb1ynGNUpFouM8Uc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmZDZmODkwZC1lMWI5LTRmY2UtODU1NC1lNWJiNTYwMzEzNjEiLCJtZW1iZXJJZCI6MjE5Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NywiZXhwIjoxNzg2NTE4NDc3fQ.YbP0b6D2HWdZNtpKUBHy81pYo6K0tctd2amUMvTdL7o",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzZTU2NTI0MC1iZDBhLTQzZDEtYjY5Zi0wNTIwMDA1MGY0YWIiLCJtZW1iZXJJZCI6MjE5Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NywiZXhwIjoxNzg2NTE4NDc3fQ.n9f4w7Fm5DXTCSP6wiWy0WMC519sXAOWtuISJQFlDGI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwNTM4NTEzZS04ZWYwLTQxOTQtYjU4Ni02ZDQxNDI2YTZiODUiLCJtZW1iZXJJZCI6MjE5OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OCwiZXhwIjoxNzg2NTE4NDc4fQ.aZ_mknzz-VFP7sl-BZb1Fg-HfCyOAFCqYU-CPVmaFgQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhN2M5MmFiNy1iNjUzLTQ3YjgtOWIyMy0xMmFmYjVmNDI0ZWEiLCJtZW1iZXJJZCI6MjE5OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OCwiZXhwIjoxNzg2NTE4NDc4fQ.JZBjnjdBreBM6zWNn8kFi9QBdNAJfOZGA4SRCZwrwAQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhZjhiZGZmNi1mNWYxLTQzNzItYTUxMi0zNDg2YjA0MzRiOWYiLCJtZW1iZXJJZCI6MjIwMCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OCwiZXhwIjoxNzg2NTE4NDc4fQ.TobjuWy8prxfVBYd3Hxg63MuaQZI0fI9TNfN5kag0x8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmNjJlZTEyZi0yZDBkLTQ1ZGYtOTgyZi0xMjUwMjIxY2JiZjAiLCJtZW1iZXJJZCI6MjIwMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OCwiZXhwIjoxNzg2NTE4NDc4fQ.8HuN1QIKYIgsVGdT-X_oNLUHqnAkkbKc3BclIou2Rlc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0MWVkYzFlMS04YmJhLTQ4NWUtOGI2My00Y2Y4ZjhkNDQyNzMiLCJtZW1iZXJJZCI6MjIwMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OCwiZXhwIjoxNzg2NTE4NDc4fQ.5dlWq68rHSkVuGbBIWax5T1HUnB5FgiTcDpQyL1wD14",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5MmNjODhlOC1kMzU5LTRhODYtYTUwNy01OWE3MDA0MWY2NGMiLCJtZW1iZXJJZCI6MjIwMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OSwiZXhwIjoxNzg2NTE4NDc5fQ.uTxmxAWKNaTE-YTF371CEO5fKxjy6TpBLspt3GIODM0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhZWNmM2RhNi1jNTA5LTRjYTktYTljYy0yMmE3Mzg1NzQwZTUiLCJtZW1iZXJJZCI6MjIwNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OSwiZXhwIjoxNzg2NTE4NDc5fQ.VouUH_WkiRXM5zEzZOX-W3HGDU8XeBBxfBJO2xXUaUo",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1N2JkZDRjNi05MTgwLTRiZmEtYjAwMS1mNDM2MTdmZjk3YzgiLCJtZW1iZXJJZCI6MjIwNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OSwiZXhwIjoxNzg2NTE4NDc5fQ.LjXTTVOp6tKWLsOhfkGqEeMm2lBqkNgZLJTfpAfu9a0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1OWUyODc1OS1iZTExLTQ5Y2UtYjRiNy04MGY2NDE1ZjMzN2UiLCJtZW1iZXJJZCI6MjIwNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OSwiZXhwIjoxNzg2NTE4NDc5fQ.mNOR7TuPe6la6eQKUuKA84JJKS2tlfzRsbrq_ak_jUQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MGJjNDhkZi0xNjBjLTQyZTktODg0MS01NGUxMDQyZWIyOTkiLCJtZW1iZXJJZCI6MjIwNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OSwiZXhwIjoxNzg2NTE4NDc5fQ.AwVWvEJwTzlLjNH9fvxCBn5-mbWGU_KJAd6uEzYPRQc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjMTdlNWUyMS1mMzQwLTQzZDAtYTViNS02ZTE2MzlhYzEwZTMiLCJtZW1iZXJJZCI6MjIwOCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3OSwiZXhwIjoxNzg2NTE4NDc5fQ.ESkbI1FKGlzwNGLxn4XGNHxQu0FgpYGw59pmsu_soq8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MzUwZmU2MS03Y2FlLTRkMzItYjIwZi0zY2I1NzU0ODk2YTAiLCJtZW1iZXJJZCI6MjIwOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MCwiZXhwIjoxNzg2NTE4NDgwfQ.ElIcUpzarShJQZxalezH1x8c02ptVALrzR3EdNtOQYw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzZGNhN2RhMC1iNWQyLTQ0ZGQtOWQ1NS1kZDlmYjUzZjFmMjkiLCJtZW1iZXJJZCI6MjIxMCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MCwiZXhwIjoxNzg2NTE4NDgwfQ.yuCLtHr5LS129oy77WuC7WvYPQ0Jfqy3TXDqCeK3u8s",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiMDQxZjJiNy1mYTVlLTRlMzMtYjI4ZC1hMWUzNjVkOWMzODciLCJtZW1iZXJJZCI6MjIxMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MCwiZXhwIjoxNzg2NTE4NDgwfQ.Oh3ihq2IwkhiKnRvoZTb0wB18kOLGzNLlhQKnGE_Bkk",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5YzAxMzQxMS0xZGRjLTQ5NjMtODY1NC1mMjhhMmM2OGZlNjQiLCJtZW1iZXJJZCI6MjIxMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MSwiZXhwIjoxNzg2NTE4NDgxfQ.EbvFX7SjX2mFzKDkmqcB2YV_x7n19KiXrUMqlG3G6p8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MjhkNGYwMC1iODFkLTQxYTUtODJkNi03Y2RhY2Q2ODhhNTEiLCJtZW1iZXJJZCI6MjIxMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MSwiZXhwIjoxNzg2NTE4NDgxfQ.WkfC6XfGJI5rpRZCgU8SHLAqX4X62WqiKn4LwlWeswc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0OTA5N2YzZS00N2Y2LTQ1ZmQtYmZmZi1hMGE5MGE1MWI1YzAiLCJtZW1iZXJJZCI6MjIxNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MSwiZXhwIjoxNzg2NTE4NDgxfQ.5FbtlP-Nt97Wn1lcS-ROfis-AzgBw5KHGDxZfg4VWts",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzZDJiYTQzZC1mNmVhLTQ1ZTYtYWEyZS04ZTMwZDFlOTA2YmEiLCJtZW1iZXJJZCI6MjIxNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MSwiZXhwIjoxNzg2NTE4NDgxfQ.7Gb1H2nRMkm4FqOXHrMt2HME0ZZ8lJlCKzPIB4TEqnY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmODk2NTU4Yi05NDhhLTQyMTctYWUzMC1kZTAwMDRkMDE1NmMiLCJtZW1iZXJJZCI6MjIxNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MiwiZXhwIjoxNzg2NTE4NDgyfQ.sPmDO3xGFoEblh-JEGaGqAgaFWC4UyiVGnDYLWwLoMI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxYmNhNWJlMC05NDEzLTRlZjctYTY2OC0wNDEwZmI5OWViN2IiLCJtZW1iZXJJZCI6MjIxNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MiwiZXhwIjoxNzg2NTE4NDgyfQ.zMWVAeVablJSNPyu83lPu6al-YcQuq2omuieQwAWh_k",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzNTU5YTA1OS0zNzBiLTRmMTAtYTk2My0zNjVhOWQ3N2EwYzAiLCJtZW1iZXJJZCI6MjIxOCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MiwiZXhwIjoxNzg2NTE4NDgyfQ.j7qNmdrO3PHOtewhsVG6ttEy7fRkEu66OtKp-azpEVo",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4ZDAyNWE4Zi1kNmVmLTQwMzktYmU3YS02ZGUxZWZmNzZiNzAiLCJtZW1iZXJJZCI6MjIxOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MywiZXhwIjoxNzg2NTE4NDgzfQ.IA1UKtqI6E1TnG_T7MzJW5Vw2qo24cO_RoI9To-TxY8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwMGE0MGMxMy0zNGY3LTRkZWItYmUxZS1jODM4ZTIzZGUzMDQiLCJtZW1iZXJJZCI6MjIyMCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MywiZXhwIjoxNzg2NTE4NDgzfQ.JkBpdFnhlJ1vbtEmWOvakku08pE9uLcEP6nvhK9IKSc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiMjYyZDY1Ni05ZWY4LTQ1YzEtODdlYi0xMjdkNDYxMDIxNTAiLCJtZW1iZXJJZCI6MjIyMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MywiZXhwIjoxNzg2NTE4NDgzfQ.eP-mjG1zYQTk1F91r53yJvYC7ng_-ZayYO1hZIKJmJs",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlZjFlZGE1My00NGY5LTRkNzgtYWU1MS02MWJmZjUzODhiZjgiLCJtZW1iZXJJZCI6MjIyMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MywiZXhwIjoxNzg2NTE4NDgzfQ.gIxSdpVGkQZ6ni1ghOemtx6J1RuGHCkM6pxTtTbZWhE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlZDg1MjhlMi0xN2MwLTQyZDktYWI0Mi1lOGQzZTkxMDE4NDEiLCJtZW1iZXJJZCI6MjIyMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4MywiZXhwIjoxNzg2NTE4NDgzfQ.cQMfAe7cxFgHZywPbJME8QY628NBZUO2DZzjGcodBmo",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhZmY5ZmM3ZC0yYWI4LTQ3NGYtYWJhZC1iODYyZmI2Nzc1NjMiLCJtZW1iZXJJZCI6MjIyNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NCwiZXhwIjoxNzg2NTE4NDg0fQ.K0MFSAf-PVYBiSaC5Lx1lIk_5aZN6og6X8dNM5ryob4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMTkwM2QwOC00NzI5LTRkZTQtOGUyOS01ZTA1ODUwMDAxM2UiLCJtZW1iZXJJZCI6MjIyNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NCwiZXhwIjoxNzg2NTE4NDg0fQ.YcLbsU__NUOIjiVU_jfzXmXPGuF_iC20ZO96FCCZWSk",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5ZmMzNDk4ZC01M2I2LTRiMjktOTBmMS1kYzdiNDIzNTg3MGMiLCJtZW1iZXJJZCI6MjIyNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NCwiZXhwIjoxNzg2NTE4NDg0fQ.z7YqP57z0vZ5HTXmK82GTRyua1dF5ANAtbmjOKQq-lY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiZWJiOGNhOS1kNDlmLTRmNzUtOWQ4MS1lZjYzOWFjZjU1NTgiLCJtZW1iZXJJZCI6MjIyNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NCwiZXhwIjoxNzg2NTE4NDg0fQ.fxkithHUpVRNX_ZFpyGmnKXgfU9fU3Q8fHZFxllaxVc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4NzNiODgyYS1lOWY2LTQzMWItYjUzNi1kYjJlOGQwY2VmMWYiLCJtZW1iZXJJZCI6MjIyOCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NCwiZXhwIjoxNzg2NTE4NDg0fQ.A3qU2bsg2rm9ssTblzoprDM6gkNMZCmWkTzm8GsRIeY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmZWJiMjA0Yy02ZWNmLTRlYTItYjI2Yi1lYTVkMWU1YTk2NjgiLCJtZW1iZXJJZCI6MjIyOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NSwiZXhwIjoxNzg2NTE4NDg1fQ.oPgXE5HnkMKStdMQjTboORXzsG9KwggR9iMH8KymwEE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjZDI1YzUyMC00MmFkLTQyYjgtYmYyMS0yMTc1ZDAzODMyYzkiLCJtZW1iZXJJZCI6MjIzMCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NSwiZXhwIjoxNzg2NTE4NDg1fQ.WretIXn76Dww3cwcPUPSsUzQKKIEBEy9Khc9OlHL1Kk",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MTJiYWU2YS1lYTcxLTRlYTktOGQxNy1jMDMyNmEwNDFkMDAiLCJtZW1iZXJJZCI6MjIzMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NSwiZXhwIjoxNzg2NTE4NDg1fQ.GYy52qPIYstgN_FKHuZkmfpTh9_ZfUGwbBVwknAlbZQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlYTFkNmI0MS1kMGFkLTQ3MGItYjZmYy0yNTQ3ZDgxNDUzMzkiLCJtZW1iZXJJZCI6MjIzMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NSwiZXhwIjoxNzg2NTE4NDg1fQ.2R78JCjLUD1BLyqiPaI8YnXXtPTyk7gudtEscrainyo",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5M2JkMDE0OC02MzMyLTQ2NjUtOTI5Ny1hNTc5NzAwNGYyYjIiLCJtZW1iZXJJZCI6MjIzMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NSwiZXhwIjoxNzg2NTE4NDg1fQ.OyyHR2SVZbwK2Ml_Brq6S2F7bRCyrrhWQXyCJRua6h4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkYjMxYWQ3Zi1kNjBlLTRmZTktYWU0NC0zZmJkMzYxYWZjNTUiLCJtZW1iZXJJZCI6MjIzNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NiwiZXhwIjoxNzg2NTE4NDg2fQ.j92seB9qQeMqylklkV05osgVBvRcnMtoSL88LPmhUfU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyZjYzNGE4Yy0wNzE5LTQzNmEtOGJkYi1lYjhkZDg0ZmY0NDgiLCJtZW1iZXJJZCI6MjIzNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NiwiZXhwIjoxNzg2NTE4NDg2fQ.prt8mU0jpNViMiaT-3GsmFW3COycuaHJnlMY0fw08gw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3OTQxMTRmZi02Zjk5LTRkZDYtYjgxOS04OWE4NGExY2ZjYTkiLCJtZW1iZXJJZCI6MjIzNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NiwiZXhwIjoxNzg2NTE4NDg2fQ.CmbAehURCVpa4pAGDWp2osvO20Z50qBSoRMQDvZm9f4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1NTZmYTFlNS0xODlmLTQxMWMtYWQ2OC1hYmNmMWU5Njg2ODMiLCJtZW1iZXJJZCI6MjIzNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NiwiZXhwIjoxNzg2NTE4NDg2fQ.oXX6TY-btY5UbyL3St1BXbts2AkXDabX3bSHDccq12A",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0YjBkNThmYi03ZTczLTQxYjctOGY1OS03YjkxNWI2YmQ4MmMiLCJtZW1iZXJJZCI6MjIzOCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NiwiZXhwIjoxNzg2NTE4NDg2fQ.0jcbUsx6hX1BX79I0uUtZZFnbWLubtjFF2X3o3Ea5J4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhZjdiZWM1NS05Y2Q3LTQxZmEtODYxOC02Y2Y2MzY0ZjYyMDUiLCJtZW1iZXJJZCI6MjIzOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NiwiZXhwIjoxNzg2NTE4NDg2fQ.K-3vYo6u1drOIChFaxt_8wSKAHi3RtoiCVZeurNvki0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjMjFkZGMzYy1kZDQ2LTRiNDctOGZkNi05N2UwZjkwNWNkZTYiLCJtZW1iZXJJZCI6MjI0MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NywiZXhwIjoxNzg2NTE4NDg3fQ.iBHmpX-IzqEG_2syn1V4GAqU6P28P34cuEH7VWwBxQw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwMTRmN2JlNS0yNzE1LTQzMDctOGZjMy1lZDE0ZGJjNGNmZDkiLCJtZW1iZXJJZCI6MjI0MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NywiZXhwIjoxNzg2NTE4NDg3fQ.DtcAvSuxJcdk4BDl_1-i65sSi0-IdKlkeAo63z3uypc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3ZjE0MGNkMi0xNDI5LTQ1YzYtOTAyNS1hZDAzNDVhYTNmYzAiLCJtZW1iZXJJZCI6MjI0Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NywiZXhwIjoxNzg2NTE4NDg3fQ.LXvI6EhqNi6uLsIiz-A2vAUrA8ozT0UPKP1sfLh7sSY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmMTFhZTg0MC1kZGYyLTRjOTItYTdmNi0wMzM2ZTUwNTVlNjEiLCJtZW1iZXJJZCI6MjI0Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NywiZXhwIjoxNzg2NTE4NDg3fQ.TCa3CredrlqmRGYHIrjtNQF3w5d0AfkcsMx3eVWNoRY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhZjQ5YzhiNy05MmYxLTRjMmQtOGFmYi1iOTZhNDc3YzZmOGEiLCJtZW1iZXJJZCI6MjI0NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4NywiZXhwIjoxNzg2NTE4NDg3fQ.Ykjot0lblietT0ArbsYbCA6QcQzzQ73ukgX3M98InC8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkMGQ1Y2M1ZC1iZTY4LTQ5MzYtYTY3MS1mODAyOTU2MWE1YTMiLCJtZW1iZXJJZCI6MjI0NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OCwiZXhwIjoxNzg2NTE4NDg4fQ.QmASx8DHErm_WJIkI7PSxHJiABc2_3kWBxnyWRzUuHM",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlMjUxNGE4Ny03ODM2LTQwZTQtOTE4Ni1iNjAxOGI0MTIxZTAiLCJtZW1iZXJJZCI6MjI0Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OCwiZXhwIjoxNzg2NTE4NDg4fQ.IEKqpWSr1-PV4zxaZI17m7KGrDnbcEXxmZ-wjtsDwyI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkOWZiMTU4Mi03YTE5LTQxOGQtOWY4NS1mNDFlNzkzZDMzYmYiLCJtZW1iZXJJZCI6MjI0Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OCwiZXhwIjoxNzg2NTE4NDg4fQ.F-YRP3wQG3gKYkEx3Qi3Cn6rNa-jfzv8Pa9YQ86Wt9I",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkNWY0NTZhMC1mOWNkLTQ4MzMtYWEwYi04NTg5NjA0Yjk4NGMiLCJtZW1iZXJJZCI6MjI0OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OCwiZXhwIjoxNzg2NTE4NDg4fQ.Bj1oUUFXJG21-2kukEH7rgvADIw-gFaFAQbV5vObskw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhMTI2YzgwOC03NmE5LTRhZGUtYTg2Ny1iYjdmMDNlYzFkMWYiLCJtZW1iZXJJZCI6MjI0OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OCwiZXhwIjoxNzg2NTE4NDg4fQ.yDzFgxwa42D_JCd1SyDIEasQGx295UtDRdk2eEqgszc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhMmY2OWEzOS04MzdiLTRlOGEtOTE2Zi03NGQ3ZGQwZDNiM2IiLCJtZW1iZXJJZCI6MjI1MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OSwiZXhwIjoxNzg2NTE4NDg5fQ.SE_SS_EuA6g4cf69YZtZc7m6Ca6FCqD6Adr2-w9vZc8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MTcxMjA4NS0yODIyLTQyNDAtYWE4Mi1iZDQ4YWU2ZDY4NGYiLCJtZW1iZXJJZCI6MjI1MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OSwiZXhwIjoxNzg2NTE4NDg5fQ.8_gpUuPcAU6MrgSxv0Ml4tB-esbIr0yDXKPiDbc5Zi4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3MzRhYTNiYS03NDA2LTQ4ZDAtODg4Mi1mZTlkMzYwOThkNTciLCJtZW1iZXJJZCI6MjI1Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OSwiZXhwIjoxNzg2NTE4NDg5fQ.uvnfEt_xM4y1kQsozmFexkgiBLxPzGBouWn4EWmBF68",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmOGM1YTAwMy03MTU3LTQzYjktYTAyZi0xZWVhOTlkOTFiNWUiLCJtZW1iZXJJZCI6MjI1Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OSwiZXhwIjoxNzg2NTE4NDg5fQ.8m-uIuHqlJCHvpIUgyDOHM96eT66A1uRF-lF6MPCjMU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0ZjQ2YWE2ZS1lNjU1LTQyOWEtOGFhZS0zNDE0MDM4NjgxNmMiLCJtZW1iZXJJZCI6MjI1NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg4OSwiZXhwIjoxNzg2NTE4NDg5fQ.aFrGZMwMN86GnG38gCjEIJW6FQWyk3i7Lsx0AoBnIzg",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2MzA0YzI0ZC04YjlhLTRmMWItYWUyZi02MGQ1ZmRkZTdmN2YiLCJtZW1iZXJJZCI6MjI1NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MCwiZXhwIjoxNzg2NTE4NDkwfQ.vAn7SOuJAADFlyk28AWGiicaMx_pWPKW6nfDUVYh_WQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhNTEyMTQyNy1mZGUyLTQ3NzQtYmUzNS1iYTJiMDNkNjRlZTYiLCJtZW1iZXJJZCI6MjI1Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MCwiZXhwIjoxNzg2NTE4NDkwfQ.3k563NK2JioaU0H7kIa0hRDS6VMc_u5MPiIIPD-Fz1k",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4ZDhkOWQ0ZS1jOGFjLTRiMGMtYjg1MC0xNjZmODFkNTA3NjEiLCJtZW1iZXJJZCI6MjI1Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MCwiZXhwIjoxNzg2NTE4NDkwfQ.XrUSRj_-jjdzv_MOyEBVX7UqUQSSU-vUQH3yl21bqAo",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyMDhjZjgzMC1lMDUyLTQwN2MtOTE5Zi1lM2Y2MDMwYjI5NTQiLCJtZW1iZXJJZCI6MjI1OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MCwiZXhwIjoxNzg2NTE4NDkwfQ.OYqB7Jmk-jxMsdLhz4bMK--UkEE6Tr2pgMbcNnbpvP0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlZWVjMTY1Ni1lMzdiLTQwOGYtOTIwYS1kZWUzNDViYmE2NDciLCJtZW1iZXJJZCI6MjI1OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MCwiZXhwIjoxNzg2NTE4NDkwfQ.kFA3F5J0JBS9UheZALzJpzX6P4qLoNvH8FyCvlcoDPA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxNDc1N2Y4Ni0wYjYyLTQ3MWUtYWZmNC1iY2U3M2I3MDUzZGMiLCJtZW1iZXJJZCI6MjI2MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MCwiZXhwIjoxNzg2NTE4NDkwfQ.64ynJ6hdWqPkwMrXHCkzW8KUH2ZLliWYhTF2bXBkNlc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkOTEzOTgwYy1iNTdlLTQyMmMtYmI2MC1hOWFiNTc2ODM5NjciLCJtZW1iZXJJZCI6MjI2MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MSwiZXhwIjoxNzg2NTE4NDkxfQ.RqqzSK5EaTgAwlMAAGUTR2_IY61jDDl5VOlDmq4MB-8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkNWMwNzgxMy1jMDBhLTQxMWUtYTdlYS1iMDk2ODFlNTI2NDEiLCJtZW1iZXJJZCI6MjI2Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MSwiZXhwIjoxNzg2NTE4NDkxfQ.Z5ykmgQ1F_6jvr-7vZ8OsbIp5WPVxna0lSWucjoVv6A",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmM2JjNGJkYy1jOTJjLTQ5ZTUtODRiYi0wOGFiNjZhOTNjYjUiLCJtZW1iZXJJZCI6MjI2Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MSwiZXhwIjoxNzg2NTE4NDkxfQ.gahn5CEYv4cD8XvCt8NHNbBbqz3YMQJfi6t2fOxChnk",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3NDQ2OTM2OC0zZmQxLTQ2ZGMtYWUzOS02ODk4MmY3ZGQ0Y2QiLCJtZW1iZXJJZCI6MjI2NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MSwiZXhwIjoxNzg2NTE4NDkxfQ.Hm01Vh9Y5r6H-B58l1S4iOLL3FWRWZcdR4lw6fxxBRE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjNTgzYWUyNi04MjI1LTQ5ZGYtOWRkNS1lMTkwZDg0ZmE1ZDAiLCJtZW1iZXJJZCI6MjI2NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MSwiZXhwIjoxNzg2NTE4NDkxfQ.A8l7cxysrU3xPylYY65YU09wy_UJFucGa5lPYdBlKfA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiMjIxZGNhYy1lODZjLTRiNWItYTdkZC0yYzE0YmU2OTI5ZTYiLCJtZW1iZXJJZCI6MjI2Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MiwiZXhwIjoxNzg2NTE4NDkyfQ.v-C8GctdqRygXgSeY1s7-v99bjkIrdi7xOz2vE53Sgo",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwM2E3NjA5Ni1mMTNhLTQ4NWMtYjQ5My0yMjBmZWEyM2VlNzYiLCJtZW1iZXJJZCI6MjI2Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MiwiZXhwIjoxNzg2NTE4NDkyfQ.IhAewX8R8yk75Q-WNIUuujNNFRb-Fmt-HsV1VcwMB_U",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmMzJhOGY4ZC0wODUyLTQzNDMtOTI0Mi05ZTFkZThjMjVkYjgiLCJtZW1iZXJJZCI6MjI2OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MiwiZXhwIjoxNzg2NTE4NDkyfQ.hNcuWBvDPXQeEmYNApv-IHEcaw0sH2BmDwt2JFShArU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiODcxYjc2Ny1hZjUyLTQ4MTgtOWJhYS0zZmRlOTk3MmI3ZmQiLCJtZW1iZXJJZCI6MjI2OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MiwiZXhwIjoxNzg2NTE4NDkyfQ.eQE107R3mYy6d45oYVgQkXvb3l6sBMdyS71AmJXnK9c",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiMjRhNWFmMi1mMzIxLTQzZGEtYTMwMC04Y2Y0YzQzOTllMjkiLCJtZW1iZXJJZCI6MjI3MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MiwiZXhwIjoxNzg2NTE4NDkyfQ.maej5vm1k5lMvqIGpEVGfCM35g80bsYuBHNHvAua6TQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwZTk2YjdlMi0zMjE5LTQ3ODQtOGJhYS1jOGUxYTk2MDk2ZjQiLCJtZW1iZXJJZCI6MjI3MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MiwiZXhwIjoxNzg2NTE4NDkyfQ.Km-YCo1WhIru2xkL6yb9yqbc20V5lcoP_MD1C1Esetw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhMTg2ZDE0Yy1hNTBlLTQ4MzMtODg5MS0zMTVmMzBlZWE1OWEiLCJtZW1iZXJJZCI6MjI3Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MywiZXhwIjoxNzg2NTE4NDkzfQ.BuMaVGGZOdPQCAXfDmsC6Pn29vH4Qqgz0-IQc7G7XT0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhNjExODkxZS0yMTdkLTRkNWMtODdkZi0xMzA3YTg0ODVkMmEiLCJtZW1iZXJJZCI6MjI3Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MywiZXhwIjoxNzg2NTE4NDkzfQ.hP8fdGTj46P7lsQaNpc8bzwkzqgBVgaaxBf74bDT6kI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlZmIxOGY0ZC02NzJmLTRlZDQtYmQ2ZC1hODYyMTRiNGZhNTQiLCJtZW1iZXJJZCI6MjI3NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MywiZXhwIjoxNzg2NTE4NDkzfQ.gYVowbsg9vyr3LMCXWSCxRO0ETcNtTKNu8_C1rUYte8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4MWIxMTJjMi1lZjdkLTQ5YzctOWIzZC1lODFiNDhmOTY1YmIiLCJtZW1iZXJJZCI6MjI3NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MywiZXhwIjoxNzg2NTE4NDkzfQ.2iIFQeceZgaj51mIAdvazQ0WJijX-gHzjuVlztpNB_E",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiZDU0MDA4NS0wNmU5LTQzMDMtYWJmYS1mYjZiNGFhM2MyYTIiLCJtZW1iZXJJZCI6MjI3Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5MywiZXhwIjoxNzg2NTE4NDkzfQ.9a-MDrdWSf1gJaToZBOEYwxwn017lCImiAMhoyjMrig",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3MDllYWU3YS0zMGRjLTQ3OWQtODJmZC00NGQ0YzQyN2RjMDkiLCJtZW1iZXJJZCI6MjI3Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5NCwiZXhwIjoxNzg2NTE4NDk0fQ.gHeSfiz6Gwq-AFAOR7LHiIp6upZ7HWJC0QfkLAE0H5Y",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3MjQ3MDBhNC1mMGZkLTRlY2YtYTI1MC0zYzNiYmZkYjA4NTgiLCJtZW1iZXJJZCI6MjI3OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5NCwiZXhwIjoxNzg2NTE4NDk0fQ.fI1sh_UGQVMqXXdeQJUXXKQ8XmHSnh7jRosS17gARYE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwOTc1OTI4Ni1hYWZiLTQ4NDQtODNjZi1hNDE3Zjg1OTdkMDYiLCJtZW1iZXJJZCI6MjI3OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5NCwiZXhwIjoxNzg2NTE4NDk0fQ.hmQev-QWtsBoc1b1vrTYocIzlE_YVmGUmQJzxjaDi_4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3MzE3MDFmYy05OWJlLTQzMTMtOGEwYy1hN2MyN2U4N2NiMmMiLCJtZW1iZXJJZCI6MjI4MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5NCwiZXhwIjoxNzg2NTE4NDk0fQ.RoLyi9AZvv4g8zxnevxgbw8mKm8rLG4Qr_he2ILDm8Q",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjMTA3ZDMwNi1jOTVhLTQ0YjgtYjk1Ni1kNDYyNWJlOWI3NGEiLCJtZW1iZXJJZCI6MjI4MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5NCwiZXhwIjoxNzg2NTE4NDk0fQ.CQ481Z2c4LaDIuFR0t0Cybod7MMeQeBVn62xgJtP7dc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzMTgwNjhjMS04NmNhLTQ2ZjUtYjEzMi05ODI3YTYzMTRmYjkiLCJtZW1iZXJJZCI6MjI4Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg5NSwiZXhwIjoxNzg2NTE4NDk1fQ.KFr-S7JP8_2FEnJ8srN3-qm3P-132n_vp8sdoXobAg8"
-        ]
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01",
+        "passes": 100,
+        "fails": 0
+      }
+    },
+    "name": ""
+  },
+  "metrics": {
+    "http_req_receiving": {
+      "p(99)": 0.5559599999999997,
+      "avg": 0.07145631067961164,
+      "min": 0.013,
+      "med": 0.048,
+      "max": 2.361,
+      "p(90)": 0.10080000000000003,
+      "p(95)": 0.13879999999999998
+    },
+    "http_req_duration": {
+      "min": 13.193,
+      "med": 95.423,
+      "max": 372.851,
+      "p(90)": 276.63680000000005,
+      "p(95)": 319.92379999999997,
+      "p(99)": 360.99284,
+      "avg": 135.53041423948224
+    },
+    "http_req_failed": {
+      "passes": 100,
+      "fails": 209,
+      "value": 0.32362459546925565
+    },
+    "http_req_connecting": {
+      "max": 34.191,
+      "p(90)": 14.2802,
+      "p(95)": 14.477,
+      "p(99)": 20.10444,
+      "avg": 3.607705501618122,
+      "min": 0,
+      "med": 0
+    },
+    "vus_max": {
+      "value": 100,
+      "min": 100,
+      "max": 100
+    },
+    "iteration_duration": {
+      "p(99)": 379.81443592,
+      "avg": 225.45960123999993,
+      "min": 43.598708,
+      "med": 227.4457495,
+      "max": 382.819375,
+      "p(90)": 351.12074170000005,
+      "p(95)": 368.67125625
+    },
+    "iterations": {
+      "count": 100,
+      "rate": 4.785103398906795
+    },
+    "http_req_waiting": {
+      "max": 372.812,
+      "p(90)": 276.5966000000001,
+      "p(95)": 319.853,
+      "p(99)": 360.94615999999996,
+      "avg": 135.438284789644,
+      "min": 13.102,
+      "med": 95.243
+    },
+    "http_req_blocked": {
+      "med": 0.003,
+      "max": 34.256,
+      "p(90)": 14.305800000000001,
+      "p(95)": 14.5128,
+      "p(99)": 20.11976,
+      "avg": 3.6372427184466014,
+      "min": 0.001
+    },
+    "http_req_sending": {
+      "min": 0.007,
+      "med": 0.013,
+      "max": 0.163,
+      "p(90)": 0.03840000000000001,
+      "p(95)": 0.05439999999999988,
+      "p(99)": 0.108,
+      "avg": 0.020673139158576024
+    },
+    "data_sent": {
+      "count": 99028,
+      "rate": 4738.592193869421
+    },
+    "http_req_duration{expected_response:true}": {
+      "med": 93.225,
+      "max": 352.689,
+      "p(90)": 107.15500000000002,
+      "p(95)": 131.77779999999998,
+      "p(99)": 210.7215599999999,
+      "avg": 97.83005263157897,
+      "min": 14.084
+    },
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.047851033989067954,
+      "thresholds": {
+        "count==1": false
+      }
+    },
+    "checks": {
+      "passes": 101,
+      "fails": 0,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
+    },
+    "data_received": {
+      "count": 191541,
+      "rate": 9165.434901300065
+    },
+    "peak_create_race_unexpected": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "http_reqs": {
+      "count": 309,
+      "rate": 14.785969502621997
+    },
+    "peak_create_race_conflict": {
+      "count": 99,
+      "rate": 4.737252364917728,
+      "thresholds": {
+        "count==99": false
+      }
+    },
+    "vus": {
+      "value": 0,
+      "min": 0,
+      "max": 0
+    },
+    "http_req_tls_handshaking": {
+      "p(99)": 0,
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0,
+      "p(95)": 0
     }
+  },
+  "setup_data": {
+    "restaurantId": 22,
+    "targetSessionId": 601,
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]",
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 100 JWT tokens removed — see PR #220 review]"
+  }
 }

@@ -1,180 +1,174 @@
 {
-    "setup_data": {
-        "date": "2026-08-13",
-        "memberTokens": [
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmMjg5M2U0Yy0xOTdlLTQxZGItOWFjZC0yYWIxYjQzOGJmNTEiLCJtZW1iZXJJZCI6Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjQ5ODI3MywiZXhwIjoxNzg2NTAxODczfQ.gAeU8H07obyHhcvuuQwlkGW3zUdIWXgS4fz3NTOkjdA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkYTJkNmFmMC0xZDgwLTQwNWUtYTI2MC0zNDI2OWVhZGU2ZmYiLCJtZW1iZXJJZCI6OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjQ5ODI3MywiZXhwIjoxNzg2NTAxODczfQ.KQ6nMvCyheGGko3ccXlynohFbmg1v5ewA_ySG8vddiw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhZDgyNjk4Ni1jNzQ0LTQ0M2MtYmU4MS03NmUzNTQ1YzNmOTciLCJtZW1iZXJJZCI6OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjQ5ODI3MywiZXhwIjoxNzg2NTAxODczfQ.cwS4nU6Lz1cBZnwh1roSGHstgXuK0bSC7RzJ9npXbss",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0MDliNDFmZC1kMDRjLTRhNjMtOTRlOS05N2IzYjc1NzY3NGEiLCJtZW1iZXJJZCI6MTAsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzQsImV4cCI6MTc4NjUwMTg3NH0.PwWqY1LqBaR_icJaEt81WefHAOtwqwIdsHQpesCOu4U",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyN2ZlMjQ1My0zMjAxLTQ5MGQtYjNhYy1mNmUwZjAxMGNlZmYiLCJtZW1iZXJJZCI6MTEsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzQsImV4cCI6MTc4NjUwMTg3NH0.1zarMVx87toLGg_0uWu_5ZRUZ6TvjAtct9u022c5M8w"
-        ],
-        "restaurantId": 3,
-        "targetSessionId": 98,
-        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMTdhZGFhNC0xYjUxLTQyYjUtOWJhMS1jY2ViOWEwNGI2MWUiLCJtZW1iZXJJZCI6MTIsInJvbGUiOiJNRU1CRVIiLCJpYXQiOjE3ODY0OTgyNzQsImV4cCI6MTc4NjUwMTg3NH0.xCyT_it4e7ciW4lBGBBuLU0AAOnhGbJ_RvgHXmwRKxM"
-    },
-    "root_group": {
-        "groups": {
-            "teardown": {
-                "name": "teardown",
-                "path": "::teardown",
-                "id": "a8a9942382e8ffe2e56ef29e664b8229",
-                "groups": {},
-                "checks": {
-                        "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
-                            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "id": "72ee86e493a705c57357954724f8ed6a",
-                            "passes": 1,
-                            "fails": 0
-                        }
-                    }
-            }
-        },
+  "setup_data": {
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 5 JWT tokens removed — see PR #220 review]",
+    "restaurantId": 3,
+    "targetSessionId": 98,
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]"
+  },
+  "root_group": {
+    "groups": {
+      "teardown": {
+        "name": "teardown",
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
         "checks": {
-            "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
-                "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "id": "e932986fb0e444a272fc4b0130cfaf01",
-                "passes": 5,
-                "fails": 0
-            }
-        },
-        "name": "",
-        "path": "",
-        "id": "d41d8cd98f00b204e9800998ecf8427e"
-    },
-    "metrics": {
-        "vus_max": {
-            "value": 5,
-            "min": 5,
-            "max": 5
-        },
-        "http_req_blocked": {
-            "avg": 4.719541666666665,
-            "min": 0.003,
-            "med": 0.004,
-            "max": 47.18,
-            "p(90)": 11.7891,
-            "p(95)": 11.82105
-        },
-        "http_req_receiving": {
-            "med": 0.094,
-            "max": 0.239,
-            "p(90)": 0.16360000000000002,
-            "p(95)": 0.22039999999999996,
-            "avg": 0.10920833333333334,
-            "min": 0.054
-        },
-        "vus": {
-            "min": 0,
-            "max": 0,
-            "value": 0
-        },
-        "iteration_duration": {
-            "avg": 74.0267082,
-            "min": 57.008208,
-            "med": 75.151958,
-            "max": 89.332625,
-            "p(90)": 86.3068418,
-            "p(95)": 87.81973339999999
-        },
-        "http_reqs": {
-            "count": 24,
-            "rate": 12.188123689141905
-        },
-        "peak_create_race_unexpected": {
-            "count": 0,
-            "rate": 0,
-            "thresholds": {
-                "count==0": false
-            }
-        },
-        "http_req_tls_handshaking": {
-            "avg": 0,
-            "min": 0,
-            "med": 0,
-            "max": 0,
-            "p(90)": 0,
-            "p(95)": 0
-        },
-        "peak_create_race_success": {
-            "count": 1,
-            "rate": 0.5078384870475794,
-            "thresholds": {
-                "count==1": false
-            }
-        },
-        "http_req_duration{expected_response:true}": {
-            "p(95)": 131.37290000000002,
-            "avg": 96.7294210526316,
-            "min": 21.919,
-            "med": 115.535,
-            "max": 136.043,
-            "p(90)": 128.1716
-        },
-        "iterations": {
-            "count": 5,
-            "rate": 2.5391924352378967
-        },
-        "data_sent": {
-            "count": 7896,
-            "rate": 4009.892693727687
-        },
-        "peak_create_race_conflict": {
-            "count": 4,
-            "rate": 2.0313539481903176,
-            "thresholds": {
-                "count==4": false
-            }
-        },
-        "http_req_sending": {
-            "p(90)": 0.1107,
-            "p(95)": 0.1157,
-            "avg": 0.042666666666666686,
-            "min": 0.014,
-            "med": 0.022,
-            "max": 0.127
-        },
-        "data_received": {
-            "count": 14762,
-            "rate": 7496.711745796367
-        },
-        "http_req_failed": {
-            "passes": 5,
-            "fails": 19,
-            "value": 0.20833333333333334
-        },
-        "http_req_duration": {
-            "med": 110.618,
-            "max": 136.043,
-            "p(90)": 127.41250000000001,
-            "p(95)": 130.35105000000001,
-            "avg": 88.652125,
-            "min": 21.919
-        },
-        "http_req_waiting": {
-            "min": 21.764,
-            "med": 110.3815,
-            "max": 135.958,
-            "p(90)": 127.2852,
-            "p(95)": 130.25629999999998,
-            "avg": 88.50025
-        },
-        "checks": {
-            "passes": 6,
-            "fails": 0,
-            "thresholds": {
-                "rate==1.0": false
-            },
-            "value": 1
-        },
-        "http_req_connecting": {
-            "med": 0,
-            "max": 47.125,
-            "p(90)": 11.744,
-            "p(95)": 11.77675,
-            "avg": 4.70125,
-            "min": 0
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1,
+            "fails": 0
+          }
         }
+      }
+    },
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01",
+        "passes": 5,
+        "fails": 0
+      }
+    },
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "metrics": {
+    "vus_max": {
+      "value": 5,
+      "min": 5,
+      "max": 5
+    },
+    "http_req_blocked": {
+      "avg": 4.719541666666665,
+      "min": 0.003,
+      "med": 0.004,
+      "max": 47.18,
+      "p(90)": 11.7891,
+      "p(95)": 11.82105
+    },
+    "http_req_receiving": {
+      "med": 0.094,
+      "max": 0.239,
+      "p(90)": 0.16360000000000002,
+      "p(95)": 0.22039999999999996,
+      "avg": 0.10920833333333334,
+      "min": 0.054
+    },
+    "vus": {
+      "min": 0,
+      "max": 0,
+      "value": 0
+    },
+    "iteration_duration": {
+      "avg": 74.0267082,
+      "min": 57.008208,
+      "med": 75.151958,
+      "max": 89.332625,
+      "p(90)": 86.3068418,
+      "p(95)": 87.81973339999999
+    },
+    "http_reqs": {
+      "count": 24,
+      "rate": 12.188123689141905
+    },
+    "peak_create_race_unexpected": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "http_req_tls_handshaking": {
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0,
+      "p(95)": 0
+    },
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.5078384870475794,
+      "thresholds": {
+        "count==1": false
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "p(95)": 131.37290000000002,
+      "avg": 96.7294210526316,
+      "min": 21.919,
+      "med": 115.535,
+      "max": 136.043,
+      "p(90)": 128.1716
+    },
+    "iterations": {
+      "count": 5,
+      "rate": 2.5391924352378967
+    },
+    "data_sent": {
+      "count": 7896,
+      "rate": 4009.892693727687
+    },
+    "peak_create_race_conflict": {
+      "count": 4,
+      "rate": 2.0313539481903176,
+      "thresholds": {
+        "count==4": false
+      }
+    },
+    "http_req_sending": {
+      "p(90)": 0.1107,
+      "p(95)": 0.1157,
+      "avg": 0.042666666666666686,
+      "min": 0.014,
+      "med": 0.022,
+      "max": 0.127
+    },
+    "data_received": {
+      "count": 14762,
+      "rate": 7496.711745796367
+    },
+    "http_req_failed": {
+      "passes": 5,
+      "fails": 19,
+      "value": 0.20833333333333334
+    },
+    "http_req_duration": {
+      "med": 110.618,
+      "max": 136.043,
+      "p(90)": 127.41250000000001,
+      "p(95)": 130.35105000000001,
+      "avg": 88.652125,
+      "min": 21.919
+    },
+    "http_req_waiting": {
+      "min": 21.764,
+      "med": 110.3815,
+      "max": 135.958,
+      "p(90)": 127.2852,
+      "p(95)": 130.25629999999998,
+      "avg": 88.50025
+    },
+    "checks": {
+      "passes": 6,
+      "fails": 0,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
+    },
+    "http_req_connecting": {
+      "med": 0,
+      "max": 47.125,
+      "p(90)": 11.744,
+      "p(95)": 11.77675,
+      "avg": 4.70125,
+      "min": 0
     }
+  }
 }

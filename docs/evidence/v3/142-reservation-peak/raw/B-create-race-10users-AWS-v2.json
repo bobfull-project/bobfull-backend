@@ -1,194 +1,183 @@
 {
-    "metrics": {
-        "peak_create_race_success": {
-            "count": 1,
-            "rate": 0.4233938659543488,
-            "thresholds": {
-                "count==1": false
-            }
-        },
-        "iteration_duration": {
-            "max": 60.374,
-            "p(90)": 59.46635,
-            "p(95)": 59.920175,
-            "p(99)": 60.283235000000005,
-            "avg": 49.2473458,
-            "min": 36.830583,
-            "med": 50.024874999999994
-        },
-        "peak_create_race_conflict": {
-            "count": 9,
-            "rate": 3.810544793589139,
-            "thresholds": {
-                "count==9": false
-            }
-        },
-        "http_reqs": {
-            "rate": 16.512360772219605,
-            "count": 39
-        },
-        "http_req_receiving": {
-            "avg": 0.09156410256410255,
-            "min": 0.022,
-            "med": 0.065,
-            "max": 0.553,
-            "p(90)": 0.13440000000000005,
-            "p(95)": 0.18659999999999985,
-            "p(99)": 0.44317999999999996
-        },
-        "http_req_connecting": {
-            "p(90)": 6.5534,
-            "p(95)": 6.6975,
-            "p(99)": 23.380319999999994,
-            "avg": 2.447769230769231,
-            "min": 0,
-            "med": 0,
-            "max": 33.597
-        },
-        "http_req_tls_handshaking": {
-            "min": 0,
-            "med": 0,
-            "max": 0,
-            "p(90)": 0,
-            "p(95)": 0,
-            "p(99)": 0,
-            "avg": 0
-        },
-        "data_sent": {
-            "count": 12718,
-            "rate": 5384.723187207408
-        },
-        "http_req_sending": {
-            "avg": 0.029692307692307702,
-            "min": 0.009,
-            "med": 0.017,
-            "max": 0.124,
-            "p(90)": 0.06720000000000001,
-            "p(95)": 0.09059999999999999,
-            "p(99)": 0.11335999999999999
-        },
-        "http_req_waiting": {
-            "avg": 68.73366666666668,
-            "min": 12.003,
-            "med": 87.658,
-            "max": 100.175,
-            "p(90)": 93.9832,
-            "p(95)": 94.5617,
-            "p(99)": 98.7728
-        },
-        "http_req_blocked": {
-            "min": 0.002,
-            "med": 0.003,
-            "max": 33.663,
-            "p(90)": 6.604,
-            "p(95)": 6.755,
-            "p(99)": 23.472159999999988,
-            "avg": 2.4670000000000005
-        },
-        "peak_create_race_unexpected": {
-            "rate": 0,
-            "count": 0,
-            "thresholds": {
-                "count==0": false
-            }
-        },
-        "http_req_duration{expected_response:true}": {
-            "p(95)": 95.6974,
-            "p(99)": 99.2054,
-            "avg": 78.24989655172415,
-            "min": 12.642,
-            "med": 89.01,
-            "max": 100.233,
-            "p(90)": 94.32860000000001
-        },
-        "vus": {
-            "min": 0,
-            "max": 0,
-            "value": 0
-        },
-        "vus_max": {
-            "value": 10,
-            "min": 10,
-            "max": 10
-        },
-        "data_received": {
-            "count": 24103,
-            "rate": 10205.06235109767
-        },
-        "http_req_failed": {
-            "passes": 10,
-            "fails": 29,
-            "value": 0.2564102564102564
-        },
-        "checks": {
-            "passes": 11,
-            "fails": 0,
-            "thresholds": {
-                "rate==1.0": false
-            },
-            "value": 1
-        },
-        "iterations": {
-            "count": 10,
-            "rate": 4.233938659543488
-        },
-        "http_req_duration": {
-            "avg": 68.8549230769231,
-            "min": 12.188,
-            "med": 87.719,
-            "max": 100.233,
-            "p(90)": 94.1638,
-            "p(95)": 94.6154,
-            "p(99)": 98.83840000000001
-        }
+  "metrics": {
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.4233938659543488,
+      "thresholds": {
+        "count==1": false
+      }
     },
-    "setup_data": {
-        "targetSessionId": 595,
-        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0MGIwYjk4MC03M2RiLTQxNzYtODhkNS02NjU1YTUzMDU5OTkiLCJtZW1iZXJJZCI6MjEwNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MCwiZXhwIjoxNzg2NTE4NDYwfQ.hRhFDdFG6twbJMrjjPWE9aVHIHzLXCDmUtDTuJC-7Fo",
-        "date": "2026-08-13",
-        "memberTokens": [
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMTBmMjc5My1iMWE2LTQyOWEtYjliYS1iNzE0MzExMjAzZmQiLCJtZW1iZXJJZCI6MjA5Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OCwiZXhwIjoxNzg2NTE4NDU4fQ.23AGgWqmBalg8di71JpZQksxdli8_irUADgFN8QhWUE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYmZmOTk0OS1hMjY4LTQ4ZmUtOTdjYi1kZWY1MmY2ZDhkNDciLCJtZW1iZXJJZCI6MjA5OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OCwiZXhwIjoxNzg2NTE4NDU4fQ.fEjb3aooflv6DTbypz9nA6dqDJKpGz7t9XquIgg_F-k",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiZjE2NWQ3NS01YjExLTRhNzgtOGRkMS04ZTcxODI4MzU0MTgiLCJtZW1iZXJJZCI6MjA5OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OCwiZXhwIjoxNzg2NTE4NDU4fQ.XKXE7GlCIlm3HCz0LNX3oFl5bhD1pKZMsJaIT0fIBMI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2MDRkYjZkYi0xOTc3LTRmYmQtYjE4MC1lYzRjYWU0NGQzYzUiLCJtZW1iZXJJZCI6MjEwMCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OCwiZXhwIjoxNzg2NTE4NDU4fQ.06HzJWCeRrFJn4KMRaTeE7OprITAW7jMCmm_R9lgk7o",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkNzdjZTdjYy00OTM1LTRiNmMtYTZkMy1iMDM2N2JlNzkwNWMiLCJtZW1iZXJJZCI6MjEwMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OSwiZXhwIjoxNzg2NTE4NDU5fQ.EHuMzbd_YgqnOg5AlDXONlZ33ZxfDR1JVxb8KWf3nzQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4YjljNjM1Yy1mNWYyLTQzZDctYTRkYS03YmFkZDVhNjI0OTQiLCJtZW1iZXJJZCI6MjEwMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OSwiZXhwIjoxNzg2NTE4NDU5fQ.9-gQpgSWS8PsBsFmVbJn2s93-3mrmUNlCg6ikMd39UA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyMWRmYWY2My0zZTA0LTQxNjgtODIxYi0yMzlmYTNkMjAwMDQiLCJtZW1iZXJJZCI6MjEwMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OSwiZXhwIjoxNzg2NTE4NDU5fQ.qUPDiGaba8mnAlqEyxmcmHy3LqKY5_P80YgeFTzmEOs",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyZWE3ODg2Ny02NjY5LTQ2NDUtODAxMC05YjAzNzJlM2VlOTkiLCJtZW1iZXJJZCI6MjEwNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OSwiZXhwIjoxNzg2NTE4NDU5fQ.tEw6zoKm_mIQSDmd1SlFATNy00CqeVxjO_8I-kScnkE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4YzRjMGEwYy1jZmRkLTQyYzMtYjQzOS04Y2RhNmM3NzFmNjEiLCJtZW1iZXJJZCI6MjEwNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg1OSwiZXhwIjoxNzg2NTE4NDU5fQ.THVjnsVyltPqGpCqweOiRgMeIs0ZkB9s8LKY_eX1soQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyYjU3NWUyMy1hMTI4LTRhOGQtYTcyOS1hMmUxNTFjZjE1MGIiLCJtZW1iZXJJZCI6MjEwNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2MCwiZXhwIjoxNzg2NTE4NDYwfQ.SOkX0ikFMYJ56yDXQlAFvTh0R7ZNR5QRkheQ1G2lhSg"
-        ],
-        "restaurantId": 19
+    "iteration_duration": {
+      "max": 60.374,
+      "p(90)": 59.46635,
+      "p(95)": 59.920175,
+      "p(99)": 60.283235000000005,
+      "avg": 49.2473458,
+      "min": 36.830583,
+      "med": 50.024874999999994
     },
-    "root_group": {
-        "id": "d41d8cd98f00b204e9800998ecf8427e",
-        "groups": {
-            "teardown": {
-                "name": "teardown",
-                "path": "::teardown",
-                "id": "a8a9942382e8ffe2e56ef29e664b8229",
-                "groups": {},
-                "checks": {
-                        "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
-                            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "id": "72ee86e493a705c57357954724f8ed6a",
-                            "passes": 1,
-                            "fails": 0
-                        }
-                    }
-            }
-        },
-        "checks": {
-            "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
-                "passes": 10,
-                "fails": 0,
-                "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "id": "e932986fb0e444a272fc4b0130cfaf01"
-            }
-        },
-        "name": "",
-        "path": ""
+    "peak_create_race_conflict": {
+      "count": 9,
+      "rate": 3.810544793589139,
+      "thresholds": {
+        "count==9": false
+      }
+    },
+    "http_reqs": {
+      "rate": 16.512360772219605,
+      "count": 39
+    },
+    "http_req_receiving": {
+      "avg": 0.09156410256410255,
+      "min": 0.022,
+      "med": 0.065,
+      "max": 0.553,
+      "p(90)": 0.13440000000000005,
+      "p(95)": 0.18659999999999985,
+      "p(99)": 0.44317999999999996
+    },
+    "http_req_connecting": {
+      "p(90)": 6.5534,
+      "p(95)": 6.6975,
+      "p(99)": 23.380319999999994,
+      "avg": 2.447769230769231,
+      "min": 0,
+      "med": 0,
+      "max": 33.597
+    },
+    "http_req_tls_handshaking": {
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0,
+      "p(95)": 0,
+      "p(99)": 0,
+      "avg": 0
+    },
+    "data_sent": {
+      "count": 12718,
+      "rate": 5384.723187207408
+    },
+    "http_req_sending": {
+      "avg": 0.029692307692307702,
+      "min": 0.009,
+      "med": 0.017,
+      "max": 0.124,
+      "p(90)": 0.06720000000000001,
+      "p(95)": 0.09059999999999999,
+      "p(99)": 0.11335999999999999
+    },
+    "http_req_waiting": {
+      "avg": 68.73366666666668,
+      "min": 12.003,
+      "med": 87.658,
+      "max": 100.175,
+      "p(90)": 93.9832,
+      "p(95)": 94.5617,
+      "p(99)": 98.7728
+    },
+    "http_req_blocked": {
+      "min": 0.002,
+      "med": 0.003,
+      "max": 33.663,
+      "p(90)": 6.604,
+      "p(95)": 6.755,
+      "p(99)": 23.472159999999988,
+      "avg": 2.4670000000000005
+    },
+    "peak_create_race_unexpected": {
+      "rate": 0,
+      "count": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "p(95)": 95.6974,
+      "p(99)": 99.2054,
+      "avg": 78.24989655172415,
+      "min": 12.642,
+      "med": 89.01,
+      "max": 100.233,
+      "p(90)": 94.32860000000001
+    },
+    "vus": {
+      "min": 0,
+      "max": 0,
+      "value": 0
+    },
+    "vus_max": {
+      "value": 10,
+      "min": 10,
+      "max": 10
+    },
+    "data_received": {
+      "count": 24103,
+      "rate": 10205.06235109767
+    },
+    "http_req_failed": {
+      "passes": 10,
+      "fails": 29,
+      "value": 0.2564102564102564
+    },
+    "checks": {
+      "passes": 11,
+      "fails": 0,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
+    },
+    "iterations": {
+      "count": 10,
+      "rate": 4.233938659543488
+    },
+    "http_req_duration": {
+      "avg": 68.8549230769231,
+      "min": 12.188,
+      "med": 87.719,
+      "max": 100.233,
+      "p(90)": 94.1638,
+      "p(95)": 94.6154,
+      "p(99)": 98.83840000000001
     }
+  },
+  "setup_data": {
+    "targetSessionId": 595,
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]",
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 10 JWT tokens removed — see PR #220 review]",
+    "restaurantId": 19
+  },
+  "root_group": {
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": {
+      "teardown": {
+        "name": "teardown",
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
+        "checks": {
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1,
+            "fails": 0
+          }
+        }
+      }
+    },
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "passes": 10,
+        "fails": 0,
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01"
+      }
+    },
+    "name": "",
+    "path": ""
+  }
 }

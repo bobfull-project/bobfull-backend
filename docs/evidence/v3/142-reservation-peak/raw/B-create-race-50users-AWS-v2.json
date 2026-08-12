@@ -1,234 +1,183 @@
 {
-    "metrics": {
-        "iteration_duration": {
-            "avg": 121.25077415999998,
-            "min": 46.530958,
-            "med": 123.762917,
-            "max": 189.48,
-            "p(90)": 175.5426461,
-            "p(95)": 183.7910394,
-            "p(99)": 187.38228991
-        },
-        "checks": {
-            "fails": 0,
-            "passes": 51,
-            "thresholds": {
-                "rate==1.0": false
-            },
-            "value": 1
-        },
-        "http_req_tls_handshaking": {
-            "p(95)": 0,
-            "p(99)": 0,
-            "avg": 0,
-            "min": 0,
-            "med": 0,
-            "max": 0,
-            "p(90)": 0
-        },
-        "http_req_waiting": {
-            "p(90)": 141.14620000000002,
-            "p(95)": 162.1479,
-            "p(99)": 178.04452,
-            "avg": 97.89087421383647,
-            "min": 10.938,
-            "med": 93.022,
-            "max": 181.948
-        },
-        "http_req_receiving": {
-            "p(99)": 0.39567999999999964,
-            "avg": 0.08125157232704402,
-            "min": 0.016,
-            "med": 0.062,
-            "max": 1.048,
-            "p(90)": 0.12200000000000004,
-            "p(95)": 0.1621
-        },
-        "http_req_duration": {
-            "p(90)": 141.196,
-            "p(95)": 162.4479,
-            "p(99)": 178.22464,
-            "avg": 97.99969182389943,
-            "min": 11.049,
-            "med": 93.096,
-            "max": 182.002
-        },
-        "peak_create_race_conflict": {
-            "rate": 4.857275405532932,
-            "count": 49,
-            "thresholds": {
-                "count==49": false
-            }
-        },
-        "vus": {
-            "value": 31,
-            "min": 0,
-            "max": 31
-        },
-        "data_sent": {
-            "count": 51078,
-            "rate": 5063.263533955329
-        },
-        "peak_create_race_success": {
-            "count": 1,
-            "rate": 0.09912806950067209,
-            "thresholds": {
-                "count==1": false
-            }
-        },
-        "http_req_failed": {
-            "passes": 50,
-            "fails": 109,
-            "value": 0.31446540880503143
-        },
-        "data_received": {
-            "rate": 9766.295663345214,
-            "count": 98522
-        },
-        "peak_create_race_unexpected": {
-            "rate": 0,
-            "count": 0,
-            "thresholds": {
-                "count==0": false
-            }
-        },
-        "http_req_blocked": {
-            "med": 0.004,
-            "max": 33.446,
-            "p(90)": 6.220000000000001,
-            "p(95)": 6.747999999999999,
-            "p(99)": 7.345899999999999,
-            "avg": 2.14151572327044,
-            "min": 0.001
-        },
-        "http_req_sending": {
-            "avg": 0.027566037735849046,
-            "min": 0.007,
-            "med": 0.017,
-            "max": 0.289,
-            "p(90)": 0.046,
-            "p(95)": 0.07679999999999994,
-            "p(99)": 0.21813999999999992
-        },
-        "http_req_duration{expected_response:true}": {
-            "p(90)": 99.72319999999999,
-            "p(95)": 101.97540000000001,
-            "p(99)": 113.88492,
-            "avg": 90.4529357798165,
-            "min": 14.863,
-            "med": 92.833,
-            "max": 122.644
-        },
-        "iterations": {
-            "count": 50,
-            "rate": 4.956403475033604
-        },
-        "http_reqs": {
-            "count": 159,
-            "rate": 15.76136305060686
-        },
-        "vus_max": {
-            "value": 50,
-            "min": 50,
-            "max": 50
-        },
-        "http_req_connecting": {
-            "max": 33.275,
-            "p(90)": 6.2092,
-            "p(95)": 6.7288,
-            "p(99)": 7.31898,
-            "avg": 2.1190503144654085,
-            "min": 0,
-            "med": 0
-        }
+  "metrics": {
+    "iteration_duration": {
+      "avg": 121.25077415999998,
+      "min": 46.530958,
+      "med": 123.762917,
+      "max": 189.48,
+      "p(90)": 175.5426461,
+      "p(95)": 183.7910394,
+      "p(99)": 187.38228991
     },
-    "setup_data": {
-        "verifierToken": "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjYmVjZjQ2Ni01OTE3LTRlYTUtYTA3Ni1hMGQ0YWYzNGVlMzAiLCJtZW1iZXJJZCI6MjE4MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NCwiZXhwIjoxNzg2NTE4NDc0fQ.DsysUVybu-2WeZygPCV1jOSNnmEpY1u9STLXjDrIe8Y",
-        "date": "2026-08-13",
-        "memberTokens": [
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5YjMwZTA0Mi1iYWVmLTRlMjktYmFhYS04YzIyYWRiNjYxZTMiLCJtZW1iZXJJZCI6MjEzMSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NSwiZXhwIjoxNzg2NTE4NDY1fQ.d8ORX-kOtGU3Dz_LcBsV792b4755AtrvG-ogL-BlfPE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwNjhjNzEwMy1iY2E0LTRhMTAtODM0ZC0yZWY1NzkwNTIyYzciLCJtZW1iZXJJZCI6MjEzMiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NSwiZXhwIjoxNzg2NTE4NDY1fQ.LS_gW9nmA3z0yUcge__APwFMx-DA_D1AZdZLFvQhsCU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJiY2ViNGU1Yi0yMTU5LTQxMzgtYmNiZS1lNmJkM2RmYmJiMDciLCJtZW1iZXJJZCI6MjEzMywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NSwiZXhwIjoxNzg2NTE4NDY1fQ.S0wExaO9Su1s3e8OAyuMARMcMHwtAq-AH7yjOXO0j0w",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmZTcxYzk2Ni1kOGFkLTRiMDMtOWJhMy1jMDRlNzc0NTlhMGEiLCJtZW1iZXJJZCI6MjEzNCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NSwiZXhwIjoxNzg2NTE4NDY1fQ.D_U3N5AfNG8i-aEOYJR4aTNLYlpvcgRAQR1YK1ikc8A",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzNjI4ZTJhZC1jZTM4LTQ5MmYtOWM4My1mOWY1MDhlNjlkMDMiLCJtZW1iZXJJZCI6MjEzNSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NSwiZXhwIjoxNzg2NTE4NDY1fQ.A4uEvzexkGWLePxLmtm3ErkPyVJUTOSN5y5tj4m2KYM",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MTkzMWMyMC0yOTFjLTRkMjItYTA3My0yYmVmOWZiZGYzYjQiLCJtZW1iZXJJZCI6MjEzNiwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NiwiZXhwIjoxNzg2NTE4NDY2fQ.hUKOJIjH25ykW5r3eAnaU8hy45lY60E2kyYoQDbzbuU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMWNmNTQ4NC03ZjZhLTRmZjUtYmIwOS1lMzM2ODUzYjVjOGEiLCJtZW1iZXJJZCI6MjEzNywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NiwiZXhwIjoxNzg2NTE4NDY2fQ.mrBF2nmDKw5r9NprDLqPR5sTLAkI7wL8-ywQmaEb9BA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1OGYxMmFlOC02OGM4LTQ3NmEtYWY2MC01Mjc0YzkyNzdlZTIiLCJtZW1iZXJJZCI6MjEzOCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NiwiZXhwIjoxNzg2NTE4NDY2fQ.U3__CFiV1FQR7eKqISR1s-l8Ra39dTvGPE7QRoAqLTk",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzMTBiMDc3NC1iNmM4LTQ4MTctYWJlMy1mYjE5OGEyYzNmYzciLCJtZW1iZXJJZCI6MjEzOSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NiwiZXhwIjoxNzg2NTE4NDY2fQ.haN5bxnfzLfk0R7I6ZFnGYQTUkVtrfBpHTT6KExmWrU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmMTdmZGU1OC0xZTcxLTQxZjQtOTU3Yy0zYTBiM2NiZDczYWIiLCJtZW1iZXJJZCI6MjE0MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NiwiZXhwIjoxNzg2NTE4NDY2fQ.hR--ktR0dbq-zo1CpIZX5W0gJS8kbCO2lpWI-aF0NB4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJkMThlMjEyNi00OWY4LTRlYzMtYjdhMS1lZjFmNzBhNzcyMzciLCJtZW1iZXJJZCI6MjE0MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NywiZXhwIjoxNzg2NTE4NDY3fQ.ZZf8JvkgNJKykw2ANMZ0NfDvDGQQEN1KT_DOMave-c8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0MzE3ZWEwYy05YTlmLTRlZDQtYTQyNS05OWFhYzNiOTY0YWQiLCJtZW1iZXJJZCI6MjE0Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NywiZXhwIjoxNzg2NTE4NDY3fQ.P9CpID4UMnfTpmU05Fy13pNWUtE9m_glPm-_bXTeAU8",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5MjAxZjlhZS03NmRjLTRjYTctYWZlYy1kNGFlZWU2ZGM2NDMiLCJtZW1iZXJJZCI6MjE0Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NywiZXhwIjoxNzg2NTE4NDY3fQ.zwTOT_tCEpmcayk-Qs2qYdFNJ1Oh6ufn60D8GGWlKQY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyYjQyZDA1Yi05ZTQ4LTQ0ZTQtOWFhMi1iM2E2MTQ5ZGVlYTMiLCJtZW1iZXJJZCI6MjE0NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NywiZXhwIjoxNzg2NTE4NDY3fQ.7F17iapCy8Iy3cRIj2CJIuZH5hE4iJ3JENNVV0CUaT4",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxZWM4YTIyZS0zZmRjLTQxZjQtYmY1MC03ZmUzMzNmYWQ0ZTUiLCJtZW1iZXJJZCI6MjE0NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2NywiZXhwIjoxNzg2NTE4NDY3fQ.yFgNLGM7-91Mj5-rV72KIojhdKREaFxjkRgTEWcsC9k",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0YmVlOGVhNC03OTk0LTQxMzUtOWVjMy02NjNlZTI3ZTM2OWMiLCJtZW1iZXJJZCI6MjE0Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OCwiZXhwIjoxNzg2NTE4NDY4fQ.jgjQnGUsrZpZKAcQyba4jYn-h_mH2rcQxjvULsqML1g",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1NmE1YzI2MC1mNzNjLTQ3YzQtYThmZi1kNTAzMTY4OTllMzIiLCJtZW1iZXJJZCI6MjE0Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OCwiZXhwIjoxNzg2NTE4NDY4fQ.KP1q8waZR7Pp7E3BqzFyRPXvw558VVelyoaCmBbNSbM",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhNjJlZjBhYi02YWRmLTQ1YTUtOGJmMi04NmFkZTUxODdkMTIiLCJtZW1iZXJJZCI6MjE0OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OCwiZXhwIjoxNzg2NTE4NDY4fQ.XdY8izZneYlrCvhmupaJmw5au2Z9bTRlcgueUjApaCc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxNDQ1ZjMzOS01NzZmLTRiMDItOTQ5OS01NTM2NmU3NGM1YzYiLCJtZW1iZXJJZCI6MjE0OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OCwiZXhwIjoxNzg2NTE4NDY4fQ.ZNFxGOnGDofIOfNVhvFmMzhp_OQWUZQsk4ZtDsIlT2s",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMzE3NjU2ZS0yNzYxLTQyMzMtOWRjMS1mMGYwNjgyN2NkMDkiLCJtZW1iZXJJZCI6MjE1MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OCwiZXhwIjoxNzg2NTE4NDY4fQ.FEiyYsvIoXlEiH0RDu4d9LSM4_X7XporbA4EjR6Fx3I",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmNDY0YWEyZi0xOGI1LTQ4NzktODA4Mi0zMzExNDkxNGUxODQiLCJtZW1iZXJJZCI6MjE1MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OCwiZXhwIjoxNzg2NTE4NDY4fQ.11ckqxsR_77I7MClBVYsC8KrfUvXNNxKPYKe7HYfxRg",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIxMDZmYjQ1MS0yNDc1LTQyZmUtOGVjNS1mMzFhNGJjYTY5OTkiLCJtZW1iZXJJZCI6MjE1Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OSwiZXhwIjoxNzg2NTE4NDY5fQ.Vx-gVhOn9BfDNZfz6Go2wOLb4t6q89vxcDU-g5A_EQs",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzOGQ5NDYxMS1hODk1LTQzOWUtYjM3OC1iZDczZGQyYjE1ZWIiLCJtZW1iZXJJZCI6MjE1Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OSwiZXhwIjoxNzg2NTE4NDY5fQ.4N0PM0JDbrBnb9uoz9CJPhlmpWI2q2OYvzd_NH06Oto",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI5Y2NhYzg2OC1kMTU1LTRiNzItODY3NC1jMzIwNWM4MDA3NWMiLCJtZW1iZXJJZCI6MjE1NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OSwiZXhwIjoxNzg2NTE4NDY5fQ.cDDawPM-pHBuGBkMQReVKtqUx2Ble9PCX3G5TUR_cvU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2MjY1NWU1Ni02ZWQyLTQyYTgtOTQxMC1iYTYwMDY0MjU4OWIiLCJtZW1iZXJJZCI6MjE1NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OSwiZXhwIjoxNzg2NTE4NDY5fQ.FkzoeNOMKGXHgVK7aQju9p3BJVvXyib3Kd7bFT2dS3Q",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhYThjNGIxNy1mYWQ4LTQxMTctYjYyMC00MmRmYTM4MjZkMmMiLCJtZW1iZXJJZCI6MjE1Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg2OSwiZXhwIjoxNzg2NTE4NDY5fQ.bPp3bHNd5qxVo3wqAVIac7OKqN74n5yEjmL5bSfCqD0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmM2I5NmYzNS1jMGYxLTRhYWYtYmU4Ni1kMDUyYWNjMzRhYzUiLCJtZW1iZXJJZCI6MjE1Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MCwiZXhwIjoxNzg2NTE4NDcwfQ.T4IWPurufWe4QwGwv38G7gJ7qucXMVLxx3COcNvJuYQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjNzUzNzFkZC00ODg3LTRkYTktYTIwYi0xMjhjZDI0YjczMGUiLCJtZW1iZXJJZCI6MjE1OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MCwiZXhwIjoxNzg2NTE4NDcwfQ.xmn8o0lHpPIanaOOzald0ZcHOBH3ORiDAGq8fguJJMY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2ODZiOGM1Ni1iYTNmLTQ4NmYtYmY5MC0wNWExYTI2NjA3YjMiLCJtZW1iZXJJZCI6MjE1OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MCwiZXhwIjoxNzg2NTE4NDcwfQ.xfiq4mPmh5ySX1i6zTS47o4qW4hGWMazN2zyCRvyiYY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzZjE5ZmY2MC05NTU4LTRkMGQtOGJmMy0yZTJiZDBjYjVhNTkiLCJtZW1iZXJJZCI6MjE2MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MCwiZXhwIjoxNzg2NTE4NDcwfQ.Bsup_8XbCTYAOcVFdz3i5X9QxibRsU8gEAmQRoBqHxU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2N2MzMTU1Yi1kM2QyLTQ1MmEtODE2NC0zY2JiODY2MjJlMGYiLCJtZW1iZXJJZCI6MjE2MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MCwiZXhwIjoxNzg2NTE4NDcwfQ._SzG8YdP59F3eBEEqEXtep4tuRd7Oqo_23sq9hXbhAA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlZDA2NmIyNS03MzI5LTQ5MjYtYTdlMi1iMjk2MDljZDA2YTkiLCJtZW1iZXJJZCI6MjE2Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MSwiZXhwIjoxNzg2NTE4NDcxfQ.STqPfuDQ1NJmJdiliDrSgh-TF9adOoHZuWizrGcC8YU",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3NzljZjNjNC0zYjg1LTRhMjYtYTZkMy1kMmY0YWQ4MjIyMjMiLCJtZW1iZXJJZCI6MjE2Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MSwiZXhwIjoxNzg2NTE4NDcxfQ.HJNO-GNWOsX9le_hR334DrkmpPluyWRLYcuX93J1wJc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJlNzQwY2QwZC1hMTNmLTRkMGQtYmJhZS1kYzAzY2E3YzViMjkiLCJtZW1iZXJJZCI6MjE2NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MSwiZXhwIjoxNzg2NTE4NDcxfQ.Vk0xyqAQdSaBMpT22IEWFzTyMbp4Igpd1wxRbiks8Js",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1ZmYwNTRmZi0yZGMzLTQ1NGEtOTFlMS1iODU5ZTYzZjNiNGYiLCJtZW1iZXJJZCI6MjE2NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MSwiZXhwIjoxNzg2NTE4NDcxfQ.kwYUIAxchGLwgxlUvmv5qO3Z6FQofUF4VMn41O8zKOY",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzMDRjOTg3OC1kZDYwLTRmNzMtOWIzZC03ZTk5OWRhNDkzNzciLCJtZW1iZXJJZCI6MjE2Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MSwiZXhwIjoxNzg2NTE4NDcxfQ.82kBJt8EEo4-UdS58OC7jQMCNONsObn4KMVADguJREk",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIyZDQ0YzA4Ny1lMTVhLTQxMWYtYmY5MS0xYmJjMzc0YmRiNGUiLCJtZW1iZXJJZCI6MjE2Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MSwiZXhwIjoxNzg2NTE4NDcxfQ.d_GyRZwa3pcV29LBDYzbS0hMdPlhTwbYBwVGSgyGAhg",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjNGNlZGE5NS1lOWI1LTQ3NmUtOWViZi1lZjRlNjU0MzJlOWYiLCJtZW1iZXJJZCI6MjE2OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MiwiZXhwIjoxNzg2NTE4NDcyfQ.M14a9hn4O5ZGODyuG9KcRI5LGC5yzdOhGWtm8DpVIy0",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzMjYzMjdlYS00MjdhLTQ2M2MtYWE5Yy0zOWM5ODlkYjg0M2QiLCJtZW1iZXJJZCI6MjE2OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MiwiZXhwIjoxNzg2NTE4NDcyfQ.bSmPUp3rIGUIwXB9vIUpiz--WAl9GusFDP7iuAwnV_M",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI3MTBlMDA4My01OTA0LTQ1NjItYTE4ZS1mZDIxMmFmYWZhYmEiLCJtZW1iZXJJZCI6MjE3MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MiwiZXhwIjoxNzg2NTE4NDcyfQ.iAWqsX56LUAbCQvDBqOV4antSqtViFRDH5oWrOnuB1E",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2YjNhYjhkMy0wZTU3LTQzNzctYmQ2Yy1kNDA4MjY2OGEyZWYiLCJtZW1iZXJJZCI6MjE3MSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MiwiZXhwIjoxNzg2NTE4NDcyfQ.PTDMRfwaSuQ5ELnn80K2sWPYWur1RCql4_SGhnDbdxA",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1MDIyMzdjZC1kZTQxLTRjNGMtYWNiMi1kZmRhZjY0YzhhY2MiLCJtZW1iZXJJZCI6MjE3Miwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MiwiZXhwIjoxNzg2NTE4NDcyfQ.abU-AqGkOZt5TjbI6ERV-v1_KOFCKzE_sd4R4ytljZE",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI1YmFjNDJmOS1jYjFlLTQ3ZDgtYTcxYi1kYjViZDRiNjkzMGQiLCJtZW1iZXJJZCI6MjE3Mywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MywiZXhwIjoxNzg2NTE4NDczfQ.g7XO-zxRyjwMn0ntF2Lz2836x4lQT7iwmWNpl4Xh56c",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4MTZiMDE4OS1jZjk5LTQzMzYtYjM4My01OWQxOTBmOTIxYWIiLCJtZW1iZXJJZCI6MjE3NCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MywiZXhwIjoxNzg2NTE4NDczfQ.CRJwPCmLReXojMHgNEQ4hNc0MzYOl-vidLsN1giVayg",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhMDQ5ZmE5NC01N2ZkLTQyMTktYTcwNS05ODAxYzk1ZjJlN2EiLCJtZW1iZXJJZCI6MjE3NSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MywiZXhwIjoxNzg2NTE4NDczfQ.QvqRribUw8-4bgqfvPAJ4PW27DL-JKyn7NbtAT9_kJg",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJjN2FlOTg2OC0xMjJmLTRhNjctOWQwYy04ZmI2MmRjMzdiYmMiLCJtZW1iZXJJZCI6MjE3Niwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MywiZXhwIjoxNzg2NTE4NDczfQ.u_ixDH1WriM1KctOfpkBSE8aOJW5lwRYwdByokKczdQ",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJmZGJhOTYxMS1jOWEzLTQzYzYtYTA2NC0xOWY4MGQ5Mjg4MWMiLCJtZW1iZXJJZCI6MjE3Nywicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MywiZXhwIjoxNzg2NTE4NDczfQ.PZHlnqShAXw0jjvHIwHr399hbS-3FgrJxQ4puRjN_gI",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2YmIyZWVkOC1hMjQ4LTQ2NzYtOWE0NS01MGU3NmQ4MDY4ODIiLCJtZW1iZXJJZCI6MjE3OCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3MywiZXhwIjoxNzg2NTE4NDczfQ.gngclin1wsE1Th54m6wBy6S7AK903TgpeixgfZ8LgDc",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI2MDcyOWZkYS1hYWNmLTQ0ZTQtYjhiMy1iZmMyZTExYjBlNGIiLCJtZW1iZXJJZCI6MjE3OSwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NCwiZXhwIjoxNzg2NTE4NDc0fQ.Bn4KLRx8jBMR7Kh876zdIiClSSaWpvjU-geATNDwPYw",
-            "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI0YzcyYzVlMy02ZGYwLTRlNGItODFlNC1lYzUyZjI2NmFhYzIiLCJtZW1iZXJJZCI6MjE4MCwicm9sZSI6Ik1FTUJFUiIsImlhdCI6MTc4NjUxNDg3NCwiZXhwIjoxNzg2NTE4NDc0fQ.u4Z7hZFO27dBQ-YI5j5xFaWbJ2ERD8mfPz_tbUXhH5g"
-        ],
-        "restaurantId": 21,
-        "targetSessionId": 599
+    "checks": {
+      "fails": 0,
+      "passes": 51,
+      "thresholds": {
+        "rate==1.0": false
+      },
+      "value": 1
     },
-    "root_group": {
-        "name": "",
-        "path": "",
-        "id": "d41d8cd98f00b204e9800998ecf8427e",
-        "groups": {
-            "teardown": {
-                "name": "teardown",
-                "path": "::teardown",
-                "id": "a8a9942382e8ffe2e56ef29e664b8229",
-                "groups": {},
-                "checks": {
-                        "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
-                            "fails": 0,
-                            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
-                            "id": "72ee86e493a705c57357954724f8ed6a",
-                            "passes": 1
-                        }
-                    }
-            }
-        },
-        "checks": {
-            "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
-                "passes": 50,
-                "fails": 0,
-                "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
-                "id": "e932986fb0e444a272fc4b0130cfaf01"
-            }
-        }
+    "http_req_tls_handshaking": {
+      "p(95)": 0,
+      "p(99)": 0,
+      "avg": 0,
+      "min": 0,
+      "med": 0,
+      "max": 0,
+      "p(90)": 0
+    },
+    "http_req_waiting": {
+      "p(90)": 141.14620000000002,
+      "p(95)": 162.1479,
+      "p(99)": 178.04452,
+      "avg": 97.89087421383647,
+      "min": 10.938,
+      "med": 93.022,
+      "max": 181.948
+    },
+    "http_req_receiving": {
+      "p(99)": 0.39567999999999964,
+      "avg": 0.08125157232704402,
+      "min": 0.016,
+      "med": 0.062,
+      "max": 1.048,
+      "p(90)": 0.12200000000000004,
+      "p(95)": 0.1621
+    },
+    "http_req_duration": {
+      "p(90)": 141.196,
+      "p(95)": 162.4479,
+      "p(99)": 178.22464,
+      "avg": 97.99969182389943,
+      "min": 11.049,
+      "med": 93.096,
+      "max": 182.002
+    },
+    "peak_create_race_conflict": {
+      "rate": 4.857275405532932,
+      "count": 49,
+      "thresholds": {
+        "count==49": false
+      }
+    },
+    "vus": {
+      "value": 31,
+      "min": 0,
+      "max": 31
+    },
+    "data_sent": {
+      "count": 51078,
+      "rate": 5063.263533955329
+    },
+    "peak_create_race_success": {
+      "count": 1,
+      "rate": 0.09912806950067209,
+      "thresholds": {
+        "count==1": false
+      }
+    },
+    "http_req_failed": {
+      "passes": 50,
+      "fails": 109,
+      "value": 0.31446540880503143
+    },
+    "data_received": {
+      "rate": 9766.295663345214,
+      "count": 98522
+    },
+    "peak_create_race_unexpected": {
+      "rate": 0,
+      "count": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "http_req_blocked": {
+      "med": 0.004,
+      "max": 33.446,
+      "p(90)": 6.220000000000001,
+      "p(95)": 6.747999999999999,
+      "p(99)": 7.345899999999999,
+      "avg": 2.14151572327044,
+      "min": 0.001
+    },
+    "http_req_sending": {
+      "avg": 0.027566037735849046,
+      "min": 0.007,
+      "med": 0.017,
+      "max": 0.289,
+      "p(90)": 0.046,
+      "p(95)": 0.07679999999999994,
+      "p(99)": 0.21813999999999992
+    },
+    "http_req_duration{expected_response:true}": {
+      "p(90)": 99.72319999999999,
+      "p(95)": 101.97540000000001,
+      "p(99)": 113.88492,
+      "avg": 90.4529357798165,
+      "min": 14.863,
+      "med": 92.833,
+      "max": 122.644
+    },
+    "iterations": {
+      "count": 50,
+      "rate": 4.956403475033604
+    },
+    "http_reqs": {
+      "count": 159,
+      "rate": 15.76136305060686
+    },
+    "vus_max": {
+      "value": 50,
+      "min": 50,
+      "max": 50
+    },
+    "http_req_connecting": {
+      "max": 33.275,
+      "p(90)": 6.2092,
+      "p(95)": 6.7288,
+      "p(99)": 7.31898,
+      "avg": 2.1190503144654085,
+      "min": 0,
+      "med": 0
     }
+  },
+  "setup_data": {
+    "verifierToken": "[REDACTED JWT token removed — see PR #220 review]",
+    "date": "2026-08-13",
+    "memberTokens": "[REDACTED 50 JWT tokens removed — see PR #220 review]",
+    "restaurantId": 21,
+    "targetSessionId": 599
+  },
+  "root_group": {
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": {
+      "teardown": {
+        "name": "teardown",
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": {},
+        "checks": {
+          "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다": {
+            "fails": 0,
+            "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+            "id": "72ee86e493a705c57357954724f8ed6a",
+            "passes": 1
+          }
+        }
+      }
+    },
+    "checks": {
+      "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)": {
+        "passes": 50,
+        "fails": 0,
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01"
+      }
+    }
+  }
 }
