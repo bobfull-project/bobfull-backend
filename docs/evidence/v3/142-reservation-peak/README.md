@@ -151,11 +151,18 @@ CREATE는 `TimeSlotRepository.findWithLockByIdAndDeletedAtIsNull`로 비관적 �
 `SHOW ENGINE INNODB STATUS` 레벨의 row lock wait/deadlock 카운터는 MySQL exporter가 없어
 관측하지 못했다 — 아래 한계 참고).
 
-| 동시 사용자 수 | `findWithLockBy...` 호출 수 | 호출당 평균 시간 | HikariCP active(최대) | HikariCP pending(최대) | CPU(최대) |
-|---:|---:|---:|---:|---:|---:|
-| 100 | 101건 | 40.0ms | 1 | 0 | 44% |
-| 200 | 201건 | 35.1ms | 1 | 0 | 44% |
-| 500 | 501건 | 27.8ms | 1 | 0 | 44% |
+| 동시 사용자 수 | `findWithLockBy...` 호출 수 | 호출당 평균 시간 | HikariCP active(최대) | HikariCP pending(최대) | HikariCP timeout(구간 내 신규) | 서버 미처리 예외(구간 내 신규) | CPU(최대) |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100~200(연속 실행) | 101·201건 | 40.0ms·35.1ms | 1 | 0 | 0건(9→9) | 0건(10→10) | 44% |
+| 500 | 501건 | 27.8ms | 1 | 0 | 0건(18→18) | 0건(19→19) | 44% |
+
+`HikariCP timeout`은 `hikaricp_connections_timeout_total`(커넥션 획득 자체를 실패한 요청
+수)의 구간 시작~종료 값이고, `서버 미처리 예외`는 `bobfull_business_events_total{event="UNHANDLED_EXCEPTION"}`
+(deadlock 등 커스텀 처리되지 않은 예외가 발생하면 증가하는 앱 자체 카운터 — MySQL
+`SHOW ENGINE INNODB STATUS` 레벨 deadlock 카운터는 아니지만, 발생 시 애플리케이션단에서
+잡히지 않은 예외로 이어질 가능성이 높아 대체 신호로 썼다)이다. 둘 다 각 구간에서 **0건**
+증가해, 커넥션 타임아웃이나 처리되지 않은 서버 오류(deadlock 포함) 없이 CREATE 경쟁이
+처리됐음을 확인했다.
 
 **해석**: 100→500명으로 동시성이 5배 늘어도 락 호출당 평균 시간이 오히려 낮거나 비슷하게
 유지되고(40→35→28ms), `HikariCP active`는 최대 1(=풀의 10%), `pending`은 항상 0이었다 —
