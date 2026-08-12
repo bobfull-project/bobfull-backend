@@ -44,6 +44,7 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
         "portone.webhook-secret=Y2hhdC1tZXNzYWdlLW91dGJveC10ZXN0",
         "outbox.chat-message.enabled=false",
         "bobfull.kafka.chat-message.consumer-enabled=false",
+        "bobfull.kafka.chat-message.topic-auto-create-enabled=true",
         "bobfull.kafka.chat-message.topic=chat-message-outbox-it.v1",
         "bobfull.kafka.chat-message.dlt-topic=chat-message-outbox-it.dlt.v1",
         "bobfull.kafka.chat-message.producer-ack-timeout-seconds=5"

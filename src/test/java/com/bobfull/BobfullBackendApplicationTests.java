@@ -1,7 +1,12 @@
 package com.bobfull;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.apache.kafka.clients.admin.NewTopic;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 
 @SpringBootTest(properties = {
 		"spring.datasource.url=jdbc:h2:mem:bobfull-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -19,8 +24,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 })
 class BobfullBackendApplicationTests {
 
+	@Autowired
+	private ApplicationContext applicationContext;
+
 	@Test
 	void contextLoads() {
+		assertThat(applicationContext.getBeansOfType(NewTopic.class)).isEmpty();
 	}
 
 }

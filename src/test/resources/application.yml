@@ -64,6 +64,7 @@ bobfull:
   kafka:
     chat-message:
       consumer-enabled: false
+      topic-auto-create-enabled: false
 
 chat:
   redis-pubsub:

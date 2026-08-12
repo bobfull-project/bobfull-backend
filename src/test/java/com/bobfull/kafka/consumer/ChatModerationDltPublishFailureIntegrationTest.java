@@ -47,6 +47,7 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
         "portone.webhook-secret=Y2hhdC1tb2RlcmF0aW9uLWRsdC1mYWlsdXJlLXRlc3Q=",
         "outbox.chat-message.enabled=false",
         "bobfull.kafka.chat-message.consumer-enabled=true",
+        "bobfull.kafka.chat-message.topic-auto-create-enabled=true",
         "bobfull.kafka.chat-message.topic=chat-moderation-dlt-failure-it.v1",
         "bobfull.kafka.chat-message.dlt-topic=chat-moderation-dlt-failure-it.dlt.v1",
         "bobfull.kafka.chat-message.consumer-max-attempts=2",
