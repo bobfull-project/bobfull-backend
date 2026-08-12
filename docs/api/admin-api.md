@@ -41,10 +41,10 @@
 
 | DTO | data 필드 / 구조 | Nullable / 비고 |
 |---|---|---|
-| `AdminMemberListItemResponse` | `memberId`, `email`, `name`, `role`, `noShowCount`, `createdAt`, `deletedAt` | 삭제되지 않은 회원은 `deletedAt=null` 가능 |
-| `AdminMemberDetailResponse` | `memberId`, `email`, `name`, `phoneNumber`, `role`, `noShowCount`, `createdAt`, `deletedAt` | 삭제되지 않은 회원은 `deletedAt=null` 가능 |
+| `AdminMemberListItemResponse` | `memberId`, `email`, `name`, `role`, `noShowCount`, `createdAt`, `deletedAt` | DTO 선언만으로 nullable 여부를 임의 단정하지 않음 |
+| `AdminMemberDetailResponse` | `memberId`, `email`, `name`, `phoneNumber`, `role`, `noShowCount`, `createdAt`, `deletedAt` | DTO 선언만으로 nullable 여부를 임의 단정하지 않음 |
 | `AdminRestaurantListItemResponse` | `restaurantId`, `ownerMemberId`, `ownerName`, `name`, `category`, `status`, `createdAt` | - |
-| `AdminRestaurantDetailResponse` | `restaurantId`, `ownerMemberId`, `ownerName`, `name`, `address`, `category`, `description`, `keyword`, `depositPerPerson`, `status`, `createdAt`, `deletedAt` | 미삭제 식당은 `deletedAt=null` 가능 |
+| `AdminRestaurantDetailResponse` | `restaurantId`, `ownerMemberId`, `ownerName`, `name`, `address`, `category`, `description`, `keyword`, `depositPerPerson`, `status`, `createdAt`, `deletedAt` | DTO 선언만으로 nullable 여부를 임의 단정하지 않음 |
 | `AdminReservationListItemResponse` | `reservationId`, `restaurantId`, `restaurantName`, `creatorMemberId`, `startAt`, `reservationStatus`, `recruitmentStatus`, `currentParticipantCount`, `capacity` | - |
 | `AdminPaymentListItemResponse` | `paymentId`, `memberId`, `reservationId`, `amount`, `currency`, `paymentStatus`, `paidAt` | 미결제면 `paidAt=null` 가능 |
 | `AdminRefundListItemResponse` | `refundId`, `paymentId`, `memberId`, `reservationId`, `amount`, `refundStatus`, `requestedAt`, `completedAt` | 상태에 따라 시간 필드 null 가능 |
