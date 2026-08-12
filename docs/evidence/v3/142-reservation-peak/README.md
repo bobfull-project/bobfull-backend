@@ -7,10 +7,18 @@ Load/Stress까지 실행해 첫 병목 전환점을 확인했다(아래 "결과 
 `query_range` 원본 응답은 `raw/prometheus/`에 저장했다. Grafana 시각화는 admin 비밀번호·
 Slack 연동이 필요해 이번 범위에서는 붙이지 않고 Prometheus HTTP API로 직접 쿼리했다.
 
-시나리오 B는 팀 합의(Human 결정, Issue #142 댓글)에 따라 **현재 비관적 락 전략 기준의 Before
-Baseline**으로 측정한다. #60(예약 좌석 락 전략 재설계, 2026-08-11 기준 DRAFT)이 끝나 락 전략이
-바뀌면, 이번 결과를 Before로 두고 동일 조건으로 After를 재측정한다. A는 #60과 무관해 최종
-결과로 취급한다.
+시나리오 B는 착수 당시 팀 합의(Human 결정, Issue #142 댓글)에 따라 "현재 비관적 락 전략 기준의
+Before Baseline"으로 측정하고, #60(예약 좌석 락 전략 재설계)이 새 전략을 확정하면 동일 조건으로
+After를 재측정할 계획이었다. **#60이 [PR #234](https://github.com/bobfull-project/bobfull-backend/pull/234)로
+2026-08-12 병합되면서 Decision Matrix가 예약 좌석 경쟁에 대해 "비관적 락 유지(현재 구조가 이미
+충분함을 실측으로 확인, 새 전략 미도입)"로 결론났다** — 즉 재측정할 After(새 전략) 자체가
+생기지 않는다. 이에 따라 시나리오 B의 아래 결과는 Before Baseline이 아니라 **최종 결과**로
+재분류한다. A는 원래부터 #60과 무관해 최종 결과로 취급한다.
+
+(참고: #234의 재검토 조건은 "인기 회차 부하(#142)에서 lock wait가 실제 병목으로 확인되면
+재검토"였는데, 아래 "B의 DB Pool·Lock 지표"가 보여주듯 500명 동시 CREATE 경쟁까지도 락 대기·
+DB Pool 병목 신호가 관측되지 않아 이 재검토 조건도 트리거되지 않았다 — 두 Issue의 실측이
+서로를 뒷받침한다.)
 
 ## 측정·재현 환경 (Issue #142 "측정 환경 계약")
 
@@ -215,14 +223,16 @@ CREATE는 `TimeSlotRepository.findWithLockByIdAndDeletedAtIsNull`로 비관적 �
 `409 ACTIVE_RESERVATION_ALREADY_EXISTS`였다. `checks_succeeded`는 매 실행 100%였고
 `peak_create_race_unexpected` 카운터는 항상 0이었다. `teardown()`에서 새 회원으로 같은
 회차에 CREATE를 한 번 더 시도해도 409가 나, 경쟁 종료 후에도 배타 선점이 깨지지 않음을
-독립적으로 재확인했다. AWS 실행에서는 동시성이 올라갈수록 iteration_duration이 늘었다
-(2명 128ms → 50명 233ms 평균) — 로컬보다 네트워크 왕복이 포함돼 그런 것으로 보이며, 이 규모
-(최대 50)에서는 DB Pool pending/lock wait 등 실제 병목 신호는 관측하지 않았다(Prometheus/Grafana
-미연결, 별도 진행 필요).
+독립적으로 재확인했다. 동시성이 올라갈수록 요청 지연이 늘어나는 현상은 위 "결과 — AWS"
+표(`peak_create_race_duration`, 경쟁 요청만 분리한 지표)에 이미 반영돼 있다.
 
-**이 결과는 현재 비관적 락 전략 기준의 Before Baseline이다(팀 합의, Human 결정).** #60(예약
-좌석 락 전략 재설계)이 끝나면 동일 조건(같은 동시성 단계 2/5/10/20/50, 같은 Fixture 방식)으로
-After를 재측정해 이 표와 비교한다.
+**이 결과는 최종 결과다.** 착수 당시에는 "현재 비관적 락 전략 기준의 Before Baseline"으로
+두고 #60(예약 좌석 락 전략 재설계)이 끝나면 After를 재측정할 계획이었으나, #60이
+[PR #234](https://github.com/bobfull-project/bobfull-backend/pull/234)로 2026-08-12
+병합되면서 Decision Matrix가 "비관적 락 유지(새 전략 미도입)"로 결론나 재측정할 After 자체가
+생기지 않는다(위 "요약" 참고). #234의 재검토 조건("인기 회차 부하(#142)에서 lock wait가 실제
+병목으로 확인되면 재검토")도 위 "B의 DB Pool·Lock 지표" 결과(500명까지 병목 신호 없음)에서
+트리거되지 않았다.
 
 ### 트러블슈팅 — teardown 검증 로직 최초 버그
 
@@ -301,7 +311,9 @@ spring:
 - **재배포 후 재측정 필요**: `DB_POOL_MAX_SIZE`를 늘려 `bobfull-k6-test-app`을 재배포한 뒤
   같은 Stress를 재실행해 실제로 병목이 개선되는지 확인(김홍기 조율 필요, RDS `max_connections`
   여유 확인 필요)
-- #60(예약 좌석 락 전략 재설계) 결과가 나오면 시나리오 B를 동일 조건으로 재검증(Before는 이번
-  결과, After는 #60 이후 재실행)
-- A/B 개선·재측정 결과가 정리되면 시나리오 C(Redis ZSet 대기열) 도입 여부 판단으로 이어감(팀 합의)
+- (완료) #60(예약 좌석 락 전략 재설계)이 [PR #234](https://github.com/bobfull-project/bobfull-backend/pull/234)로
+  병합돼 "비관적 락 유지"로 결론남 — 시나리오 B의 재측정(After)이 더 이상 필요 없어 결과를
+  최종으로 재분류함
+- A/B 결과가 정리됐으므로 시나리오 C(Redis ZSet 대기열) 도입 여부 판단으로 이어감(팀 합의) —
+  단, A는 재배포 후 재측정이 아직 남아있어 그 결과까지 보고 판단하는 게 안전함
 - JOIN 기반 좌석초과 테스트는 Fake 결제 확인 어댑터 도입 여부를 별도 결정한 뒤 진행
