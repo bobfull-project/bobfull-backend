@@ -27,6 +27,13 @@ public interface ReservationRepository
 
     Optional<Reservation> findByTimeSlotIdAndReservationStatusIn(Long timeSlotId, Collection<ReservationStatus> statuses);
 
+    /**
+     * 여러 TimeSlot에 걸친 활성/CLOSED 예약을 한 번에 조회한다(Issue #235, 인기 회차 조회
+     * Hot-path에서 회차별로 반복 조회하던 것을 배치로 묶기 위함). 같은 TimeSlot에 같은 statuses
+     * 조건을 만족하는 Reservation은 최대 1건이라는 전제(CREATE 배타 선점, ADR-0001)를 그대로 쓴다.
+     */
+    List<Reservation> findAllByTimeSlotIdInAndReservationStatusIn(Collection<Long> timeSlotIds, Collection<ReservationStatus> statuses);
+
     boolean existsByTimeSlotIdInAndReservationStatusIn(Collection<Long> timeSlotIds, Collection<ReservationStatus> statuses);
 
     Page<Reservation> findAllByTimeSlotIdIn(Collection<Long> timeSlotIds, Pageable pageable);

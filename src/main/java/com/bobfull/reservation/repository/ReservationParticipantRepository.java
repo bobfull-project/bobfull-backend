@@ -40,6 +40,19 @@ public interface ReservationParticipantRepository extends JpaRepository<Reservat
     int sumPartySizeByStatuses(
             @Param("reservationId") Long reservationId, @Param("statuses") Collection<ParticipationStatus> statuses);
 
+    /**
+     * 여러 Reservation에 걸친 partySize 합계를 Reservation별로 묶어 한 번에 반환한다(Issue #235,
+     * 인기 회차 조회 Hot-path에서 예약별로 반복 조회하던 것을 배치로 묶기 위함). 각 행은
+     * {@code [reservationId, sumPartySize]}이며, 참여자가 없는 Reservation은 결과에 나타나지
+     * 않는다(호출자가 0으로 취급해야 한다).
+     */
+    @Query("select p.reservationId, coalesce(sum(p.partySize), 0) from ReservationParticipant p "
+            + "where p.reservationId in :reservationIds and p.participationStatus in :statuses "
+            + "group by p.reservationId")
+    List<Object[]> sumPartySizeByReservationIdsAndStatuses(
+            @Param("reservationIds") Collection<Long> reservationIds,
+            @Param("statuses") Collection<ParticipationStatus> statuses);
+
     Page<ReservationParticipant> findAllByReservationIdAndParticipationStatus(
             Long reservationId, ParticipationStatus status, Pageable pageable);
 

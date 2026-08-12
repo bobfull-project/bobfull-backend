@@ -32,12 +32,17 @@ import org.springframework.boot.test.context.SpringBootTest;
  * Hibernate Statistics로 측정하는 선택적 통합 테스트다. BOBFULL_MYSQL_PERF_TEST=true 일 때만
  * 실행하며, 개발 DB가 아닌 별도 스키마(BOBFULL_TEST_MYSQL_URL)를 사용한다.
  *
- * <p>수정 전(Before)에는 TimeSlotService.toAvailableDiningSessionResponse와
+ * <p>수정 전(Before, Issue #61)에는 TimeSlotService.toAvailableDiningSessionResponse와
  * AvailableCapacityCalculator.calculate가 동일한 활성 Reservation 조회·참여자 합계 조회를 각각
  * 독립적으로 실행해 TimeSlot 20건에 123개 쿼리(평균 6.15개/TimeSlot)가 발생했다.
- * AvailableCapacityCalculator.calculateWithKnownParticipantCount로 중복 조회를 제거한 수정 후
- * (After)에는 83개 쿼리(평균 4.15개/TimeSlot)로 줄었다(docs/evidence/v3/61-search-query/README.md).
- * 이 테스트는 그 개선이 되돌아가지 않도록 고정한다.</p>
+ * AvailableCapacityCalculator.calculateWithKnownParticipantCount로 중복 조회를 제거한 뒤에는
+ * 83개 쿼리(평균 4.15개/TimeSlot, 3 + TIME_SLOT_COUNT*4)로 줄었다
+ * (docs/evidence/v3/61-search-query/README.md).</p>
+ *
+ * <p>Issue #235에서는 회차별 반복 조회 4종(활성 예약·참여자 합계·CLOSED 여부·READY 선점 합계)을
+ * 전부 배치 쿼리로 바꿔, 쿼리 수가 TimeSlot 건수와 무관한 고정값(7)이 되도록 다시 줄였다
+ * (docs/evidence/v3/restaurant-view-hotpath/README.md). 이 테스트는 그 개선이 되돌아가지
+ * 않도록 고정한다.</p>
  *
  * <p>{@code spring.jpa.hibernate.ddl-auto=update}이므로 대상 스키마의 기존 테이블을 지우지 않는다.
  * 그래도 개발 DB가 아닌 별도 스키마를 가리켜야 한다(seed/cleanUp이 restaurant 등 공용 테이블을
@@ -112,10 +117,10 @@ class AvailableDiningSessionQueryCountInvestigationTest {
                 TIME_SLOT_COUNT, queryCount, (double) queryCount / TIME_SLOT_COUNT);
 
         assertThat(response.content()).hasSize(TIME_SLOT_COUNT);
-        // After(중복 제거 후): TimeSlot당 활성 Reservation 조회 1회 + 참여자 합계 조회 1회 +
-        // CLOSED 여부 조회 1회 + READY 선점 합계 조회 1회 = 4회, 외부 조회(식당·SharedTable·TimeSlot
-        // 목록) 3회를 더해 3 + TIME_SLOT_COUNT * 4 = 83이 되어야 한다(Before 123 대비 40회 감소).
-        assertThat(queryCount).isEqualTo(3 + TIME_SLOT_COUNT * 4L);
+        // Issue #235(After): 활성 예약·CLOSED 여부·참여자 합계·READY 선점 합계를 TimeSlot 건수와
+        // 무관하게 각각 배치 쿼리 1회로 묶었다. 외부 조회(식당·SharedTable·TimeSlot 목록) 3회 +
+        // 배치 조회 4회 = 7회로, TIME_SLOT_COUNT를 20에서 아무리 늘려도 이 값은 그대로여야 한다.
+        assertThat(queryCount).isEqualTo(7L);
     }
 
     private Statistics statistics() {

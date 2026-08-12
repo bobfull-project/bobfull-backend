@@ -6,12 +6,13 @@ import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.exception.SharedTableErrorCode;
 import com.bobfull.common.exception.TimeSlotErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.payment.service.PaymentHoldReader;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.policy.ReservationCapacityPolicy;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
-import com.bobfull.reservation.service.AvailableCapacityCalculator;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.entity.SharedTable;
@@ -38,7 +39,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -59,6 +59,7 @@ public class TimeSlotService {
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
     private static final List<ReservationStatus> ACTIVE_RESERVATION_STATUSES =
             List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
+    private static final List<ReservationStatus> CLOSED_RESERVATION_STATUS = List.of(ReservationStatus.CLOSED);
     private static final List<ParticipationStatus> OCCUPYING_PARTICIPATION_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
@@ -66,9 +67,9 @@ public class TimeSlotService {
     private final SharedTableRepository sharedTableRepository;
     private final RestaurantRepository restaurantRepository;
     private final TimeSlotReservationValidator timeSlotReservationValidator;
-    private final AvailableCapacityCalculator availableCapacityCalculator;
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
+    private final PaymentHoldReader paymentHoldReader;
     private final Clock clock;
 
     public TimeSlotService(
@@ -76,18 +77,18 @@ public class TimeSlotService {
             SharedTableRepository sharedTableRepository,
             RestaurantRepository restaurantRepository,
             TimeSlotReservationValidator timeSlotReservationValidator,
-            AvailableCapacityCalculator availableCapacityCalculator,
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
+            PaymentHoldReader paymentHoldReader,
             Clock clock
     ) {
         this.timeSlotRepository = timeSlotRepository;
         this.sharedTableRepository = sharedTableRepository;
         this.restaurantRepository = restaurantRepository;
         this.timeSlotReservationValidator = timeSlotReservationValidator;
-        this.availableCapacityCalculator = availableCapacityCalculator;
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
+        this.paymentHoldReader = paymentHoldReader;
         this.clock = clock;
     }
 
@@ -165,13 +166,19 @@ public class TimeSlotService {
 
         Map<Long, Integer> capacityByTableId = capacityByTableId(sharedTables);
         DateRange dateRange = toDateRange(date);
-        List<AvailableDiningSessionResponse> content = timeSlotRepository
+        List<TimeSlot> timeSlots = timeSlotRepository
                 .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
-                        capacityByTableId.keySet(), dateRange.startAt(), dateRange.endAt())
-                .stream()
+                        capacityByTableId.keySet(), dateRange.startAt(), dateRange.endAt());
+        if (timeSlots.isEmpty()) {
+            return new AvailableDiningSessionListResponse(restaurantId, List.of());
+        }
+
+        AvailableDiningSessionBatchContext context = loadAvailableDiningSessionBatchContext(timeSlots);
+        List<AvailableDiningSessionResponse> content = timeSlots.stream()
                 .map(timeSlot -> toAvailableDiningSessionResponse(
                         timeSlot,
-                        capacityByTableId.get(timeSlot.getSharedTableId())
+                        capacityByTableId.get(timeSlot.getSharedTableId()),
+                        context
                 ))
                 .filter(response -> partySize == null || response.availableCapacity() >= partySize)
                 .toList();
@@ -231,24 +238,75 @@ public class TimeSlotService {
         );
     }
 
-    private AvailableDiningSessionResponse toAvailableDiningSessionResponse(TimeSlot timeSlot, Integer capacity) {
-        Optional<Reservation> activeReservation = reservationRepository
-                .findByTimeSlotIdAndReservationStatusIn(timeSlot.getId(), ACTIVE_RESERVATION_STATUSES);
-        Long reservationId = activeReservation.map(Reservation::getId).orElse(null);
-        int currentParticipantCount = activeReservation
-                .map(reservation -> reservationParticipantRepository.sumPartySizeByStatuses(
-                        reservation.getId(), OCCUPYING_PARTICIPATION_STATUSES))
-                .orElse(0);
+    /**
+     * #142(인기 회차 조회 폭주)에서 회차 목록 조회가 회차당 4개 쿼리(활성 예약·참여자 합계·CLOSED
+     * 여부·READY 선점 합계)를 반복해 DB Pool·CPU가 동시 포화되는 병목으로 확인됐다(Issue #235
+     * "1. 병목 Hot-path 분리"). 회차 ID를 미리 다 알고 있으므로, 이 4개를 회차 수와 무관하게
+     * 고정된 배치 쿼리로 한 번씩만 실행해 앞에서 모아두고 Java에서 회차별로 조립한다 —
+     * `availableCapacity` 계산식 자체(닫힘이면 0, 아니면 {@link ReservationCapacityPolicy})는
+     * {@link com.bobfull.reservation.service.AvailableCapacityCalculator}와 동일하게 유지한다.
+     */
+    private AvailableDiningSessionBatchContext loadAvailableDiningSessionBatchContext(List<TimeSlot> timeSlots) {
+        List<Long> timeSlotIds = timeSlots.stream().map(TimeSlot::getId).toList();
+
+        Map<Long, Reservation> activeReservationByTimeSlotId = reservationRepository
+                .findAllByTimeSlotIdInAndReservationStatusIn(timeSlotIds, ACTIVE_RESERVATION_STATUSES)
+                .stream()
+                .collect(Collectors.toMap(Reservation::getTimeSlotId, reservation -> reservation));
+
+        Set<Long> closedTimeSlotIds = reservationRepository
+                .findAllByTimeSlotIdInAndReservationStatusIn(timeSlotIds, CLOSED_RESERVATION_STATUS)
+                .stream()
+                .map(Reservation::getTimeSlotId)
+                .collect(Collectors.toSet());
+
+        List<Long> activeReservationIds = activeReservationByTimeSlotId.values().stream()
+                .map(Reservation::getId)
+                .toList();
+        Map<Long, Integer> participantCountByReservationId = activeReservationIds.isEmpty()
+                ? Map.of()
+                : reservationParticipantRepository
+                        .sumPartySizeByReservationIdsAndStatuses(activeReservationIds, OCCUPYING_PARTICIPATION_STATUSES)
+                        .stream()
+                        .collect(Collectors.toMap(row -> (Long) row[0], row -> ((Number) row[1]).intValue()));
+
+        Map<Long, Integer> readyHoldPartySizeByTimeSlotId = paymentHoldReader
+                .sumActiveReadyPartySizeByTimeSlotIds(timeSlotIds);
+
+        return new AvailableDiningSessionBatchContext(
+                activeReservationByTimeSlotId, closedTimeSlotIds, participantCountByReservationId, readyHoldPartySizeByTimeSlotId);
+    }
+
+    private AvailableDiningSessionResponse toAvailableDiningSessionResponse(
+            TimeSlot timeSlot, Integer capacity, AvailableDiningSessionBatchContext context) {
+        Reservation activeReservation = context.activeReservationByTimeSlotId().get(timeSlot.getId());
+        Long reservationId = activeReservation != null ? activeReservation.getId() : null;
+        int currentParticipantCount = reservationId != null
+                ? context.participantCountByReservationId().getOrDefault(reservationId, 0)
+                : 0;
+        int availableCapacity = context.closedTimeSlotIds().contains(timeSlot.getId())
+                ? 0
+                : ReservationCapacityPolicy.availableCapacity(
+                        capacity,
+                        currentParticipantCount,
+                        context.readyHoldPartySizeByTimeSlotId().getOrDefault(timeSlot.getId(), 0));
         return AvailableDiningSessionResponse.of(
                 timeSlot,
                 capacity,
                 toOffsetDateTime(timeSlot.getStartAt()),
                 toOffsetDateTime(timeSlot.getEndAt()),
-                availableCapacityCalculator.calculateWithKnownParticipantCount(
-                        timeSlot.getId(), capacity, currentParticipantCount),
+                availableCapacity,
                 reservationId,
                 currentParticipantCount
         );
+    }
+
+    private record AvailableDiningSessionBatchContext(
+            Map<Long, Reservation> activeReservationByTimeSlotId,
+            Set<Long> closedTimeSlotIds,
+            Map<Long, Integer> participantCountByReservationId,
+            Map<Long, Integer> readyHoldPartySizeByTimeSlotId
+    ) {
     }
 
     private Map<Long, Integer> capacityByTableId(List<SharedTable> sharedTables) {
