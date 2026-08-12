@@ -13,7 +13,7 @@
 ## 기준 코드
 
 - Before SHA: `a467fd9` (Issue #170 시작 시 최신 `develop`)
-- After SHA: 커밋 후 갱신 예정
+- After SHA: `e90edaf5e3f7ee2d5247b5a5545bb2ccc400dcd7`
 
 ## 환경·데이터·실행 조건
 
@@ -44,7 +44,19 @@
 
 ## 정합성 회귀 검증
 
-실행 명령과 결과는 커밋 전 최종 검증 뒤 이 문서에 갱신한다. 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. 다중 인스턴스 전달률·latency·재연결과 WSS Upgrade는 검증하지 않았다.
+실행 명령:
+
+```bash
+./gradlew :test \
+  --tests 'com.bobfull.chat.controller.ChatMessageControllerTest' \
+  --tests 'com.bobfull.chat.service.ChatMessageCommandServiceTest' \
+  --tests 'com.bobfull.chat.realtime.*' \
+  --tests 'com.bobfull.outbox.service.ChatMessageOutboxSignalDispatcherTest' \
+  --tests 'com.bobfull.outbox.service.ChatMessageOutboxProcessorIntegrationTest' \
+  --rerun-tasks
+```
+
+결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. 전체 `clean build`는 테스트 단계까지 실행했지만 도구가 종료 코드를 반환하지 않아 `NOT_RUN`으로 분리한다. 다중 인스턴스 전달률·latency·재연결과 WSS Upgrade는 검증하지 않았다.
 
 ## 구조화 로그·메트릭
 
