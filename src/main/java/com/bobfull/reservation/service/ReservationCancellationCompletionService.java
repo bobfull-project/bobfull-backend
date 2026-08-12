@@ -2,11 +2,17 @@ package com.bobfull.reservation.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,18 +24,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReservationCancellationCompletionService {
 
+    private static final Logger log = LoggerFactory.getLogger(ReservationCancellationCompletionService.class);
+
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCancellationTransactionService transactionService;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public ReservationCancellationCompletionService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
-            ReservationCancellationTransactionService transactionService
+            ReservationCancellationTransactionService transactionService,
+            BusinessMetricRecorder businessMetricRecorder
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.transactionService = transactionService;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     /** Reservation을 먼저 잠그고 조건부 UPDATE로 참여자 완료 처리권을 하나만 허용한다. */
@@ -51,9 +62,27 @@ public class ReservationCancellationCompletionService {
             if (!hasRemainingCancellation) {
                 reservation.cancel();
             }
+            logCancellationCompletedAfterCommit(
+                    reservationId, reservationParticipantId, reservation.getReservationStatus(), completedAt);
             return;
         }
 
         transactionService.recalculateAfterCompletion(reservation);
+        logCancellationCompletedAfterCommit(
+                reservationId, reservationParticipantId, reservation.getReservationStatus(), completedAt);
+    }
+
+    private void logCancellationCompletedAfterCommit(
+            Long reservationId,
+            Long reservationParticipantId,
+            ReservationStatus afterReservationStatus,
+            Instant completedAt
+    ) {
+        AfterCommitExecutor.run(() -> {
+            log.info(
+                    "event=RESERVATION_CANCELLATION_COMPLETED reservationId={} participantId={} afterReservationStatus={} afterParticipantStatus=CANCELLED completedAt={}",
+                    reservationId, reservationParticipantId, afterReservationStatus, completedAt);
+            businessMetricRecorder.increment(BusinessMetricEvent.RESERVATION_CANCELLATION_COMPLETED);
+        });
     }
 }

@@ -51,6 +51,7 @@ flowchart TB
     image["이미지 저장·검증"]
     noshow["노쇼"]
     chat["채팅"]
+    notification["알림"]
 
     auth --> restaurant
     auth --> image
@@ -62,6 +63,7 @@ flowchart TB
     payment --> noshow
     reservation --> chat
     payment --> chat
+    reservation --> notification
 ```
 
 | 구성 요소 | 책임 | 기준 데이터·경계 |
@@ -73,6 +75,8 @@ flowchart TB
 | 결제·환불 | 임시 선점, PortOne 검증, 결제·환불 상태 반영 | `Payment`, `Refund` |
 | 노쇼 | 식사 종료 후 OWNER의 참여자 단위 처리·해제 이력 | `NoShowHistory` |
 | 채팅 | 예약당 채팅방, 유효 참여자 접근, 메시지 저장·조회 | `ChatRoom`, `ChatMessage` |
+| AI Moderation Core | ChatMessage 원문 분석 orchestration, 결과 검증·저장, Provider 실패 전파 | `ChatModerationService`, `ChatModeration`, `AiModerationPort` |
+| 알림 | 모집 마감 처리 결과(확정·인원 미달 취소)를 유효 참여자에게 이메일로 안내 | 신규 저장 엔티티 없음, `Reservation`/`ReservationParticipant` 조회 결과만 사용 |
 
 ## 4. 인증·인가와 소유권 검증
 
@@ -88,7 +92,11 @@ OWNER는 백엔드에서 Presigned PUT URL을 발급받아 `temp/restaurants/{ow
 
 ### 인증 세션(Access·Refresh Token)
 
-Access Token은 HS256 JWT로 서명·만료만 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃의 Redis 실패는 감추지 않고 그대로 전파한다. Access Token Blacklist(요청마다 Redis 조회)는 도입하지 않으며, Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)도 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
+Access Token은 HS256 JWT로 서명·만료를 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. 다만 발급 시 부여하는 `jti` Claim으로 로그아웃된 토큰만 예외적으로 즉시 폐기할 수 있다(Access Token Blacklist, Issue #186). Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제하고, 그 Access Token의 `jti`를 남은 유효시간만큼 Blacklist에 등록한다. 인증 필터는 서명·만료 검증을 통과한 모든 요청마다 이 Blacklist를 조회해 로그아웃된 토큰을 차단한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃 자체(Blacklist 등록·Refresh Token 삭제)의 Redis 실패는 감추지 않고 그대로 전파한다. 반면 Blacklist *조회*는 인증 필터를 거치는 모든 요청에 실행돼 Redis 장애가 곧 전체 API 장애로 번지므로 Fail-open으로 처리한다 — Redis 예외 시 요청을 막지 않고 인증을 허용하며, 노출되는 위험은 직전 로그아웃한 토큰이 만료 시각까지 잠시 재사용되는 좁은 범위로 한정한다. 이 기능 배포 이전에 발급돼 `jti`가 없는 토큰은 Blacklist 조회를 건너뛰고 인증만 정상 처리한다. Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)는 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
+
+### 식당 검색 Cache
+
+`GET /api/restaurants`의 `date`/`time`이 없는 검색(기본/keyword/category/정렬/pagination)만 Redis에 캐시한다(Issue #62). 인증 세션과 같은 Redis 인스턴스를 재사용하되 key prefix(`bobfull:search:`, 인증은 `auth:`)로 책임을 분리한다. TTL은 60초이며, 식당 등록·수정·삭제 시 개별 key를 지우지 않고 버전 번호를 올려 무효화한다(해시된 key는 역추적이 불가능하므로 namespace 방식). Redis 조회·저장 실패는 예외를 전파하지 않고 DB 경로로 항상 대체한다(Fail-open) — 인증 Redis의 Refresh Token(Fail-closed)과는 독립적인 정책이다. `date`/`time`이 있는 검색과 예약 가능 회차 조회(`availableCapacity` 등)는 캐시 대상이 아니다. 상세: `docs/evidence/v3/62-search-cache/README.md`.
 
 ## 5. 예약·좌석·결제 처리
 
@@ -122,11 +130,77 @@ sequenceDiagram
 
 취소 가능 시점, 전체·참여자 단위 환불, 상태 전이와 TimeSlot 재사용 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를, 환불·노쇼 데이터 관계는 [ERD](./ERD.md)를 따른다.
 
+## 6-1. 예약 결과·결제 완료 이메일 알림
+
+Issue #168은 예약 참여자에게 다음 네 가지 이메일을 안내한다.
+
+```text
+결제 완료(CREATE) → 예약 접수 안내("모집 중입니다")
+결제 완료(JOIN)   → 참여 완료 안내("모집 중입니다")
+모집 마감 + 확정 기준 충족 → 최종 확정 안내
+모집 마감 + 확정 기준 미달 → 인원 미달 취소 안내
+```
+
+접수·참여 완료 안내는 이 시점에 `Reservation`이 아직 `RECRUITING`일 수 있으므로 "확정"이라 표현하지 않는다. 최종 확정·취소 안내만 식사 시작 2시간 전 모집 마감 처리(§5 `RecruitmentDeadlineScheduler`, Issue #47) 결과를 반영한다.
+
+V2의 메모리 `AFTER_COMMIT` + `@Async` 방식은 커밋 직후 프로세스가 종료되면 이메일 시도 자체가 유실되고 재처리 근거가 없었다. V3(Issue #183)에서 ChatRoom과 같은 공통 Transactional Outbox로 전환했다(§7, ADR 0008).
+
+```text
+핵심 트랜잭션(결제 완료 확정 또는 모집 마감 처리)
+→ OutboxEvent(EMAIL_*, PENDING) + 수신자별 email_outbox_delivery(PENDING)를 같은 트랜잭션에 저장
+→ 트랜잭션 COMMIT
+→ 같은 호출 스레드에서 AfterCommit signal (별도 스레드풀·@Async 아님)
+→ EmailOutboxProcessor가 PENDING 수신자만 SMTP에 1회 시도
+→ 성공한 수신자는 SENT로 보존, 실패한 수신자만 공통 Outbox backoff(5·10·20·40·80초, 5회)로 재시도
+→ scheduler(5초 주기)는 signal 유실·재시작 시의 안전망
+```
+
+- `ReservationConfirmationService#confirm`이 CREATE·JOIN 모두에서 `EmailOutboxEventService.enqueue(EMAIL_RESERVATION_CREATED|EMAIL_PARTICIPATION_COMPLETED, ...)`를 호출해 접수·참여 완료 안내를 Outbox에 기록한다.
+- `ReservationCancellationTransactionService#acceptRecruitmentDeadline`이 `CLOSED_ONLY`/`CANCELLED` 결과에서 각각 `EmailOutboxEventService.enqueue(EMAIL_RECRUITMENT_CONFIRMED|EMAIL_RECRUITMENT_CANCELLED, ...)`를 호출해 최종 확정·취소 안내를 Outbox에 기록한다.
+- `EmailOutboxEventService.enqueue`는 `Propagation.MANDATORY`라 활성 트랜잭션 밖에서는 호출할 수 없다 — 이메일 발송 의도가 핵심 상태 변경과 항상 같은 커밋에 들어가도록 강제한다.
+- `EmailOutboxProcessor`는 예외를 삼키지 않고 전파한다 — 실패는 공통 Outbox의 재시도·`FAILED` 전이만으로 처리하며, 이미 커밋된 예약·결제 상태를 되돌리지 않는다.
+- 환불 요청(`ReservationCancellationRefundPort`)은 `RecruitmentDeadlineCancellationService.process`에서 여전히 직접 호출하며, 이메일 Outbox와는 완전히 독립적으로 실행된다 — 환불 요청이 실패해도 이미 커밋된 이메일 Outbox 처리에는 영향이 없다.
+- 별도 알림 이력 테이블은 두지 않는다. `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 기존 멱등 가드와, `email_outbox_delivery`의 `(outbox_event_id, recipient_member_id)` UNIQUE가 함께 중복 발송을 방지한다.
+
+SMTP 호출은 수신자마다 정확히 한 번만 시도한다. 재시도와 최종 `FAILED` 전이는 SMTP Adapter가 아니라 공통 Outbox가 단독으로 책임진다(계층별 재시도 중첩 방지).
+
+정원이 2시간 마감 이전에 이미 다 차 스케줄러 후보에서 제외되는 예약(모집이 결제 완료 시점에 조기 마감된 경우)은 최종 확정 이메일 대상이 아니다 — 해당 경우는 프런트엔드 화면(모달·팝업) 안내로 대체하며 이번 Issue 범위에 포함하지 않는다.
+
 ## 7. 채팅
 
-최초 예약 결제가 완료되면 예약당 `ChatRoom` 하나를 생성한다. 결제 완료 후 취소되지 않은 유효 참여자만 접근할 수 있고 OWNER와 ADMIN은 참여하지 않는다. 예약 또는 참여가 취소되면 해당 참여자의 접근은 종료되며, 예약이 `CANCELLED` 또는 `CLOSED`가 되면 새 메시지 전송을 종료한다. 기존 `ChatMessage`는 DB에 보관하고 cursor 기반으로 조회한다.
+최초 예약 결제가 완료되면 예약당 `ChatRoom` 하나를 생성한다. `Payment`·`Reservation`·`ReservationParticipant`를 확정하는 핵심 트랜잭션에는 ChatRoom 생성 의도만 `OutboxEvent(PENDING)`으로 함께 저장한다. 커밋 뒤 즉시 signal은 빠른 처리 경로이고, scheduler는 남은 `PENDING`과 5분 이상 고착된 `PROCESSING`을 다시 처리한다. 실제 ChatRoom 저장은 별도 짧은 트랜잭션에서 `createIfAbsent(reservationId)`로 수행하므로 실패가 결제·예약을 롤백시키지 않으며, at-least-once 재처리도 `chat_room.reservation_id` UNIQUE로 한 건을 유지한다(#176, ADR 0008).
+
+결제 완료 후 취소되지 않은 유효 참여자만 접근할 수 있고 OWNER와 ADMIN은 참여하지 않는다. 예약 또는 참여가 취소되면 해당 참여자의 접근은 종료되며, 예약이 `CANCELLED` 또는 `CLOSED`가 되면 새 메시지 전송을 종료한다. 기존 `ChatMessage`는 DB에 보관하고 cursor 기반으로 조회한다.
 
 STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 참조한다.
+
+### AI Moderation Core
+
+`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 Application Validation을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider Native Structured Output을 사용하며, Provider 의존성과 Prompt/Policy metadata는 Port 뒤에 격리한다. AI 실패를 SAFE로 바꾸지 않고 retry 가능한 예외로 전달한다. `ChatModeration`의 `@Version`은 저장 구간의 stale UPDATE를 거절하며, 완료 결과가 최종 실패 기록에 덮이지 않게 한다.
+
+```text
+ChatMessage
+→ ChatModerationService
+→ AiModerationPort
+→ OpenAI
+→ Application Validation
+→ ChatModeration
+```
+
+### Outbox + Kafka 전달 파이프라인 (#59)
+
+ChatMessage 생성과 `OutboxEvent(CHAT_MESSAGE_CREATED)` 저장은 같은 트랜잭션에서 이뤄지며, `ChatRoomOutboxProcessor`/`EmailOutboxProcessor`와 같은 형태의 `ChatMessageOutboxProcessor`가 커밋 후 신호를 받아 Kafka에 발행하고 Broker ACK 후에만 COMPLETED로 표시한다. `ChatModerationConsumer`는 위 AI Moderation Core의 `analyze(messageId)`만 호출하며, Provider/ChatClient를 직접 다루지 않는다.
+
+```text
+ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
+→ 커밋 후 signal
+→ ChatMessageOutboxProcessor → Kafka(bobfull.chat.message-created.v1)
+→ ChatModerationConsumer
+→ ChatModerationService.analyze(messageId)  (위 AI Moderation Core 흐름)
+→ 실패 시 최대 3회 재시도 → 소진 시 DLT(bobfull.chat.message-created.dlt.v1) + recordFinalFailure
+```
+
+DB→Broker 구간 유실 방지는 Outbox가, Broker 이후 AI 처리 실패의 재시도/격리는 Kafka Retry/DLT가 담당한다. 상세 근거는 [ADR 0010](./adr/0010-chat-message-outbox-kafka-pipeline.md)을 따른다.
 
 ## 8. 저장값·계산값과 운영 관찰
 
@@ -141,10 +215,11 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 다음 항목은 기준 문서에서 확정되지 않았거나 이번 문서 범위가 아니므로 구조를 구체화하지 않는다.
 
 - 배포 구조, 최종 AWS 구성, 프론트엔드 배포 방식, V1·V2·V3별 물리 아키텍처
-- Redis의 배포·클러스터 구성(로컬 단일 인스턴스만 구성됨), Kafka 도입 구조, 채팅 Pub/Sub
+- Redis의 배포·클러스터 구성(로컬 단일 인스턴스만 구성됨), 채팅 Pub/Sub
 - Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
+- Kafka를 AI Moderation 외 다른 이벤트로 확대 적용하는 것, 범용 Outbox Framework, Consumer 독립 Worker 분리(#192에서 측정 후 판단) — Chat AI Moderation의 Outbox+Kafka 연결 자체는 #59에서 완료
 - 개별 ADR의 사전 생성, API·ERD 상세 복제, 클래스·패키지 구조
 
 새 기술 선택이나 중요한 구조 변경이 실제로 필요해지면 [ADR 운영 기준](./adr/README.md)에 따라 별도 ADR을 작성한다.

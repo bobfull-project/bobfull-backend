@@ -49,7 +49,7 @@ import org.springframework.boot.test.context.SpringBootTest;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "payment.expiration.enabled=false",
         "jwt.secret=no-show-concurrency-test-secret-key-please-keep-this-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-no-show-concurrency-test-api-secret",
         "portone.store-id=portone-no-show-concurrency-test-store-id",
         "portone.webhook-secret=d2hzZWNfbm8tc2hvdy1jb25jdXJyZW5jeQ=="

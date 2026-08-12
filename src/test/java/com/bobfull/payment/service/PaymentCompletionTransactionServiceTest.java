@@ -5,6 +5,10 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
@@ -21,12 +25,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentCompletionTransactionServiceTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private ReservationConfirmationPort reservationConfirmationPort;
+    @Mock private BusinessMetricRecorder businessMetricRecorder;
 
     @Test
     void 잠금_획득후_READY_Payment을_완료하고_Port_결과를_응답과_엔티티에_연결한다() {
@@ -37,7 +45,7 @@ class PaymentCompletionTransactionServiceTest {
                 .willReturn(new ReservationConfirmationPort.ReservationConfirmationResult(10L, 20L));
         Instant now = Instant.parse("2026-07-28T00:00:00Z");
         PaymentCompletionTransactionService service = new PaymentCompletionTransactionService(paymentRepository,
-                reservationConfirmationPort, Clock.fixed(now, ZoneOffset.UTC));
+                reservationConfirmationPort, Clock.fixed(now, ZoneOffset.UTC), businessMetricRecorder);
 
         // when
         var result = service.complete("payment-id", 1L);
@@ -53,6 +61,47 @@ class PaymentCompletionTransactionServiceTest {
     }
 
     @Test
+    void READY_Payment를_완료하면_afterCommit에서_PAYMENT_COMPLETED_구조화로그를_남긴다() {
+        // given
+        Payment payment = readyPayment();
+        given(paymentRepository.findWithLockByPaymentId("payment-id")).willReturn(Optional.of(payment));
+        given(reservationConfirmationPort.confirm(payment))
+                .willReturn(new ReservationConfirmationPort.ReservationConfirmationResult(10L, 20L));
+        PaymentCompletionTransactionService service = new PaymentCompletionTransactionService(paymentRepository,
+                reservationConfirmationPort, Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneOffset.UTC),
+                businessMetricRecorder);
+        Logger logger = (Logger) LoggerFactory.getLogger(PaymentCompletionTransactionService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
+            // when
+            service.complete("payment-id", 1L);
+            assertThat(appender.list).isEmpty();
+            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCommit();
+            }
+        } finally {
+            logger.detachAppender(appender);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=PAYMENT_COMPLETED");
+            assertThat(event.getFormattedMessage()).contains("paymentId=payment-id");
+            assertThat(event.getFormattedMessage()).contains("memberId=1");
+            assertThat(event.getFormattedMessage()).contains("reservationId=10");
+            assertThat(event.getFormattedMessage()).contains("participantId=20");
+            assertThat(event.getFormattedMessage()).contains("afterStatus=PAID");
+        });
+    }
+
+    @Test
     void 잠금_획득후_이미_PAID인_Payment은_기존_결과를_반환하고_Port를_호출하지_않는다() {
         // given
         Payment payment = readyPayment();
@@ -60,7 +109,7 @@ class PaymentCompletionTransactionServiceTest {
         payment.attachReservationConfirmation(10L, 20L);
         given(paymentRepository.findWithLockByPaymentId("payment-id")).willReturn(Optional.of(payment));
         PaymentCompletionTransactionService service = new PaymentCompletionTransactionService(paymentRepository,
-                reservationConfirmationPort, Clock.systemUTC());
+                reservationConfirmationPort, Clock.systemUTC(), businessMetricRecorder);
 
         // when
         var result = service.complete("payment-id", 1L);
@@ -79,7 +128,7 @@ class PaymentCompletionTransactionServiceTest {
         ReflectionTestUtils.setField(payment, "status", PaymentStatus.FAILED);
         given(paymentRepository.findWithLockByPaymentId("payment-id")).willReturn(Optional.of(payment));
         PaymentCompletionTransactionService service = new PaymentCompletionTransactionService(paymentRepository,
-                reservationConfirmationPort, Clock.systemUTC());
+                reservationConfirmationPort, Clock.systemUTC(), businessMetricRecorder);
 
         // when
         Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 1L));
@@ -97,7 +146,7 @@ class PaymentCompletionTransactionServiceTest {
         Payment payment = readyPayment();
         given(paymentRepository.findWithLockByPaymentId("payment-id")).willReturn(Optional.of(payment));
         PaymentCompletionTransactionService service = new PaymentCompletionTransactionService(paymentRepository,
-                reservationConfirmationPort, Clock.systemUTC());
+                reservationConfirmationPort, Clock.systemUTC(), businessMetricRecorder);
 
         // when
         Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 2L));
@@ -115,7 +164,8 @@ class PaymentCompletionTransactionServiceTest {
                 BigDecimal.valueOf(10000), Instant.parse("2026-07-28T00:00:00Z"));
         given(paymentRepository.findWithLockByPaymentId("payment-id")).willReturn(Optional.of(payment));
         PaymentCompletionTransactionService service = new PaymentCompletionTransactionService(paymentRepository,
-                reservationConfirmationPort, Clock.fixed(Instant.parse("2026-07-28T00:01:00Z"), ZoneOffset.UTC));
+                reservationConfirmationPort, Clock.fixed(Instant.parse("2026-07-28T00:01:00Z"), ZoneOffset.UTC),
+                businessMetricRecorder);
 
         // when
         Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.complete("payment-id", 1L));

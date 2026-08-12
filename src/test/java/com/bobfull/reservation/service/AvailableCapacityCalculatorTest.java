@@ -1,7 +1,10 @@
 package com.bobfull.reservation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.bobfull.payment.service.PaymentHoldReader;
 import com.bobfull.reservation.entity.ParticipationStatus;
@@ -22,6 +25,7 @@ class AvailableCapacityCalculatorTest {
 
     private static final List<ReservationStatus> ACTIVE_STATUSES =
             List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
+    private static final List<ReservationStatus> CLOSED_STATUS = List.of(ReservationStatus.CLOSED);
     private static final List<ParticipationStatus> OCCUPYING_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
 
@@ -82,6 +86,34 @@ class AvailableCapacityCalculatorTest {
 
         // then
         assertThat(availableCapacity).isZero();
+    }
+
+    @Test
+    void CLOSED_예약이_있으면_참여자_상태와_무관하게_가용_좌석을_0으로_반환한다() {
+        // given: 식사 종료(CLOSED)로 생명주기가 끝난 회차는 재예약으로 이어지면 안 된다(Issue #175 회귀 수정)
+        given(reservationRepository.existsByTimeSlotIdAndReservationStatusIn(200L, CLOSED_STATUS)).willReturn(true);
+
+        // when
+        int availableCapacity = calculator().calculate(200L, 4);
+
+        // then
+        assertThat(availableCapacity).isZero();
+        verify(reservationRepository, never()).findByTimeSlotIdAndReservationStatusIn(200L, ACTIVE_STATUSES);
+        verify(paymentHoldReader, never()).sumActiveReadyPartySize(200L);
+    }
+
+    @Test
+    void CLOSED_예약의_참여자가_전부_NO_SHOW로_빠져도_좌석은_다시_열리지_않는다() {
+        // given: NO_SHOW는 OCCUPYING_STATUSES(RESERVED, CANCEL_REQUESTED)가 아니라 점유 집계에서 빠지지만,
+        // CLOSED 자체가 재예약을 막으므로 참여자 집계와 무관하게 0을 반환해야 한다
+        given(reservationRepository.existsByTimeSlotIdAndReservationStatusIn(200L, CLOSED_STATUS)).willReturn(true);
+
+        // when
+        int availableCapacity = calculator().calculate(200L, 4);
+
+        // then
+        assertThat(availableCapacity).isZero();
+        verify(reservationParticipantRepository, never()).sumPartySizeByStatuses(any(), any());
     }
 
     private Reservation reservation(Long id) {

@@ -1,9 +1,11 @@
 package com.bobfull.reservation.repository;
 
 import com.bobfull.admin.repository.AdminReservationRepository;
+import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationStatus;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.time.Instant;
 import org.springframework.data.domain.Page;
@@ -39,6 +41,34 @@ public interface ReservationRepository
             @Param("restaurantId") Long restaurantId,
             @Param("startAt") Instant startAt,
             @Param("endAt") Instant endAt,
+            Pageable pageable
+    );
+
+    /**
+     * 모집 마감 기한(식사 시작 2시간 전) 도달 후보를 조회한다(Issue #47). TimeSlot과 조인해
+     * 회차 시작 시각을 직접 비교하며, 아직 모집 마감·취소 처리되지 않은 대상만 후보로 삼는다.
+     */
+    @Query("select r.id from Reservation r join TimeSlot ts on r.timeSlotId = ts.id "
+            + "where r.recruitmentStatus = :recruitmentStatus and r.reservationStatus in :activeStatuses "
+            + "and ts.startAt <= :deadline "
+            + "order by ts.startAt asc")
+    List<Long> findRecruitmentDeadlineCandidateIds(
+            @Param("recruitmentStatus") RecruitmentStatus recruitmentStatus,
+            @Param("activeStatuses") Collection<ReservationStatus> activeStatuses,
+            @Param("deadline") Instant deadline,
+            Pageable pageable
+    );
+
+    /**
+     * 식사 종료(TimeSlot.endAt 도달) 후보를 조회한다(Issue #175 Q1·Q2). {@code CONFIRMED} 예약만
+     * 대상으로 삼아, 식사 종료 시점까지 {@code RECRUITING}으로 남은 예약은 자동 종료로 덮지 않는다.
+     */
+    @Query("select r.id from Reservation r join TimeSlot ts on r.timeSlotId = ts.id "
+            + "where r.reservationStatus = :reservationStatus and ts.endAt <= :now "
+            + "order by ts.endAt asc")
+    List<Long> findDiningEndCandidateIds(
+            @Param("reservationStatus") ReservationStatus reservationStatus,
+            @Param("now") Instant now,
             Pageable pageable
     );
 }

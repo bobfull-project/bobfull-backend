@@ -10,6 +10,9 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.TimeSlotErrorCode;
@@ -42,6 +45,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -289,8 +293,8 @@ class TimeSlotServiceTest {
                 .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
                         anyCollection(), any(Instant.class), any(Instant.class)))
                 .willReturn(List.of(smallSlot, largeSlot));
-        given(availableCapacityCalculator.calculate(200L, 2)).willReturn(2);
-        given(availableCapacityCalculator.calculate(201L, 4)).willReturn(4);
+        given(availableCapacityCalculator.calculateWithKnownParticipantCount(200L, 2, 0)).willReturn(2);
+        given(availableCapacityCalculator.calculateWithKnownParticipantCount(201L, 4, 0)).willReturn(4);
         given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(200L), anyCollection()))
                 .willReturn(Optional.empty());
         given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(201L), anyCollection()))
@@ -331,6 +335,43 @@ class TimeSlotServiceTest {
         verify(timeSlotRepository).flush();
         assertThat(timeSlot.getStartAt()).isEqualTo(seoulInstant("2026-08-01T12:00:00"));
         assertThat(timeSlot.getEndAt()).isEqualTo(seoulInstant("2026-08-01T14:00:00"));
+    }
+
+    @Test
+    void 회차_시간을_수정하면_DINING_SESSION_TIME_CHANGED_구조화로그를_남긴다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable sharedTable = sharedTable(100L, 10L, 4);
+        TimeSlot timeSlot = timeSlot(200L, 100L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        given(timeSlotRepository.findByIdAndDeletedAtIsNull(200L)).willReturn(Optional.of(timeSlot));
+        given(sharedTableRepository.findByIdAndDeletedAtIsNull(100L)).willReturn(Optional.of(sharedTable));
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(timeSlotRepository.existsBySharedTableIdAndStartAtAndDeletedAtIsNullAndIdNot(
+                100L, seoulInstant("2026-08-01T12:00:00"), 200L)).willReturn(false);
+        Logger logger = (Logger) LoggerFactory.getLogger(TimeSlotService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            timeSlotService().update(1L, 200L, new DiningSessionRequest(
+                    LocalDateTime.of(2026, 8, 1, 12, 0),
+                    LocalDateTime.of(2026, 8, 1, 14, 0)
+            ));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=DINING_SESSION_TIME_CHANGED");
+            assertThat(event.getFormattedMessage()).contains("sessionId=200");
+            assertThat(event.getFormattedMessage()).contains("tableId=100");
+            assertThat(event.getFormattedMessage()).contains("actorId=1");
+            assertThat(event.getFormattedMessage()).contains("beforeStartAt=2026-08-01T02:00:00Z");
+            assertThat(event.getFormattedMessage()).contains("afterStartAt=2026-08-01T03:00:00Z");
+        });
     }
 
     @Test

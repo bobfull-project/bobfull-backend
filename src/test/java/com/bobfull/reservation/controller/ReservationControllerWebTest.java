@@ -34,6 +34,7 @@ import com.bobfull.reservation.dto.ReservationPrepareResponse;
 import com.bobfull.reservation.service.ReservationCancellationService;
 import com.bobfull.reservation.service.ReservationPreparationService;
 import com.bobfull.reservation.service.ReservationSearchService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -56,12 +57,13 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=reservation-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class ReservationControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private ObjectMapper objectMapper;

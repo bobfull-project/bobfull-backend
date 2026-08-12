@@ -4,6 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bobfull.payment.entity.Payment;
+import com.bobfull.chat.repository.ChatRoomRepository;
+import com.bobfull.outbox.entity.OutboxEventStatus;
+import com.bobfull.outbox.entity.OutboxEventType;
+import com.bobfull.outbox.repository.OutboxEventRepository;
+import com.bobfull.outbox.repository.EmailOutboxDeliveryRepository;
+import com.bobfull.outbox.service.EmailOutboxEventService;
+import com.bobfull.notification.adapter.FakeReservationNotificationAdapter;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.port.ReservationConfirmationPort;
@@ -12,9 +19,12 @@ import com.bobfull.reservation.entity.RecruitmentStatus;
 import com.bobfull.reservation.entity.Reservation;
 import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
+import com.bobfull.reservation.port.ReservationNotificationPort;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.service.ReservationConfirmationService;
+import com.bobfull.restaurant.entity.Restaurant;
+import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.entity.SharedTable;
 import com.bobfull.sharedtable.repository.SharedTableRepository;
 import com.bobfull.timeslot.entity.TimeSlot;
@@ -41,10 +51,11 @@ import org.springframework.transaction.annotation.Transactional;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=payment-reservation-transaction-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-payment-reservation-test-api-secret",
         "portone.store-id=portone-payment-reservation-test-store-id",
-        "portone.webhook-secret=d2hzZWNfcmVzZXJ2YXRpb24tdGVzdA=="
+        "portone.webhook-secret=d2hzZWNfcmVzZXJ2YXRpb24tdGVzdA==",
+        "spring.main.allow-bean-definition-overriding=true"
 })
 @ContextConfiguration(classes = PaymentReservationConfirmationTransactionIntegrationTest.FailureInjectionConfiguration.class)
 class PaymentReservationConfirmationTransactionIntegrationTest {
@@ -55,16 +66,28 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     @Autowired private ReservationParticipantRepository reservationParticipantRepository;
     @Autowired private TimeSlotRepository timeSlotRepository;
     @Autowired private SharedTableRepository sharedTableRepository;
+    @Autowired private RestaurantRepository restaurantRepository;
     @Autowired private FailureMode failureMode;
+    @Autowired private ChatRoomRepository chatRoomRepository;
+    @Autowired private OutboxEventRepository outboxEventRepository;
+    @Autowired private EmailOutboxDeliveryRepository emailOutboxDeliveryRepository;
+    @Autowired private EmailOutboxEventService emailOutboxEventService;
+    @Autowired private FakeReservationNotificationAdapter notificationAdapter;
 
     @AfterEach
     void cleanUp() {
         failureMode.reset();
+        notificationAdapter.reservationCreatedNotifications().clear();
+        notificationAdapter.participationCompletedNotifications().clear();
+        emailOutboxDeliveryRepository.deleteAll();
+        outboxEventRepository.deleteAll();
         paymentRepository.deleteAll();
+        chatRoomRepository.deleteAll();
         reservationParticipantRepository.deleteAll();
         reservationRepository.deleteAll();
         timeSlotRepository.deleteAll();
         sharedTableRepository.deleteAll();
+        restaurantRepository.deleteAll();
     }
 
     @Test
@@ -78,6 +101,10 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(completed.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(reservationRepository.count()).isEqualTo(1);
         assertThat(reservationParticipantRepository.count()).isEqualTo(1);
+        assertThat(chatRoomRepository.count()).isEqualTo(1);
+        assertThat(outboxEventRepository.count()).isEqualTo(2);
+        assertThat(outboxEventRepository.findAll()).allSatisfy(event ->
+                assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.COMPLETED));
         assertThat(completed.getReservationId()).isNotNull();
         assertThat(completed.getReservationParticipantId()).isNotNull();
         Reservation reservation = reservationRepository.findById(completed.getReservationId()).orElseThrow();
@@ -86,6 +113,17 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         ReservationParticipant participant = reservationParticipantRepository
                 .findById(completed.getReservationParticipantId()).orElseThrow();
         assertThat(participant.getReservationId()).isEqualTo(reservation.getId());
+        assertThat(chatRoomRepository.findByReservationId(reservation.getId())).isPresent();
+        // 핵심 트랜잭션 커밋 후 AFTER_COMMIT 리스너가 예약 접수 이메일 이벤트를 실제로 처리한다.
+        assertThat(notificationAdapter.reservationCreatedNotifications()).hasSize(1);
+        assertThat(notificationAdapter.participationCompletedNotifications()).isEmpty();
+    }
+
+    @Test
+    void Email_Outbox는_핵심_트랜잭션_밖에서_저장할수_없다() {
+        assertThatThrownBy(() -> emailOutboxEventService.enqueue(
+                OutboxEventType.EMAIL_RESERVATION_CREATED, 1L, java.util.List.of()))
+                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
     }
 
     @Test
@@ -98,12 +136,17 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         paymentCompletionTransactionService.complete(payment.getPaymentId(), payment.getMemberId());
 
         assertThat(reservationParticipantRepository.count()).isEqualTo(2);
+        assertThat(chatRoomRepository.count()).isZero();
+        assertThat(outboxEventRepository.count()).isEqualTo(1);
         Reservation updated = reservationRepository.findById(reservation.getId()).orElseThrow();
         assertThat(updated.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(updated.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
         Payment completed = paymentRepository.findById(payment.getId()).orElseThrow();
         assertThat(completed.getReservationId()).isEqualTo(reservation.getId());
         assertThat(completed.getReservationParticipantId()).isNotNull();
+        // 핵심 트랜잭션 커밋 후 AFTER_COMMIT 리스너가 참여 완료 이메일 이벤트를 실제로 처리한다.
+        assertThat(notificationAdapter.participationCompletedNotifications()).hasSize(1);
+        assertThat(notificationAdapter.reservationCreatedNotifications()).isEmpty();
     }
 
     @Test
@@ -118,6 +161,32 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         Reservation updated = reservationRepository.findById(reservation.getId()).orElseThrow();
         assertThat(updated.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(updated.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
+        // 정원 도달로 같은 트랜잭션 안에서 모집이 즉시 CLOSED돼도, 참여 완료 알림 자체는 그대로
+        // 발송된다 — 문구가 실제 상태(이미 CLOSED)와 충돌하지 않는지는 어댑터 단위 테스트에서 검증한다.
+        assertThat(notificationAdapter.participationCompletedNotifications()).hasSize(1);
+    }
+
+    @Test
+    void ChatRoom_생성_실패는_이미_커밋된_Payment_Reservation_Participant를_되돌리지_않는다() {
+        TimeSlot timeSlot = timeSlot(4);
+        Payment payment = readyCreatePayment(timeSlot, 3);
+        failureMode.set(FailureMode.Type.CHAT_ROOM_CREATION_FAILURE);
+
+        paymentCompletionTransactionService.complete(payment.getPaymentId(), payment.getMemberId());
+
+        Payment completed = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertThat(completed.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(completed.getReservationId()).isNotNull();
+        assertThat(completed.getReservationParticipantId()).isNotNull();
+        assertThat(reservationRepository.count()).isEqualTo(1);
+        assertThat(reservationParticipantRepository.count()).isEqualTo(1);
+        assertThat(chatRoomRepository.count()).isZero();
+        assertThat(outboxEventRepository.findAll()).anySatisfy(event -> {
+            assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+            assertThat(event.getAttemptCount()).isEqualTo(1);
+        });
+        // ChatRoom 생성 실패는 Outbox 재시도로 남고 이메일 접수 알림에는 영향이 없다.
+        assertThat(notificationAdapter.reservationCreatedNotifications()).hasSize(1);
     }
 
     @Test
@@ -174,10 +243,18 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reloaded.getReservationParticipantId()).isNull();
         assertThat(reservationRepository.count()).isZero();
         assertThat(reservationParticipantRepository.count()).isZero();
+        // 핵심 트랜잭션이 롤백되면 ChatRoom도 Outbox도, 이메일 알림도 처리되지 않는다.
+        assertThat(chatRoomRepository.count()).isZero();
+        assertThat(outboxEventRepository.count()).isZero();
+        assertThat(emailOutboxDeliveryRepository.count()).isZero();
+        assertThat(notificationAdapter.reservationCreatedNotifications()).isEmpty();
+        assertThat(notificationAdapter.participationCompletedNotifications()).isEmpty();
     }
 
     private TimeSlot timeSlot(int capacity) {
-        SharedTable table = sharedTableRepository.saveAndFlush(SharedTable.create(1L, capacity));
+        Restaurant restaurant = restaurantRepository.saveAndFlush(
+                Restaurant.create(1L, "밥풀식당", "제주시", "한식", "설명", "키워드", 10000));
+        SharedTable table = sharedTableRepository.saveAndFlush(SharedTable.create(restaurant.getId(), capacity));
         return timeSlotRepository.saveAndFlush(TimeSlot.create(table.getId(),
                 Instant.parse("2026-08-01T02:00:00Z"), Instant.parse("2026-08-01T04:00:00Z")));
     }
@@ -201,6 +278,28 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         @Bean
         FailureMode failureMode() {
             return new FailureMode();
+        }
+
+        @Bean
+        @Primary
+        ReservationNotificationPort fakeReservationNotificationPort() {
+            return new FakeReservationNotificationAdapter();
+        }
+
+        @Bean
+        @Primary
+        com.bobfull.chat.service.ChatRoomCreationService failureInjectingChatRoomCreationService(
+                ChatRoomRepository chatRoomRepository, FailureMode failureMode
+        ) {
+            return new com.bobfull.chat.service.ChatRoomCreationService(chatRoomRepository) {
+                @Override
+                public com.bobfull.chat.entity.ChatRoom createIfAbsent(Long reservationId) {
+                    if (failureMode.type == FailureMode.Type.CHAT_ROOM_CREATION_FAILURE) {
+                        throw new IllegalStateException("강제 ChatRoom 생성 실패(테스트)");
+                    }
+                    return super.createIfAbsent(reservationId);
+                }
+            };
         }
 
         @Bean
@@ -232,7 +331,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     }
 
     static class FailureMode {
-        enum Type { NONE, RESERVATION_SAVE_FAILURE, PARTICIPANT_SAVE_FAILURE, RESULT_LINK_FAILURE }
+        enum Type { NONE, RESERVATION_SAVE_FAILURE, PARTICIPANT_SAVE_FAILURE, RESULT_LINK_FAILURE, CHAT_ROOM_CREATION_FAILURE }
         private Type type = Type.NONE;
         void set(Type type) { this.type = type; }
         void reset() { this.type = Type.NONE; }

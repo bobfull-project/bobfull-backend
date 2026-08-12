@@ -7,8 +7,16 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.outbox.entity.OutboxEvent;
+import com.bobfull.outbox.repository.OutboxEventRepository;
+import com.bobfull.outbox.service.ChatRoomOutboxProcessor;
+import com.bobfull.outbox.service.EmailOutboxEventService;
 import com.bobfull.payment.entity.PaymentPurpose;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.RecruitmentStatus;
@@ -20,10 +28,14 @@ import com.bobfull.reservation.repository.ReservationRepository;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import java.util.List;
 import java.util.Optional;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,9 +53,23 @@ class ReservationConfirmationServiceTest {
     @Mock
     private ReservationCapacityReader reservationCapacityReader;
 
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+
+    @Mock
+    private ChatRoomOutboxProcessor chatRoomOutboxProcessor;
+
+    @Mock
+    private EmailOutboxEventService emailOutboxEventService;
+
+    @Mock
+    private BusinessMetricRecorder businessMetricRecorder;
+
     private ReservationConfirmationService service() {
         return new ReservationConfirmationService(
-                reservationRepository, reservationParticipantRepository, reservationCapacityReader);
+                reservationRepository, reservationParticipantRepository, reservationCapacityReader, outboxEventRepository,
+                chatRoomOutboxProcessor, emailOutboxEventService, Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC),
+                businessMetricRecorder);
     }
 
     @Test
@@ -59,6 +85,11 @@ class ReservationConfirmationServiceTest {
             ReflectionTestUtils.setField(participant, "id", 20L);
             return participant;
         });
+        given(outboxEventRepository.save(any(OutboxEvent.class))).willAnswer(invocation -> {
+            OutboxEvent event = invocation.getArgument(0);
+            ReflectionTestUtils.setField(event, "id", 30L);
+            return event;
+        });
         given(reservationCapacityReader.readTableCapacity(200L)).willReturn(4);
         given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
 
@@ -70,6 +101,9 @@ class ReservationConfirmationServiceTest {
         assertThat(result.reservationId()).isEqualTo(10L);
         assertThat(result.reservationParticipantId()).isEqualTo(20L);
         verify(reservationRepository).save(any(Reservation.class));
+        verify(outboxEventRepository).save(any(OutboxEvent.class));
+        verify(chatRoomOutboxProcessor).signal(30L);
+        verify(emailOutboxEventService).enqueue(any(), any(), any());
     }
 
     @Test
@@ -91,6 +125,44 @@ class ReservationConfirmationServiceTest {
         // then
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.OPEN);
+        // ChatRoom Outbox는 CREATE 전용이고, 이메일 안내용 이벤트는 CREATE·JOIN 모두에서 발행된다.
+        verify(outboxEventRepository, never()).save(any(OutboxEvent.class));
+        verify(emailOutboxEventService).enqueue(any(), any(), any());
+    }
+
+    @Test
+    void 확정_기준에_처음_도달하면_RESERVATION_CONFIRMED_구조화로그를_남긴다() {
+        // given
+        Reservation reservation = reservation(10L);
+        given(reservationRepository.findWithLockById(10L)).willReturn(Optional.of(reservation));
+        given(reservationParticipantRepository.save(any(ReservationParticipant.class))).willAnswer(invocation -> {
+            ReservationParticipant participant = invocation.getArgument(0);
+            ReflectionTestUtils.setField(participant, "id", 21L);
+            return participant;
+        });
+        given(reservationCapacityReader.readTableCapacity(200L)).willReturn(4);
+        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(3);
+        Logger logger = (Logger) LoggerFactory.getLogger(ReservationConfirmationService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            service().confirm(PaymentPurpose.JOIN, 200L, 10L, 2L, 1);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=RESERVATION_CONFIRMED");
+            assertThat(event.getFormattedMessage()).contains("reservationId=10");
+            assertThat(event.getFormattedMessage()).contains("participantId=21");
+            assertThat(event.getFormattedMessage()).contains("memberId=2");
+            assertThat(event.getFormattedMessage()).contains("beforeStatus=RECRUITING");
+            assertThat(event.getFormattedMessage()).contains("afterStatus=CONFIRMED");
+        });
     }
 
     @Test

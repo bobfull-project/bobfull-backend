@@ -7,13 +7,20 @@ import com.bobfull.auth.dto.ReissueResponse;
 import com.bobfull.auth.dto.SignupOwnerRequest;
 import com.bobfull.auth.dto.SignupResponse;
 import com.bobfull.auth.dto.SignupUserRequest;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import com.bobfull.auth.token.RefreshTokenStore;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
+import java.time.Clock;
+import java.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,31 +28,44 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 회원가입·로그인과 Refresh Token 재발급·로그아웃을 담당한다(Issue #125).
+ * 회원가입·로그인과 Refresh Token 재발급·로그아웃을 담당한다(Issue #125, #186).
  * 이메일·전화번호·사업자등록번호 중복은 저장 전 사전 검사로 우선 차단하고,
  * 동시 가입 경쟁으로 사전 검사를 통과한 뒤 DB UNIQUE 제약에 걸리면
  * DataIntegrityViolationException을 같은 중복 ErrorCode로 변환한다.
  * Refresh Token은 Redis에만 저장하며(회원당 1건, 재발급마다 회전), 재발급 중 Redis 조회 실패는
- * 무효 토큰과 동일하게 401로 거부한다(fail-closed). 로그아웃의 Redis 실패는 감추지 않고 전파한다.
+ * 무효 토큰과 동일하게 401로 거부한다(fail-closed). 로그아웃의 Redis 실패(Blacklist 등록·Refresh Token
+ * 삭제 모두)는 감추지 않고 전파한다 — 인증 필터의 매 요청 Blacklist *조회*만 Fail-open이고, 로그아웃
+ * 자체의 등록 실패를 성공으로 위장하지는 않는다(Issue #186 Q5).
  */
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
+    private final BusinessMetricRecorder businessMetricRecorder;
+    private final AccessTokenBlacklistStore accessTokenBlacklistStore;
+    private final Clock clock;
 
     public AuthService(
             MemberRepository memberRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
-            RefreshTokenStore refreshTokenStore
+            RefreshTokenStore refreshTokenStore,
+            BusinessMetricRecorder businessMetricRecorder,
+            AccessTokenBlacklistStore accessTokenBlacklistStore,
+            Clock clock
     ) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.refreshTokenStore = refreshTokenStore;
+        this.businessMetricRecorder = businessMetricRecorder;
+        this.accessTokenBlacklistStore = accessTokenBlacklistStore;
+        this.clock = clock;
     }
 
     @Transactional
@@ -85,9 +105,15 @@ public class AuthService {
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
         Member member = memberRepository.findByEmail(request.email())
-                .orElseThrow(() -> new CustomException(MemberErrorCode.INVALID_CREDENTIALS));
+                .orElseThrow(() -> {
+                    log.warn("event=LOGIN_FAILED reason=INVALID_CREDENTIALS");
+                    businessMetricRecorder.increment(BusinessMetricEvent.LOGIN_FAILED);
+                    return new CustomException(MemberErrorCode.INVALID_CREDENTIALS);
+                });
 
         if (!passwordEncoder.matches(request.password(), member.getPasswordHash())) {
+            log.warn("event=LOGIN_FAILED reason=INVALID_CREDENTIALS");
+            businessMetricRecorder.increment(BusinessMetricEvent.LOGIN_FAILED);
             throw new CustomException(MemberErrorCode.INVALID_CREDENTIALS);
         }
 
@@ -116,11 +142,25 @@ public class AuthService {
             return refreshTokenStore.rotate(refreshToken)
                     .orElseThrow(() -> new CustomException(CommonErrorCode.UNAUTHORIZED));
         } catch (DataAccessException e) {
+            log.error("event=AUTH_REISSUE_FAILED reason=REFRESH_TOKEN_STORE_UNAVAILABLE", e);
+            businessMetricRecorder.increment(BusinessMetricEvent.AUTH_REISSUE_FAILED);
             throw new CustomException(CommonErrorCode.UNAUTHORIZED);
         }
     }
 
-    public LogoutResponse logout(Long memberId) {
+    /**
+     * 현재 Access Token의 jti를 남은 유효시간만큼 Blacklist에 등록해 즉시 무효화하고,
+     * 해당 회원의 Refresh Token을 삭제한다(Issue #186). accessToken은 이 요청이 인증 필터를
+     * 통과한 그 토큰이므로 서명·만료 재검증은 항상 성공한다. jti가 없는 토큰(이 기능 배포 이전에
+     * 발급된 토큰, PR #187 리뷰)은 Blacklist에 등록할 방법이 없어 그 등록만 건너뛰고 Refresh Token
+     * 삭제는 그대로 수행한다 — 로그아웃 자체가 실패하지는 않는다.
+     */
+    public LogoutResponse logout(Long memberId, String accessToken) {
+        JwtTokenProvider.AccessTokenClaims claims = jwtTokenProvider.parseAccessTokenClaims(accessToken);
+        if (claims.jti() != null) {
+            Duration remaining = Duration.between(clock.instant(), claims.expiresAt());
+            accessTokenBlacklistStore.blacklist(claims.jti(), remaining);
+        }
         refreshTokenStore.deleteByMember(memberId);
         return LogoutResponse.success();
     }

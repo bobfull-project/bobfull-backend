@@ -24,7 +24,7 @@ public class PaymentExpirationScheduler {
                     try {
                         processor.expire(paymentInternalId);
                     } catch (RuntimeException exception) {
-                        log.error("event=PAYMENT_EXPIRATION_FAILED paymentInternalId={} reason={}",
+                        log.warn("event=PAYMENT_EXPIRATION_FAILED paymentInternalId={} reason={}",
                                 paymentInternalId, exception.toString(), exception);
                     }
                 });

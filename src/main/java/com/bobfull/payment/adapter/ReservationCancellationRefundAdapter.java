@@ -2,6 +2,8 @@ package com.bobfull.payment.adapter;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.port.PortOneRefundRequester;
 import com.bobfull.payment.service.RefundCompletionService;
@@ -19,12 +21,15 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
     private final RefundTransactionService transactionService;
     private final RefundCompletionService completionService;
     private final PortOneRefundRequester refundRequester;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public ReservationCancellationRefundAdapter(RefundTransactionService transactionService,
-            RefundCompletionService completionService, PortOneRefundRequester refundRequester) {
+            RefundCompletionService completionService, PortOneRefundRequester refundRequester,
+            BusinessMetricRecorder businessMetricRecorder) {
         this.transactionService = transactionService;
         this.completionService = completionService;
         this.refundRequester = refundRequester;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Override
@@ -66,7 +71,9 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
             // 실제로 실패한 것이 아니므로 PORTONE_REFUND_FAILED로 뭉뚱그리지 않고 재조정이 필요하다는
             // 별도 오류로 구분해, 호출자가 "환불 자체가 실패했다"고 잘못 안내하지 않게 한다.
             log.error("event=REFUND_COMPENSATION_REQUIRED paymentId={} refundId={} cancellationId={} externalStatus={} internalStatus=ROLLBACK autoRetry=false",
-                    refund.getPayment().getId(), refund.getId(), result.cancellationId(), result.completed() ? "COMPLETED" : "PROCESSING");
+                    refund.getPayment().getId(), refund.getId(), result.cancellationId(),
+                    result.completed() ? "COMPLETED" : "PROCESSING", exception);
+            businessMetricRecorder.increment(BusinessMetricEvent.REFUND_COMPENSATION_REQUIRED);
             if (result.completed()) {
                 throw new CustomException(PaymentErrorCode.REFUND_RECONCILIATION_REQUIRED);
             }
@@ -81,10 +88,10 @@ public class ReservationCancellationRefundAdapter implements ReservationCancella
         } catch (RuntimeException exception) {
             if (exception instanceof PortOneRefundRequester.ExplicitRefundFailureException) {
                 transactionService.markFailed(refund.getId());
-                log.error("event=REFUND_FAILED paymentId={} refundId={} externalStatus=FAILED internalStatus=FAILED autoRetry=false",
+                log.warn("event=REFUND_FAILED paymentId={} refundId={} externalStatus=FAILED internalStatus=FAILED autoRetry=false",
                         refund.getPayment().getId(), refund.getId());
             } else {
-                log.error("event=REFUND_RESULT_UNKNOWN paymentId={} refundId={} externalStatus=UNKNOWN internalStatus=REQUESTED autoRetry=false",
+                log.warn("event=REFUND_RESULT_UNKNOWN paymentId={} refundId={} externalStatus=UNKNOWN internalStatus=REQUESTED autoRetry=false",
                         refund.getPayment().getId(), refund.getId());
             }
             throw new CustomException(PaymentErrorCode.PORTONE_REFUND_FAILED);

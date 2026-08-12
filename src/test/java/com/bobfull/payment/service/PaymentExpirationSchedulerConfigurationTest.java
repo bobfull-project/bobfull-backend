@@ -17,7 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "payment.expiration.enabled=false",
         "jwt.secret=payment-expiration-scheduler-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600",
+        "jwt.access-token-expiration-seconds=1800",
         "portone.api-secret=portone-payment-expiration-scheduler-test-api-secret",
         "portone.store-id=portone-payment-expiration-scheduler-test-store-id",
         "portone.webhook-secret=d2hzZWNfc2NoZWR1bGVyLXRlc3Q="

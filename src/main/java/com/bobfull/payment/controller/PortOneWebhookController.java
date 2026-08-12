@@ -2,11 +2,14 @@ package com.bobfull.payment.controller;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.payment.service.PaymentCompletionService;
 import com.bobfull.payment.service.RefundWebhookService;
 import io.portone.sdk.server.errors.WebhookVerificationException;
 import io.portone.sdk.server.webhook.WebhookVerifier;
 import com.bobfull.payment.port.PortOneWebhookVerifier;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -29,19 +32,30 @@ public class PortOneWebhookController {
     private final PortOneWebhookVerifier webhookVerifier;
     private final PaymentCompletionService paymentCompletionService;
     private final RefundWebhookService refundWebhookService;
+    private final BusinessMetricRecorder businessMetricRecorder;
     @Autowired
-    public PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService, RefundWebhookService refundWebhookService) { this.webhookVerifier = webhookVerifier; this.paymentCompletionService = paymentCompletionService; this.refundWebhookService = refundWebhookService; }
+    public PortOneWebhookController(PortOneWebhookVerifier webhookVerifier, PaymentCompletionService paymentCompletionService,
+            RefundWebhookService refundWebhookService, BusinessMetricRecorder businessMetricRecorder) {
+        this.webhookVerifier = webhookVerifier;
+        this.paymentCompletionService = paymentCompletionService;
+        this.refundWebhookService = refundWebhookService;
+        this.businessMetricRecorder = businessMetricRecorder;
+    }
 
     @PostMapping
     public ResponseEntity<Void> receive(@RequestBody String rawBody,
             @RequestHeader(value = WebhookVerifier.HEADER_ID, required = false) String id,
             @RequestHeader(value = WebhookVerifier.HEADER_SIGNATURE, required = false) String signature,
-            @RequestHeader(value = WebhookVerifier.HEADER_TIMESTAMP, required = false) String timestamp) {
+            @RequestHeader(value = WebhookVerifier.HEADER_TIMESTAMP, required = false) String timestamp,
+            HttpServletRequest request) {
         try {
             if (id == null || signature == null || timestamp == null) {
+                log.warn("event=PORTONE_WEBHOOK_SIGNATURE_INVALID reason=MISSING_HEADERS");
                 return ResponseEntity.badRequest().build();
             }
             var event = webhookVerifier.verify(rawBody, id, signature, timestamp);
+            request.setAttribute("portonePaymentId", event.paymentId());
+            request.setAttribute("portoneCancellationId", event.cancellationId());
             if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.UNSUPPORTED) return ResponseEntity.ok().build();
             if (event.type() == PortOneWebhookVerifier.WebhookEvent.Type.PARTIAL_CANCELLED) {
                 log.info("event=PORTONE_PARTIAL_CANCELLED_IGNORED paymentId={} cancellationId={}", event.paymentId(), event.cancellationId());
@@ -58,10 +72,12 @@ public class PortOneWebhookController {
                 if (e.getErrorCode() != PaymentErrorCode.PAYMENT_EXPIRED) {
                     log.error("event=PAYMENT_WEBHOOK_PERMANENT_FAILURE paymentId={} reason={}", paymentId,
                             e.getErrorCode().getCode());
+                    businessMetricRecorder.increment(BusinessMetricEvent.PAYMENT_WEBHOOK_PERMANENT_FAILURE);
                 }
             }
             return ResponseEntity.ok().build();
         } catch (WebhookVerificationException e) {
+            log.warn("event=PORTONE_WEBHOOK_SIGNATURE_INVALID reason=VERIFICATION_FAILED");
             return ResponseEntity.badRequest().build();
         }
     }

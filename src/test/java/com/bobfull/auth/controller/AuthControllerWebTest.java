@@ -1,8 +1,8 @@
 package com.bobfull.auth.controller;
 
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,18 +20,15 @@ import com.bobfull.common.config.ClockConfig;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
-import com.bobfull.common.security.AuthMember;
+import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.common.security.SecurityConfig;
-import java.util.List;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -46,15 +43,19 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=auth-controller-web-test-secret-key-please-keep-this-long-enough",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class AuthControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
     private AuthService authService;
@@ -211,11 +212,12 @@ class AuthControllerWebTest {
     @Test
     void 인증된_회원이_로그아웃하면_200을_반환한다() throws Exception {
         // given
-        given(authService.logout(1L)).willReturn(LogoutResponse.success());
+        String accessToken = jwtTokenProvider.createAccessToken(1L, MemberRole.MEMBER);
+        given(authService.logout(eq(1L), eq(accessToken))).willReturn(LogoutResponse.success());
 
         // when
         ResultActions result = mockMvc.perform(post("/api/auth/logout")
-                .with(authentication(memberAuthentication(1L))));
+                .header("Authorization", "Bearer " + accessToken));
 
         // then
         result.andExpect(status().isOk())
@@ -228,8 +230,4 @@ class AuthControllerWebTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private Authentication memberAuthentication(Long memberId) {
-        AuthMember authMember = new AuthMember(memberId, MemberRole.MEMBER);
-        return new UsernamePasswordAuthenticationToken(authMember, null, List.of(new SimpleGrantedAuthority("ROLE_MEMBER")));
-    }
 }

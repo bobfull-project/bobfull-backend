@@ -152,19 +152,19 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 
 ## 6. 노쇼·지급 예정 금액
 
-- V2에서 OWNER는 식사 종료 후 노쇼 처리 대상 참여자를 조회하고, 참여자를 노쇼 처리·해제하며 이력을 조회한다.
+- V2에서 OWNER는 식사 종료 후 노쇼 처리 대상 참여자를 조회하고, 참여자를 노쇼 처리·해제하며 이력을 조회한다. 식사 종료 경계는 `now >= TimeSlot.endAt`이며, 채팅 신규 메시지 전송 차단과 동일한 경계를 사용한다(Issue #175).
 - V1 지급 예정 금액은 `paidAt`이 존재하는 결제 완료 이력의 금액 합계에서 `COMPLETED` 환불 금액 합계를 뺀 조회 계산값이다. 완료 환불로 Payment의 현재 상태가 `REFUNDED`여도 원결제 금액은 결제 완료액에 포함한다.
 
 ## 7. 채팅
 
 - V2에서 최초 예약 결제 완료 시 예약당 채팅방 1개를 생성한다. 별도 생성 API는 없다.
 - 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료되고 OWNER와 ADMIN은 참여하지 않는다.
-- 예약이 `CANCELLED` 또는 `CLOSED`면 새 메시지 전송을 종료하고, 기존 메시지는 조회할 수 있다.
+- 예약이 `CANCELLED` 또는 `CLOSED`면 새 메시지 전송을 종료하고, 기존 메시지는 조회할 수 있다. `CONFIRMED → CLOSED` 전이는 스케줄러가 처리하지만, 스케줄러 지연과 무관하게 `now >= TimeSlot.endAt`부터는 새 메시지 전송을 즉시 차단한다(Issue #175).
 - 메시지는 DB에 저장하며 과거 메시지는 cursor 기반으로 조회한다.
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
 - HTTP 조회 경로는 `GET /api/chat/rooms/{chatRoomId}/messages`다.
-- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
+- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 차단, Redis Pub/Sub, Kafka는 범위에서 제외한다. V3 #218 사용자 신고는 채팅방의 상대 회원을 대상으로 하며, AI Moderation과 신고 누적은 관리자 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN/정지/퇴장에 사용하지 않는다.
 
 ## 8. 버전 범위
 

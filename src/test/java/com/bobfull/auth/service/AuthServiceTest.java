@@ -7,6 +7,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.auth.dto.LoginRequest;
 import com.bobfull.auth.dto.LoginResponse;
 import com.bobfull.auth.dto.LogoutResponse;
@@ -14,20 +18,27 @@ import com.bobfull.auth.dto.ReissueResponse;
 import com.bobfull.auth.dto.SignupOwnerRequest;
 import com.bobfull.auth.dto.SignupResponse;
 import com.bobfull.auth.dto.SignupUserRequest;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import com.bobfull.auth.token.RefreshTokenStore;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.MemberErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.common.security.AuthMember;
 import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.common.security.MemberRole;
 import com.bobfull.member.entity.Member;
 import com.bobfull.member.repository.MemberRepository;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -49,6 +60,15 @@ class AuthServiceTest {
 
     @Mock
     private RefreshTokenStore refreshTokenStore;
+
+    @Mock
+    private BusinessMetricRecorder businessMetricRecorder;
+
+    @Mock
+    private AccessTokenBlacklistStore accessTokenBlacklistStore;
+
+    @Mock
+    private Clock clock;
 
     @InjectMocks
     private AuthService authService;
@@ -152,6 +172,33 @@ class AuthServiceTest {
     }
 
     @Test
+    void 로그인_실패_로그는_계정_존재여부와_민감정보를_남기지_않는다() {
+        // given
+        LoginRequest request = new LoginRequest("unknown@example.com", "Password123!");
+        given(memberRepository.findByEmail(request.email())).willReturn(Optional.empty());
+        Logger logger = (Logger) LoggerFactory.getLogger(AuthService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            catchThrowable(() -> authService.login(request));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("event=LOGIN_FAILED");
+            assertThat(event.getFormattedMessage()).contains("reason=INVALID_CREDENTIALS");
+            assertThat(event.getFormattedMessage()).doesNotContain("unknown@example.com");
+            assertThat(event.getFormattedMessage()).doesNotContain("Password123!");
+        });
+    }
+
+    @Test
     void 비밀번호가_일치하지_않으면_INVALID_CREDENTIALS_예외가_발생한다() {
         // given
         LoginRequest request = new LoginRequest("user@example.com", "WrongPassword!");
@@ -223,22 +270,63 @@ class AuthServiceTest {
         // given
         given(refreshTokenStore.rotate(anyString()))
                 .willThrow(new org.springframework.data.redis.RedisConnectionFailureException("연결 실패"));
+        Logger logger = (Logger) LoggerFactory.getLogger(AuthService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
 
         // when
-        Throwable result = catchThrowable(() -> authService.reissue("any-refresh-token"));
+        Throwable result;
+        try {
+            result = catchThrowable(() -> authService.reissue("any-refresh-token"));
+        } finally {
+            logger.detachAppender(appender);
+        }
 
         // then
         assertThat(result).isInstanceOf(CustomException.class);
         assertThat(((CustomException) result).getErrorCode()).isEqualTo(CommonErrorCode.UNAUTHORIZED);
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage()).contains("event=AUTH_REISSUE_FAILED");
+            assertThat(event.getFormattedMessage()).contains("reason=REFRESH_TOKEN_STORE_UNAVAILABLE");
+            assertThat(event.getFormattedMessage()).doesNotContain("any-refresh-token");
+            assertThat(event.getThrowableProxy().getClassName())
+                    .isEqualTo(org.springframework.data.redis.RedisConnectionFailureException.class.getName());
+        });
     }
 
     @Test
-    void 로그아웃하면_해당_회원의_RefreshToken을_삭제한다() {
+    void 로그아웃하면_Access_Token을_Blacklist에_등록하고_해당_회원의_RefreshToken을_삭제한다() {
+        // given
+        Instant now = Instant.parse("2026-08-01T00:00:00Z");
+        Instant expiresAt = now.plusSeconds(600);
+        given(clock.instant()).willReturn(now);
+        given(jwtTokenProvider.parseAccessTokenClaims("access-token")).willReturn(
+                new JwtTokenProvider.AccessTokenClaims(new AuthMember(1L, MemberRole.MEMBER), "jti-1", expiresAt));
+
         // when
-        LogoutResponse response = authService.logout(1L);
+        LogoutResponse response = authService.logout(1L, "access-token");
 
         // then
         assertThat(response.result()).isTrue();
+        verify(accessTokenBlacklistStore).blacklist("jti-1", Duration.ofSeconds(600));
+        verify(refreshTokenStore).deleteByMember(1L);
+    }
+
+    @Test
+    void jti가_없는_토큰으로_로그아웃하면_Blacklist_등록은_건너뛰고_RefreshToken만_삭제한다() {
+        // given: Issue #186 배포 이전에 발급된 Access Token(PR #187 리뷰) — jti가 없어 Blacklist에
+        // 등록할 방법이 없지만, 로그아웃 자체(Refresh Token 삭제)는 그대로 성공해야 한다.
+        given(jwtTokenProvider.parseAccessTokenClaims("legacy-access-token")).willReturn(
+                new JwtTokenProvider.AccessTokenClaims(new AuthMember(1L, MemberRole.MEMBER), null, Instant.now()));
+
+        // when
+        LogoutResponse response = authService.logout(1L, "legacy-access-token");
+
+        // then
+        assertThat(response.result()).isTrue();
+        verify(accessTokenBlacklistStore, org.mockito.Mockito.never()).blacklist(any(), any());
         verify(refreshTokenStore).deleteByMember(1L);
     }
 }

@@ -445,7 +445,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 인증된 회원의 Refresh Token을 Redis에서 즉시 삭제한다. Access Token은 별도로 무효화하지 않으며 자연 만료까지 유효하다.
+- 설명: 인증된 회원의 Refresh Token을 Redis Whitelist에서 즉시 삭제하고, 현재 요청에 사용된 Access Token의 `jti`를 남은 유효시간만큼 Redis Blacklist에 등록해 즉시 무효화한다(Issue #186). 이후 이 Access Token으로는 보호 API에 접근할 수 없다.
 - Method: `POST`
 - Path: `/api/auth/logout`
 - Auth: 필요
@@ -832,6 +832,7 @@ OWNER 응답 예시:
 - 검색 조건이 없으면 운영 중인 식당 전체 목록을 조회한다.
 - 날짜·시간 조건이 있으면 해당 조건에 예약 가능한 합석 회차가 존재하는 식당만 조회한다.
 - 요청 Body는 사용하지 않는다.
+- `date`/`time`이 없는 검색(기본/`keyword`/`category`/`sort`/pagination 조합)은 Redis에 최대 60초(TTL) 캐시될 수 있다(Issue #62). 식당 정보 변경(등록·수정·삭제) 시 캐시를 즉시 무효화하지만, 무효화 시점과 재조회 시점이 겹치면 최대 TTL만큼 이전 값이 보일 수 있다. `date`/`time`이 있는 검색은 캐시하지 않는다. `imageUrl`은 캐시 여부와 무관하게 항상 요청 시점에 새로 발급한다.
 
 ## 3. Response
 
@@ -2505,7 +2506,9 @@ OWNER 응답 예시:
 - Auth: `OWNER`
 - 담당자: 배지현
 
-- 예약은 `CANCELLED`가 되며 참여자를 `NO_SHOW`로 처리하지 않는다. TimeSlot은 예약 시작 전이며 다른 제약이 없는 경우만 새 예약 가능 상태로 복구한다.
+- 이 API는 취소를 접수만 하고 즉시 `CANCELLED`로 확정하지 않는다(#44, #45, #46). Reservation을 `CANCELLING`으로, 유효 참여자를 모두 `CANCEL_REQUESTED`로 전환하며, 참여자별 환불이 모두 완료되면 `CANCELLED`로 확정된다. 참여자를 `NO_SHOW`로 처리하지 않는다.
+- OWNER 강제 취소는 MEMBER 취소(§6-10)와 달리 취소 기한(2시간) 제약을 두지 않는다(2026-08-06 Human 확정). 식사가 이미 시작했거나 끝난 뒤에도 식당 귀책으로 전체 취소·전액 환불을 접수할 수 있다.
+- TimeSlot은 예약이 `CANCELLED`로 확정되고 다른 제약이 없는 경우만 새 예약 가능 상태로 복구된다.
 - 전체 취소 사유는 각 유효 참여자의 `cancelReason`에 동일하게 기록한다. Reservation에는 별도 취소 사유 컬럼을 두지 않는다.
 
 ## 2. Request
@@ -3016,7 +3019,7 @@ OWNER 응답 예시:
 
 ## 1. INFO
 
-- 설명: 식사 종료 후에만 조회 가능
+- 설명: 식사 종료 후에만 조회 가능. 종료 경계는 `now >= TimeSlot.endAt`이며(Issue #175), 채팅 신규 메시지 전송 차단과 동일한 경계를 사용한다.
 - Method: `GET`
 - Path: `/api/owner/reservations/{reservationId}/participations/no-show-candidates`
 - Auth: `OWNER`
@@ -4217,6 +4220,127 @@ OWNER 응답 예시:
 
 ---
 
+## 11-12. 채팅 moderation 회원별 집계 조회 `[V3]`
+
+## 1. INFO
+
+- 설명: `FLAGGED` 채팅 분석 결과를 발신 회원별로 집계한다. 목록에는 원문을 포함하지 않는다.
+- Method: `GET`
+- Path: `/api/admin/moderation/members`
+- Auth: `ADMIN`
+- 담당자: 김현승
+
+## 2. Request
+
+### Query Parameters
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `status` | String | N | `NORMAL` 또는 `REVIEW_REQUIRED`. 생략 시 FLAGGED 이력이 있는 회원 전체 |
+| `page` | Integer | N | 0부터 시작하는 페이지 번호 |
+| `size` | Integer | N | 페이지 크기(기본 20) |
+
+`totalFlaggedCount`는 LOW/MEDIUM/HIGH FLAGGED 메시지를, `reviewTargetCount`는 MEDIUM/HIGH 메시지만 각각 `COUNT(DISTINCT messageId)`로 계산한다. `reviewTargetCount >= 3`이면 `REVIEW_REQUIRED`다. SAFE와 ANALYSIS_FAILED는 집계하지 않는다.
+
+## 3. Response
+
+- Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "content": [
+      {
+        "memberId": 27,
+        "profanityCount": 4,
+        "personalInformationCount": 1,
+        "spamCount": 2,
+        "totalFlaggedCount": 7,
+        "reviewTargetCount": 4,
+        "reviewStatus": "REVIEW_REQUIRED",
+        "lastFlaggedAt": "2026-08-11T00:00:00Z"
+      }
+    ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}
+```
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `400` | `INVALID_INPUT_VALUE` | status 또는 page/size 값이 올바르지 않음 |
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | ADMIN 권한이 없음 |
+
+---
+
+## 11-13. 채팅 moderation 회원별 상세 조회 `[V3]`
+
+## 1. INFO
+
+- 설명: 회원의 moderation 집계와 FLAGGED 근거 메시지를 함께 조회한다. 이 상세 응답에서만 원문을 노출한다.
+- Method: `GET`
+- Path: `/api/admin/moderation/members/{memberId}`
+- Auth: `ADMIN`
+- 담당자: 김현승
+
+## 2. Request
+
+### Path Variables
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `memberId` | Long | Y | 조회할 회원 식별자 |
+
+## 3. Response
+
+- Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "memberId": 27,
+    "reviewStatus": "REVIEW_REQUIRED",
+    "totalFlaggedCount": 4,
+    "reviewTargetCount": 3,
+    "riskCounts": { "LOW": 1, "MEDIUM": 2, "HIGH": 1 },
+    "evidences": [
+      {
+        "messageId": 382,
+        "content": "실제 ChatMessage 원문",
+        "categories": ["PROFANITY"],
+        "riskLevel": "MEDIUM",
+        "countedForReview": true,
+        "sentAt": "2026-08-11T00:00:00Z",
+        "analyzedAt": "2026-08-11T00:00:01Z"
+      }
+    ]
+  }
+}
+```
+
+- evidences는 FLAGGED 메시지만 포함하며 SAFE와 ANALYSIS_FAILED는 제외한다.
+- REVIEW_REQUIRED은 자동 제재나 처리 완료 상태를 뜻하지 않으며, 관리자 확인 대상이라는 누적 신호다.
+
+## 4. Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | ADMIN 권한이 없음 |
+| `404` | `MEMBER_ID_NOT_FOUND` | memberId에 해당하는 회원이 없음 |
+
+---
+
 # 12. 예약 참여자 채팅 API
 
 ## 12-1. 예약 채팅방 조회 `[V2]`
@@ -4325,12 +4449,19 @@ OWNER 응답 예시:
 - 최초 예약 결제 완료 시 예약당 채팅방 1개를 생성한다. 별도 채팅방 생성 API는 없다.
 - 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료된다. OWNER와 ADMIN은 참여하지 않는다.
 - 예약이 `CANCELLED` 또는 `CLOSED`가 되면 신규 메시지 전송은 종료하지만 기존 메시지는 조회할 수 있다.
+- `now >= TimeSlot.endAt`(노쇼 처리 허용과 동일한 경계, Issue #175)부터는 예약 상태가 아직 `CONFIRMED`여도 신규 메시지 전송을 즉시 차단한다. CLOSED 전이 스케줄러의 처리 지연과 무관하게 이 시간 비교가 우선 적용된다.
 - 메시지는 DB에 저장한다.
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
-- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 신고·차단, Redis Pub/Sub, Kafka는 범위에서 제외한다.
+- 읽음 처리, 이미지·파일, 메시지 수정·삭제, 사용자 차단, Redis Pub/Sub, Kafka는 범위에서 제외한다. 사용자 신고는 V3 Issue #218 범위에 포함하며, AI Moderation과 사용자 신고는 관리자 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN/정지/퇴장에 사용하지 않는다.
 
 ---
+
+# 12.1 V3 채팅방 사용자 신고와 관리자 Human Review
+
+`POST /api/chat-rooms/{chatRoomId}/members/{reportedMemberId}/reports`는 JWT 회원이 같은 채팅방 참여 이력이 있는 상대 회원을 신고한다. 요청은 `reason`(`ABUSE`, `SPAM`, `PERSONAL_INFORMATION`, `OTHER`), nullable `anchorMessageId`, nullable `detail`이며 `OTHER`는 `detail`이 필수다. 신고자 ID는 Body가 아닌 JWT에서 결정하고, 자기 신고·중복 신고·다른 방 또는 다른 작성자의 anchor는 거절한다.
+
+ADMIN 전용 API는 `GET /api/admin/moderation/reports?status=PENDING&page=0&size=20`, `GET /api/admin/moderation/reports/{reportId}`, `PATCH /api/admin/moderation/reports/{reportId}/review`다. 상세는 anchor가 있으면 전후 최대 5건, 없으면 신고 생성 시각 이전 최대 20건의 같은 방 Context와 메시지별 AI Moderation, 회원 moderation 집계, 신고 누적 신호를 반환한다. Review 요청은 `decision`(`NO_VIOLATION`, `VIOLATION_CONFIRMED`)이고 `PENDING → REVIEWED`만 허용한다. AI Moderation·신고 신호·결정은 Human Review 참고 정보이며 자동 제재 점수 또는 자동 BAN/정지/퇴장으로 사용하지 않는다.
 
 # 13. V2 내부 구현 정책
 
@@ -4792,6 +4923,8 @@ OWNER 응답 예시:
 | 관리자 | V2 | 전체 운영 지표 조회 | `GET` | `/api/admin/statistics/overview` | 정용태 |
 | 관리자 | V2 | 식당별 예약 성사율 조회 | `GET` | `/api/admin/statistics/restaurants` | 정용태 |
 | 관리자 | V2 | 사용자별 노쇼율 조회 | `GET` | `/api/admin/statistics/members/no-show-rates` | 정용태 |
+| 관리자 | V3 | 채팅 moderation 회원별 집계 조회 | `GET` | `/api/admin/moderation/members` | 김현승 |
+| 관리자 | V3 | 채팅 moderation 회원별 상세 조회 | `GET` | `/api/admin/moderation/members/{memberId}` | 김현승 |
 | 예약 참여자 채팅 | V2 | 예약 채팅방 조회 | `GET` | `/api/reservations/{reservationId}/chat-room` | 김현승 |
 | 예약 참여자 채팅 | V2 | 채팅 메시지 목록 조회 | `GET` | `/api/chat/rooms/{chatRoomId}/messages` | 김현승 |
 

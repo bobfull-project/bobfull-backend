@@ -1,9 +1,14 @@
 package com.bobfull.common.exception;
 
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.common.response.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,6 +23,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final ObjectProvider<BusinessMetricRecorder> businessMetricRecorderProvider;
+
+    public GlobalExceptionHandler(ObjectProvider<BusinessMetricRecorder> businessMetricRecorderProvider) {
+        this.businessMetricRecorderProvider = businessMetricRecorderProvider;
+    }
 
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
@@ -34,6 +45,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(CommonErrorCode.INVALID_INPUT_VALUE));
     }
 
+    /** 동시 Human Review에서 진 요청은 이미 확정된 신고로 일관되게 안내한다. */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleReportOptimisticLockException(
+            ObjectOptimisticLockingFailureException e
+    ) {
+        return ResponseEntity.status(ChatErrorCode.CHAT_ROOM_REPORT_ALREADY_REVIEWED.getHttpStatus())
+                .body(ApiResponse.fail(ChatErrorCode.CHAT_ROOM_REPORT_ALREADY_REVIEWED));
+    }
+
     @ExceptionHandler({
             MissingServletRequestParameterException.class,
             MethodArgumentTypeMismatchException.class
@@ -44,9 +64,27 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-        log.error("처리되지 않은 예외가 발생했습니다.", e);
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception e, HttpServletRequest request) {
+        if ("/api/webhooks/portone".equals(request.getRequestURI())) {
+            log.error("event=PORTONE_WEBHOOK_PROCESSING_FAILED method={} path={} paymentId={} cancellationId={} reason={}",
+                    request.getMethod(), request.getRequestURI(),
+                    request.getAttribute("portonePaymentId"),
+                    request.getAttribute("portoneCancellationId"),
+                    e.getClass().getSimpleName(), e);
+            incrementBusinessMetric(BusinessMetricEvent.PORTONE_WEBHOOK_PROCESSING_FAILED);
+        } else {
+            log.error("event=UNHANDLED_EXCEPTION method={} path={} reason={}",
+                    request.getMethod(), request.getRequestURI(), e.getClass().getSimpleName(), e);
+            incrementBusinessMetric(BusinessMetricEvent.UNHANDLED_EXCEPTION);
+        }
         return ResponseEntity.status(CommonErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
                 .body(ApiResponse.fail(CommonErrorCode.INTERNAL_SERVER_ERROR));
+    }
+
+    private void incrementBusinessMetric(BusinessMetricEvent event) {
+        BusinessMetricRecorder businessMetricRecorder = businessMetricRecorderProvider.getIfAvailable();
+        if (businessMetricRecorder != null) {
+            businessMetricRecorder.increment(event);
+        }
     }
 }

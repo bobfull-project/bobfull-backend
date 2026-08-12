@@ -2,12 +2,16 @@ package com.bobfull.payment.service;
 
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.PaymentErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricEvent;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
+import com.bobfull.common.transaction.AfterCommitExecutor;
 import com.bobfull.payment.entity.Payment;
 import com.bobfull.payment.entity.PaymentStatus;
 import com.bobfull.payment.entity.Refund;
 import com.bobfull.payment.entity.RefundStatus;
 import com.bobfull.payment.repository.PaymentRepository;
 import com.bobfull.payment.repository.RefundRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -23,13 +27,16 @@ public class RefundTransactionService {
     private final RefundRepository refundRepository;
     private final Clock clock;
     private final RefundIdempotencyKeyGenerator keyGenerator;
+    private final BusinessMetricRecorder businessMetricRecorder;
 
     public RefundTransactionService(PaymentRepository paymentRepository, RefundRepository refundRepository, Clock clock,
-                                    RefundIdempotencyKeyGenerator keyGenerator) {
+                                    RefundIdempotencyKeyGenerator keyGenerator,
+                                    BusinessMetricRecorder businessMetricRecorder) {
         this.paymentRepository = paymentRepository;
         this.refundRepository = refundRepository;
         this.clock = clock;
         this.keyGenerator = keyGenerator;
+        this.businessMetricRecorder = businessMetricRecorder;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -59,6 +66,9 @@ public class RefundTransactionService {
         Refund refund = refundRepository.saveAndFlush(
                 Refund.create(payment, payment.getAmount(), RefundStatus.REQUESTED, clock.instant(), null,
                         keyGenerator.generate(), cancelReason));
+        log.info("event=REFUND_REQUESTED refundId={} paymentId={} reservationId={} participantId={} amount={} afterStatus={}",
+                refund.getId(), payment.getPaymentId(), payment.getReservationId(),
+                payment.getReservationParticipantId(), refund.getAmount(), refund.getStatus());
         return new RefundPreparation(refund, true);
     }
 
@@ -79,6 +89,9 @@ public class RefundTransactionService {
             if (refund.getStatus() == RefundStatus.COMPLETED
                     && refund.getPayment().getStatus() == PaymentStatus.PAID) {
                 refund.getPayment().markRefunded();
+            }
+            if (before != RefundStatus.COMPLETED && refund.getStatus() == RefundStatus.COMPLETED) {
+                logRefundCompletedAfterCommit(refund);
             }
         } else {
             refund.markProcessing(cancellationId);
@@ -130,6 +143,9 @@ public class RefundTransactionService {
                     && refund.getPayment().getStatus() == PaymentStatus.PAID) {
                 refund.getPayment().markRefunded();
             }
+            if (before != RefundStatus.COMPLETED && refund.getStatus() == RefundStatus.COMPLETED) {
+                logRefundCompletedAfterCommit(refund);
+            }
             return RefundCompletion.from(refund);
         });
     }
@@ -158,6 +174,23 @@ public class RefundTransactionService {
             return java.util.Optional.empty();
         }
         return byPaymentId;
+    }
+
+    private void logRefundCompletedAfterCommit(Refund refund) {
+        Long completedRefundId = refund.getId();
+        String completedPaymentId = refund.getPayment().getPaymentId();
+        Long completedReservationId = refund.getPayment().getReservationId();
+        Long completedParticipantId = refund.getPayment().getReservationParticipantId();
+        BigDecimal completedAmount = refund.getAmount();
+        RefundStatus completedRefundStatus = refund.getStatus();
+        PaymentStatus completedPaymentStatus = refund.getPayment().getStatus();
+        AfterCommitExecutor.run(() -> {
+            log.info(
+                    "event=REFUND_COMPLETED refundId={} paymentId={} reservationId={} participantId={} amount={} afterStatus={} paymentAfterStatus={}",
+                    completedRefundId, completedPaymentId, completedReservationId, completedParticipantId,
+                    completedAmount, completedRefundStatus, completedPaymentStatus);
+            businessMetricRecorder.increment(BusinessMetricEvent.REFUND_COMPLETED);
+        });
     }
 
     public record RefundCompletion(RefundStatus refundStatus, Long reservationId,

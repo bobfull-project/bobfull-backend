@@ -3,6 +3,8 @@ package com.bobfull.reservation.service;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.outbox.entity.OutboxEventType;
+import com.bobfull.outbox.service.EmailOutboxEventService;
 import com.bobfull.reservation.dto.CancellationScope;
 import com.bobfull.reservation.dto.ReservationCancellationRequest;
 import com.bobfull.reservation.entity.ParticipationStatus;
@@ -14,10 +16,18 @@ import com.bobfull.reservation.port.ReservationCancellationRefundPort;
 import com.bobfull.reservation.port.ReservationCapacityReader;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
+import com.bobfull.restaurant.entity.Restaurant;
+import com.bobfull.restaurant.repository.RestaurantRepository;
+import com.bobfull.sharedtable.entity.SharedTable;
+import com.bobfull.sharedtable.repository.SharedTableRepository;
+import com.bobfull.timeslot.entity.TimeSlot;
+import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,25 +42,39 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReservationCancellationTransactionService {
 
+    private static final Logger log = LoggerFactory.getLogger(ReservationCancellationTransactionService.class);
     private static final Duration CANCELLATION_DEADLINE = Duration.ofHours(2);
     private static final List<ParticipationStatus> OCCUPYING_STATUSES =
             List.of(ParticipationStatus.RESERVED, ParticipationStatus.CANCEL_REQUESTED);
+    private static final String RECRUITMENT_FAILURE_REASON = "모집 마감 기준 인원 미달로 자동 취소되었습니다";
 
     private final ReservationRepository reservationRepository;
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCapacityReader reservationCapacityReader;
+    private final TimeSlotRepository timeSlotRepository;
+    private final SharedTableRepository sharedTableRepository;
+    private final RestaurantRepository restaurantRepository;
     private final Clock clock;
+    private final EmailOutboxEventService emailOutboxEventService;
 
     public ReservationCancellationTransactionService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
             ReservationCapacityReader reservationCapacityReader,
-            Clock clock
+            TimeSlotRepository timeSlotRepository,
+            SharedTableRepository sharedTableRepository,
+            RestaurantRepository restaurantRepository,
+            Clock clock,
+            EmailOutboxEventService emailOutboxEventService
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.reservationCapacityReader = reservationCapacityReader;
+        this.timeSlotRepository = timeSlotRepository;
+        this.sharedTableRepository = sharedTableRepository;
+        this.restaurantRepository = restaurantRepository;
         this.clock = clock;
+        this.emailOutboxEventService = emailOutboxEventService;
     }
 
     // 락 순서: Reservation 단독(ADR 0001 "복수 비관적 락의 획득 순서" 참고). 환불 outbound port 호출은
@@ -67,10 +91,13 @@ public class ReservationCancellationTransactionService {
         validateCancellationDeadline(reservation.getTimeSlotId());
 
         String reason = request.reason();
-        if (reservation.isCreatedBy(memberId)) {
-            return acceptEntireReservationCancellation(reservation, actingParticipant, reason);
-        }
-        return acceptParticipantCancellation(reservation, actingParticipant, reason);
+        CancellationAcceptance acceptance = reservation.isCreatedBy(memberId)
+                ? acceptEntireReservationCancellation(reservation, actingParticipant, reason)
+                : acceptParticipantCancellation(reservation, actingParticipant, reason);
+        log.info("event=RESERVATION_CANCELLATION_REQUESTED reservationId={} participantId={} memberId={} scope={} afterReservationStatus={} afterParticipantStatus={}",
+                acceptance.reservationId(), acceptance.actingParticipantId(), memberId, acceptance.scope(),
+                reservation.getReservationStatus(), actingParticipant.getParticipationStatus());
+        return acceptance;
     }
 
     /**
@@ -82,18 +109,116 @@ public class ReservationCancellationTransactionService {
     private CancellationAcceptance acceptEntireReservationCancellation(
             Reservation reservation, ReservationParticipant actingParticipant, String reason
     ) {
-        List<ReservationParticipant> validParticipants = reservationParticipantRepository
-                .findAllByReservationIdAndParticipationStatus(reservation.getId(), ParticipationStatus.RESERVED);
-        validParticipants.forEach(participant -> participant.requestCancel(reason));
-        reservation.startCancelling();
-
-        List<Long> participantIds = validParticipants.stream().map(ReservationParticipant::getId).toList();
+        List<Long> participantIds = transitionAllValidParticipantsToCancelRequested(reservation, reason);
         ReservationCancellationRefundPort.RefundRequestCommand command =
                 new ReservationCancellationRefundPort.RefundRequestCommand(
                         reservation.getId(), participantIds, actingParticipant.getMemberId(), reason);
 
         return new CancellationAcceptance(
                 reservation.getId(), actingParticipant.getId(), CancellationScope.RESERVATION, command);
+    }
+
+    /**
+     * OWNER가 본인 식당 사유로 예약 전체 취소를 접수한다(Issue #46, #44 공통 접수·실행·확정 절차 재사용).
+     * MEMBER 취소와 달리 취소 기한(2시간)을 두지 않고, 상태 충돌은 §6-14 계약에 맞춰
+     * {@link ReservationErrorCode#INVALID_STATE}로 통일한다. 이후 트랜잭션 밖 환불 실행과
+     * 완료 확정은 MEMBER 취소와 동일한 {@link ReservationCancellationRefundPort}·완료 경로를 그대로 탄다.
+     */
+    @Transactional
+    public OwnerCancellationAcceptance acceptByOwner(Long ownerMemberId, Long reservationId, String reason) {
+        Reservation reservation = findReservationWithLockOrThrow(reservationId);
+        validateOwnership(reservation, ownerMemberId);
+        validateReservationCancellableByOwner(reservation);
+
+        List<Long> participantIds = transitionAllValidParticipantsToCancelRequested(reservation, reason);
+        ReservationCancellationRefundPort.RefundRequestCommand command =
+                new ReservationCancellationRefundPort.RefundRequestCommand(
+                        reservation.getId(), participantIds, ownerMemberId, reason);
+
+        log.info("event=RESERVATION_CANCELLATION_REQUESTED reservationId={} actorId={} scope=RESERVATION trigger=OWNER_CANCEL participantCount={} afterReservationStatus={}",
+                reservation.getId(), ownerMemberId, participantIds.size(), reservation.getReservationStatus());
+        return new OwnerCancellationAcceptance(reservation.getId(), command);
+    }
+
+    /**
+     * 예약에 속한 유효(RESERVED) 참여자 전원을 CANCEL_REQUESTED로 전환하고 예약을 CANCELLING으로
+     * 전이한 뒤, 하나의 {@code RefundRequestCommand}로 묶을 참여자 ID 목록을 반환한다. 최초 예약자
+     * 취소(MEMBER)와 OWNER 강제 취소가 이 로직을 공유한다(Issue #44, #46).
+     */
+    private List<Long> transitionAllValidParticipantsToCancelRequested(Reservation reservation, String reason) {
+        List<ReservationParticipant> validParticipants = reservationParticipantRepository
+                .findAllByReservationIdAndParticipationStatus(reservation.getId(), ParticipationStatus.RESERVED);
+        validParticipants.forEach(participant -> participant.requestCancel(reason));
+        reservation.startCancelling();
+        return validParticipants.stream().map(ReservationParticipant::getId).toList();
+    }
+
+    /**
+     * OWNER 소유권을 검증한다(Issue #48 {@code NoShowService.resolveOwnership}과 동일한 패턴, ADR 0005
+     * 원칙 7). Reservation은 이미 락으로 조회돼 있으므로 TimeSlot·SharedTable·Restaurant만 순서대로
+     * 조회하며, 그 사이 어떤 대상이 없어도 소유권 불일치와 구분하지 않고 전부 RESERVATION_ID_NOT_FOUND로
+     * 취급한다 — 실제 불일치는 마지막 소유권 비교에서만 ACCESS_DENIED로 구분한다.
+     */
+    private void validateOwnership(Reservation reservation, Long ownerMemberId) {
+        TimeSlot timeSlot = timeSlotRepository.findByIdAndDeletedAtIsNull(reservation.getTimeSlotId())
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+        SharedTable sharedTable = sharedTableRepository.findByIdAndDeletedAtIsNull(timeSlot.getSharedTableId())
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+        Restaurant restaurant = restaurantRepository.findByIdAndDeletedAtIsNull(sharedTable.getRestaurantId())
+                .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+        if (!restaurant.isOwnedBy(ownerMemberId)) {
+            throw new CustomException(CommonErrorCode.ACCESS_DENIED);
+        }
+    }
+
+    /**
+     * {@code CLOSED}(식사 종료로 생명주기가 끝난 예약)도 여기서 차단한다(Issue #175 PR #178
+     * 리뷰 반영). OWNER 취소는 MEMBER 취소와 달리 취소 기한을 두지 않아, 이 검사가 없으면
+     * 식사가 끝난 예약도 다시 {@code CANCELLING}으로 전이되어 환불이 시작될 수 있다.
+     */
+    private void validateReservationCancellableByOwner(Reservation reservation) {
+        if (reservation.isCancelled() || reservation.isCancelling() || reservation.isClosed()) {
+            throw new CustomException(ReservationErrorCode.INVALID_STATE);
+        }
+    }
+
+    /**
+     * 모집 마감 기한(식사 시작 2시간 전) 도달을 스케줄러 후보 하나에 대해 접수한다(Issue #47,
+     * #44 공통 접수·실행·확정 절차 재사용). 후보 조회 이후 다른 경로가 먼저 모집을 마감시켰을 수
+     * 있어 {@code recruitmentStatus}가 이미 {@code CLOSED}이거나 예약이 이미 취소 진행 중이면
+     * 아무 것도 바꾸지 않고 {@link RecruitmentDeadlineOutcome#ALREADY_PROCESSED}로 멱등 종료한다.
+     * 확정 기준 이상이면 모집만 마감하고, 미달이면 유효 참여자 전원을 MEMBER·OWNER 취소와 동일한
+     * 방식으로 취소 접수한다.
+     *
+     * <p>결과 이메일은 상태 변경과 같은 트랜잭션에 Outbox와 수신자별 전송 이력으로 기록한다.
+     * {@code ALREADY_PROCESSED}는 같은 예약의 이메일 이벤트도 최초 1회만 생성되게 하는 멱등 가드다.</p>
+     */
+    @Transactional
+    public RecruitmentDeadlineAcceptance acceptRecruitmentDeadline(Long reservationId) {
+        Reservation reservation = findReservationWithLockOrThrow(reservationId);
+        if (reservation.getRecruitmentStatus() != RecruitmentStatus.OPEN || !reservation.isActive()) {
+            return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.ALREADY_PROCESSED, null);
+        }
+        reservation.closeRecruitment();
+
+        int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
+        int currentCount = reservationParticipantRepository.sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES);
+        if (currentCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
+            emailOutboxEventService.enqueue(OutboxEventType.EMAIL_RECRUITMENT_CONFIRMED, reservationId,
+                    reservationParticipantRepository.findAllByReservationIdAndParticipationStatus(reservationId, ParticipationStatus.RESERVED));
+            return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.CLOSED_ONLY, null);
+        }
+
+        List<ReservationParticipant> participants = reservationParticipantRepository
+                .findAllByReservationIdAndParticipationStatus(reservationId, ParticipationStatus.RESERVED);
+        List<Long> participantIds = transitionAllValidParticipantsToCancelRequested(reservation, RECRUITMENT_FAILURE_REASON);
+        ReservationCancellationRefundPort.RefundRequestCommand command =
+                new ReservationCancellationRefundPort.RefundRequestCommand(
+                        reservation.getId(), participantIds, reservation.getCreatorMemberId(), RECRUITMENT_FAILURE_REASON);
+        emailOutboxEventService.enqueue(OutboxEventType.EMAIL_RECRUITMENT_CANCELLED, reservation.getId(), participants);
+        log.info("event=RESERVATION_CANCELLATION_REQUESTED reservationId={} actorId=SYSTEM scope=RESERVATION trigger=RECRUITMENT_DEADLINE participantCount={} afterReservationStatus={}",
+                reservation.getId(), participantIds.size(), reservation.getReservationStatus());
+        return new RecruitmentDeadlineAcceptance(reservationId, RecruitmentDeadlineOutcome.CANCELLED, command);
     }
 
     /**
@@ -193,6 +318,23 @@ public class ReservationCancellationTransactionService {
             Long reservationId,
             Long actingParticipantId,
             CancellationScope scope,
+            ReservationCancellationRefundPort.RefundRequestCommand refundCommand
+    ) {
+    }
+
+    public record OwnerCancellationAcceptance(
+            Long reservationId,
+            ReservationCancellationRefundPort.RefundRequestCommand refundCommand
+    ) {
+    }
+
+    public enum RecruitmentDeadlineOutcome {
+        ALREADY_PROCESSED, CLOSED_ONLY, CANCELLED
+    }
+
+    public record RecruitmentDeadlineAcceptance(
+            Long reservationId,
+            RecruitmentDeadlineOutcome outcome,
             ReservationCancellationRefundPort.RefundRequestCommand refundCommand
     ) {
     }

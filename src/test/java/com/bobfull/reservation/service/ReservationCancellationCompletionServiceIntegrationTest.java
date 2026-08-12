@@ -13,7 +13,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * 일부로만 실행돼야 하므로 {@code Propagation.MANDATORY}로 선언돼 있다. 이 테스트는
  * 실제 Spring 트랜잭션 프록시가 그 제약을 강제하는지 검증한다.
  */
-@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:reservation-cancellation-completion-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=reservation-cancellation-completion-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=3600", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:reservation-cancellation-completion-test;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.hibernate.ddl-auto=create-drop", "jwt.secret=reservation-cancellation-completion-test-secret-key-please-keep-long", "jwt.access-token-expiration-seconds=1800", "portone.api-secret=test", "portone.store-id=test", "portone.webhook-secret=dGVzdA=="})
 class ReservationCancellationCompletionServiceIntegrationTest {
 
     @Autowired

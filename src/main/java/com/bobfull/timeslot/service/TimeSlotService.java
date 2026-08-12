@@ -41,6 +41,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,6 +55,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TimeSlotService {
 
+    private static final Logger log = LoggerFactory.getLogger(TimeSlotService.class);
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
     private static final List<ReservationStatus> ACTIVE_RESERVATION_STATUSES =
             List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING);
@@ -185,8 +188,15 @@ public class TimeSlotService {
         timeSlotReservationValidator.validateChangeAllowed(timeSlot.getId());
         validateActiveDuplicateForUpdate(sharedTable.getId(), timeRange.startAt(), timeSlot.getId());
 
+        Instant beforeStartAt = timeSlot.getStartAt();
+        Instant beforeEndAt = timeSlot.getEndAt();
         timeSlot.update(timeRange.startAt(), timeRange.endAt());
         flushTimeSlotOrThrowDuplicate();
+        if (!beforeStartAt.equals(timeSlot.getStartAt()) || !beforeEndAt.equals(timeSlot.getEndAt())) {
+            log.info("event=DINING_SESSION_TIME_CHANGED sessionId={} tableId={} actorId={} beforeStartAt={} afterStartAt={} beforeEndAt={} afterEndAt={}",
+                    timeSlot.getId(), timeSlot.getSharedTableId(), ownerMemberId, beforeStartAt, timeSlot.getStartAt(),
+                    beforeEndAt, timeSlot.getEndAt());
+        }
         return DiningSessionIdResponse.from(timeSlot);
     }
 
@@ -234,7 +244,8 @@ public class TimeSlotService {
                 capacity,
                 toOffsetDateTime(timeSlot.getStartAt()),
                 toOffsetDateTime(timeSlot.getEndAt()),
-                availableCapacityCalculator.calculate(timeSlot.getId(), capacity),
+                availableCapacityCalculator.calculateWithKnownParticipantCount(
+                        timeSlot.getId(), capacity, currentParticipantCount),
                 reservationId,
                 currentParticipantCount
         );

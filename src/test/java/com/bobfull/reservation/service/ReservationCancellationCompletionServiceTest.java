@@ -1,5 +1,6 @@
 package com.bobfull.reservation.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -7,10 +8,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ReservationErrorCode;
+import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.time.Instant;
@@ -20,6 +26,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class ReservationCancellationCompletionServiceTest {
@@ -28,10 +37,11 @@ class ReservationCancellationCompletionServiceTest {
     @Mock ReservationParticipantRepository participantRepository;
     @Mock ReservationCancellationTransactionService transactionService;
     @Mock Reservation reservation;
+    @Mock BusinessMetricRecorder businessMetricRecorder;
 
     private ReservationCancellationCompletionService service() {
         return new ReservationCancellationCompletionService(
-                reservationRepository, participantRepository, transactionService);
+                reservationRepository, participantRepository, transactionService, businessMetricRecorder);
     }
 
     @Test
@@ -76,6 +86,43 @@ class ReservationCancellationCompletionServiceTest {
 
         verify(reservation, never()).cancel();
         verifyNoInteractions(transactionService);
+    }
+
+    @Test
+    void 취소완료_로그는_afterCommit에서_남긴다() {
+        Instant now = Instant.parse("2026-08-05T00:00:00Z");
+        when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
+        when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(1);
+        when(reservation.isCancelling()).thenReturn(true);
+        when(participantRepository.existsByReservationIdAndParticipationStatus(
+                1L, ParticipationStatus.CANCEL_REQUESTED)).thenReturn(false);
+        when(reservation.getReservationStatus()).thenReturn(ReservationStatus.CANCELLED);
+        Logger logger = (Logger) LoggerFactory.getLogger(ReservationCancellationCompletionService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
+            service().complete(1L, 2L, now);
+            assertThat(appender.list).isEmpty();
+            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCommit();
+            }
+        } finally {
+            logger.detachAppender(appender);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).contains("event=RESERVATION_CANCELLATION_COMPLETED");
+            assertThat(event.getFormattedMessage()).contains("reservationId=1");
+            assertThat(event.getFormattedMessage()).contains("participantId=2");
+            assertThat(event.getFormattedMessage()).contains("afterReservationStatus=CANCELLED");
+            assertThat(event.getFormattedMessage()).contains("completedAt=2026-08-05T00:00:00Z");
+        });
     }
 
     @Test

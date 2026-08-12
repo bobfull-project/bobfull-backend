@@ -4,6 +4,45 @@ payment:
   refund-reconciliation:
     enabled: false
 
+outbox:
+  chat-message:
+    enabled: false
+
+spring:
+  ai:
+    openai:
+      api-key: test-key
+      chat:
+        model: gpt-4o-mini
+  retry:
+    max-attempts: 1
+
+  kafka:
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: bobfull-chat-moderation
+      auto-offset-reset: earliest
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: com.bobfull.chat.dto
+        spring.json.value.default.type: com.bobfull.chat.dto.ChatMessageCreatedEvent
+    listener:
+      ack-mode: RECORD
+
+  mail:
+    host: localhost
+    port: 1025
+
+notification:
+  email:
+    from-address: no-reply@bobfull-test.com
+
 cors:
   allowed-origins: http://localhost:5173
 
@@ -17,3 +56,11 @@ aws:
     image-bucket: bobfull-test-image-bucket
     upload-url-expiration: 5m
     get-url-expiration: 5m
+
+bobfull:
+  ai:
+    moderation:
+      max-output-tokens: 128
+  kafka:
+    chat-message:
+      consumer-enabled: false

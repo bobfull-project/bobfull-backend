@@ -18,11 +18,17 @@ repositories {
 }
 
 dependencies {
+	implementation platform('org.springframework.ai:spring-ai-bom:2.0.0')
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.springframework.boot:spring-boot-starter-kafka'
 	implementation platform('software.amazon.awssdk:bom:2.31.78')
 	implementation 'software.amazon.awssdk:s3'
 	implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
@@ -30,6 +36,7 @@ dependencies {
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.12.6'
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'com.querydsl:querydsl-apt:5.1.0:jakarta'
@@ -40,12 +47,32 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.kafka:spring-kafka-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:testcontainers-kafka'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'com.h2database:h2'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
+	if (System.getProperty('os.name').toLowerCase().contains('mac')) {
+		def macOsClassifier = System.getProperty('os.arch').toLowerCase().contains('aarch64')
+				|| System.getProperty('os.arch').toLowerCase().contains('arm64') ? 'osx-aarch_64' : 'osx-x86_64'
+		runtimeOnly('io.netty:netty-resolver-dns-native-macos') {
+			artifact {
+				classifier = macOsClassifier
+				type = 'jar'
+				extension = 'jar'
+			}
+		}
+	}
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+	if (project.hasProperty('showTestOutput')) {
+		testLogging {
+			showStandardStreams = true
+		}
+	}
 }

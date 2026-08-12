@@ -5,7 +5,7 @@
 이 문서는 확정된 API와 프로젝트 정책을 구현 가능한 관계형 데이터 모델로 표현한다.
 
 - 기준: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md), [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)
-- 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회에 필요한 영속 데이터
+- 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회, V3 채팅 AI moderation에 필요한 영속 데이터
 - 비범위: Java Entity, Migration, SQL Schema, Redis, Kafka, 실제 계좌 송금
 - 원칙: API Response DTO를 테이블로 만들지 않고, 기준 문서에 없는 정책은 확정하지 않는다. Mermaid의 표현 한계가 있으면 아래 엔티티 상세 표를 기준으로 한다.
 
@@ -24,6 +24,8 @@
 | `NoShowHistory` | OWNER의 노쇼 처리·해제 이력 | ReservationParticipant 1:N NoShowHistory | V2 |
 | `ChatRoom` | 예약당 하나의 채팅방 | Reservation 1:0..1 ChatRoom | V2 |
 | `ChatMessage` | DB에 저장되는 채팅 메시지 | ChatRoom 1:N ChatMessage | V2 |
+| `ChatModeration` | 메시지별 AI 분석 결과와 최종 실패 상태 | ChatMessage 1:0..1 ChatModeration | V3 |
+| `ChatRoomMemberReport` | 채팅방 상대 회원 신고와 Human Review 이력 | ChatRoom·Member·nullable ChatMessage(anchor) 연결 | V3 |
 
 관리자 현황·통계와 지급 예정 예약금은 위 데이터의 조회·집계로 제공한다. 별도 `Settlement`, `SeatHold`, `WebhookEvent`, 관리자 전용 엔티티는 현재 계약에 추가하지 않는다.
 
@@ -138,6 +140,14 @@ erDiagram
         bigint reservation_id FK "예약당 1개"
         datetime created_at "최초 예약 결제 완료 후 생성"
     }
+    OUTBOX_EVENT {
+        bigint outbox_event_id PK "Outbox 내부 식별자"
+        varchar event_id UK "이벤트 UUID"
+        varchar event_type "CHAT_ROOM_CREATION_REQUESTED"
+        varchar aggregate_type "RESERVATION"
+        bigint aggregate_id "reservation_id"
+        varchar status "PENDING, PROCESSING, COMPLETED, FAILED"
+    }
     CHAT_MESSAGE {
         bigint chat_message_id PK "커서 조회 기준 식별자"
         bigint chat_room_id FK "대상 채팅방"
@@ -145,6 +155,43 @@ erDiagram
         bigint sender_participant_id FK "유효 참여자 검증"
         varchar(1000) content "메시지 본문"
         datetime created_at "생성 시각"
+    }
+    CHAT_MODERATION {
+        bigint chat_moderation_id PK "내부 식별자"
+        bigint chat_message_id UK "메시지당 분석 결과 1건"
+        bigint version "JPA 낙관적 락 version"
+        varchar status "SAFE, FLAGGED, ANALYSIS_FAILED"
+        varchar result "SAFE, FLAGGED; 실패면 NULL"
+        varchar risk_level "LOW, MEDIUM, HIGH; 실패면 NULL"
+        varchar provider "분석 Provider"
+        varchar model_name "분석 모델"
+        varchar prompt_version "적용 Prompt 계약"
+        varchar policy_version "적용 Policy 계약"
+        bigint latency_millis "분석 시도 지연 시간"
+        bigint prompt_tokens "Provider token 관측값"
+        bigint completion_tokens "Provider token 관측값"
+        bigint total_tokens "Provider token 관측값"
+        datetime analyzed_at "결과 또는 최종 실패 기록 시각"
+        varchar error_code "최종 실패 예외 유형; 완료면 NULL"
+        datetime created_at "생성 시각"
+        datetime updated_at "갱신 시각"
+    }
+    CHAT_MODERATION_CATEGORY {
+        bigint chat_moderation_id FK "ChatModeration 컬렉션 소유자"
+        varchar category "ModerationCategory Enum"
+    }
+    CHAT_ROOM_MEMBER_REPORT {
+        bigint chat_room_member_report_id PK "신고 식별자"
+        bigint chat_room_id FK "대상 채팅방"
+        bigint reporter_member_id FK "신고자"
+        bigint reported_member_id FK "피신고자"
+        bigint anchor_message_id FK "선택 근거 메시지"
+        varchar reason "ABUSE, SPAM, PERSONAL_INFORMATION, OTHER"
+        varchar status "PENDING, REVIEWED"
+        varchar decision "NO_VIOLATION, VIOLATION_CONFIRMED; PENDING은 NULL"
+        bigint reviewed_by_member_id FK "검토 ADMIN; PENDING은 NULL"
+        datetime reviewed_at "검토 시각; PENDING은 NULL"
+        bigint version "JPA 낙관적 락"
     }
 
     MEMBER ||--o{ RESTAURANT : owns
@@ -165,6 +212,13 @@ erDiagram
     CHAT_ROOM ||--o{ CHAT_MESSAGE : contains
     MEMBER ||--o{ CHAT_MESSAGE : sends
     RESERVATION_PARTICIPANT ||--o{ CHAT_MESSAGE : sends_as
+    CHAT_MESSAGE ||--o| CHAT_MODERATION : is_analyzed_as
+    CHAT_MODERATION ||--o{ CHAT_MODERATION_CATEGORY : has_categories
+    CHAT_ROOM ||--o{ CHAT_ROOM_MEMBER_REPORT : has_reports
+    CHAT_MESSAGE o|--o{ CHAT_ROOM_MEMBER_REPORT : anchors
+    MEMBER ||--o{ CHAT_ROOM_MEMBER_REPORT : reports
+    MEMBER ||--o{ CHAT_ROOM_MEMBER_REPORT : is_reported
+    MEMBER o|--o{ CHAT_ROOM_MEMBER_REPORT : reviews
 ```
 
 ## 4. 엔티티 상세
@@ -353,7 +407,63 @@ erDiagram
 | `content` | VARCHAR(1000) | N |  | 메시지 본문 |
 | `created_at` | DATETIME | N |  | 생성 시각 |
 
-읽음 처리, 이미지·파일, 수정·삭제, 신고·차단은 현재 범위에서 제외한다.
+읽음 처리, 이미지·파일, 수정·삭제, 차단은 현재 범위에서 제외한다. 사용자 신고는 V3 #218에 포함하며, AI Moderation과 신고 누적은 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN 경로로 사용하지 않는다.
+
+### 4.12 `chat_moderation`
+
+목적: ChatMessage 원문은 바꾸지 않고, 메시지별 AI 분석 완료 결과 또는 Kafka Retry/DLT 소진 뒤의 최종 실패 상태를 보관한다.
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `chat_moderation_id` | BIGINT | N | PK | 내부 식별자 |
+| `chat_message_id` | BIGINT | N | UNIQUE | 메시지당 분석 결과 1건. 현재 Entity는 물리 FK 대신 원본 메시지 식별자를 보관 |
+| `version` | BIGINT | N | JPA `@Version` | stale UPDATE를 거절하는 낙관적 락 version |
+| `status` | VARCHAR(24) | N | 앱 Enum | `SAFE`, `FLAGGED`, `ANALYSIS_FAILED` |
+| `result` | VARCHAR(16) | Y | 앱 Enum | 완료 상태에서 `SAFE` 또는 `FLAGGED`; 실패면 NULL |
+| `risk_level` | VARCHAR(16) | Y | 앱 Enum | 완료 상태에서 `LOW`, `MEDIUM`, `HIGH`; 실패면 NULL |
+| `provider`, `model_name` | VARCHAR | N |  | 분석 Provider와 모델 관측값 |
+| `prompt_version`, `policy_version` | VARCHAR | N |  | 적용한 Prompt·Policy 계약 |
+| `latency_millis` | BIGINT | N |  | 해당 분석 시도 관측값 |
+| `prompt_tokens`, `completion_tokens`, `total_tokens` | BIGINT | Y |  | Provider가 제공한 token 관측값; 실패면 NULL 가능 |
+| `analyzed_at` | DATETIME | N |  | 결과·최종 실패 기록 시각 |
+| `error_code` | VARCHAR(128) | Y |  | 최종 실패 예외 유형; 완료면 NULL |
+| `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
+
+#### `chat_moderation_category` (`@ElementCollection`)
+
+`ChatModeration.categories`는 별도 Entity가 아닌 `@ElementCollection(fetch = EAGER)`이며, 완료 결과의 복수 `ModerationCategory`를 다음 컬렉션 테이블에 저장한다.
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `chat_moderation_id` | BIGINT | N | FK `fk_chat_moderation_category_moderation` → `chat_moderation.chat_moderation_id` | 컬렉션 소유 `ChatModeration` 식별자 |
+| `category` | VARCHAR(32) | N | 앱 Enum | `ModerationCategory` 값 |
+
+`version`은 동일 실패 행을 읽은 성공/실패 경로의 늦은 UPDATE가 완료 결과를 덮는 것을 막는다.
+
+### 4.12.1 `chat_room_member_report`
+
+채팅방의 상대 회원에 대한 사용자 신고와 ADMIN Human Review 기록이다. `chat_room_member_report_id`가 PK이며, `chat_room_id`, `reporter_member_id`, `reported_member_id`, nullable `anchor_message_id`, `reason`, nullable `detail`, `status`, nullable `decision`, nullable `reviewed_by_member_id`, nullable `reviewed_at`, `version`, `created_at`을 저장한다. `UNIQUE(reporter_member_id, chat_room_id, reported_member_id)`로 같은 신고자·방·대상 중복을 막는다. `status`는 `PENDING`에서 `REVIEWED`로만 전이하며 `decision`은 `NO_VIOLATION` 또는 `VIOLATION_CONFIRMED`다. 판단은 회원 상태를 자동 변경하지 않는다.
+
+### 4.13 `outbox_event`
+
+목적: 최초 예약 결제 확정과 함께 ChatRoom 생성 의도를 영속화해, 커밋 뒤 메모리 signal 유실·재시작 뒤에도 재처리할 근거를 남긴다(#176).
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `outbox_event_id` | BIGINT | N | PK | 내부 식별자 |
+| `event_id` | VARCHAR(36) | N | UNIQUE | UUID 이벤트 식별자 |
+| `event_type` | VARCHAR(64) | N | UNIQUE(event_type, aggregate_type, aggregate_id) | `CHAT_ROOM_CREATION_REQUESTED` |
+| `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE | `RESERVATION` |
+| `aggregate_id` | BIGINT | N | 위 복합 UNIQUE | 대상 `reservation_id` |
+| `payload_version` | INT | N |  | 현재 1. Payload 원문·개인정보는 저장하지 않음 |
+| `status` | VARCHAR(16) | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 선행 컬럼 | `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` |
+| `attempt_count` | INT | N |  | 실제 ChatRoom 생성 실패 횟수. 최초 처리 뒤 5회 재시도 후 다음 실패에서 FAILED |
+| `next_attempt_at` | DATETIME | N | 복합 INDEX `idx_outbox_event_status_next_attempt(status, next_attempt_at, outbox_event_id)` | 다음 처리 가능 시각 |
+| `processing_started_at` | DATETIME | Y |  | stale PROCESSING 회수 기준 |
+| `processing_token` | VARCHAR(36) | Y |  | claim 소유자 토큰. 오래된 작업자의 상태 덮어쓰기를 방지 |
+| `last_error_code` | VARCHAR(128) | Y |  | 예외 유형만 기록하며 민감 payload는 저장하지 않음 |
+| `processed_at` | DATETIME | Y |  | COMPLETED 처리 시각 |
+| `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
 ## 5. 관계와 Cardinality
 
@@ -369,6 +479,7 @@ erDiagram
 - `PAYMENT 1:0..1 REFUND`: 결제 전체 환불과 재시도 상태를 한 환불 행으로 관리한다.
 - `RESERVATION 1:0..1 CHAT_ROOM`, `CHAT_ROOM 1:N CHAT_MESSAGE`: 예약당 하나의 채팅방과 여러 메시지다.
 - `MEMBER 1:N CHAT_MESSAGE`: 발신 회원을 추적한다. `sender_participant_id`는 해당 예약의 유효 참여자 여부를 검증한다.
+- `CHAT_MESSAGE 1:0..1 CHAT_MODERATION`: 원문 메시지 하나에 분석 결과·최종 실패 기록을 하나만 둔다. 완료 상태를 최종 실패가 덮지 않도록 `chat_moderation.version`으로 낙관적 락을 적용한다.
 
 ## 6. UNIQUE 및 정합성 제약
 
@@ -383,6 +494,7 @@ erDiagram
 | 유효 CREATE READY Payment | 회차당 최초 예약 결제 준비 1건 | TimeSlot 행 잠금 뒤 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 조회; 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS` |
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
 | `chat_room.reservation_id` | 예약당 채팅방 1개 | DB UNIQUE |
+| `chat_moderation.chat_message_id` | 메시지당 분석 기록 1건 | DB UNIQUE는 INSERT 멱등성, JPA `@Version`은 stale UPDATE 방지 |
 | `payment.payment_id` | Payment 내부 식별자 | PK, AUTO_INCREMENT |
 | `payment.portone_payment_id` | PortOne 외부 결제 식별자 중복 금지 | DB UNIQUE + 상태 전이 멱등 처리 |
 | `payment.reservation_participant_id` | 참여자와 결제의 1:1 연결 | NULL 허용 UNIQUE |
@@ -412,9 +524,13 @@ erDiagram
 | `noShowRate` | 계산값 | 전체 참여 횟수 대비 노쇼 건수 비율 |
 | `reservationConfirmationRate`, `confirmationRate` | 계산값 | 전체 예약 수 대비 확정 예약 수 비율 |
 | `totalReservationCount`, `confirmedReservationCount`, `reservationCount`, `refundCount` | 계산값 | 조건에 맞는 예약·환불 건수 집계 |
+| `profanityCount`, `personalInformationCount`, `spamCount` | 계산값 | `FLAGGED` 메시지를 발신 회원별·category별로 `COUNT(DISTINCT messageId)` 집계. 하나의 메시지가 복수 category여도 각 category 집계에는 포함한다. |
+| `totalFlaggedCount` | 계산값 | 발신 회원의 `LOW`/`MEDIUM`/`HIGH` `FLAGGED` 메시지를 `COUNT(DISTINCT messageId)` 집계. `LOW`도 포함한다. |
+| `reviewTargetCount` | 계산값 | 발신 회원의 `MEDIUM`/`HIGH` `FLAGGED` 메시지만 `COUNT(DISTINCT messageId)` 집계한다. `LOW`는 제외한다. |
+| `reviewStatus` | 계산값 | `reviewTargetCount >= 3`이면 `REVIEW_REQUIRED`, 아니면 `NORMAL`. `REVIEW_REQUIRED`는 DB 저장 상태·자동 제재·BAN·Review Case가 아닌 조회 시 계산되는 관리자 검토 후보다. |
 | `party_size`, `amount`, `expires_at`, `restaurant.image_key`, 상태값 | 저장값 | 결제·참여 이력, 식당 이미지 Object Key, 임시 선점·환불·정산 조회의 원천 데이터 |
 
-위 집계값은 API 응답에 포함되더라도 중복 컬럼으로 저장하지 않는다. 성능·동시성 문제로 별도 저장이 필요해지면 갱신 책임과 정합성 전략을 별도 결정해야 한다.
+회원 moderation 집계에서는 `SAFE`와 `ANALYSIS_FAILED`를 제외한다. 위 집계값은 API 응답에 포함되더라도 중복 컬럼으로 저장하지 않으며, `MemberModerationSummary`, `ReviewCase`, Redis Counter 같은 별도 영속 모델도 현재 범위에 추가하지 않는다. 성능·동시성 문제로 별도 저장이 필요해지면 갱신 책임과 정합성 전략을 별도 결정해야 한다.
 
 ## 8. 상태 Enum
 
@@ -446,8 +562,9 @@ erDiagram
 
 1. 인증 회원과 `payment.member_id`를 비교하고 PortOne 결제 정보·금액·통화를 검증한다.
 2. Payment를 멱등하게 `PAID`로 전환한다.
-3. `reservation`, 최초 `reservation_participant`, `chat_room`을 생성하고 Payment의 NULL FK를 연결한다.
-4. 결제 완료 인원으로 예약·모집 상태를 계산한다.
+3. `reservation`, 최초 `reservation_participant`, ChatRoom 생성용 `outbox_event(PENDING)`을 같은 트랜잭션에 저장하고 Payment의 NULL FK를 연결한다.
+4. 커밋 뒤 즉시 signal 또는 scheduler가 Outbox를 claim해 별도 트랜잭션에서 `chat_room`을 `reservation_id` 기준 멱등 생성한다. 최초 처리 실패 뒤 5·10·20·40·80초 backoff로 5회 재시도하고, 다음 실패에서 `FAILED`로 남긴다. 5분 stale `PROCESSING`은 `PENDING`으로 회수한다.
+5. 결제 완료 인원으로 예약·모집 상태를 계산한다.
 
 ### 추가 참여 결제 완료
 
@@ -481,8 +598,11 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | `payment` | `UNIQUE(portone_payment_id)`, `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)`, `(payment_status, expires_at, payment_id)` | 외부 결제 식별자 조회·임시 선점 계산·만료 후보의 상태/시각/내부 PK 정렬 |
 | `refund` | `UNIQUE(payment_id)`, `(refund_status)` | 중복 환불 방지·실패 환불 조회 |
 | `chat_message` | `(chat_room_id, chat_message_id)` | messageId cursor 기반 과거 메시지 조회 |
+| `chat_moderation` | `UNIQUE(chat_message_id)` | 메시지별 분석 기록 중복 생성 방지 |
 
 `chat_message(chat_room_id, created_at)`는 createdAt cursor 방식을 채택할 때만 추가 검토한다. 검색·통계용 복합 인덱스는 실제 API 조회량과 실행 계획 측정 전에는 확정하지 않는다.
+
+`shared_table (restaurant_id)`는 Issue #61에서 `idx_shared_table_restaurant_id`로 구현했다. `GET /api/restaurants`의 date·time 필터(3-way join)가 이 인덱스 없이 매 요청마다 `shared_table` 전체를 스캔하는 것을 실제 MySQL EXPLAIN ANALYZE로 확인한 뒤(docs/evidence/v3/61-search-query/README.md) 추가했다.
 
 ## 11. 삭제와 이력 보존 정책
 

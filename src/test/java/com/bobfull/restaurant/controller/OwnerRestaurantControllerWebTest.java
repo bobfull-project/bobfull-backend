@@ -22,6 +22,7 @@ import com.bobfull.restaurant.dto.RestaurantIdResponse;
 import com.bobfull.restaurant.dto.RestaurantUpdateRequest;
 import com.bobfull.restaurant.entity.RestaurantStatus;
 import com.bobfull.restaurant.service.RestaurantService;
+import com.bobfull.auth.token.AccessTokenBlacklistStore;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,12 +46,13 @@ import tools.jackson.databind.ObjectMapper;
 @Import({SecurityConfig.class, ClockConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=owner-restaurant-controller-web-test-secret-key-please-keep-long",
-        "jwt.access-token-expiration-seconds=3600"
+        "jwt.access-token-expiration-seconds=1800"
 })
 class OwnerRestaurantControllerWebTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean private AccessTokenBlacklistStore accessTokenBlacklistStore;
 
     @Autowired
     private ObjectMapper objectMapper;

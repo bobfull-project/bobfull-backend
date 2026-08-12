@@ -3,17 +3,23 @@ package com.bobfull.restaurant.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.ImageErrorCode;
 import com.bobfull.common.exception.RestaurantErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.restaurant.cache.RestaurantSearchCacheStore;
 import com.bobfull.restaurant.dto.OwnerRestaurantDetailResponse;
 import com.bobfull.restaurant.dto.OwnerRestaurantListResponse;
 import com.bobfull.restaurant.dto.RestaurantCreateRequest;
@@ -35,6 +41,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -60,6 +67,9 @@ class RestaurantServiceTest {
 
     @Mock
     private RestaurantImageService restaurantImageService;
+
+    @Mock
+    private RestaurantSearchCacheStore restaurantSearchCacheStore;
 
     @InjectMocks
     private RestaurantService restaurantService;
@@ -91,6 +101,33 @@ class RestaurantServiceTest {
 
         // then
         assertThat(response).isNotNull();
+        verify(restaurantSearchCacheStore).bumpVersion();
+    }
+
+    @Test
+    void 트랜잭션_안에서_등록하면_검색_캐시_버전_증가는_커밋_후에만_실행된다() {
+        // given
+        RestaurantCreateRequest request =
+                new RestaurantCreateRequest("밥풀식당", "제주시 애월읍 1", "한식", "설명", "흑돼지,혼밥", 10000, null);
+        given(restaurantRepository.save(any(Restaurant.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            // when
+            restaurantService.register(1L, request);
+
+            // then: 트랜잭션이 아직 커밋되지 않은 시점에는 호출되지 않는다.
+            verify(restaurantSearchCacheStore, never()).bumpVersion();
+
+            // when: 커밋 콜백을 실행하면
+            List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            // then: 그제서야 호출된다.
+            verify(restaurantSearchCacheStore).bumpVersion();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -151,6 +188,8 @@ class RestaurantServiceTest {
         Restaurant restaurant = restaurantOwnedByWithImage(1L, SEARCH_IMAGE_KEY);
         RestaurantSearchRequest request = new RestaurantSearchRequest("흑돼지", "한식", null, null);
         Pageable pageable = PageRequest.of(0, 20);
+        given(restaurantSearchCacheStore.find(any()))
+                .willReturn(new RestaurantSearchCacheStore.Lookup(0L, Optional.empty()));
         given(restaurantRepository.search(eq(request), eq(pageable)))
                 .willReturn(new PageImpl<>(List.of(restaurant), pageable, 1));
         given(restaurantImageService.createGetUrl(SEARCH_IMAGE_KEY)).willReturn("https://search-image.example");
@@ -163,6 +202,50 @@ class RestaurantServiceTest {
         assertThat(response.content().get(0).keyword()).isEqualTo("흑돼지,혼밥");
         assertThat(response.content().get(0).imageUrl()).isEqualTo("https://search-image.example");
         assertThat(response.totalElements()).isEqualTo(1);
+        verify(restaurantSearchCacheStore).put(eq(0L), any(), any());
+    }
+
+    @Test
+    void date나_time이_있는_검색은_캐시를_조회하거나_저장하지_않는다() {
+        // given
+        Restaurant restaurant = restaurantOwnedByWithImage(1L, SEARCH_IMAGE_KEY);
+        RestaurantSearchRequest request =
+                new RestaurantSearchRequest(null, null, java.time.LocalDate.of(2026, 8, 12), null);
+        Pageable pageable = PageRequest.of(0, 20);
+        given(restaurantRepository.search(eq(request), eq(pageable)))
+                .willReturn(new PageImpl<>(List.of(restaurant), pageable, 1));
+        given(restaurantImageService.createGetUrl(SEARCH_IMAGE_KEY)).willReturn("https://search-image.example");
+
+        // when
+        restaurantService.searchRestaurants(request, pageable);
+
+        // then
+        verify(restaurantSearchCacheStore, never()).find(any());
+        verify(restaurantSearchCacheStore, never()).put(anyLong(), any(), any());
+    }
+
+    @Test
+    void 캐시에_저장된_결과가_있으면_DB를_조회하지_않고_이미지_URL만_새로_생성한다() {
+        // given
+        RestaurantSearchRequest request = new RestaurantSearchRequest("흑돼지", "한식", null, null);
+        Pageable pageable = PageRequest.of(0, 20);
+        com.bobfull.restaurant.cache.CachedRestaurantSearchResult.Item cachedItem =
+                new com.bobfull.restaurant.cache.CachedRestaurantSearchResult.Item(
+                        10L, "밥풀식당", "제주시 애월읍 1", "한식", "흑돼지,혼밥", 10000, SEARCH_IMAGE_KEY);
+        com.bobfull.restaurant.cache.CachedRestaurantSearchResult cached =
+                new com.bobfull.restaurant.cache.CachedRestaurantSearchResult(List.of(cachedItem), 0, 20, 1, 1);
+        given(restaurantSearchCacheStore.find(any()))
+                .willReturn(new RestaurantSearchCacheStore.Lookup(0L, Optional.of(cached)));
+        given(restaurantImageService.createGetUrl(SEARCH_IMAGE_KEY)).willReturn("https://fresh-image.example");
+
+        // when
+        PageResponse<RestaurantSearchResponse> response = restaurantService.searchRestaurants(request, pageable);
+
+        // then
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).imageUrl()).isEqualTo("https://fresh-image.example");
+        verify(restaurantRepository, never()).search(any(), any());
+        verify(restaurantSearchCacheStore, never()).put(anyLong(), any(), any());
     }
 
     @Test
@@ -220,6 +303,35 @@ class RestaurantServiceTest {
         // then
         assertThat(restaurant.getName()).isEqualTo("새이름");
         assertThat(restaurant.getDepositPerPerson()).isEqualTo(12000);
+        verify(restaurantSearchCacheStore).bumpVersion();
+    }
+
+    @Test
+    void 트랜잭션_안에서_수정하면_검색_캐시_버전_증가는_커밋_후에만_실행된다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, null);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            // when
+            restaurantService.update(1L, 10L, request);
+
+            // then: 아직 DB 트랜잭션이 커밋되지 않은 시점에는 Redis 버전을 올리지 않는다 —
+            // 이 시점에 동시 검색이 새 버전으로 캐시 Miss를 내면 아직 반영 안 된 옛 값을
+            // 다시 캐시해버리는 경쟁(PR #202 리뷰)이 생기므로, 반드시 커밋 후여야 한다.
+            verify(restaurantSearchCacheStore, never()).bumpVersion();
+
+            // when
+            List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            // then
+            verify(restaurantSearchCacheStore).bumpVersion();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -303,13 +415,29 @@ class RestaurantServiceTest {
         RestaurantUpdateRequest request = new RestaurantUpdateRequest("새이름", "새설명", "한식,혼밥", 12000, NEW_IMAGE_KEY);
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
         willThrow(new RuntimeException("delete failed")).given(restaurantImageService).delete(OLD_IMAGE_KEY);
+        Logger logger = (Logger) LoggerFactory.getLogger(RestaurantService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
 
         // when
-        RestaurantIdResponse response = restaurantService.update(1L, 10L, request);
+        RestaurantIdResponse response;
+        try {
+            response = restaurantService.update(1L, 10L, request);
+        } finally {
+            logger.detachAppender(appender);
+        }
 
         // then
         assertThat(response).isNotNull();
         assertThat(restaurant.getImageKey()).isEqualTo(NEW_IMAGE_KEY);
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("event=RESTAURANT_IMAGE_DELETE_FAILED");
+            assertThat(event.getFormattedMessage()).contains("imageKey=" + OLD_IMAGE_KEY);
+            assertThat(event.getFormattedMessage()).contains("reason=RuntimeException");
+            assertThat(event.getThrowableProxy().getClassName()).isEqualTo(RuntimeException.class.getName());
+        });
     }
 
     @Test
@@ -350,7 +478,8 @@ class RestaurantServiceTest {
         RestaurantService clockedService = new RestaurantService(
                 restaurantRepository,
                 FIXED_CLOCK,
-                restaurantImageService
+                restaurantImageService,
+                restaurantSearchCacheStore
         );
         Restaurant restaurant = restaurantOwnedByWithImage(1L, DETAIL_IMAGE_KEY);
         given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
@@ -360,6 +489,38 @@ class RestaurantServiceTest {
 
         // then
         assertThat(restaurant.getDeletedAt()).isEqualTo(FIXED_CLOCK.instant());
+        verify(restaurantSearchCacheStore).bumpVersion();
+    }
+
+    @Test
+    void 트랜잭션_안에서_삭제하면_검색_캐시_버전_증가는_커밋_후에만_실행된다() {
+        // given
+        RestaurantService clockedService = new RestaurantService(
+                restaurantRepository,
+                FIXED_CLOCK,
+                restaurantImageService,
+                restaurantSearchCacheStore
+        );
+        Restaurant restaurant = restaurantOwnedByWithImage(1L, DETAIL_IMAGE_KEY);
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            // when
+            clockedService.delete(1L, 10L);
+
+            // then
+            verify(restaurantSearchCacheStore, never()).bumpVersion();
+
+            // when
+            List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            // then
+            verify(restaurantSearchCacheStore).bumpVersion();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

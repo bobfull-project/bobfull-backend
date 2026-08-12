@@ -3,6 +3,18 @@
 # 실제 DB 접속 정보는 환경변수로 주입합니다.
 
 spring:
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+
+  retry:
+    max-attempts: 1
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
   config:
     import: optional:file:.env[.properties]
 
@@ -24,6 +36,19 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2000ms}
+
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -61,6 +86,39 @@ aws:
     upload-url-expiration: ${S3_IMAGE_UPLOAD_URL_EXPIRATION:5m}
     get-url-expiration: ${S3_IMAGE_GET_URL_EXPIRATION:5m}
 
+notification:
+  email:
+    from-address: ${NOTIFICATION_EMAIL_FROM_ADDRESS:no-reply@bobfull.com}
+
+outbox:
+  chat-room:
+    enabled: ${OUTBOX_CHAT_ROOM_ENABLED:true}
+    fixed-delay: ${OUTBOX_CHAT_ROOM_FIXED_DELAY:60s}
+    batch-size: ${OUTBOX_CHAT_ROOM_BATCH_SIZE:100}
+  email:
+    enabled: ${OUTBOX_EMAIL_ENABLED:true}
+    fixed-delay: ${OUTBOX_EMAIL_FIXED_DELAY:5s}
+    batch-size: ${OUTBOX_EMAIL_BATCH_SIZE:100}
+  chat-message:
+    enabled: ${OUTBOX_CHAT_MESSAGE_ENABLED:true}
+    fixed-delay: ${OUTBOX_CHAT_MESSAGE_FIXED_DELAY:5s}
+    batch-size: ${OUTBOX_CHAT_MESSAGE_BATCH_SIZE:100}
+
 logging:
   level:
     org.hibernate.SQL: debug
+
+bobfull:
+  ai:
+    moderation:
+      max-output-tokens: ${OPENAI_MODERATION_MAX_TOKENS:128}
+  kafka:
+    chat-message:
+      topic: ${KAFKA_CHAT_MESSAGE_TOPIC:bobfull.chat.message-created.v1}
+      dlt-topic: ${KAFKA_CHAT_MESSAGE_DLT_TOPIC:bobfull.chat.message-created.dlt.v1}
+      partitions: ${KAFKA_CHAT_MESSAGE_PARTITIONS:3}
+      replicas: ${KAFKA_CHAT_MESSAGE_REPLICAS:1}
+      consumer-enabled: ${KAFKA_CHAT_MESSAGE_CONSUMER_ENABLED:true}
+      consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
+      consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
+      producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}

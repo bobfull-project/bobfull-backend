@@ -50,3 +50,12 @@ Refresh Token·Blacklist 후보는 모두 "특정 시점 이후 자동 소멸해
 - 다중 기기 동시 세션 지원이 실제로 필요해질 때
 - Access Token 즉시 폐기(Blacklist)가 실제로 필요해질 때
 - Redis 장애 빈도·영향이 커서 fail-closed 정책 자체를 재검토해야 할 때
+
+## 후속 결정: Access Token Blacklist 도입 (Issue #186, 2026-08-07)
+
+위 재검토 조건 중 "Access Token 즉시 폐기(Blacklist)가 실제로 필요해질 때"가 충족되어 Blacklist를 도입한다.
+
+- Access Token 만료를 3600초에서 1800초로 줄이고, 발급 시 `jti` Claim을 부여한다.
+- 로그아웃 시 그 Access Token의 `jti`를 Redis에 등록한다. 키는 Refresh Token과 동일한 소문자·콜론 관례를 따라 `auth:access-token-blacklist:{jti}`로 하고(Issue 본문의 대문자·하이픈 예시와는 다름), TTL은 등록 시점 기준 남은 유효시간으로 설정한다.
+- 인증 필터는 서명·만료 검증 통과 후 매 요청마다 이 Blacklist를 조회한다. **이 조회만 Fail-open으로 결정한다** — Refresh Token 재발급의 fail-closed(§결정)는 `/api/auth/reissue` 단일 엔드포인트에만 영향을 주지만, Blacklist 조회는 인증 필터를 거치는 모든 요청에 실행되어 Redis 장애가 곧 전체 API 장애로 번진다. Redis 예외 시 요청을 막지 않고 인증을 허용하며, 노출되는 위험은 직전 로그아웃한 토큰이 만료 시각까지 잠시 재사용되는 좁은 범위로 한정한다. 로그아웃 자체(Blacklist 등록·Refresh Token 삭제)의 Redis 실패는 감추지 않고 그대로 전파한다 — 이 결정은 매 요청 *조회*에만 적용된다.
+- 재발급(`/api/auth/reissue`)이 교체 대상 기존 Access Token을 Blacklist에 등록하는 것은 이번 결정 범위에 포함하지 않는다 — 기존 Access Token은 재발급 후에도 자연 만료까지 유효하다(§2-7 계약 유지).

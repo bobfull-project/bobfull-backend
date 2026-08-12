@@ -37,6 +37,24 @@ develop → main PR
 main 병합 후 배포
 ```
 
+### V3 Sprint Mode 예외와 현재 운영 정책
+
+위 일반 흐름의 `최소 2명 Approve`는 V3 Sprint Mode를 적용하지 않는 PR의 기본 규칙이다. 현재 V3 Sprint Mode 대상 PR에는 다음 규칙을 우선 적용한다.
+
+```text
+Draft PR 생성 또는 담당 구현 AI의 새 Push
+→ 담당 구현 AI가 최신 Issue 계약 / Head / Diff / 검증 / Evidence 재확인
+→ bobfull-pr-review 기반 자동 독립 Review
+→ BLOCKER/MAJOR면 수정·재검증·Push·최신 Head 재Review
+→ 없으면 담당 Human의 최종 Merge 대기
+```
+
+- 별도 GitHub Human Approve 1개 이상이나 다른 팀원의 형식적 Approve 대기는 필수 Merge Gate가 아니다.
+- `PR #번호 검토하라`는 자동 Review의 선행 조건이 아니라, Human이 재검토·외부 Review 반영·추가 수정 검토를 명시적으로 요청할 때 쓰는 수동 진입점이다.
+- BLOCKER와 MAJOR만 Merge를 차단한다. MINOR와 SUGGESTION은 기록하되 단독으로 Merge를 막지 않는다.
+- 자동 AI Review는 정책·API 계약·DB/상태 모델·권한/보안·트랜잭션 경계의 Human 판단이나 최종 Merge를 대체하지 않는다.
+- V3 Sprint Mode의 세부 검증·Evidence·최신 Head 재검토 기준은 `AGENTS.md`, `docs/AI_WORKFLOW.md`, `docs/AI_REVIEW_GUIDE.md`, `skills/bobfull-pr-review/SKILL.md`를 따른다.
+
 ### 초기 저장소 설정 예외
 
 `develop` 브랜치가 아직 생성되지 않은 최초 설정 단계에서는 팀 규칙·AI 워크플로우·Issue/PR 템플릿 등 저장소 기반 문서를 `feature/*` 브랜치에서 작성하고 `main`으로 PR을 올릴 수 있다.
@@ -127,6 +145,7 @@ asdfasdf
 
 - 리뷰 코멘트는 건설적으로 작성한다.
 - 최소 2명 이상의 Approve를 받은 후 PR 작성자가 직접 Merge한다.
+- 단, V3 Sprint Mode 대상 PR은 위 Approve 수 대신 `V3 Sprint Mode 예외와 현재 운영 정책`의 자동 독립 Review와 BLOCKER/MAJOR Gate를 적용한다.
 - 리뷰 의견이 있으면 반영하거나 답변한 후 Merge한다.
 - 하나의 PR은 하나의 기능 또는 하나의 버그 수정에 집중한다.
 - 서로 관련 없는 여러 도메인의 변경을 하나의 PR에 포함하지 않는다.
@@ -153,4 +172,4 @@ gh pr create --draft --base develop --template .github/pull_request_template.md
 - `--fill`, `--fill-first`, `--fill-verbose`, `--body`, `--body-file`을 사용하더라도 최종 본문을 최신 `.github/pull_request_template.md`와 대조해 전체 섹션과 순서를 보존한다.
 - GitHub API, Connector, Codex 등 AI·자동화 도구도 템플릿을 직접 읽고 동일한 섹션·순서의 본문을 명시적으로 전달한다. 도구의 자동 채움 여부는 규칙 준수 근거가 아니다.
 - 기존 PR에 템플릿 일부 또는 전체가 누락되면 새 PR을 만들지 않고 최신 템플릿 구조로 본문을 복구한다. 기존 작성자의 유효한 설명과 Human 원문은 적절한 섹션으로 보존하며, 추정으로 검증 결과나 Human 답변·리뷰를 채우지 않는다.
-- 템플릿 복구만으로 구현 완료나 Merge 가능으로 판단하지 않는다. 최소한 `PR #번호 검토하라` 실행 전, 늦어도 Ready 전환·Human Approve 요청 전에는 구조를 복구한다.
+- 템플릿 복구만으로 구현 완료나 Merge 가능으로 판단하지 않는다. V3 Sprint Mode에서는 Draft PR 생성 또는 새 Push 뒤 자동 독립 Review 전에, 일반 모드에서는 늦어도 Ready 전환·Human Approve 요청 전에 구조를 복구한다.

@@ -205,6 +205,7 @@ OWNER 인증
 ```
 
 - OWNER의 노쇼 처리·해제는 참여자 단위로 수행하고 처리 이력을 남긴다. 상세 허용 상태와 저장 관계는 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md), [API 명세](./BOBFULL_API_SPEC_COMPLETE.md), [ERD](./ERD.md)를 따른다.
+- `예약 CLOSED`는 스케줄러가 `CONFIRMED` 예약을 대상으로 `TimeSlot.endAt` 도달 후보를 조회해 전이하며, 채팅 SEND 차단·노쇼 처리 허용은 스케줄러 처리 시점과 무관하게 `now >= TimeSlot.endAt`을 직접 비교해 동일한 경계로 즉시 보장한다(Issue #175).
 
 ### 예약 참여자 채팅
 
