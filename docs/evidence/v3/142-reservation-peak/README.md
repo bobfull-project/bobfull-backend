@@ -34,19 +34,50 @@ Baseline**으로 측정한다. #60(예약 좌석 락 전략 재설계, 2026-08-1
 
 ### 결과 표 비교 — AWS Load vs Stress (`bobfull-k6-test-app`, t3.small)
 
-| 단계 | 목표 부하 | 실제 RPS | p50 | p90 | p95 | max | 오류율(http_req_failed) | dropped_iterations | CPU/DB Pool/Lock | 정합성 | 병목 후보 |
+| 단계 | 목표 부하 | 실제 RPS | p50 | p90 | p95 | max | 오류율(http_req_failed) | dropped_iterations | CPU/DB Pool | 정합성 | 병목 후보 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
-| Load | constant-arrival-rate 20/s, 5분 | 39.8/s(요청 기준, 조회 2건/iteration) | 188ms | 385ms | 533ms | 2.26s | 0.04%(5/11,959) | 23(0.08/s) | 미관측(Prometheus 미연결) | 목록·상세 응답 정상(checks 99.95%) | 아직 없음 — 안정 구간이나 여유가 크지 않음 |
-| Stress | ramping-arrival-rate 20→40→80→160→320/s, 13분 | 48.5/s(목표 320/s 대비 크게 못 미침) | 2.52s | 10.66s | 13.90s | 33.33s | 0.02%(8/38,351) | **63,026(79.6/s)** | 미관측(Prometheus 미연결) | checks 99.98%(오류로 인한 정합성 위반 아님) | **App/DB 자원 포화 추정**(t3.small, 2 vCPU) |
+| Load | constant-arrival-rate 20/s, 5분 | 39.8/s(요청 기준, 조회 2건/iteration) | 188ms | 385ms | 533ms | 2.26s | 0.04%(5/11,959) | 23(0.08/s) | 미관측(1차 실행, Prometheus 미연결) | 목록·상세 응답 정상(checks 99.95%) | 아직 없음 — 안정 구간이나 여유가 크지 않음 |
+| Stress(1차) | ramping-arrival-rate 20→40→80→160→320/s, 13분 | 48.5/s(목표 320/s 대비 크게 못 미침) | 2.52s | 10.66s | 13.90s | 33.33s | 0.02%(8/38,351) | 63,026(79.6/s) | 미관측(1차 실행, Prometheus 미연결) | checks 99.98% | App/DB 자원 포화 추정 |
+| Stress(2차, Prometheus 연결) | 동일 | 50.9/s | 2.33s | 10.47s | 12.98s | 31.60s | 0.00%(2/40,287) | 62,058(78.4/s) | **CPU 88~98%, HikariCP active 10/10(고정), pending ~190건** | checks 99.99% | **CPU + DB Pool 동시 포화(아래 근본 원인 확인 참고)** |
 
-**해석**: Stress 단계에서 오류율은 오히려 Load보다 낮았지만(0.02% vs 0.04%), p95가 533ms →
-13.9초로 26배 급증했고 `dropped_iterations`가 63,026건(목표 iteration의 상당수가 시작조차
-못 함)까지 치솟았다. 즉 서버가 **에러를 내며 실패하는 게 아니라, 요청이 쌓여 점점 느려지는
-방식으로 포화**됐다 — 전형적인 자원 고갈(saturation) 신호다. VU가 300(설정 상한)까지 늘었다가
-후반부에 오히려 줄어든 것(대기 중인 요청이 워낙 느려 VU가 다음 iteration을 못 돌림)도 이
-해석과 일치한다. 다만 CPU/DB Connection Pool/Lock 지표가 없어 **App CPU인지 DB Pool인지
-lock wait인지는 이번 기록만으로 확정하지 않는다** — Prometheus/Grafana 연결 후 재확인이
-필요하다(#207 후속).
+**해석**: 오류율은 Load보다도 낮았지만(0.00~0.02%), p95가 533ms → 13초대로 24~26배 급증했고
+`dropped_iterations`가 6만 건대까지 치솟았다. 서버가 **에러를 내며 실패하는 게 아니라, 요청이
+쌓여 점점 느려지는 방식으로 포화**됐다 — 전형적인 자원 고갈(saturation) 신호다. 1차·2차 Stress
+실행 결과가 거의 동일해(p95 13.90s vs 12.98s, dropped 63,026 vs 62,058) 재현 가능함을 확인했다.
+
+### 근본 원인 확인 — 로컬 Prometheus를 AWS 인스턴스에 연결해 실측 (2차 Stress 실행 중 수집)
+
+`monitoring/docker-compose.yml`의 Prometheus를 실행자 로컬에서 띄우고
+`BOBFULL_BACKEND_METRICS_TARGET=15.164.48.39:8080`으로 지정해, AWS Test App EC2의
+`/actuator/prometheus`를 직접 스크래핑하며 2차 Stress를 재실행했다(Grafana는 admin 비밀번호·
+Slack 연동이 필요해 이번엔 띄우지 않고 Prometheus HTTP API로 직접 쿼리했다).
+
+Stress 시작 시각(`02:04:07Z`) 기준 경과 시간별 관측값(`query_range`, step=30s):
+
+| 경과 | `process_cpu_usage` | `system_cpu_usage` | `hikaricp_connections_active` | `hikaricp_connections_pending` | `jvm_threads_live_threads` |
+|---:|---:|---:|---:|---:|---:|
+| t+0s(Load 20/s 시작) | 0.3% | 1.4% | 0 | 0 | 41 |
+| t+90s | 82% | 85% | 6 | 0 | 69 |
+| t+150s(40 RPS 단계 중) | **98%** | **99%** | **10(=max)** | **59** | 103 |
+| t+210s | 96% | 96% | 10 | 191 | 232 |
+| t+420s(160 RPS 단계) | 91% | 91% | 10 | 190 | 232 |
+| t+780s(320 RPS 단계) | 94% | 95% | 10 | 191 | 232 |
+
+**결론**: CPU와 DB Connection Pool(HikariCP `maximum-pool-size=10`)이 목표 부하가 40 RPS
+단계에 도달한 시점(경과 약 2분 30초, 아직 Stress 최고 단계 320 RPS에 훨씬 못 미친 지점)부터
+**거의 동시에 포화**되고, 이후 160·320 RPS 단계까지도 그 상태가 그대로 유지된다(더 나빠지지도
+않음 — 이미 최대치라 더 나빠질 여지가 없다). Tomcat 스레드도 232에서 고정돼 요청이 스레드
+단계에서부터 쌓이고 있음을 보여준다. 즉 **"어느 시점 이후 갑자기 무너진 병목"이 아니라
+"t3.small(2 vCPU) 인스턴스 자체의 CPU·커넥션 풀 용량이 hot-key 조회 40 RPS 수준에서 이미
+한계"**라는 게 이번 기록의 근거 있는 결론이다. `hikaricp_connections_pending`이 약 190건으로
+안정된 것도 "더 큰 장애로 확산"되지 않고 일정한 대기 상태로 버티는 것으로 해석된다(요청이
+실패하지 않고 느려지기만 하는 이유).
+
+이 결론의 한계: (1) 커넥션 풀 크기(10)가 애플리케이션 기본값인지 이 테스트 인스턴스만의 설정인지
+확인하지 않았다 — 운영 환경 설정과 다를 수 있다. (2) CPU 포화가 "쿼리 자체가 무겁다"(#61
+영역)와 "단순히 요청량 대비 vCPU가 부족하다"(인스턴스 크기 문제) 중 어느 쪽이 더 큰 비중인지는
+쿼리별 CPU 프로파일링 없이는 구분하지 못한다. (3) t3.small은 버스터블 인스턴스라 CPU 크레딧
+소진 여부도 확인하지 않았다.
 
 ## 시나리오 B — 예약 버튼 동시 클릭 (`peak-reservation-create-race.js`)
 
