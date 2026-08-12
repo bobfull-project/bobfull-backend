@@ -33,6 +33,8 @@
 
 ## 3. Mermaid ERD
 
+이 저장소는 `@ManyToOne`/`@OneToMany`/`@ManyToMany`를 쓰지 않고 참조를 원본 ID `Long` 컬럼 값으로만 저장한다. 실제 `@JoinColumn`으로 매핑돼 DB에 물리 FK 제약이 생성되는 컬럼은 `refund.payment_id`와 `chat_moderation_category.chat_moderation_id` 2건뿐이다. 아래 Mermaid의 `FK` 표기는 이 2건에만 사용하고, 나머지 참조 컬럼은 값 기반 참조이므로 컬럼에 `FK`를 표기하지 않는다(관계선으로만 논리적 연결을 표현). 각 컬럼이 실제 DB UNIQUE·INDEX를 갖는지는 섹션 4 상세 표를 기준으로 한다.
+
 ```mermaid
 erDiagram
     MEMBER {
@@ -49,7 +51,7 @@ erDiagram
     }
     RESTAURANT {
         bigint restaurant_id PK "식당 식별자"
-        bigint owner_member_id FK "OWNER 소유자"
+        bigint owner_member_id "OWNER 소유자"
         varchar(100) name "식당명"
         varchar(255) address "식당 주소"
         varchar(50) category "음식 카테고리"
@@ -64,7 +66,7 @@ erDiagram
     }
     SHARED_TABLE {
         bigint shared_table_id PK "합석 테이블 식별자"
-        bigint restaurant_id FK "소속 식당"
+        bigint restaurant_id "소속 식당"
         integer display_number "식당별 자동 표시 번호"
         integer capacity "허용 정원 2·4·6·8"
         varchar(20) status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
@@ -74,7 +76,7 @@ erDiagram
     }
     TIME_SLOT {
         bigint time_slot_id PK "회차 식별자"
-        bigint shared_table_id FK "대상 테이블"
+        bigint shared_table_id "대상 테이블"
         datetime start_at "회차 시작 시각"
         datetime end_at "회차 종료 시각"
         datetime active_start_at "활성 중복 방지용 생성 컬럼"
@@ -84,8 +86,8 @@ erDiagram
     }
     RESERVATION {
         bigint reservation_id PK "예약 식별자"
-        bigint time_slot_id FK "대상 회차"
-        bigint creator_member_id FK "최초 예약자"
+        bigint time_slot_id "대상 회차"
+        bigint creator_member_id "최초 예약자"
         varchar(20) reservation_status "RECRUITING, CONFIRMED, CANCELLING, CANCELLED, CLOSED"
         varchar(20) recruitment_status "OPEN, CLOSED"
         datetime created_at "생성 시각"
@@ -93,8 +95,8 @@ erDiagram
     }
     RESERVATION_PARTICIPANT {
         bigint reservation_participant_id PK "참여 식별자"
-        bigint reservation_id FK "대상 예약"
-        bigint member_id FK "신청 회원"
+        bigint reservation_id "대상 예약"
+        bigint member_id "신청 회원"
         integer party_size "신청 인원"
         varchar(20) participation_status "RESERVED, NO_SHOW, CANCEL_REQUESTED, CANCELLED"
         datetime cancelled_at "전체 참여 취소 시각"
@@ -105,10 +107,10 @@ erDiagram
     PAYMENT {
         bigint payment_id PK "Payment 내부 식별자"
         varchar(64) portone_payment_id UK "PortOne 외부 결제 식별자"
-        bigint member_id FK "결제 당사자"
-        bigint time_slot_id FK "결제 준비 대상 회차"
-        bigint reservation_id FK "CREATE의 READY 단계는 NULL 가능"
-        bigint reservation_participant_id FK "결제 완료 후 연결되는 참여자"
+        bigint member_id "결제 당사자"
+        bigint time_slot_id "결제 준비 대상 회차"
+        bigint reservation_id "CREATE의 READY 단계는 NULL 가능"
+        bigint reservation_participant_id UK "결제 완료 후 연결되는 참여자"
         varchar(20) payment_purpose "CREATE, JOIN"
         integer party_size "결제·임시 선점 인원"
         decimal amount "party_size 기준 예약금"
@@ -121,7 +123,7 @@ erDiagram
     }
     REFUND {
         bigint refund_id PK "환불 식별자"
-        varchar(64) payment_id FK "결제 전체 환불 대상"
+        bigint payment_id FK "결제 전체 환불 대상"
         decimal amount "환불 금액"
         varchar(20) refund_status "REQUESTED, PROCESSING, COMPLETED, FAILED"
         datetime requested_at "요청 시각"
@@ -132,14 +134,14 @@ erDiagram
     }
     NO_SHOW_HISTORY {
         bigint no_show_history_id PK "이력 식별자"
-        bigint reservation_participant_id FK "처리 대상"
-        bigint processed_by_member_id FK "처리 OWNER"
+        bigint reservation_participant_id "처리 대상"
+        bigint processed_by_member_id "처리 OWNER"
         boolean is_marked "TRUE=노쇼 처리, FALSE=노쇼 해제"
         datetime processed_at "처리 시각"
     }
     CHAT_ROOM {
         bigint chat_room_id PK "채팅방 식별자"
-        bigint reservation_id FK "예약당 1개"
+        bigint reservation_id UK "예약당 1개"
         datetime created_at "최초 예약 결제 완료 후 생성"
         datetime updated_at "BaseTimeEntity 상속 컬럼. 별도 갱신 로직 없음"
     }
@@ -166,9 +168,9 @@ erDiagram
     }
     CHAT_MESSAGE {
         bigint chat_message_id PK "커서 조회 기준 식별자"
-        bigint chat_room_id FK "대상 채팅방"
-        bigint sender_member_id FK "발신 회원"
-        bigint sender_participant_id FK "유효 참여자 검증"
+        bigint chat_room_id "대상 채팅방"
+        bigint sender_member_id "발신 회원"
+        bigint sender_participant_id "유효 참여자 검증"
         varchar(1000) content "메시지 본문"
         datetime created_at "생성 시각"
         datetime updated_at "BaseTimeEntity 상속 컬럼. 별도 갱신 로직 없음"
@@ -199,15 +201,15 @@ erDiagram
     }
     CHAT_ROOM_MEMBER_REPORT {
         bigint chat_room_member_report_id PK "신고 식별자"
-        bigint chat_room_id FK "대상 채팅방"
-        bigint reporter_member_id FK "신고자"
-        bigint reported_member_id FK "피신고자"
-        bigint anchor_message_id FK "선택 근거 메시지"
+        bigint chat_room_id "대상 채팅방"
+        bigint reporter_member_id "신고자"
+        bigint reported_member_id "피신고자"
+        bigint anchor_message_id "선택 근거 메시지"
         varchar reason "ABUSE, SPAM, PERSONAL_INFORMATION, OTHER"
         varchar detail "신고 상세. NULL 허용"
         varchar status "PENDING, REVIEWED"
         varchar decision "NO_VIOLATION, VIOLATION_CONFIRMED; PENDING은 NULL"
-        bigint reviewed_by_member_id FK "검토 ADMIN; PENDING은 NULL"
+        bigint reviewed_by_member_id "검토 ADMIN; PENDING은 NULL"
         datetime reviewed_at "검토 시각; PENDING은 NULL"
         bigint version "JPA 낙관적 락"
         datetime created_at "생성 시각"
@@ -270,13 +272,13 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `restaurant_id` | BIGINT | N | PK | 식당 식별자 |
-| `owner_member_id` | BIGINT | N | FK → `member.member_id`, INDEX | OWNER 소유자 |
+| `owner_member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | OWNER 소유자 |
 | `name` | VARCHAR(100) | N |  | 식당명 |
 | `address` | VARCHAR(255) | N |  | 식당 주소 |
 | `category` | VARCHAR(50) | N |  | 음식 카테고리 |
 | `description` | VARCHAR(1000) | N |  | 식당 소개 |
 | `keyword` | VARCHAR(100) | N |  | 사장님이 직접 입력하는 식당 키워드 |
-| `deposit_per_person` | DECIMAL | N |  | 1인당 예약금 |
+| `deposit_per_person` | INTEGER | N |  | 1인당 예약금 |
 | `image_key` | VARCHAR(500) | Y |  | S3 최종 Object Key. `restaurants/{ownerId}/{uuid}.{extension}` 형식만 저장하며 URL은 저장하지 않음 |
 | `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
@@ -291,8 +293,8 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `shared_table_id` | BIGINT | N | PK | 합석 테이블 식별자 |
-| `restaurant_id` | BIGINT | N | FK → `restaurant.restaurant_id`, INDEX | 소속 식당 |
-| `display_number` | INTEGER | N | UNIQUE(`restaurant_id`, `display_number`) | 식당별 1부터 자동 증가하며 삭제 후에도 재사용하지 않는 표시 번호 |
+| `restaurant_id` | BIGINT | N | 값 참조 → `restaurant.restaurant_id`(물리 FK 아님), INDEX `idx_shared_table_restaurant_id` | 소속 식당 |
+| `display_number` | INTEGER | N | DB UNIQUE 아님(애플리케이션에서 `MAX+1`로 생성) | 식당별 1부터 자동 증가하며 삭제 후에도 재사용하지 않는 표시 번호 |
 | `capacity` | INTEGER | N | CHECK 후보: `2,4,6,8` | 허용 정원 |
 | `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
@@ -305,9 +307,9 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `time_slot_id` | BIGINT | N | PK | 회차 식별자 |
-| `shared_table_id` | BIGINT | N | FK → `shared_table.shared_table_id`, INDEX | 대상 테이블 |
+| `shared_table_id` | BIGINT | N | 값 참조 → `shared_table.shared_table_id`(물리 FK 아님), 복합 UNIQUE `uk_time_slot_active_start`의 선행 컬럼 | 대상 테이블 |
 | `start_at`, `end_at` | DATETIME | N | `end_at > start_at` | 회차 시작·종료 시각 |
-| `active_start_at` | DATETIME | Y | GENERATED, UNIQUE 후보 일부 | 활성 회차 중복 방지용 생성 컬럼. `deleted_at IS NULL`이면 `start_at`, 삭제된 회차는 NULL. API 입력·응답 값이 아니다 |
+| `active_start_at` | DATETIME | Y | GENERATED, 복합 UNIQUE `uk_time_slot_active_start`의 후행 컬럼(실제 구현됨) | 활성 회차 중복 방지용 생성 컬럼. `deleted_at IS NULL`이면 `start_at`, 삭제된 회차는 NULL. API 입력·응답 값이 아니다 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
@@ -320,8 +322,8 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `reservation_id` | BIGINT | N | PK | 예약 식별자 |
-| `time_slot_id` | BIGINT | N | FK → `time_slot.time_slot_id`, INDEX | 대상 회차 |
-| `creator_member_id` | BIGINT | N | FK → `member.member_id`, INDEX | 최초 예약자 |
+| `time_slot_id` | BIGINT | N | 값 참조 → `time_slot.time_slot_id`(물리 FK 아님) | 대상 회차 |
+| `creator_member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | 최초 예약자 |
 | `reservation_status` | VARCHAR(20) | N | 앱 Enum | `RECRUITING`, `CONFIRMED`, `CANCELLING`, `CANCELLED`, `CLOSED` |
 | `recruitment_status` | VARCHAR(20) | N | 앱 Enum | `OPEN`, `CLOSED` |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -335,8 +337,8 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `reservation_participant_id` | BIGINT | N | PK | 참여 식별자 |
-| `reservation_id` | BIGINT | N | FK → `reservation.reservation_id`, INDEX | 대상 예약 |
-| `member_id` | BIGINT | N | FK → `member.member_id`, INDEX | 신청 회원 |
+| `reservation_id` | BIGINT | N | 값 참조 → `reservation.reservation_id`(물리 FK 아님), 복합 UNIQUE `uk_reservation_participant_member`의 선행 컬럼 | 대상 예약 |
+| `member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님), 복합 UNIQUE `uk_reservation_participant_member`의 후행 컬럼 | 신청 회원 |
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 신청 인원 |
 | `participation_status` | VARCHAR(20) | N | 앱 Enum | `RESERVED`, `NO_SHOW`, `CANCEL_REQUESTED`, `CANCELLED` |
 | `cancelled_at` | DATETIME | Y |  | 전체 참여 취소 시각 |
@@ -352,18 +354,18 @@ erDiagram
 
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
-| `payment_id` | BIGINT | N | PK, AUTO_INCREMENT | Payment 내부 식별자 |
+| `payment_id` | BIGINT | N | PK, AUTO_INCREMENT, 복합 INDEX `idx_payment_status_expires_at_id`의 후행 컬럼 | Payment 내부 식별자 |
 | `portone_payment_id` | VARCHAR(64) | N | UNIQUE | PortOne 결제 요청·조회·웹훅과 외부 API에 사용하는 식별자 |
-| `member_id` | BIGINT | N | FK → `member.member_id`, INDEX | 결제 당사자 |
-| `time_slot_id` | BIGINT | N | FK → `time_slot.time_slot_id`, INDEX | 결제 준비 대상 회차 |
-| `reservation_id` | BIGINT | Y | FK → `reservation.reservation_id`, INDEX | `CREATE`의 READY 단계에서는 NULL 가능 |
-| `reservation_participant_id` | BIGINT | Y | FK → `reservation_participant.reservation_participant_id`, UNIQUE | 결제 완료 후 연결되는 참여자 |
+| `member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | 결제 당사자 |
+| `time_slot_id` | BIGINT | N | 값 참조 → `time_slot.time_slot_id`(물리 FK 아님) | 결제 준비 대상 회차 |
+| `reservation_id` | BIGINT | Y | 값 참조 → `reservation.reservation_id`(물리 FK 아님) | `CREATE`의 READY 단계에서는 NULL 가능 |
+| `reservation_participant_id` | BIGINT | Y | 값 참조 → `reservation_participant.reservation_participant_id`(물리 FK 아님), UNIQUE | 결제 완료 후 연결되는 참여자 |
 | `payment_purpose` | VARCHAR(20) | N | 앱 Enum: `CREATE`, `JOIN` | 결제 준비 구분 |
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 결제·임시 선점 인원 |
 | `amount` | DECIMAL | N |  | `party_size` 기준 예약금 |
 | `currency` | VARCHAR(10) | N |  | PortOne 검증 대상 통화 |
-| `payment_status` | VARCHAR(20) | N | 앱 Enum | `READY`, `PAID`, `EXPIRED`, `FAILED`, `REFUNDED` |
-| `expires_at` | DATETIME | N | 복합 INDEX | READY 임시 선점 만료 시각 |
+| `payment_status` | VARCHAR(20) | N | 앱 Enum, 복합 INDEX `idx_payment_status_expires_at_id`의 선행 컬럼 | `READY`, `PAID`, `EXPIRED`, `FAILED`, `REFUNDED` |
+| `expires_at` | DATETIME | N | 복합 INDEX `idx_payment_status_expires_at_id`의 중간 컬럼 | READY 임시 선점 만료 시각 |
 | `paid_at` | DATETIME | Y |  | PAID 전환 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
@@ -397,8 +399,8 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `no_show_history_id` | BIGINT | N | PK | 이력 식별자 |
-| `reservation_participant_id` | BIGINT | N | FK → `reservation_participant.reservation_participant_id` | 처리 대상 |
-| `processed_by_member_id` | BIGINT | N | FK → `member.member_id` | 처리 OWNER |
+| `reservation_participant_id` | BIGINT | N | 값 참조 → `reservation_participant.reservation_participant_id`(물리 FK 아님) | 처리 대상 |
+| `processed_by_member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | 처리 OWNER |
 | `is_marked` | BOOLEAN | N |  | `TRUE`=노쇼 처리, `FALSE`=노쇼 해제 |
 | `processed_at` | DATETIME | N |  | 처리 시각 |
 
@@ -411,7 +413,7 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `chat_room_id` | BIGINT | N | PK | 채팅방 식별자 |
-| `reservation_id` | BIGINT | N | FK → `reservation.reservation_id`, UNIQUE | 예약당 1개 |
+| `reservation_id` | BIGINT | N | 값 참조 → `reservation.reservation_id`(물리 FK 아님), UNIQUE | 예약당 1개 |
 | `created_at` | DATETIME | N |  | 최초 예약 결제 완료 후 생성 |
 | `updated_at` | DATETIME | N |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
 
@@ -421,10 +423,10 @@ erDiagram
 
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
-| `chat_message_id` | BIGINT | N | PK | 커서 조회 기준 식별자 |
-| `chat_room_id` | BIGINT | N | FK → `chat_room.chat_room_id`, INDEX | 대상 채팅방 |
-| `sender_member_id` | BIGINT | N | FK → `member.member_id` | 발신 회원 |
-| `sender_participant_id` | BIGINT | N | FK → `reservation_participant.reservation_participant_id` | 유효 참여자 검증 |
+| `chat_message_id` | BIGINT | N | PK, 복합 INDEX `idx_chat_message_room_id`의 후행 컬럼 | 커서 조회 기준 식별자 |
+| `chat_room_id` | BIGINT | N | 값 참조 → `chat_room.chat_room_id`(물리 FK 아님), 복합 INDEX `idx_chat_message_room_id`의 선행 컬럼 | 대상 채팅방 |
+| `sender_member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | 발신 회원 |
+| `sender_participant_id` | BIGINT | N | 값 참조 → `reservation_participant.reservation_participant_id`(물리 FK 아님) | 유효 참여자 검증 |
 | `content` | VARCHAR(1000) | N |  | 메시지 본문 |
 | `created_at` | DATETIME | N |  | 생성 시각 |
 | `updated_at` | DATETIME | N |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
@@ -472,7 +474,7 @@ erDiagram
 
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
-| `outbox_event_id` | BIGINT | N | PK | 내부 식별자 |
+| `outbox_event_id` | BIGINT | N | PK, 복합 INDEX `idx_outbox_event_status_next_attempt`의 후행 컬럼 | 내부 식별자 |
 | `event_id` | VARCHAR(36) | N | UNIQUE | UUID 이벤트 식별자 |
 | `event_type` | VARCHAR(64) | N | UNIQUE(event_type, aggregate_type, aggregate_id) | 앱 Enum: `CHAT_ROOM_CREATION_REQUESTED`, `CHAT_MESSAGE_CREATED`, `EMAIL_RESERVATION_CREATED`, `EMAIL_PARTICIPATION_COMPLETED`, `EMAIL_RECRUITMENT_CONFIRMED`, `EMAIL_RECRUITMENT_CANCELLED` |
 | `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE | `RESERVATION`(ChatRoom 생성·`EMAIL_RECRUITMENT_*`), `CHAT_MESSAGE`(`CHAT_MESSAGE_CREATED`), `RESERVATION_PARTICIPANT`(`EMAIL_RESERVATION_CREATED`, `EMAIL_PARTICIPATION_COMPLETED`) 중 하나 |
@@ -480,7 +482,7 @@ erDiagram
 | `payload_version` | INT | N |  | 현재 1. Payload 원문·개인정보는 저장하지 않음 |
 | `status` | VARCHAR(16) | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 선행 컬럼 | `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` |
 | `attempt_count` | INT | N |  | 해당 이벤트의 처리 실패 횟수. 최초 처리 뒤 5회 재시도 후 다음 실패에서 FAILED |
-| `next_attempt_at` | DATETIME | N | 복합 INDEX `idx_outbox_event_status_next_attempt(status, next_attempt_at, outbox_event_id)` | 다음 처리 가능 시각 |
+| `next_attempt_at` | DATETIME | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 중간 컬럼 | 다음 처리 가능 시각 |
 | `processing_started_at` | DATETIME | Y |  | stale PROCESSING 회수 기준 |
 | `processing_token` | VARCHAR(36) | Y |  | claim 소유자 토큰. 오래된 작업자의 상태 덮어쓰기를 방지 |
 | `last_error_code` | VARCHAR(128) | Y |  | 예외 유형만 기록하며 민감 payload는 저장하지 않음 |
@@ -514,7 +516,7 @@ erDiagram
 - `MEMBER 1:N RESERVATION_PARTICIPANT`: 회원은 여러 예약에 참여할 수 있다.
 - `MEMBER 1:N PAYMENT`, `TIME_SLOT 1:N PAYMENT`: 결제 준비·완료 이력을 회원과 회차별로 보관한다.
 - `RESERVATION 1:N PAYMENT`: 하나의 예약에는 최초·추가 참여 결제가 여러 건 연결될 수 있다. `CREATE` READY 결제는 예약 생성 전에는 NULL이다.
-- `RESERVATION_PARTICIPANT 1:0..1 PAYMENT`: 참여자 한 건은 본인 결제 한 건과 연결된다. 결제 완료 전 참여자가 없으므로 Payment 쪽 FK를 NULL 허용으로 둔다.
+- `RESERVATION_PARTICIPANT 1:0..1 PAYMENT`: 참여자 한 건은 본인 결제 한 건과 연결된다. 결제 완료 전 참여자가 없으므로 Payment 쪽 참조 컬럼(`reservation_participant_id`, 물리 FK 아님)을 NULL 허용으로 둔다.
 - `PAYMENT 1:0..1 REFUND`: 결제 전체 환불과 재시도 상태를 한 환불 행으로 관리한다.
 - `RESERVATION 1:0..1 CHAT_ROOM`, `CHAT_ROOM 1:N CHAT_MESSAGE`: 예약당 하나의 채팅방과 여러 메시지다.
 - `MEMBER 1:N CHAT_MESSAGE`: 발신 회원을 추적한다. `sender_participant_id`는 해당 예약의 유효 참여자 여부를 검증한다.
@@ -527,7 +529,7 @@ erDiagram
 | `member.email` | 이메일 중복 금지 | DB UNIQUE |
 | `member.phone_number` | 전화번호 중복 금지 | DB UNIQUE |
 | `member.business_number` | 사업자등록번호 중복 금지 | DB UNIQUE. MEMBER의 NULL은 중복 허용, 값이 있으면 중복 금지 |
-| `restaurant.owner_member_id` | 소유자는 OWNER여야 함 | FK + 애플리케이션 역할 검증 |
+| `restaurant.owner_member_id` | 소유자는 OWNER여야 함 | 값 참조(물리 FK 아님) + 애플리케이션 역할 검증 |
 | 활성 `time_slot` | 동일 테이블·동일 시작 시각 활성 회차 중복 금지 | `deleted_at IS NULL`인 회차만 중복 금지. 삭제된 회차와 같은 시작 시각은 재생성 가능. `active_start_at` generated column + `UNIQUE(shared_table_id, active_start_at)`로 DB에서 활성 회차 중복을 강제 |
 | 활성 `reservation.time_slot_id` | 회차당 활성 합석 예약 1건 | DB 단순 UNIQUE로 보장하지 않는다. TimeSlot 행 비관적 락과 `RECRUITING`·`CONFIRMED` Reservation 조회를 같은 트랜잭션에서 수행; `CANCELLED` 이력은 유지 |
 | 유효 CREATE READY Payment | 회차당 최초 예약 결제 준비 1건 | TimeSlot 행 잠금 뒤 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 조회; 있으면 `ACTIVE_RESERVATION_ALREADY_EXISTS` |
@@ -601,7 +603,7 @@ erDiagram
 
 1. 인증 회원과 `payment.member_id`를 비교하고 PortOne 결제 정보·금액·통화를 검증한다.
 2. Payment를 멱등하게 `PAID`로 전환한다.
-3. `reservation`, 최초 `reservation_participant`, ChatRoom 생성용 `outbox_event(PENDING)`을 같은 트랜잭션에 저장하고 Payment의 NULL FK를 연결한다.
+3. `reservation`, 최초 `reservation_participant`, ChatRoom 생성용 `outbox_event(PENDING)`을 같은 트랜잭션에 저장하고 Payment의 비어 있던 참조 컬럼(`reservation_id`, `reservation_participant_id`, 물리 FK 아님)을 연결한다.
 4. 커밋 뒤 즉시 signal 또는 scheduler가 Outbox를 claim해 별도 트랜잭션에서 `chat_room`을 `reservation_id` 기준 멱등 생성한다. 최초 처리 실패 뒤 5·10·20·40·80초 backoff로 5회 재시도하고, 다음 실패에서 `FAILED`로 남긴다. 5분 stale `PROCESSING`은 `PENDING`으로 회수한다.
 5. 결제 완료 인원으로 예약·모집 상태를 계산한다.
 
@@ -643,6 +645,8 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 
 `shared_table (restaurant_id)`는 Issue #61에서 `idx_shared_table_restaurant_id`로 구현했다. `GET /api/restaurants`의 date·time 필터(3-way join)가 이 인덱스 없이 매 요청마다 `shared_table` 전체를 스캔하는 것을 실제 MySQL EXPLAIN ANALYZE로 확인한 뒤(docs/evidence/v3/61-search-query/README.md) 추가했다.
 
+위 표의 `payment (payment_status, expires_at, payment_id)`와 `chat_message (chat_room_id, chat_message_id)`는 후보가 아니라 각각 `idx_payment_status_expires_at_id`, `idx_chat_message_room_id`로 이미 구현된 실제 Index다(섹션 4.7, 4.11 상세 표 참고). 같은 행의 나머지 항목(`payment`의 `(member_id, payment_status)`, `(time_slot_id, payment_status, expires_at)` 등)은 아직 도입하지 않은 순수 후보다.
+
 ## 11. 삭제와 이력 보존 정책
 
 | 대상 | 처리 방향 | 근거·보류 |
@@ -673,7 +677,7 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | API 주요 식별자 | 충족 | Member, Restaurant, SharedTable, TimeSlot, Reservation, Payment, Refund, ChatRoom 식별자 존재 |
 | Request 저장 필드 | 충족 | `partySize`, `capacity`, 회차 시간, 결제 금액·통화·만료 시각·상태를 각각 저장 |
 | 응답 계산값 | 충족 | PAID/READY Payment와 Participation, SharedTable 정원으로 계산 |
-| 역할·소유권 | 충족 | Restaurant OWNER FK, Payment Member FK, Reservation creator FK |
+| 역할·소유권 | 충족 | `Restaurant.ownerMemberId`, `Payment.memberId`, `Reservation.creatorMemberId` 값 참조(물리 FK 아님) |
 | 예약·모집·참여 상태 | 충족 | Reservation과 ReservationParticipant의 별도 상태 컬럼 |
 | READY 임시 선점 | 충족 | Payment의 READY·expires_at·party_size; SeatHold 미사용 |
 | 환불·지급 예정 | 충족 | Payment 1:0..1 Refund와 PAID/COMPLETED 집계 |
