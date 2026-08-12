@@ -41,10 +41,10 @@ erDiagram
         bigint member_id PK "내부 식별자"
         varchar(255) email UK "로그인 식별자"
         varchar(255) password_hash "비밀번호 해시"
-        varchar(50) name "참여자 목록·채팅 표시 이름"
-        varchar(20) phone_number UK "회원 전화번호"
-        varchar(20) business_number UK "OWNER 사업자등록번호. MEMBER는 NULL"
-        varchar(20) role "MEMBER, OWNER, ADMIN"
+        varchar(255) name "참여자 목록·채팅 표시 이름"
+        varchar(255) phone_number UK "회원 전화번호"
+        varchar(255) business_number UK "OWNER 사업자등록번호. MEMBER는 NULL"
+        enum role "MEMBER, OWNER, ADMIN"
         datetime deleted_at "회원 소프트 삭제 시각"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
@@ -59,7 +59,7 @@ erDiagram
         varchar(100) keyword "사장님 입력 식당 키워드"
         integer deposit_per_person "1인당 예약금"
         varchar(500) image_key "S3 최종 Object Key"
-        varchar(20) status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
+        enum status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
         datetime deleted_at "소프트 삭제 시각"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
@@ -69,7 +69,7 @@ erDiagram
         bigint restaurant_id "소속 식당"
         integer display_number "식당별 자동 표시 번호"
         integer capacity "허용 정원 2·4·6·8"
-        varchar(20) status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
+        enum status "생성 시 서버 기본값, 현재 ACTIVE만 사용"
         datetime deleted_at "소프트 삭제 시각"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
@@ -88,8 +88,8 @@ erDiagram
         bigint reservation_id PK "예약 식별자"
         bigint time_slot_id "대상 회차"
         bigint creator_member_id "최초 예약자"
-        varchar(20) reservation_status "RECRUITING, CONFIRMED, CANCELLING, CANCELLED, CLOSED"
-        varchar(20) recruitment_status "OPEN, CLOSED"
+        enum reservation_status "RECRUITING, CONFIRMED, CANCELLING, CANCELLED, CLOSED"
+        enum recruitment_status "OPEN, CLOSED"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
     }
@@ -98,7 +98,7 @@ erDiagram
         bigint reservation_id "대상 예약"
         bigint member_id "신청 회원"
         integer party_size "신청 인원"
-        varchar(20) participation_status "RESERVED, NO_SHOW, CANCEL_REQUESTED, CANCELLED"
+        enum participation_status "RESERVED, NO_SHOW, CANCEL_REQUESTED, CANCELLED"
         datetime cancelled_at "전체 참여 취소 시각"
         varchar(255) cancel_reason "취소 사유. 노쇼는 저장하지 않음"
         datetime created_at "생성 시각"
@@ -111,11 +111,11 @@ erDiagram
         bigint time_slot_id "결제 준비 대상 회차"
         bigint reservation_id "CREATE의 READY 단계는 NULL 가능"
         bigint reservation_participant_id UK "결제 완료 후 연결되는 참여자"
-        varchar(20) payment_purpose "CREATE, JOIN"
+        enum payment_purpose "CREATE, JOIN"
         integer party_size "결제·임시 선점 인원"
         decimal amount "party_size 기준 예약금"
         varchar(10) currency "PortOne 검증 대상 통화"
-        varchar(20) payment_status "READY, PAID, EXPIRED, FAILED, REFUNDED"
+        enum payment_status "READY, PAID, EXPIRED, FAILED, REFUNDED"
         datetime expires_at "READY 임시 선점 만료 시각"
         datetime paid_at "PAID 전환 시각"
         datetime created_at "생성 시각"
@@ -125,7 +125,7 @@ erDiagram
         bigint refund_id PK "환불 식별자"
         bigint payment_id FK "결제 전체 환불 대상"
         decimal amount "환불 금액"
-        varchar(20) refund_status "REQUESTED, PROCESSING, COMPLETED, FAILED"
+        enum refund_status "REQUESTED, PROCESSING, COMPLETED, FAILED"
         datetime requested_at "요청 시각"
         datetime completed_at "완료 시각"
         datetime last_pg_checked_at "마지막 PG 조회 시각"
@@ -148,10 +148,10 @@ erDiagram
     OUTBOX_EVENT {
         bigint outbox_event_id PK "Outbox 내부 식별자"
         varchar event_id UK "이벤트 UUID"
-        varchar event_type "CHAT_ROOM_CREATION_REQUESTED 등 6종. Chat/Email 공통 유형"
-        varchar aggregate_type "RESERVATION, CHAT_MESSAGE, RESERVATION_PARTICIPANT"
+        enum event_type "CHAT_ROOM_CREATION_REQUESTED 등 6종. Chat/Email 공통 유형"
+        varchar(32) aggregate_type "RESERVATION, CHAT_MESSAGE, RESERVATION_PARTICIPANT. Java enum 아닌 String 필드"
         bigint aggregate_id "event_type별 대상 식별자 값. 물리 FK 아님"
-        varchar status "PENDING, PROCESSING, COMPLETED, FAILED"
+        enum status "PENDING, PROCESSING, COMPLETED, FAILED"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
     }
@@ -161,7 +161,7 @@ erDiagram
         bigint reservation_id "대상 예약. 물리 FK 아님"
         bigint reservation_participant_id "대상 참여자. 물리 FK 아님"
         bigint recipient_member_id "수신 회원. 물리 FK 아님"
-        varchar status "PENDING, SENT"
+        enum status "PENDING, SENT"
         datetime sent_at "SENT 전환 시각. PENDING은 NULL"
         datetime created_at "생성 시각"
         datetime updated_at "수정 시각"
@@ -179,9 +179,9 @@ erDiagram
         bigint chat_moderation_id PK "내부 식별자"
         bigint chat_message_id UK "메시지당 분석 결과 1건"
         bigint version "JPA 낙관적 락 version"
-        varchar status "SAFE, FLAGGED, ANALYSIS_FAILED"
-        varchar result "SAFE, FLAGGED; 실패면 NULL"
-        varchar risk_level "LOW, MEDIUM, HIGH; 실패면 NULL"
+        enum status "SAFE, FLAGGED, ANALYSIS_FAILED"
+        enum result "SAFE, FLAGGED; 실패면 NULL"
+        enum risk_level "LOW, MEDIUM, HIGH; 실패면 NULL"
         varchar provider "분석 Provider"
         varchar model_name "분석 모델"
         varchar prompt_version "적용 Prompt 계약"
@@ -197,7 +197,7 @@ erDiagram
     }
     CHAT_MODERATION_CATEGORY {
         bigint chat_moderation_id FK "ChatModeration 컬렉션 소유자"
-        varchar category "ModerationCategory Enum"
+        enum category "ModerationCategory Enum"
     }
     CHAT_ROOM_MEMBER_REPORT {
         bigint chat_room_member_report_id PK "신고 식별자"
@@ -205,10 +205,10 @@ erDiagram
         bigint reporter_member_id "신고자"
         bigint reported_member_id "피신고자"
         bigint anchor_message_id "선택 근거 메시지"
-        varchar reason "ABUSE, SPAM, PERSONAL_INFORMATION, OTHER"
-        varchar detail "신고 상세. NULL 허용"
-        varchar status "PENDING, REVIEWED"
-        varchar decision "NO_VIOLATION, VIOLATION_CONFIRMED; PENDING은 NULL"
+        enum reason "ABUSE, SPAM, PERSONAL_INFORMATION, OTHER"
+        varchar(500) detail "신고 상세. NULL 허용"
+        enum status "PENDING, REVIEWED"
+        enum decision "NO_VIOLATION, VIOLATION_CONFIRMED; PENDING은 NULL"
         bigint reviewed_by_member_id "검토 ADMIN; PENDING은 NULL"
         datetime reviewed_at "검토 시각; PENDING은 NULL"
         bigint version "JPA 낙관적 락"
@@ -245,7 +245,7 @@ erDiagram
 
 ## 4. 엔티티 상세
 
-모든 Enum 표기는 애플리케이션 Enum 값이다. MySQL `ENUM` 타입 사용을 확정하지 않는다.
+모든 Enum 표기는 애플리케이션 Enum 값이다. 이 값은 Java `enum` 타입 필드에 `@Enumerated(EnumType.STRING)`으로 매핑되며, Spring Boot 4.1.0(Hibernate 7 계열) 기본 MySQL Dialect는 별도 `@JdbcTypeCode` 오버라이드가 없는 이 필드들을 VARCHAR가 아닌 네이티브 MySQL `ENUM(...)` 컬럼으로 생성한다(이 저장소에는 그런 오버라이드가 없다). 따라서 아래 표의 Java `enum` 필드는 `ENUM(...)` 타입으로 표기하고, 실제로는 `String` 필드(예: `outbox_event.aggregate_type`)인 값은 `VARCHAR(N)`로 구분해 표기한다.
 
 ### 4.1 `member`
 
@@ -256,10 +256,10 @@ erDiagram
 | `member_id`                | BIGINT | N | PK | 내부 식별자 |
 | `email`                    | VARCHAR(255) | N | UNIQUE | 로그인 식별자 |
 | `password_hash`            | VARCHAR(255) | N |  | 비밀번호 해시 |
-| `name`                     | VARCHAR(50) | N |  | 참여자 목록·채팅 표시 이름 |
-| `phone_number`             | VARCHAR(20) | N | UNIQUE | 회원 전화번호 |
-| `business_number`          | VARCHAR(20) | Y | UNIQUE | OWNER 회원가입 시 저장하는 사업자등록번호. MEMBER는 NULL. NULL은 중복 허용, 값이 있으면 중복 금지 |
-| `role`                     | VARCHAR(20) | N | 앱 Enum: `MEMBER`, `OWNER`, `ADMIN` | 역할 |
+| `name`                     | VARCHAR(255) | N |  | 참여자 목록·채팅 표시 이름. `@Column`에 별도 `length` 지정이 없어 Hibernate 기본값 255 적용 |
+| `phone_number`             | VARCHAR(255) | N | UNIQUE | 회원 전화번호. `@Column`에 별도 `length` 지정이 없어 Hibernate 기본값 255 적용 |
+| `business_number`          | VARCHAR(255) | Y | UNIQUE | OWNER 회원가입 시 저장하는 사업자등록번호. MEMBER는 NULL. NULL은 중복 허용, 값이 있으면 중복 금지. `@Column`에 별도 `length` 지정이 없어 Hibernate 기본값 255 적용 |
+| `role`                     | ENUM('MEMBER', 'OWNER', 'ADMIN') | N |  | 역할 |
 | `deleted_at`               | DATETIME | Y |  | 회원 소프트 삭제 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
@@ -280,7 +280,7 @@ erDiagram
 | `keyword` | VARCHAR(100) | N |  | 사장님이 직접 입력하는 식당 키워드 |
 | `deposit_per_person` | INTEGER | N |  | 1인당 예약금 |
 | `image_key` | VARCHAR(500) | Y |  | S3 최종 Object Key. `restaurants/{ownerId}/{uuid}.{extension}` 형식만 저장하며 URL은 저장하지 않음 |
-| `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
+| `status` | ENUM('ACTIVE') | N |  | 생성 시 서버 기본값. 현재 `ACTIVE`만 사용 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
@@ -296,7 +296,7 @@ erDiagram
 | `restaurant_id` | BIGINT | N | 값 참조 → `restaurant.restaurant_id`(물리 FK 아님), INDEX `idx_shared_table_restaurant_id` | 소속 식당 |
 | `display_number` | INTEGER | N | DB UNIQUE 아님(애플리케이션에서 `MAX+1`로 생성) | 식당별 1부터 자동 증가하며 삭제 후에도 재사용하지 않는 표시 번호 |
 | `capacity` | INTEGER | N | CHECK 후보: `2,4,6,8` | 허용 정원 |
-| `status` | VARCHAR(20) | N | 앱 Enum: 현재 `ACTIVE` | 생성 시 서버 기본값 |
+| `status` | ENUM('ACTIVE') | N |  | 생성 시 서버 기본값. 현재 `ACTIVE`만 사용 |
 | `deleted_at` | DATETIME | Y |  | API의 소프트 삭제 정책 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
@@ -324,8 +324,8 @@ erDiagram
 | `reservation_id` | BIGINT | N | PK | 예약 식별자 |
 | `time_slot_id` | BIGINT | N | 값 참조 → `time_slot.time_slot_id`(물리 FK 아님) | 대상 회차 |
 | `creator_member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | 최초 예약자 |
-| `reservation_status` | VARCHAR(20) | N | 앱 Enum | `RECRUITING`, `CONFIRMED`, `CANCELLING`, `CANCELLED`, `CLOSED` |
-| `recruitment_status` | VARCHAR(20) | N | 앱 Enum | `OPEN`, `CLOSED` |
+| `reservation_status` | ENUM('RECRUITING', 'CONFIRMED', 'CANCELLING', 'CANCELLED', 'CLOSED') | N |  | 예약 상태 |
+| `recruitment_status` | ENUM('OPEN', 'CLOSED') | N |  | 모집 상태 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
 최초 예약자는 `reservation_participant`에도 존재한다. `creator_member_id`는 최초 예약자만 가능한 모집 마감·취소 권한을 빠르고 명확하게 검증하기 위한 중복 저장이다. 결제 완료 시 최초 참여자와 동일 회원인지 같은 트랜잭션에서 보장해야 한다. `CANCELLED` 예약은 이력을 위해 TimeSlot 연결을 유지하고, 해당 회차의 다음 예약 생성은 활성 Reservation 유무를 트랜잭션에서 확인한다. `CANCELLING`은 취소가 접수돼 외부 환불을 기다리는 중간 상태이며(#44), `isActive()`는 `RECRUITING`·`CONFIRMED`만 참으로 취급해 `CANCELLING`도 신규 JOIN·결제 확정 대상에서 제외한다.
@@ -340,7 +340,7 @@ erDiagram
 | `reservation_id` | BIGINT | N | 값 참조 → `reservation.reservation_id`(물리 FK 아님), 복합 UNIQUE `uk_reservation_participant_member`의 선행 컬럼 | 대상 예약 |
 | `member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님), 복합 UNIQUE `uk_reservation_participant_member`의 후행 컬럼 | 신청 회원 |
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 신청 인원 |
-| `participation_status` | VARCHAR(20) | N | 앱 Enum | `RESERVED`, `NO_SHOW`, `CANCEL_REQUESTED`, `CANCELLED` |
+| `participation_status` | ENUM('RESERVED', 'NO_SHOW', 'CANCEL_REQUESTED', 'CANCELLED') | N |  | 참여자 상태 |
 | `cancelled_at` | DATETIME | Y |  | 전체 참여 취소 시각 |
 | `cancel_reason` | VARCHAR(255) | Y |  | 취소 사유(MEMBER 본인 취소·식당 귀책 취소 공통). 노쇼는 사유를 저장하지 않는다 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -360,11 +360,11 @@ erDiagram
 | `time_slot_id` | BIGINT | N | 값 참조 → `time_slot.time_slot_id`(물리 FK 아님) | 결제 준비 대상 회차 |
 | `reservation_id` | BIGINT | Y | 값 참조 → `reservation.reservation_id`(물리 FK 아님) | `CREATE`의 READY 단계에서는 NULL 가능 |
 | `reservation_participant_id` | BIGINT | Y | 값 참조 → `reservation_participant.reservation_participant_id`(물리 FK 아님), UNIQUE | 결제 완료 후 연결되는 참여자 |
-| `payment_purpose` | VARCHAR(20) | N | 앱 Enum: `CREATE`, `JOIN` | 결제 준비 구분 |
+| `payment_purpose` | ENUM('CREATE', 'JOIN') | N |  | 결제 준비 구분 |
 | `party_size` | INTEGER | N | CHECK 후보: `>= 1` | 결제·임시 선점 인원 |
 | `amount` | DECIMAL | N |  | `party_size` 기준 예약금 |
 | `currency` | VARCHAR(10) | N |  | PortOne 검증 대상 통화 |
-| `payment_status` | VARCHAR(20) | N | 앱 Enum, 복합 INDEX `idx_payment_status_expires_at_id`의 선행 컬럼 | `READY`, `PAID`, `EXPIRED`, `FAILED`, `REFUNDED` |
+| `payment_status` | ENUM('READY', 'PAID', 'EXPIRED', 'FAILED', 'REFUNDED') | N | 복합 INDEX `idx_payment_status_expires_at_id`의 선행 컬럼 | 결제 상태 |
 | `expires_at` | DATETIME | N | 복합 INDEX `idx_payment_status_expires_at_id`의 중간 컬럼 | READY 임시 선점 만료 시각 |
 | `paid_at` | DATETIME | Y |  | PAID 전환 시각 |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
@@ -380,11 +380,11 @@ erDiagram
 | `refund_id` | BIGINT | N | PK | 환불 식별자 |
 | `payment_id` | BIGINT | N | FK → `payment.payment_id`, UNIQUE | Payment 내부 PK를 참조하는 결제 전체 환불 대상 |
 | `amount` | DECIMAL | N |  | 환불 금액 |
-| `refund_status` | VARCHAR(20) | N | 앱 Enum | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` |
+| `refund_status` | ENUM('REQUESTED', 'PROCESSING', 'COMPLETED', 'FAILED') | N |  | 환불 상태 |
 | `requested_at`, `completed_at` | DATETIME | Y |  | 요청·완료 시각 |
 | `cancellation_id` | VARCHAR(64) | Y | UNIQUE | PortOne 취소(cancellation) 식별자. 요청 접수 시점에는 비어 있고, PortOne 응답·웹훅으로 확인되면 저장한다(#45) |
 | `idempotency_key` | VARCHAR(256) | N | UNIQUE, 변경 불가 | PortOne 환불 POST 전에 생성하는 외부 요청 식별자. DB에는 따옴표 없는 원본 값을 저장한다(#145) |
-| `request_reason` | VARCHAR | N | 변경 불가 | 최초 환불 요청 사유. amount·paymentId·idempotencyKey와 함께 동일 외부 요청 본문으로 고정한다(#145) |
+| `request_reason` | VARCHAR(255) | N | 변경 불가 | 최초 환불 요청 사유. `@Column`에 별도 `length` 지정이 없어 Hibernate 기본값 255 적용. amount·paymentId·idempotencyKey와 함께 동일 외부 요청 본문으로 고정한다(#145) |
 | `last_pg_checked_at` | DATETIME | Y |  | 외부 PG 조회를 실제로 시도한 시각. `updated_at`과 분리해 재확인 후보를 공정하게 순환한다(#141) |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
@@ -442,11 +442,13 @@ erDiagram
 | `chat_moderation_id` | BIGINT | N | PK | 내부 식별자 |
 | `chat_message_id` | BIGINT | N | UNIQUE | 메시지당 분석 결과 1건. 현재 Entity는 물리 FK 대신 원본 메시지 식별자를 보관 |
 | `version` | BIGINT | N | JPA `@Version` | stale UPDATE를 거절하는 낙관적 락 version |
-| `status` | VARCHAR(24) | N | 앱 Enum | `SAFE`, `FLAGGED`, `ANALYSIS_FAILED` |
-| `result` | VARCHAR(16) | Y | 앱 Enum | 완료 상태에서 `SAFE` 또는 `FLAGGED`; 실패면 NULL |
-| `risk_level` | VARCHAR(16) | Y | 앱 Enum | 완료 상태에서 `LOW`, `MEDIUM`, `HIGH`; 실패면 NULL |
-| `provider`, `model_name` | VARCHAR | N |  | 분석 Provider와 모델 관측값 |
-| `prompt_version`, `policy_version` | VARCHAR | N |  | 적용한 Prompt·Policy 계약 |
+| `status` | ENUM('SAFE', 'FLAGGED', 'ANALYSIS_FAILED') | N |  | 분석 처리 상태 |
+| `result` | ENUM('SAFE', 'FLAGGED') | Y |  | 완료 상태에서 `SAFE` 또는 `FLAGGED`; 실패면 NULL |
+| `risk_level` | ENUM('LOW', 'MEDIUM', 'HIGH') | Y |  | 완료 상태에서 `LOW`, `MEDIUM`, `HIGH`; 실패면 NULL |
+| `provider` | VARCHAR(32) | N |  | 분석 Provider 관측값 |
+| `model_name` | VARCHAR(128) | N |  | 분석 모델 관측값 |
+| `prompt_version` | VARCHAR(64) | N |  | 적용한 Prompt 계약 |
+| `policy_version` | VARCHAR(64) | N |  | 적용한 Policy 계약 |
 | `latency_millis` | BIGINT | N |  | 해당 분석 시도 관측값 |
 | `prompt_tokens`, `completion_tokens`, `total_tokens` | BIGINT | Y |  | Provider가 제공한 token 관측값; 실패면 NULL 가능 |
 | `analyzed_at` | DATETIME | N |  | 결과·최종 실패 기록 시각 |
@@ -460,7 +462,7 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---:|---|---|
 | `chat_moderation_id` | BIGINT | N | FK `fk_chat_moderation_category_moderation` → `chat_moderation.chat_moderation_id` | 컬렉션 소유 `ChatModeration` 식별자 |
-| `category` | VARCHAR(32) | N | 앱 Enum | `ModerationCategory` 값 |
+| `category` | ENUM('PROFANITY', 'PERSONAL_INFORMATION', 'SPAM') | N |  | `ModerationCategory` 값 |
 
 `version`은 동일 실패 행을 읽은 성공/실패 경로의 늦은 UPDATE가 완료 결과를 덮는 것을 막는다.
 
@@ -476,11 +478,11 @@ erDiagram
 |---|---|---:|---|---|
 | `outbox_event_id` | BIGINT | N | PK, 복합 INDEX `idx_outbox_event_status_next_attempt`의 후행 컬럼 | 내부 식별자 |
 | `event_id` | VARCHAR(36) | N | UNIQUE | UUID 이벤트 식별자 |
-| `event_type` | VARCHAR(64) | N | UNIQUE(event_type, aggregate_type, aggregate_id) | 앱 Enum: `CHAT_ROOM_CREATION_REQUESTED`, `CHAT_MESSAGE_CREATED`, `EMAIL_RESERVATION_CREATED`, `EMAIL_PARTICIPATION_COMPLETED`, `EMAIL_RECRUITMENT_CONFIRMED`, `EMAIL_RECRUITMENT_CANCELLED` |
-| `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE | `RESERVATION`(ChatRoom 생성·`EMAIL_RECRUITMENT_*`), `CHAT_MESSAGE`(`CHAT_MESSAGE_CREATED`), `RESERVATION_PARTICIPANT`(`EMAIL_RESERVATION_CREATED`, `EMAIL_PARTICIPATION_COMPLETED`) 중 하나 |
+| `event_type` | ENUM('CHAT_ROOM_CREATION_REQUESTED', 'EMAIL_RESERVATION_CREATED', 'EMAIL_PARTICIPATION_COMPLETED', 'EMAIL_RECRUITMENT_CONFIRMED', 'EMAIL_RECRUITMENT_CANCELLED', 'CHAT_MESSAGE_CREATED') | N | UNIQUE(event_type, aggregate_type, aggregate_id) | 이벤트 유형 |
+| `aggregate_type` | VARCHAR(32) | N | 위 복합 UNIQUE. Java enum 아닌 String 필드라 VARCHAR 유지 | `RESERVATION`(ChatRoom 생성·`EMAIL_RECRUITMENT_*`), `CHAT_MESSAGE`(`CHAT_MESSAGE_CREATED`), `RESERVATION_PARTICIPANT`(`EMAIL_RESERVATION_CREATED`, `EMAIL_PARTICIPATION_COMPLETED`) 중 하나 |
 | `aggregate_id` | BIGINT | N | 위 복합 UNIQUE | `aggregate_type`에 대응하는 `reservation_id`, `chat_message_id`, 또는 `reservation_participant_id` 값. 물리 FK가 아닌 값 기반 참조 |
 | `payload_version` | INT | N |  | 현재 1. Payload 원문·개인정보는 저장하지 않음 |
-| `status` | VARCHAR(16) | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 선행 컬럼 | `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` |
+| `status` | ENUM('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED') | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 선행 컬럼 | 처리 상태 |
 | `attempt_count` | INT | N |  | 해당 이벤트의 처리 실패 횟수. 최초 처리 뒤 5회 재시도 후 다음 실패에서 FAILED |
 | `next_attempt_at` | DATETIME | N | 복합 INDEX `idx_outbox_event_status_next_attempt`의 중간 컬럼 | 다음 처리 가능 시각 |
 | `processing_started_at` | DATETIME | Y |  | stale PROCESSING 회수 기준 |
@@ -500,7 +502,7 @@ erDiagram
 | `reservation_id` | BIGINT | N |  | 대상 예약. 물리 FK 아님 |
 | `reservation_participant_id` | BIGINT | N |  | 대상 참여자. 물리 FK 아님 |
 | `recipient_member_id` | BIGINT | N | 위 복합 UNIQUE | 수신 회원. 물리 FK 아님 |
-| `status` | VARCHAR(16) | N | 복합 INDEX `idx_email_outbox_delivery_event_status`의 후행 컬럼(선행 컬럼은 `outbox_event_id`) | 앱 Enum: `PENDING`, `SENT` |
+| `status` | ENUM('PENDING', 'SENT') | N | 복합 INDEX `idx_email_outbox_delivery_event_status`의 후행 컬럼(선행 컬럼은 `outbox_event_id`) | 발송 상태 |
 | `sent_at` | DATETIME | Y |  | `SENT` 전환 시각. `PENDING`은 NULL |
 | `created_at`, `updated_at` | DATETIME | N |  | 생성·수정 시각 |
 
