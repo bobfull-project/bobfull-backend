@@ -42,6 +42,11 @@ const CONCURRENT_USERS = Number(__ENV.CONCURRENT_USERS || 10);
 const BASE_DATE = __ENV.BASE_DATE || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 export const options = {
+    // setup()이 CONCURRENT_USERS명을 순차로 회원가입·로그인하므로(회원마다 2번 HTTP round-trip),
+    // 동시성이 커지면 k6 기본 setupTimeout(60s)을 넘길 수 있다(500명에서 실제로 발생, AWS
+    // 기준 왕복 약 80~150ms x 1,002회 ≈ 60초 근접). 넉넉히 잡아 하네스 자체의 순차 setup
+    // 한계 때문에 실행이 실패하지 않게 한다 — 이건 서버 성능이 아니라 테스트 스크립트의 한계다.
+    setupTimeout: '180s',
     scenarios: {
         peak_create_race: {
             executor: 'per-vu-iterations',

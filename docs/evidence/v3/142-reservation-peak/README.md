@@ -112,6 +112,17 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 | 10 | 1 | 9 | 0 | PASS | PASS | `raw/B-create-race-10users-AWS.*` |
 | 20 | 1 | 19 | 0 | PASS | PASS | `raw/B-create-race-20users-AWS.*` |
 | 50 | 1 | 49 | 0 | PASS | PASS | `raw/B-create-race-50users-AWS.*` |
+| 100 | 1 | 99 | 0 | PASS | — | `raw/B-create-race-100users-AWS.*` |
+| 200 | 1 | 199 | 0 | PASS | — | `raw/B-create-race-200users-AWS.*` |
+| 500 | 1 | 499 | 0 | PASS | — | `raw/B-create-race-500users-AWS.*`(`setupTimeout=180s` 필요, 아래 참고) |
+
+**환경 한계(서버가 아니라 하네스)**: `CONCURRENT_USERS=1000`은 `setup()`이 180초를 넘겨
+실패했다(`setup() execution timed out after 180 seconds`). `setup()`이 회원가입·로그인을
+순차로 하기 때문(1,000명이면 2,002회 순차 HTTP round-trip)이지, 서버가 느려진 게 아니다 —
+그 180초 동안 서버는 초당 약 10~16 요청을 오류 없이 처리하고 있었다(`raw/B-create-race-1000users-AWS.log`
+참고, `http_req_failed=0%`). 500명까지는 `setupTimeout`을 늘리는 것만으로 정확히 1명 성공을
+재확인했다. 더 큰 동시성을 보려면 `setup()`을 병렬화하거나(예: 여러 회원을 동시에 가입) 미리
+만들어둔 회원 풀을 재사용하는 방식으로 하네스를 고쳐야 한다(이번 범위 밖, 후속 개선 후보).
 
 로컬·AWS 모든 동시성 단계에서 정확히 1명만 성공하고 나머지는 전부
 `409 ACTIVE_RESERVATION_ALREADY_EXISTS`였다. `checks_succeeded`는 매 실행 100%였고
