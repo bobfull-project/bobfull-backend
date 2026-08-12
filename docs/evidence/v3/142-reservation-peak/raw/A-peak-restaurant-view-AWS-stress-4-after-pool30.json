@@ -1,0 +1,165 @@
+{
+    "root_group": {
+        "checks": {
+            "peak_restaurant_detail status is 200": {
+                "name": "peak_restaurant_detail status is 200",
+                "path": "::peak_restaurant_detail status is 200",
+                "id": "c3e6eecda259d624d31cadb203a90c35",
+                "passes": 14629,
+                "fails": 41
+            },
+            "peak_restaurant_detail body.success is true": {
+                "name": "peak_restaurant_detail body.success is true",
+                "path": "::peak_restaurant_detail body.success is true",
+                "id": "bfc484a2a67896e6bb40ad7edaaf15e4",
+                "passes": 14629,
+                "fails": 41
+            },
+            "peak_dining_sessions status is 200": {
+                "name": "peak_dining_sessions status is 200",
+                "path": "::peak_dining_sessions status is 200",
+                "id": "2ed23084638bf02bf9a601fdc977abd3",
+                "passes": 14632,
+                "fails": 38
+            },
+            "peak_dining_sessions body.success is true": {
+                "path": "::peak_dining_sessions body.success is true",
+                "id": "fb0a3ae0a14fbd88a64d9392afb49b9f",
+                "passes": 14632,
+                "fails": 38,
+                "name": "peak_dining_sessions body.success is true"
+            }
+        },
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {}
+    },
+    "metrics": {
+        "checks": {
+            "passes": 58522,
+            "fails": 158,
+            "value": 0.9973074301295161
+        },
+        "iterations": {
+            "count": 14670,
+            "rate": 18.500648967328267
+        },
+        "http_reqs": {
+            "count": 29345,
+            "rate": 37.00760354098487
+        },
+        "http_req_duration{expected_response:true}": {
+            "med": 6261.597,
+            "max": 37591.768,
+            "p(90)": 15514.763500000001,
+            "p(95)": 19010.113,
+            "p(99)": 26041.0196,
+            "avg": 7759.834168386527,
+            "min": 17.919
+        },
+        "http_req_sending": {
+            "avg": 0.01842167319815859,
+            "min": 0.002,
+            "med": 0.014,
+            "max": 3.429,
+            "p(90)": 0.027,
+            "p(95)": 0.039,
+            "p(99)": 0.087
+        },
+        "dropped_iterations": {
+            "count": 67529,
+            "rate": 85.16225794919636
+        },
+        "vus": {
+            "value": 39,
+            "min": 0,
+            "max": 300
+        },
+        "iteration_duration": {
+            "p(95)": 32099.23991234999,
+            "p(99)": 41963.317519979995,
+            "avg": 15660.500204243923,
+            "min": 3371.642917,
+            "med": 14074.672479,
+            "max": 65453.188709,
+            "p(90)": 27178.6046166
+        },
+        "data_sent": {
+            "count": 3141463,
+            "rate": 3961.7657946046324
+        },
+        "data_received": {
+            "count": 280303817,
+            "rate": 353497.1044662046
+        },
+        "http_req_receiving": {
+            "avg": 3.7954161185891606,
+            "min": 0.01,
+            "med": 0.612,
+            "max": 222.097,
+            "p(90)": 7.248600000000001,
+            "p(95)": 9.667,
+            "p(99)": 29.11731999999998
+        },
+        "http_req_waiting": {
+            "p(99)": 26851.328319999997,
+            "avg": 7824.432493065267,
+            "min": 17.694,
+            "med": 6276.544,
+            "max": 37586.026,
+            "p(90)": 15609.1176,
+            "p(95)": 19201.115799999996
+        },
+        "http_req_tls_handshaking": {
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0
+        },
+        "vus_max": {
+            "value": 300,
+            "min": 50,
+            "max": 300
+        },
+        "http_req_duration": {
+            "p(95)": 19205.869199999997,
+            "p(99)": 26857.338399999997,
+            "avg": 7828.24633085706,
+            "min": 17.919,
+            "med": 6278.362,
+            "max": 37591.768,
+            "p(90)": 15614.8412
+        },
+        "http_req_failed": {
+            "passes": 79,
+            "fails": 29266,
+            "value": 0.002692111092179247
+        },
+        "http_req_blocked": {
+            "med": 0.004,
+            "max": 55.908,
+            "p(90)": 0.007,
+            "p(95)": 0.012,
+            "p(99)": 6.351679999999999,
+            "avg": 0.12378394956553078,
+            "min": 0
+        },
+        "http_req_connecting": {
+            "max": 55.862,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 6.30656,
+            "avg": 0.11753746805247905,
+            "min": 0,
+            "med": 0
+        }
+    },
+    "setup_data": {
+        "date": "2026-08-13",
+        "restaurantId": 35
+    }
+}

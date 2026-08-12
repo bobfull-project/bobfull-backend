@@ -292,12 +292,73 @@ spring:
 운영 풀 크기를 임의로 올리는 결정은 하지 않았다(쿼리·DB 자원 계획은 #61/#62·Human 판단
 영역).
 
-**검증 범위와 한계**: 이 커밋에서 한 것은 "설정을 외부화"한 것뿐이다. 실제로 더 큰 값(예:
-`DB_POOL_MAX_SIZE=30`)으로 `bobfull-k6-test-app`을 재배포해 Stress를 다시 돌려보는
-**검증까지는 하지 못했다** — 이 환경에서는 그 인스턴스를 재배포할 권한이 없다(AWS 계정이
-분리돼 있음, Issue #207 참고). 재배포는 인프라 담당자(김홍기)와 조율이 필요하고, RDS의
-`max_connections` 여유도 먼저 확인해야 한다(여러 개선 후보 중 하나가 다른 자원을 옮겨서
-포화시킬 수 있음).
+### After 재측정 — `DB_POOL_MAX_SIZE=30` 재배포 후 Stress 재실행
+
+PR #220 머지 후 인프라 담당자(김홍기)가 `bobfull-k6-test-app`을 `DB_POOL_MAX_SIZE=30`으로
+재배포했다(프로세스 재시작 `2026-08-12 08:35:58Z` 확인, `hikaricp_connections_max=30.0`
+실측으로 재배포 반영 확인). 같은 조건(`STAGE=stress`)으로 Stress를 재실행하고 로컬 Prometheus를
+다시 연결해 같은 지표를 수집했다.
+
+| 지표 | Before(풀=10, `-stress-3`) | After(풀=30, `-stress-4-after-pool30`) | 변화 |
+|---|---:|---:|---|
+| p95 응답시간 | 13.14s | **19.21s** | 46% 악화 |
+| p99 응답시간 | 19.62s | **26.86s** | 37% 악화 |
+| HTTP RPS(`http_reqs`) | 51.4 req/s | **37.0 req/s** | 처리량 28% 감소 |
+| Iteration/s(`iterations`) | 25.7 iter/s | **18.5 iter/s** | 28% 감소 |
+| 오류율(`http_req_failed`) | 0.02%(9/40,701) | 0.27%(79/29,345) | 소폭 악화(절대치는 여전히 낮음) |
+| dropped_iterations | 61,851건(78.2/s) | **67,529건(85.2/s)** | 9% 악화 |
+| CPU(최대) | 88~98% | 97~98% | 동일하게 포화 |
+| HikariCP active(최대) | 10(=풀 100%) | **30(=풀 100%)** | 풀을 3배로 늘려도 여전히 100% 포화 |
+| HikariCP pending(최대) | ~192건 | ~171건 | 거의 동일 |
+| Tomcat 스레드(고정) | 232 | 235 | 거의 동일 |
+
+Raw: `raw/A-peak-restaurant-view-AWS-stress-4-after-pool30.log`, `.json`,
+`raw/prometheus/A-Stress-after-pool30-{cpu_process,hikari_active,hikari_pending,threads}.json`
+
+**결론: 풀 크기 확대는 개선이 아니라 악화로 나타났다.** `active`가 여전히 풀 사이즈만큼
+꽉 차 있고(10/10 → 30/30, 둘 다 100%) CPU도 동일하게 97~98%로 포화된 채라는 점이 이 결과를
+설명한다 — DB Connection Pool 크기는 애초에 진짜 제약이 아니었고, **t3.small(2 vCPU)
+인스턴스 자체의 CPU 용량이 진짜 상한선**이었다(위 "근본 원인 확인"의 가설과 일치). 오히려
+커넥션·스레드가 늘어난 만큼 2개뿐인 vCPU에서 컨텍스트 스위칭 오버헤드가 커져 처리량이
+줄고 지연이 늘어난 것으로 해석된다.
+
+### After 재측정 2 — 인스턴스를 t3.2xlarge(8 vCPU)로 임시 확장 후 Stress 재실행
+
+위 결론에 따라 인스턴스 vCPU 확장이 실제로 도움이 되는지 직접 확인했다. 인프라 담당자가
+`bobfull-k6-test-app`을 t3.2xlarge(8 vCPU)로 임시 확장했다(`system_cpu_count=8.0` 실측 확인,
+IP가 `3.34.1.161`로 변경돼 새 IP도 함께 확인). `DB_POOL_MAX_SIZE`는 이 시점에도 아직 30으로
+남아있었다 — 풀 크기 자체의 영향은 이미 위에서 독립적으로 확인했으므로(같은 CPU=2 조건에서
+풀 10→30이 도움이 안 됨), 롤백을 기다리지 않고 이 상태로 먼저 재측정해 CPU 변수만 새로 얹은
+효과를 봤다.
+
+| 지표 | ①CPU=2·풀=10 | ②CPU=2·풀=30 | ③**CPU=8·풀=30** |
+|---|---:|---:|---:|
+| p95 응답시간 | 13.14s | 19.21s | **4.44s** |
+| p99 응답시간 | 19.62s | 26.86s | **5.63s** |
+| HTTP RPS(`http_reqs`) | 51.4 req/s | 37.0 req/s | **73.5 req/s** |
+| 오류율(`http_req_failed`) | 0.02%(9/40,701) | 0.27%(79/29,345) | **0.002%(1/57,881)** |
+| dropped_iterations | 61,851건(78.2/s) | 67,529건(85.2/s) | **53,261건(67.6/s)** |
+| CPU(최대) | 88~98% | 97~98% | **49%(더 이상 포화 아님)** |
+| HikariCP active(최대) | 10(=풀 100%) | 30(=풀 100%) | **30(=풀 100%, 여전히 포화)** |
+| HikariCP pending(최대) | ~192건 | ~171건 | ~174건 |
+
+Raw: `raw/A-peak-restaurant-view-AWS-stress-5-after-8vcpu.log`, `.json`,
+`raw/prometheus/A-Stress-after-8vcpu-{cpu_process,hikari_active,hikari_pending,threads}.json`
+
+**결론: CPU가 진짜 원인이었다는 게 확증됐다.** CPU를 2→8 vCPU로 늘리자 `process_cpu_usage`가
+97~98%에서 49%로 내려가 더 이상 포화 상태가 아니고, p95/p99가 13.14s/19.62s(①) →
+4.44s/5.63s(③)로 크게 개선됐으며 오류율도 거의 0으로 떨어졌다. **다만 완전히 해결되지는
+않았다** — `HikariCP active`가 여전히 풀 크기(30)만큼 100% 포화돼 있고 `dropped_iterations`도
+5만 건대로 목표 부하(320 iter/s)를 여전히 못 따라간다. CPU 여유가 생기자 **DB Connection
+Pool 크기(현재 30)가 다음 병목으로 드러난 것**으로 해석된다 — CPU가 부족했던 ①·②에서는 풀을
+늘려도 의미가 없었지만, CPU가 충분한 지금은 풀을 더 늘리는 실험이 다시 의미를 가질 수 있다
+(이번 PR 범위에서는 실행하지 않음, 후속 후보).
+
+**권장 후속 조치**: (1) 인스턴스 vCPU 확장이 실제로 효과가 있다는 근거를 확보했으니, 운영
+환경 인스턴스 크기 조정 여부를 Human/인프라 담당자가 판단(비용 대비 효과 검토). (2) CPU가
+충분한 상태를 유지한다는 전제로 `DB_POOL_MAX_SIZE`를 재조정하는 실험이 후속으로 유효함(단,
+이번 PR에서 `DB_POOL_MAX_SIZE=30` 자체는 롤백하기로 이미 결정됨 — 아래 "남은 작업" 참고,
+인스턴스 크기도 비용 문제로 이 실험 이후 원래 크기로 되돌릴 예정).
 
 ## 남은 작업
 
@@ -308,9 +369,18 @@ spring:
 - (완료, PR #220 재검토 반영) raw Evidence JSON에 남아있던 실제 JWT 토큰 제거 + `handleSummary()`로
   재발 방지(BLOCKER), B의 p95/p99를 경쟁 요청만의 별도 Trend로 분리 재측정(MAJOR 1), 잔여
   RPS/iter-s 표기 정리(MAJOR 2), 오류율 지표 해석 주의사항 문서화(MINOR)
-- **재배포 후 재측정 필요**: `DB_POOL_MAX_SIZE`를 늘려 `bobfull-k6-test-app`을 재배포한 뒤
-  같은 Stress를 재실행해 실제로 병목이 개선되는지 확인(김홍기 조율 필요, RDS `max_connections`
-  여유 확인 필요)
+- (완료) `DB_POOL_MAX_SIZE=30`으로 재배포 후 Stress 재실행 — **풀 확대는 개선이 아니라 악화로
+  확인됨**(위 "After 재측정" 참고). CPU(2 vCPU)가 진짜 상한선이라는 근본 원인 확인의 가설을
+  재확인했다.
+- (완료) 인스턴스를 t3.2xlarge(8 vCPU)로 임시 확장 후 재측정 — **CPU가 진짜 원인이었음을
+  확증**(97~98% → 49%, p95 13.14s→4.44s). 다만 CPU 여유가 생기자 HikariCP 풀(30)이 새 병목으로
+  드러남(위 "After 재측정 2" 참고).
+- **Human 결정**: 이 실험 이후 인스턴스는 비용 문제로 원래 크기(t3.small)로, `DB_POOL_MAX_SIZE`도
+  기본값(10)으로 **둘 다 되돌리기로 확정**(대화창 결정) — 풀을 낮추는 건 지금 병목(CPU=8·풀=30
+  조합)에는 역효과이므로 하지 않고, "CPU가 원인이다/ 인스턴스 확장이 효과 있다"는 결론만
+  Evidence로 남긴다.
+- 운영 환경 인스턴스 크기 조정, 풀 크기 재튜닝(CPU 확장이 실제로 결정된 뒤), RDS
+  `max_connections` 여유 확인은 모두 이번 범위 밖 후속 과제로 남긴다.
 - (완료) #60(예약 좌석 락 전략 재설계)이 [PR #234](https://github.com/bobfull-project/bobfull-backend/pull/234)로
   병합돼 "비관적 락 유지"로 결론남 — 시나리오 B의 재측정(After)이 더 이상 필요 없어 결과를
   최종으로 재분류함
