@@ -15,7 +15,7 @@
 ## 최신 계약 메모
 
 - `MemberResponse.businessNumber`는 MEMBER에서는 null이며 `NON_NULL` 직렬화 정책으로 응답에서 생략된다.
-- 현재 회원 HTTP API는 내 정보 조회/수정 2개이며 과거 `DELETE /api/members/me`는 존재하지 않는다.
+- 현재 회원 HTTP API는 내 정보 조회/수정 2개다.
 
 ---
 

@@ -23,7 +23,6 @@
 ## 최신 계약 메모
 
 - 현재 예약 HTTP API는 10개다.
-- 과거 `GET /api/reservations/{reservationId}`, 참여자 공개 조회 2개, 모집 상태 변경 API는 현재 코드에 존재하지 않는다.
 - `ReservationCancellationRequest.reason`은 `@NotBlank`, `@Size(max=255)`다.
 
 ---

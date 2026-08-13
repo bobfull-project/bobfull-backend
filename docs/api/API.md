@@ -80,19 +80,4 @@
 4. Security/ErrorCode 변경 시 권한·Error 섹션도 함께 수정한다.
 5. 최종 QA에서 전체 Controller와 문서를 `Method + Path` 기준으로 다시 비교한다.
 
-## 현재 코드에 존재하지 않는 과거 API
-
-아래 API는 수정 전 명세에는 있었지만 최신 develop에는 존재하지 않는다.
-
-- `DELETE /api/members/me`
-- `GET /api/admin/refunds/failed`
-- `GET /api/owner/restaurants/{restaurantId}/settlements/summary`
-- `GET /api/reservations/{reservationId}`
-- `GET /api/reservations/{reservationId}/participations`
-- `GET /api/reservations/{reservationId}/participations/me`
-- `PATCH /api/reservations/{reservationId}/recruitment`
-- `POST /api/admin/payments/{paymentId}/retry`
-- `POST /api/admin/refunds/{refundId}/retry`
-- `POST /api/admin/settlements/recalculate`
-
 > WebSocket/STOMP 메시지 계약과 내부 Kafka/Outbox/Redis 흐름은 HTTP API 명세가 아니라 Architecture/ADR/Evidence에서 관리한다.
