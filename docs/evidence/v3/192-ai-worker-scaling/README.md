@@ -24,6 +24,15 @@
 - Scale-out 우선 기준: Consumer Lag 주신호 + Provider 429/AI p95 병행 확인
 - MSA 판단: B안으로 충분하면 MSA 미도입을 정상 결론으로 허용
 
+## Retry 증폭 확인 (2026-08-13, 설정값 확인)
+
+Issue 본문의 우려대로 Kafka Retry(최대 3회) × Spring AI 내부 Retry가 곱해지면 메시지당 최대 30회까지 외부 AI 호출이 늘 수 있다. 현재 설정을 다시 확인한 결과:
+
+- `application-prod.yml`: `spring.retry.max-attempts: 1`(Spring AI 내부 Retry 비활성 — 1회만 시도)
+- `application-prod.yml`: `bobfull.kafka.chat-message.consumer-max-attempts: 3`(Kafka Consumer Retry, 최초 처리 포함 최대 3회)
+
+메시지당 실제 최대 외부 AI 호출 수 = 3(Kafka) × 1(Spring AI) = **3회**(숨은 증폭 없음). 이 설정은 #59에서 이미 정해둔 값이며 이번 실행에서 변경하지 않았다. 실제 Provider 대상 재검증 시에도 이 두 값이 바뀌지 않았는지 함께 확인해야 한다.
+
 ## 실험 준비 — 이번 실행에서 추가한 기반 코드
 
 | 항목 | 내용 |
@@ -133,21 +142,21 @@ Consumer 중단 15건 적체 → 재개 후 유실 0건, 복구 7.8초(실험 B)
 Consumer 1→2→3 확장 시 drain time 15.4초→15.5초→10.4초 — 2에서는 거의 개선 없었고 3에서만 개선(Partition key 분산도 영향, 실험 D)
 ```
 
-## 최종 판정 (실측 기반 임시 결론 — Human 최종 확인 필요)
+## 최종 판정 (2026-08-13 Human 확정)
 
 ```text
-통합 모놀리스 유지 (임시 채택)
+통합 모놀리스 유지 (최종 확정)
 ```
 
-근거: Human 결정 Q1의 분리 착수 기준(Lag 미회복 5분+/AI 처리 p99 3초 반복 초과/HTTP p95 20%+ 동반 악화) 중 어느 것도 이번 실측 범위에서 관찰되지 않았다. AI 지연이 30배(100ms→3s) 늘어도 Chat SEND p95는 거의 그대로였고, Consumer 중단·AI 반복 실패도 Web이나 다른 채팅방 처리에 영향을 주지 않았다. Kafka 채택 근거도 속도가 아니라 신뢰성(적체·재시도·격리·복구)이라는 것이 실험 0에서 확인됐다.
+근거: Human 결정 Q1의 분리 착수 기준(Lag 미회복 5분+/AI 처리 p99 3초 반복 초과/HTTP p95 20%+ 동반 악화) 중 어느 것도 이번 실측 범위에서 관찰되지 않았다. AI 지연이 30배(100ms→3s) 늘어도 Chat SEND p95는 거의 그대로였고, Consumer 중단·AI 반복 실패도 Web이나 다른 채팅방 처리에 영향을 주지 않았다. Kafka 채택 근거도 속도가 아니라 신뢰성(적체·재시도·격리·복구)이라는 것이 실험 0에서 확인됐고, Retry 증폭 우려도 현재 설정(3×1=3회)에서 해당하지 않음을 재확인했다. B안(Web/AI Worker 실행 역할 분리)과 C안(MSA)은 필요성이 확인되지 않아 이번 V3 범위에서 도입하지 않는다.
 
-**이 결론이 최종이 아닌 이유(Human 확인 필요):**
+**측정 한계(계속 유효 — 남겨두는 이유는 아래에서 트리거로 재검토하기 위함):**
 - 실제 OpenAI Provider가 아닌 `FakeAiModerationAdapter`로만 측정함 — Provider 429/Rate Limit·실제 지연 변동성은 미반영
-- 부하 규모가 경량(요청 15~30건, 동시 10명)이라 프로덕션 피크 트래픽에서는 재확인 필요
+- 부하 규모가 경량(요청 15~30건, 동시 10명)이라 프로덕션 피크 트래픽과는 다름
 - CPU/Heap/DB Pool 등 실제 리소스 경쟁은 측정하지 않음(지연·처리량 결과로 간접 추정만 함)
 - Worker Scale-out 시 Partition 수보다 Consumer를 늘렸을 때의 유휴 Consumer 문제, Rebalance 발생 빈도는 미실측
 
-다음 후보는 위 갭이 실제로 문제가 되는 것이 확인될 때만 재검토한다:
+**재검토 트리거:** 위 한계가 실제 운영(#64 Prometheus/Grafana)에서 문제로 드러나거나, Human 결정 Q1 기준(Lag 미회복 5분+/AI p99 3초 반복/HTTP p95 20%+ 악화)이 실측되면 그때 아래를 재검토한다. 그 전까지는 별도 부하 재검증을 추가로 수행하지 않는다.
 
 ```text
 실행 역할만 Web / AI Worker 분리 (B안)
