@@ -11,6 +11,7 @@
 - 로컬 Docker app 검증용 Compose 설정
 - ECR push, EC2 bootstrap, EC2 deploy, 배포 verify 스크립트
 - GitHub Actions 기반 백엔드 CI workflow와 자동 배포 workflow 파일
+- ALB Target Group weight 기반 Blue-Green 배포 orchestration
 - 운영 환경변수 이름과 Parameter Store 이름 기준
 - 이미지 저장용 S3 버킷 이름 환경변수 기준
 - 식당 이미지 검증용 Java Lambda 수동 설정 기준
@@ -29,6 +30,7 @@
 | `REDIS_HOST` | Redis Host | 필수 |
 | `REDIS_PORT` | Redis Port | 선택 |
 | `REDIS_SSL_ENABLED` | Redis SSL/TLS 사용 여부. prod 기본값은 `true`이며 EC2-local/Docker Redis에서는 `false`로 둔다. | 선택 |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | 필수 |
 | `JWT_SECRET` | JWT 서명 Secret | 필수 |
 | `JWT_ACCESS_TOKEN_EXPIRATION_SECONDS` | Access Token 만료 초 | 선택 |
 | `AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS` | Refresh Token 만료 초 | 선택 |
@@ -70,6 +72,7 @@
 /bobfull/prod/db-username
 /bobfull/prod/db-password
 /bobfull/prod/redis-host
+/bobfull/prod/kafka-bootstrap-servers
 /bobfull/prod/jwt-secret
 /bobfull/prod/portone-api-secret
 /bobfull/prod/portone-store-id
@@ -134,7 +137,7 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 백엔드는 검증 단계와 운영 배포 단계를 분리한다.
 
 - `.github/workflows/ci-backend-v1.yml`: `develop` push에서 Gradle 검증과 Docker build만 수행한다.
-- `.github/workflows/deploy-backend-v1.yml`: `main` push에서 CI 성공 후 ECR push, SSM Run Command 기반 EC2 컨테이너 교체, 배포 후 검증을 수행한다.
+- `.github/workflows/deploy-backend-v1.yml`: `main` push에서 CI 성공 후 ECR push, 비활성 ALB Target Group의 EC2 2대에 SSM 배포, Target Group health 확인, Listener weight 전환과 public 검증을 수행한다.
 
 ECR repository는 AWS에 미리 생성되어 있어야 한다. 배포 workflow와 ECR push 스크립트는 `aws ecr describe-repositories`로 존재 여부만 확인하며, 없으면 실패하고 자동 생성하지 않는다.
 ECR image는 GitHub commit SHA 태그로만 push한다. 이미지 태그 불변성을 유지하기 위해 `latest` 태그는 생성하거나 push하지 않는다.
@@ -156,11 +159,14 @@ main push
 → Gradle clean check bootJar
 → Docker image build
 → ECR push
-→ SSM Run Command로 EC2 배포 명령 실행
-→ Parameter Store 값으로 env-file 생성
-→ 기존 컨테이너 교체
-→ EC2 localhost health check
-→ SSM 명령 Success polling
+→ ALB Listener의 현재 Blue/Green weight 조회
+→ weight 0인 비활성 Target Group의 EC2 target 2대 조회
+→ SSM Run Command로 비활성 EC2 2대에 같은 image 배포
+→ 각 EC2에서 Parameter Store env-file 생성, 기존 컨테이너 교체, localhost readiness 확인
+→ 비활성 Target Group의 모든 target healthy 확인
+→ ALB Listener weight를 기존 활성 0, 신규 활성 100으로 전환
+→ public readiness와 API 검증
+→ 실패 시 기존 Listener default action으로 rollback
 → ECR, Parameter Store, S3, CloudWatch 확인
 ```
 
@@ -171,8 +177,25 @@ GitHub Actions의 AWS 인증은 장기 Access Key를 저장하지 않고 OIDC로
 ```text
 AWS_REGION
 ECR_REPOSITORY
-BACKEND_EC2_INSTANCE_ID
 BACKEND_PARAMETER_PREFIX
+BACKEND_ALB_LISTENER_ARN
+BACKEND_BLUE_TARGET_GROUP_ARN
+BACKEND_GREEN_TARGET_GROUP_ARN
+BACKEND_PUBLIC_READINESS_URL
+BACKEND_PUBLIC_API_VERIFY_URL
+```
+
+선택 GitHub Variables:
+
+```text
+BACKEND_TARGET_PORT
+BACKEND_TG_HEALTH_TIMEOUT_SECONDS
+BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS
+BACKEND_PUBLIC_VERIFY_ATTEMPTS
+BACKEND_PUBLIC_VERIFY_DELAY_SECONDS
+BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS
+BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS
+BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS
 ```
 
 필수 GitHub Secrets:
@@ -198,8 +221,12 @@ ecr:BatchGetImage
 ecr:DescribeImages
 ssm:SendCommand
 ssm:GetCommandInvocation
+ssm:DescribeInstanceInformation
 ssm:GetParameter
 ssm:GetParametersByPath
+elasticloadbalancing:DescribeListeners
+elasticloadbalancing:ModifyListener
+elasticloadbalancing:DescribeTargetHealth
 s3:ListBucket
 logs:DescribeLogStreams
 ```
@@ -228,13 +255,17 @@ CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 
 - Gradle `clean check bootJar` 성공
 - Docker image build와 ECR push 성공
-- `aws ssm send-command` 명령 완료 상태가 `Success`
-- EC2 내부 배포 스크립트의 컨테이너 `running` 확인 성공
-- EC2 내부 `localhost` 기준 `GET /api/restaurants` health check 성공
+- ALB Listener의 Blue/Green weight가 정확히 `100/0` 또는 `0/100`
+- 비활성 Target Group의 EC2 target이 정확히 2대이며 둘 다 SSM managed `Online`
+- 비활성 EC2 2대의 `aws ssm send-command` 명령 완료 상태가 모두 `Success`
+- 비활성 EC2 2대 내부 배포 스크립트의 컨테이너 `running` 확인 성공
+- 비활성 EC2 2대 내부 `localhost` 기준 readiness health check 성공
+- 비활성 Target Group의 target 2대가 모두 `healthy`
+- ALB Listener weight 전환 후 public readiness와 API 검증 성공
 - Parameter Store 경로 조회, S3 이미지 버킷 접근, CloudWatch Log Group 접근 확인
-- EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
+- 비활성 EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
 
-자동 롤백과 Blue-Green 배포는 V1 제외 범위다. 새 컨테이너 실행 실패 시 workflow를 실패 처리하고 EC2 Docker/CloudWatch Logs에서 원인을 확인한다.
+비활성 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다. Traffic 전환 후 public 검증이 실패하면 전환 직전에 저장한 Listener default action으로 rollback한다. EC2 배포 실패 원인은 EC2 Docker/CloudWatch Logs에서 확인한다.
 
 ## CORS와 S3 프론트엔드 Origin
 
@@ -353,5 +384,5 @@ lambda/restaurant-image-validator/build/libs/restaurant-image-validator-0.0.1-SN
 
 다음 항목은 이번 PR에 포함하지 않는다.
 
-- ALB, Auto Scaling, Route 53, ACM HTTPS, CloudFront, Blue-Green 배포, 자동 롤백
+- Auto Scaling, Route 53, ACM HTTPS, CloudFront
 - main 반영 이후의 백엔드 운영 CD 실제 실행 결과
