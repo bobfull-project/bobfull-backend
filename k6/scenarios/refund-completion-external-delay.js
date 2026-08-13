@@ -67,7 +67,11 @@ const MEMBER_POOL_SIZE = Number(__ENV.MEMBER_POOL_SIZE || 20);
 const BASE_DATE = __ENV.BASE_DATE || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 export function setup() {
-    const { sessionIds } = buildCreateTargetPool('refund-f', RESERVATION_POOL_SIZE, BASE_DATE);
+    // buildCreateTargetPool은 하루 단위로 세션을 채우기 때문에 요청한 poolSize보다 훨씬 많은
+    // sessionId를 돌려줄 수 있다(#63 Fixture 구현 특성). 그대로 다 쓰면 필요 이상의 예약을
+    // 만들며 setup() 시간을 낭비하므로, 실제 필요한 개수만큼만 자른다.
+    const { sessionIds: allSessionIds } = buildCreateTargetPool('refund-f', RESERVATION_POOL_SIZE, BASE_DATE);
+    const sessionIds = allSessionIds.slice(0, RESERVATION_POOL_SIZE);
     const memberTokens = createMemberPool('refund-f', MEMBER_POOL_SIZE);
 
     const reservations = sessionIds.map((sessionId, i) =>
