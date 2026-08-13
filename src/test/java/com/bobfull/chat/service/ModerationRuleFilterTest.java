@@ -11,27 +11,29 @@ class ModerationRuleFilterTest {
 
     @Test
     void 고신뢰_개인정보_욕설_스팸만_CLEAR_FLAGGED한다() {
-        assertFlagged("010-1234-5678", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
-        assertFlagged("010 1234 5678", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
-        assertFlagged("010.1234.5678", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
+        assertFlagged("내 번호 010-1234-5678", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
+        assertFlagged("제 연락처 010 1234 5678", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
+        assertFlagged("연락처 010.1234.5678 남깁니다", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
         assertFlagged("씨발", ModerationCategory.PROFANITY, RiskLevel.HIGH);
         assertFlagged("시 발", ModerationCategory.PROFANITY, RiskLevel.HIGH);
         assertFlagged("개새끼", ModerationCategory.PROFANITY, RiskLevel.HIGH);
         assertFlagged("죽여버린다", ModerationCategory.PROFANITY, RiskLevel.HIGH);
-        assertFlagged("코인 수익방", ModerationCategory.SPAM, RiskLevel.HIGH);
-        assertFlagged("주식 리딩방", ModerationCategory.SPAM, RiskLevel.HIGH);
-        assertFlagged("대출 승인 보장", ModerationCategory.SPAM, RiskLevel.HIGH);
+        assertFlagged("코인 수익방 들어오세요", ModerationCategory.SPAM, RiskLevel.HIGH);
+        assertFlagged("주식 리딩방에서 종목을 알려드립니다", ModerationCategory.SPAM, RiskLevel.HIGH);
+        assertFlagged("대출 승인 보장, 지금 신청하세요", ModerationCategory.SPAM, RiskLevel.HIGH);
     }
 
     @Test
     void SAFE_경계와_애매한_표현은_LLM_REQUIRED다() {
-        List.of("죽", "먹고", "싶다", "와 이 집 음식 죽이는 맛이네요", "식당 전화번호는 02-1234-5678입니다", "바보야", "내일 7시에 봐요")
+        List.of("죽", "먹고", "싶다", "와 이 집 음식 죽이는 맛이네요", "식당 전화번호는 02-1234-5678입니다", "식당 전화번호는 010-1234-5678입니다",
+                "여기가 프로젝트의 시발점입니다", "바보야", "내일 7시에 봐요", "코인 수익방은 사기 같아요", "주식 리딩방 사기 조심하세요", "대출 승인 보장 광고는 믿지 마세요")
                 .forEach(input -> assertThat(filter.clearFlagged(input)).as(input).isEmpty());
     }
 
     @Test
     void 복합_위반_후보는_단일_Rule_category를_저장하지_않고_LLM_REQUIRED다() {
-        assertThat(filter.clearFlagged("내 번호 010-1234-5678, 수익방 들어와")).isEmpty();
+        assertThat(filter.clearFlagged("내 번호 010-1234-5678이야 씨발")).isEmpty();
+        assertThat(filter.clearFlagged("내 번호 010-1234-5678이야. 주식 리딩방 들어오세요")).isEmpty();
     }
 
     @Test
