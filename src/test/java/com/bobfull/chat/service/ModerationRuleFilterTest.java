@@ -13,7 +13,7 @@ class ModerationRuleFilterTest {
     void 고신뢰_개인정보_욕설_스팸만_CLEAR_FLAGGED한다() {
         assertFlagged("내 번호 010-1234-5678", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
         assertFlagged("제 연락처 010 1234 5678", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
-        assertFlagged("연락처 010.1234.5678 남깁니다", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
+        assertFlagged("내 연락처 010.1234.5678입니다", ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
         assertFlagged("씨발", ModerationCategory.PROFANITY, RiskLevel.HIGH);
         assertFlagged("시 발", ModerationCategory.PROFANITY, RiskLevel.HIGH);
         assertFlagged("개새끼", ModerationCategory.PROFANITY, RiskLevel.HIGH);
@@ -26,7 +26,9 @@ class ModerationRuleFilterTest {
     @Test
     void SAFE_경계와_애매한_표현은_LLM_REQUIRED다() {
         List.of("죽", "먹고", "싶다", "와 이 집 음식 죽이는 맛이네요", "식당 전화번호는 02-1234-5678입니다", "식당 전화번호는 010-1234-5678입니다",
-                "여기가 프로젝트의 시발점입니다", "바보야", "내일 7시에 봐요", "코인 수익방은 사기 같아요", "주식 리딩방 사기 조심하세요", "대출 승인 보장 광고는 믿지 마세요")
+                "식당 연락처 010-1234-5678 남깁니다", "여기가 프로젝트의 시발점입니다", "바보야", "내일 7시에 봐요", "코인 수익방은 사기 같아요",
+                "주식 리딩방 사기 조심하세요", "대출 승인 보장 광고는 믿지 마세요", "코인 수익방 가입하지 마세요",
+                "주식 리딩방 참여하면 안 됩니다", "대출 승인 보장 신청하지 마세요")
                 .forEach(input -> assertThat(filter.clearFlagged(input)).as(input).isEmpty());
     }
 

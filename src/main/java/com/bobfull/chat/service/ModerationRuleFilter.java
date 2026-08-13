@@ -12,11 +12,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class ModerationRuleFilter {
     private static final Pattern MOBILE_PHONE = Pattern.compile("(?<!\\d)010[\\s.-]*\\d{4}[\\s.-]*\\d{4}(?!\\d)");
-    private static final Pattern PERSONAL_PHONE_CONTEXT = Pattern.compile("(내 번호|제 번호|내 연락처|제 연락처|연락처.*남깁니다)");
+    private static final Pattern PERSONAL_PHONE_CONTEXT = Pattern.compile("(내 번호|제 번호|내 연락처|제 연락처)");
     private static final Pattern EXACT_PROFANITY = Pattern.compile("^(씨발|시발|시[\\s.\\-@]+발|개새끼(야)?|죽여버린다)$");
-    private static final Pattern COIN_INDUCEMENT = Pattern.compile("코인 수익방.*(들어오세요|가입|참여|신청)");
-    private static final Pattern STOCK_INDUCEMENT = Pattern.compile("주식 리딩방.*(들어오세요|가입|참여|신청|알려드립니다)");
-    private static final Pattern LOAN_INDUCEMENT = Pattern.compile("대출 승인 보장.*(신청|가입|이용|문의)");
+    private static final Pattern COIN_INDUCEMENT = Pattern.compile("코인 수익방.*(들어오세요|가입하세요|참여하세요|신청하세요)");
+    private static final Pattern STOCK_INDUCEMENT = Pattern.compile("주식 리딩방.*(들어오세요|가입하세요|참여하세요|신청하세요|종목을 알려드립니다)");
+    private static final Pattern LOAN_INDUCEMENT = Pattern.compile("대출 승인 보장.*(신청하세요|가입하세요)");
 
     public Optional<ModerationResult> clearFlagged(String content) {
         if (isPromptInjectionCandidate(content)) return Optional.empty();
