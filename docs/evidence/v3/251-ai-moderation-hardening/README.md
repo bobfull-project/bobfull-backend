@@ -14,21 +14,21 @@
 
 | Metric | Before | After |
 |---|---:|---:|
-| LLM Calls | 88 | 71 |
-| LLM Call Reduction | - | 19.3% |
-| Total Tokens | 66,766 | 53,801 |
-| Token Reduction | - | 19.4% |
-| Result Accuracy | 62/66 | 62/66 |
-| Category Exact | 61/66 | 62/66 |
+| LLM Calls | 88 | 72 |
+| LLM Call Reduction | - | 18.2% |
+| Total Tokens | 66,766 | 54,565 |
+| Token Reduction | - | 18.3% |
+| Result Accuracy | 62/66 | 61/66 |
+| Category Exact | 61/66 | 61/66 |
 | Risk Exact | 61/66 | 61/66 |
 | FP | 3 | 3 |
-| FN | 1 | 1 |
-| Rule Fast Path Precision | - | 17/17 |
+| FN | 1 | 2 |
+| Rule Fast Path Precision | - | 16/16 |
 | Rule Fast Path FP | - | 0 |
 
 Frozen Dataset `issue-251-hardening-v1` (SHA-256
 `9caf442202e82faaedd333ee5eaf57b422b06b48669bc7c5c1418e7487afbaba`)에서 고신뢰 CLEAR_FLAGGED Rule은
-Rule attributable moderation regression 없이 OpenAI call 19.3%, token 19.4% 감소를 관측했다. 이는 모든
+Rule attributable moderation regression 없이 OpenAI call 18.2%, token 18.3% 감소를 관측했다. 이는 모든
 production 입력에서의 품질·절감 보장이 아니라 단일 Frozen Dataset 측정값이다.
 
 LLM_REQUIRED의 Provider 결과 차이는 Rule 결과와 분리한다. Context는 일부 Split 공격 탐지에는 효과가 있었으나
@@ -36,8 +36,9 @@ LLM_REQUIRED의 Provider 결과 차이는 Rule 결과와 분리한다. Context�
 millisecond 단위 측정에서 0ms로 관측됐지만 이를 절대적 latency 보장으로 표현하지 않는다. `COST = NOT_CALCULATED`.
 
 PR #255 MAJOR boundary 수정으로 공개 사업장 `010` 번호, `시발점` substring, 스팸 경고·비판 문장, 복합 category
-후보는 모두 LLM_REQUIRED로 좁혔다. Frozen routing은 `CLEAR_FLAGGED=17`, `LLM_REQUIRED=49`로 유지됐으며,
-최종 After Implementation SHA는 `131d3cf4c8c38bcc5eda259e401a43fb0189387e`다.
+후보는 모두 LLM_REQUIRED로 좁혔다. 마지막 공개 사업장 연락처 boundary까지 반영한 Frozen routing은
+`CLEAR_FLAGGED=16`, `LLM_REQUIRED=50`이며, 최종 After Implementation SHA는
+`e348d249c10c6f00c26afc1beb49449879f9127e`다.
 
 ## 검증 대상
 
