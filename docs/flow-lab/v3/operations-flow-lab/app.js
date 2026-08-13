@@ -68,8 +68,11 @@ function renderPerformance(data) {
   const element = $("performance"); element.hidden = !data.performance; if (element.hidden) { element.innerHTML = ""; return; }
   element.innerHTML = data.performance.map((row) => {
     if (row.after == null) return `<article class="perf-stat"><h3>${row.metric}</h3><p class="perf-value">${row.before}</p></article>`;
-    const beforeNum = parseFloat(String(row.before).replace(/[^0-9.]/g, "")) || 1;
-    const afterNum = parseFloat(String(row.after).replace(/[^0-9.]/g, "")) || 0;
+    /* beforeValue/afterValue는 display 문자열과 별개인 같은-unit(scaleUnit) 계산값이다.
+       display 문자열의 단위가 서로 다를 수 있어(예: "1.706s" vs "265.54ms") 문자열에서
+       숫자만 뽑아 비교하면 방향이 뒤집힐 수 있다 — 명시 값이 없을 때만 문자열 파싱으로 대체한다. */
+    const beforeNum = row.beforeValue != null ? row.beforeValue : parseFloat(String(row.before).replace(/[^0-9.]/g, "")) || 1;
+    const afterNum = row.afterValue != null ? row.afterValue : parseFloat(String(row.after).replace(/[^0-9.]/g, "")) || 0;
     const max = Math.max(beforeNum, afterNum, 1);
     return `<article class="perf-compare"><h3>${row.metric}</h3>
       <div class="perf-bar-row"><span class="perf-bar-label">Before</span><div class="perf-bar"><div class="perf-bar-fill before" style="width:${(beforeNum / max) * 100}%"></div></div><span class="perf-bar-value">${row.before}</span></div>
