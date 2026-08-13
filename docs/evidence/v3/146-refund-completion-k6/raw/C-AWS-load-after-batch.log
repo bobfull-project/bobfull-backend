@@ -1,0 +1,107 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: k6/scenarios/refund-completion-duplicate-webhook.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 1m0s max duration (incl. graceful stop):
+              * refund_duplicate_webhook: 20.00 iterations/s for 30s (maxVUs: 40-100, gracefulStop: 30s)
+
+running (14m18.2s), 001/040 VUs, 18 complete and 0 interrupted iterations
+
+running (14m19.2s), 001/040 VUs, 38 complete and 0 interrupted iterations
+
+running (14m20.2s), 001/040 VUs, 58 complete and 0 interrupted iterations
+
+running (14m21.2s), 001/040 VUs, 78 complete and 0 interrupted iterations
+
+running (14m22.2s), 001/040 VUs, 98 complete and 0 interrupted iterations
+
+running (14m23.2s), 001/040 VUs, 118 complete and 0 interrupted iterations
+
+running (14m24.2s), 001/040 VUs, 138 complete and 0 interrupted iterations
+
+running (14m25.2s), 001/040 VUs, 158 complete and 0 interrupted iterations
+
+running (14m26.2s), 001/040 VUs, 178 complete and 0 interrupted iterations
+
+running (14m27.2s), 001/040 VUs, 198 complete and 0 interrupted iterations
+
+running (14m28.2s), 001/040 VUs, 218 complete and 0 interrupted iterations
+
+running (14m29.2s), 001/040 VUs, 238 complete and 0 interrupted iterations
+
+running (14m30.2s), 001/040 VUs, 258 complete and 0 interrupted iterations
+
+running (14m31.2s), 001/040 VUs, 278 complete and 0 interrupted iterations
+
+running (14m32.2s), 001/040 VUs, 298 complete and 0 interrupted iterations
+
+running (14m33.2s), 001/040 VUs, 318 complete and 0 interrupted iterations
+
+running (14m34.2s), 001/040 VUs, 338 complete and 0 interrupted iterations
+
+running (14m35.2s), 001/040 VUs, 358 complete and 0 interrupted iterations
+
+running (14m36.2s), 001/040 VUs, 378 complete and 0 interrupted iterations
+
+running (14m37.2s), 003/040 VUs, 396 complete and 0 interrupted iterations
+
+running (14m38.2s), 001/040 VUs, 418 complete and 0 interrupted iterations
+
+running (14m39.2s), 006/040 VUs, 433 complete and 0 interrupted iterations
+
+running (14m40.2s), 001/040 VUs, 458 complete and 0 interrupted iterations
+
+running (14m41.2s), 001/040 VUs, 478 complete and 0 interrupted iterations
+
+running (14m42.2s), 001/040 VUs, 498 complete and 0 interrupted iterations
+
+running (14m43.2s), 001/040 VUs, 518 complete and 0 interrupted iterations
+
+running (14m44.2s), 001/040 VUs, 538 complete and 0 interrupted iterations
+
+running (14m45.2s), 001/040 VUs, 558 complete and 0 interrupted iterations
+
+running (14m46.2s), 001/040 VUs, 578 complete and 0 interrupted iterations
+
+running (14m47.2s), 001/040 VUs, 598 complete and 0 interrupted iterations
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1500    1.690614/s
+    checks_succeeded...: 100.00% 1500 out of 1500
+    checks_failed......: 0.00%   0 out of 1500
+
+    ✓ refund_cancel_immediate_before_duplicate status is 200
+    ✓ refund_cancel_immediate_before_duplicate body.success is true
+    ✓ refund_webhook_duplicate_after_immediate status is 200
+    ✓ refund_cancel_concurrent_race status is 200
+    ✓ refund_webhook_concurrent_race status is 200
+
+    CUSTOM
+    refund_concurrent_race_batch_duration...............: avg=46.84     min=29      med=36      max=371     p(90)=47.1    p(95)=115.1    p(99)=271.77  
+    refund_duplicate_webhook_after_immediate_duration...: avg=12.236667 min=8       med=10      max=65      p(90)=13      p(95)=26       p(99)=53.06   
+
+    HTTP
+    http_req_duration...................................: avg=335.45ms  min=7.23ms  med=33.3ms  max=1.81s   p(90)=1.23s   p(95)=1.26s    p(99)=1.46s   
+      { expected_response:true }........................: avg=335.45ms  min=7.23ms  med=33.3ms  max=1.81s   p(90)=1.23s   p(95)=1.26s    p(99)=1.46s   
+    http_req_failed.....................................: 0.00%  0 out of 2660
+    http_reqs...........................................: 2660   2.998022/s
+
+    EXECUTION
+    iteration_duration..................................: avg=53.62ms   min=29.94ms med=44.12ms max=458.1ms p(90)=57.26ms p(95)=127.13ms p(99)=305.12ms
+    iterations..........................................: 600    0.676245/s
+    vus.................................................: 1      min=0         max=6 
+    vus_max.............................................: 40     min=40        max=40
+
+    NETWORK
+    data_received.......................................: 1.5 MB 1.7 kB/s
+    data_sent...........................................: 1.3 MB 1.4 kB/s
+
+running (14m47.3s), 000/040 VUs, 600 complete and 0 interrupted iterations
