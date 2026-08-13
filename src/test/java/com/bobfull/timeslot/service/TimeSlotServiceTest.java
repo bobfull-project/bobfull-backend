@@ -17,14 +17,17 @@ import com.bobfull.common.exception.CommonErrorCode;
 import com.bobfull.common.exception.CustomException;
 import com.bobfull.common.exception.TimeSlotErrorCode;
 import com.bobfull.common.response.PageResponse;
+import com.bobfull.payment.service.PaymentHoldReader;
+import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
-import com.bobfull.reservation.service.AvailableCapacityCalculator;
 import com.bobfull.restaurant.entity.Restaurant;
 import com.bobfull.restaurant.repository.RestaurantRepository;
 import com.bobfull.sharedtable.entity.SharedTable;
 import com.bobfull.sharedtable.repository.SharedTableRepository;
 import com.bobfull.timeslot.dto.AvailableDiningSessionListResponse;
+import com.bobfull.timeslot.dto.AvailableDiningSessionResponse;
 import com.bobfull.timeslot.dto.DiningSessionBulkRequest;
 import com.bobfull.timeslot.dto.DiningSessionBulkResponse;
 import com.bobfull.timeslot.dto.DiningSessionIdResponse;
@@ -39,6 +42,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -70,13 +74,13 @@ class TimeSlotServiceTest {
     private TimeSlotReservationValidator timeSlotReservationValidator;
 
     @Mock
-    private AvailableCapacityCalculator availableCapacityCalculator;
-
-    @Mock
     private ReservationRepository reservationRepository;
 
     @Mock
     private ReservationParticipantRepository reservationParticipantRepository;
+
+    @Mock
+    private PaymentHoldReader paymentHoldReader;
 
     private TimeSlotService timeSlotService() {
         return new TimeSlotService(
@@ -84,9 +88,9 @@ class TimeSlotServiceTest {
                 sharedTableRepository,
                 restaurantRepository,
                 timeSlotReservationValidator,
-                availableCapacityCalculator,
                 reservationRepository,
                 reservationParticipantRepository,
+                paymentHoldReader,
                 FIXED_CLOCK
         );
     }
@@ -293,12 +297,9 @@ class TimeSlotServiceTest {
                 .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
                         anyCollection(), any(Instant.class), any(Instant.class)))
                 .willReturn(List.of(smallSlot, largeSlot));
-        given(availableCapacityCalculator.calculateWithKnownParticipantCount(200L, 2, 0)).willReturn(2);
-        given(availableCapacityCalculator.calculateWithKnownParticipantCount(201L, 4, 0)).willReturn(4);
-        given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(200L), anyCollection()))
-                .willReturn(Optional.empty());
-        given(reservationRepository.findByTimeSlotIdAndReservationStatusIn(eq(201L), anyCollection()))
-                .willReturn(Optional.empty());
+        given(reservationRepository.findAllByTimeSlotIdInAndReservationStatusIn(anyCollection(), anyCollection()))
+                .willReturn(List.of());
+        given(paymentHoldReader.sumActiveReadyPartySizeByTimeSlotIds(anyCollection())).willReturn(Map.of());
 
         // when
         AvailableDiningSessionListResponse response = timeSlotService()
@@ -310,6 +311,63 @@ class TimeSlotServiceTest {
         assertThat(response.content().get(0).availableCapacity()).isEqualTo(4);
         assertThat(response.content().get(0).reservationId()).isNull();
         assertThat(response.content().get(0).currentParticipantCount()).isEqualTo(0);
+    }
+
+    /**
+     * Issue #235 — 회차 목록의 availableCapacity 계산이 회차별 반복 조회 대신 배치 조회 결과를
+     * Java에서 조립하는 방식으로 바뀌었다(TimeSlotService#loadAvailableDiningSessionBatchContext).
+     * 활성 예약이 있는 회차(참여자 합계 반영)와 CLOSED인 회차(참여자·READY 선점과 무관하게 0)를
+     * 함께 확인해, 배치 조립 로직이 기존 단건 조회(AvailableCapacityCalculator)와 같은 계산식을
+     * 따르는지 검증한다.
+     */
+    @Test
+    void 사용자용_예약_가능_회차는_배치로_조회한_활성_예약_참여자_CLOSED_여부를_반영한다() {
+        // given
+        Restaurant restaurant = restaurantOwnedBy(1L);
+        SharedTable table = sharedTable(100L, 10L, 4);
+        TimeSlot occupiedSlot = timeSlot(200L, 100L, "2026-08-01T11:00:00", "2026-08-01T13:00:00");
+        TimeSlot closedSlot = timeSlot(201L, 100L, "2026-08-01T13:00:00", "2026-08-01T15:00:00");
+        Reservation activeReservation = Reservation.create(200L, 1L);
+        ReflectionTestUtils.setField(activeReservation, "id", 900L);
+        Reservation closedReservation = Reservation.create(201L, 1L);
+        ReflectionTestUtils.setField(closedReservation, "id", 901L);
+        ReflectionTestUtils.setField(closedReservation, "reservationStatus", ReservationStatus.CLOSED);
+
+        given(restaurantRepository.findByIdAndDeletedAtIsNull(10L)).willReturn(Optional.of(restaurant));
+        given(sharedTableRepository.findAllByRestaurantIdAndDeletedAtIsNull(10L)).willReturn(List.of(table));
+        given(timeSlotRepository
+                .findAllBySharedTableIdInAndStartAtGreaterThanEqualAndStartAtLessThanAndDeletedAtIsNullOrderByStartAtAsc(
+                        anyCollection(), any(Instant.class), any(Instant.class)))
+                .willReturn(List.of(occupiedSlot, closedSlot));
+        given(reservationRepository.findAllByTimeSlotIdInAndReservationStatusIn(
+                anyCollection(), eq(List.of(ReservationStatus.RECRUITING, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLING))))
+                .willReturn(List.of(activeReservation));
+        given(reservationRepository.findAllByTimeSlotIdInAndReservationStatusIn(
+                anyCollection(), eq(List.of(ReservationStatus.CLOSED))))
+                .willReturn(List.of(closedReservation));
+        given(reservationParticipantRepository.sumPartySizeByReservationIdsAndStatuses(eq(List.of(900L)), anyCollection()))
+                .willReturn(List.<Object[]>of(new Object[]{900L, 3}));
+        given(paymentHoldReader.sumActiveReadyPartySizeByTimeSlotIds(anyCollection()))
+                .willReturn(Map.of(200L, 1));
+
+        // when
+        AvailableDiningSessionListResponse response = timeSlotService()
+                .getAvailableDiningSessions(10L, LocalDate.of(2026, 8, 1), null);
+
+        // then — 정원 4명인 occupiedSlot: 참여자 3 + READY 선점 1을 뺀 0석
+        AvailableDiningSessionResponse occupied = response.content().stream()
+                .filter(r -> r.sessionId().equals(200L)).findFirst().orElseThrow();
+        assertThat(occupied.reservationId()).isEqualTo(900L);
+        assertThat(occupied.currentParticipantCount()).isEqualTo(3);
+        assertThat(occupied.availableCapacity()).isEqualTo(0);
+
+        // then — CLOSED인 closedSlot: reservationId는 활성 예약 기준이라 null이지만(CLOSED는
+        // 집계 대상이 아님, 기존 동작과 동일), availableCapacity는 참여자·READY 선점과 무관하게
+        // 항상 0석이다.
+        AvailableDiningSessionResponse closed = response.content().stream()
+                .filter(r -> r.sessionId().equals(201L)).findFirst().orElseThrow();
+        assertThat(closed.reservationId()).isNull();
+        assertThat(closed.availableCapacity()).isZero();
     }
 
     @Test
