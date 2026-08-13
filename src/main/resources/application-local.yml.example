@@ -39,6 +39,8 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       timeout: ${REDIS_TIMEOUT:2000ms}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
 
   mail:
     host: ${MAIL_HOST:localhost}
