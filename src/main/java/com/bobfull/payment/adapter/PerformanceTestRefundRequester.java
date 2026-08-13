@@ -1,8 +1,10 @@
 package com.bobfull.payment.adapter;
 
 import com.bobfull.payment.port.PortOneRefundRequester;
+import com.bobfull.payment.service.RefundReconciliationScheduler;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.springframework.context.annotation.Primary;
@@ -27,6 +29,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * <p>cancellationId는 {@code paymentId}에서 결정적으로 생성한다(무작위 값이 아니다) — 시나리오
  * B/C처럼 즉시 응답을 {@code PROCESSING}으로 받은 뒤 K6가 같은 cancellationId로 CANCELLED 웹훅을
  * 직접 서명해 보내 완료를 재현해야 할 때, 응답 본문에서 별도로 값을 꺼내지 않고도 재계산할 수 있게 한다.</p>
+ *
+ * <p><b>운영 주의:</b> 이 Bean은 실제 PortOne 환불 요청을 완전히 건너뛰고 요청 헤더만 보고
+ * 응답한다 — {@code performance}가 운영 배포의 {@code SPRING_PROFILES_ACTIVE}에 절대 섞이지
+ * 않아야 한다(환불 요청 자체가 무력화된다).</p>
  */
 @Component
 @Profile("performance")
@@ -62,6 +68,19 @@ public class PerformanceTestRefundRequester implements PortOneRefundRequester {
     @Override
     public boolean isCancellationCompleted(String paymentId, String cancellationId) {
         return true;
+    }
+
+    /**
+     * {@code application-performance.yml}(테스트 클래스패스 전용)은 배포 가능한 jar에 포함되지
+     * 않아, 실제 배포 환경에서는 {@code payment.refund-reconciliation.enabled=false}가 적용되지
+     * 않을 수 있다 — 즉 {@link RefundReconciliationScheduler}가 여전히 동작해 이 Bean의
+     * {@code reconcile()}을 호출할 수 있다. 기본 구현(UnsupportedOperationException)을 그대로
+     * 두면 그때마다 예외가 반복돼 로그가 오염되므로, "아직 완료되지 않음"으로 안전하게 응답한다.
+     */
+    @Override
+    public ReconciliationResult reconcile(String paymentId, String cancellationId, BigDecimal refundAmount,
+            Instant refundRequestedAt) {
+        return ReconciliationResult.notCompleted();
     }
 
     private void applyDelay(String delayMsHeader) {

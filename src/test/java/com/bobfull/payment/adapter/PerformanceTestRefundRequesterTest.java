@@ -81,6 +81,12 @@ class PerformanceTestRefundRequesterTest {
         assertThat(requester.isCancellationCompleted("payment-1", "cancel-1")).isTrue();
     }
 
+    @Test
+    void reconcile은_예외없이_완료되지않음으로_응답한다() {
+        var result = requester.reconcile("payment-1", "cancel-1", BigDecimal.TEN, java.time.Instant.now());
+        assertThat(result.status()).isEqualTo(PortOneRefundRequester.ReconciliationStatus.NOT_COMPLETED);
+    }
+
     private void bindHeader(String name, String value) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(name, value);

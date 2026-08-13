@@ -9,6 +9,13 @@
 // base64 디코드하며, 그렇지 않으면 문자열 전체를 그대로 base64 디코드한다(디코드 SDK jar
 // 역어셈블로 확인). 즉 이 값은 "whsec_"가 접두어가 아니라, 전체를 한 번 base64 디코드한 바이트
 // 자체가 HMAC 키다(디코드 결과가 우연히 "whsec_..." 문자열처럼 보일 뿐이다).
+//
+// 주의: `application-performance.yml`은 `src/test/resources` 아래에 있어 배포 가능한 jar에는
+// 포함되지 않는다(JUnit 테스트 클래스패스 전용). 실제 배포된 인스턴스에서 K6를 돌릴 때는
+// `SPRING_PROFILES_ACTIVE`에 `performance`가 포함돼 있어야(예: `local,performance`) fake
+// Bean(`PerformanceTestRefundRequester` 등)이 활성화되고, 그 인스턴스에 실제 설정된
+// `portone.webhook-secret` 값을 `-e PORTONE_WEBHOOK_SECRET=...`로 넘겨야 한다 — 아래 기본값은
+// JUnit `application-performance.yml` 기준이라 실제 배포 환경과 다를 수 있다.
 import crypto from 'k6/crypto';
 import encoding from 'k6/encoding';
 import http from 'k6/http';
