@@ -28,6 +28,7 @@
 | `DB_PASSWORD` | RDS DB 비밀번호 | 필수 |
 | `REDIS_HOST` | Redis Host | 필수 |
 | `REDIS_PORT` | Redis Port | 선택 |
+| `REDIS_SSL_ENABLED` | Redis SSL/TLS 사용 여부. prod 기본값은 `true`이며 EC2-local/Docker Redis에서는 `false`로 둔다. | 선택 |
 | `JWT_SECRET` | JWT 서명 Secret | 필수 |
 | `JWT_ACCESS_TOKEN_EXPIRATION_SECONDS` | Access Token 만료 초 | 선택 |
 | `AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS` | Refresh Token 만료 초 | 선택 |
@@ -83,6 +84,7 @@
 
 ```text
 /bobfull/prod/redis-port
+/bobfull/prod/redis-ssl-enabled
 /bobfull/prod/jwt-access-token-expiration-seconds
 /bobfull/prod/auth-refresh-token-expiration-seconds
 /bobfull/prod/jpa-ddl-auto

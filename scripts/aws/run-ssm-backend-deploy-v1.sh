@@ -77,6 +77,7 @@ command_env_keys = [
     "REDIS_CONTAINER_NAME",
     "REDIS_IMAGE",
     "REDIS_VOLUME",
+    "REDIS_SSL_ENABLED",
     "S3_IMAGE_BUCKET",
 ]
 
