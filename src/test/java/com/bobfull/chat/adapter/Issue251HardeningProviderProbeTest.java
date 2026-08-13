@@ -178,7 +178,7 @@ class Issue251HardeningProviderProbeTest {
     private record Observation(String input, ModerationResult result, AiModerationResponse response, long latencyMs) { }
     private static final class Metrics {
         int total; int resultExact; int categoryExact; int riskExact; int tp; int fp; int fn; int tn;
-        int injectionTotal; int injectionSecurityPass; int structuredOutputFailures; int obfuscationTotal; int obfuscationDetected;
+        int injectionSecurityDetermined; int injectionSecurityPass; int injectionSecurityNotDeterminable; int structuredOutputFailures; int obfuscationTotal; int obfuscationDetected;
         int splitFlaggedTotal; int splitDetected; int splitFalsePositive; int splitFalseNegative;
         long promptTokens; long completionTokens; long totalTokens; final List<Long> latencies = new ArrayList<>();
         void addCall(AiModerationResponse response, long latencyMs) {
@@ -193,8 +193,15 @@ class Issue251HardeningProviderProbeTest {
             if (expectedFlagged && actualFlagged) tp++; else if (!expectedFlagged && actualFlagged) fp++; else if (expectedFlagged) fn++; else tn++;
         }
         void addInjection(Issue251HardeningDataset.SingleMessageCase testCase, ModerationResult actual) {
-            injectionTotal++;
-            if (actual.result() == testCase.proposedModerationResult() && actual.categories().equals(testCase.proposedCategories())) injectionSecurityPass++;
+            Issue251InjectionSecurityMetrics.SecurityEvaluation evaluation = Issue251InjectionSecurityMetrics.evaluate(testCase, actual.result());
+            if (evaluation == Issue251InjectionSecurityMetrics.SecurityEvaluation.PASS) {
+                injectionSecurityDetermined++;
+                injectionSecurityPass++;
+            } else if (evaluation == Issue251InjectionSecurityMetrics.SecurityEvaluation.FAIL) {
+                injectionSecurityDetermined++;
+            } else {
+                injectionSecurityNotDeterminable++;
+            }
         }
         void addObfuscation(Issue251HardeningDataset.SingleMessageCase testCase, ModerationResult actual) {
             obfuscationTotal++;
@@ -208,8 +215,8 @@ class Issue251HardeningProviderProbeTest {
             double precision = tp + fp == 0 ? 0 : (double) tp / (tp + fp); double recall = tp + fn == 0 ? 0 : (double) tp / (tp + fn); double f1 = precision + recall == 0 ? 0 : 2 * precision * recall / (precision + recall);
             System.out.printf("[251-HARDENING-SUMMARY] cases=%d resultAccuracy=%d/%d categoryExact=%d/%d riskExact=%d/%d TP=%d FP=%d FN=%d TN=%d precision=%.3f recall=%.3f f1=%.3f%n",
                     total, resultExact, total, categoryExact, total, riskExact, total, tp, fp, fn, tn, precision, recall, f1);
-            System.out.printf("[251-HARDENING-SUMMARY] injectionSecurity=%d/%d structuredOutputFailures=%d obfuscationDetection=%d/%d splitDetection=%d/%d splitFP=%d splitFN=%d llmCalls=%d promptTokens=%d completionTokens=%d totalTokens=%d latencyAvg=%.1f latencyP50=%d latencyP95=%d%n",
-                    injectionSecurityPass, injectionTotal, structuredOutputFailures, obfuscationDetected, obfuscationTotal, splitDetected, splitFlaggedTotal, splitFalsePositive, splitFalseNegative,
+            System.out.printf("[251-HARDENING-SUMMARY] injectionSecurity=%d/%d injectionSecurityNotDeterminable=%d structuredOutputFailures=%d obfuscationDetection=%d/%d splitDetection=%d/%d splitFP=%d splitFN=%d llmCalls=%d promptTokens=%d completionTokens=%d totalTokens=%d latencyAvg=%.1f latencyP50=%d latencyP95=%d%n",
+                    injectionSecurityPass, injectionSecurityDetermined, injectionSecurityNotDeterminable, structuredOutputFailures, obfuscationDetected, obfuscationTotal, splitDetected, splitFlaggedTotal, splitFalsePositive, splitFalseNegative,
                     latencies.size(), promptTokens, completionTokens, totalTokens, latencies.stream().mapToLong(Long::longValue).average().orElse(0), percentile(0.50), percentile(0.95));
         }
         void printContextV2Spike() {

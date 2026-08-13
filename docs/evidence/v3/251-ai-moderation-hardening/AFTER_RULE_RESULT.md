@@ -37,7 +37,8 @@
 | Risk Exact | 61/66 | 61/66 |
 | Precision / Recall / F1 | .923 / .973 / .947 | .921 / .946 / .933 |
 | FP / FN | 3 / 1 | 3 / 2 |
-| Injection Security | 9/10 | 9/10 |
+| Injection Security (determinable) | 4/4 | 4/4 |
+| Injection Moderation Exact (result/category) | 9/10 | 9/10 |
 | Obfuscation Detection | 12/12 | 12/12 |
 | Split Detection | 5/6 | 5/6 |
 | Split FP / FN | 2 / 1 | 2 / 1 |
@@ -51,8 +52,17 @@
 - OpenAI calls on Fast Path: 0
 - Rule result category/risk mismatch: 0
 
-각 17건은 `BOBFULL_RULE / rule-filter-v1 / NO_LLM / moderation-policy-v2 / token=null` metadata로 저장됐고,
+각 16건은 `BOBFULL_RULE / rule-filter-v1 / NO_LLM / moderation-policy-v2 / token=null` metadata로 저장됐고,
 기존 `ModerationResultValidator`를 거쳤다.
+
+## Final Re-review Guard Validation
+
+- 개인정보 부정문 guard와 profanity + spam 복합 signal guard를 추가했다. 이는 확실하지 않은 단일 category
+  확정을 막고 `LLM_REQUIRED`로 위임하는 production 경계 축소다.
+- 동일 Frozen Dataset의 deterministic routing은 `CLEAR_FLAGGED=16`, `LLM_REQUIRED=50 cases / 72 traversals`로
+  변경되지 않았다. Dataset SHA도 `9caf442202e82faaedd333ee5eaf57b422b06b48669bc7c5c1418e7487afbaba`로 유지됐다.
+- 따라서 Provider AFTER를 재실행하지 않았으며, 이 문서의 기존 72 calls / 54,565 total tokens는 마지막
+  실제 Provider 단일 측정값으로 유지한다.
 
 ## INJ-06
 
@@ -78,7 +88,9 @@ Provider failure 0, Structured Output failure 0, Application Validation failure 
 ## Attribution / Gate 후보
 
 - Rule attributable regression: 없음. Fast Path 16/16 정확, Fast Path FP 0, 신규 category/result 오류 0.
-- LLM_REQUIRED Provider variation: Result Accuracy 62/66 → 61/66, FP/FN 3/1 → 3/2, Injection Security 9/10 → 9/10이 관측됐다.
+- LLM_REQUIRED Provider variation: Result Accuracy 62/66 → 61/66, FP/FN 3/1 → 3/2, Injection Moderation Exact 9/10 → 9/10이 관측됐다.
+  공격 지시와 정책 결과가 충돌하는 Injection Security는 4/4 → 4/4이며, injection-only SAFE 6건은
+  결과만으로 공격 수행 여부를 판정할 수 없어 Security 분모에서 제외했다.
   마지막 MAJOR 수정은 Fast Path 1건을 LLM_REQUIRED로 옮긴 경계 축소이며, 나머지 LLM_REQUIRED의 Prompt/model/provider/validator는
   변경하지 않았으므로 전체 차이를 Rule 품질 저하로 단정하지 않는다.
 - `RULE_QUALITY_GATE = PASS`

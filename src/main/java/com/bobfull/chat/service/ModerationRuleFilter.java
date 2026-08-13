@@ -20,11 +20,14 @@ public class ModerationRuleFilter {
 
     public Optional<ModerationResult> clearFlagged(String content) {
         if (isPromptInjectionCandidate(content)) return Optional.empty();
-        boolean personal = MOBILE_PHONE.matcher(content).find() && PERSONAL_PHONE_CONTEXT.matcher(content).find();
-        if (personal && hasAdditionalViolationSignal(content)) return Optional.empty();
+        boolean personal = MOBILE_PHONE.matcher(content).find() && PERSONAL_PHONE_CONTEXT.matcher(content).find()
+                && !hasPersonalContextNegation(content);
         boolean profanity = EXACT_PROFANITY.matcher(content.trim()).matches();
         boolean spam = COIN_INDUCEMENT.matcher(content).find() || STOCK_INDUCEMENT.matcher(content).find()
                 || LOAN_INDUCEMENT.matcher(content).find();
+        boolean profanitySignal = hasProfanitySignal(content);
+        boolean spamSignal = hasSpamSignal(content);
+        if ((personal ? 1 : 0) + (profanitySignal ? 1 : 0) + (spamSignal ? 1 : 0) > 1) return Optional.empty();
         int matchedFamilies = (personal ? 1 : 0) + (profanity ? 1 : 0) + (spam ? 1 : 0);
         if (matchedFamilies != 1) return Optional.empty();
         if (personal) return flagged(ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
@@ -42,8 +45,14 @@ public class ModerationRuleFilter {
                 || content.contains("관리자 권한") || content.contains("분석하지 말고") || content.contains("정책을 공개")
                 || content.contains("역할을 바꿔");
     }
-    private static boolean hasAdditionalViolationSignal(String content) {
-        return content.contains("씨발") || content.contains("시발") || content.contains("개새끼") || content.contains("죽여버린다")
-                || content.contains("수익방") || content.contains("리딩방") || content.contains("대출 승인 보장");
+    private static boolean hasPersonalContextNegation(String content) {
+        return content.contains("내 번호 아니") || content.contains("제 번호 아니")
+                || content.contains("내 연락처 아니") || content.contains("제 연락처 아니");
+    }
+    private static boolean hasProfanitySignal(String content) {
+        return content.contains("씨발") || content.contains("시발") || content.contains("개새끼") || content.contains("죽여버린다");
+    }
+    private static boolean hasSpamSignal(String content) {
+        return content.contains("수익방") || content.contains("주식 리딩방") || content.contains("대출 승인 보장");
     }
 }
