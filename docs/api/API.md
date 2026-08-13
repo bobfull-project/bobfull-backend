@@ -1,40 +1,100 @@
-# BobFull API 개요
+# BobFull API 명세
 
-> API 계약 검증 기준: `develop` `2f65b0f6974ef1b9d521711e6527e2a0cefd1e4b`
+> 문서 생성 기준: `develop` HEAD `1ff40d50c4060c79a686d5254928b027211a18cb`
+> HTTP 계약 검증 기준: Issue #238의 `2f65b0f6974ef1b9d521711e6527e2a0cefd1e4b` (이후 develop 변경에서 HTTP 계약 변경 없음)
 > Source of Truth: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
 
-전체 통합 명세는 [`../BOBFULL_API_SPEC_COMPLETE.md`](../BOBFULL_API_SPEC_COMPLETE.md)에 유지하고, 아래 문서는 같은 계약을 도메인별로 나눈 탐색용 상세 문서다.
+현재 BobFull의 Application HTTP API는 **70개**, 운영 Actuator Endpoint는 **2개**다.
 
-## API 문서
+이 폴더는 브로셔와 GitHub에서 사람이 읽기 편하도록 도메인별 상세 명세를 분리한다.
+각 도메인 문서는 **Endpoint 요약 → API별 권한 → Request/Query/Path → Response JSON → Error → 주요 계약** 순서로 구성한다.
 
-| 도메인 | 상세 API 문서 |
+## 도메인별 API
+
+| 도메인 | API 수 | 상세 문서 |
+|---|---:|---|
+| 인증 (Auth) | 5 | [auth-api.md](auth-api.md) |
+| 회원 (Member) | 2 | [member-api.md](member-api.md) |
+| 식당 (Restaurant) | 8 | [restaurant-api.md](restaurant-api.md) |
+| 합석 테이블 / 회차 | 12 | [table-session-api.md](table-session-api.md) |
+| 예약 (Reservation) | 10 | [reservation-api.md](reservation-api.md) |
+| 결제 / 환불 / 정산 | 8 | [payment-api.md](payment-api.md) |
+| 노쇼 (No-show) | 5 | [no-show-api.md](no-show-api.md) |
+| 채팅 / 신고 | 3 | [chat-api.md](chat-api.md) |
+| 관리자 / Moderation | 16 | [admin-api.md](admin-api.md) |
+| 운영 Endpoint / Webhook | 3 | [operations-api.md](operations-api.md) |
+| **합계** | **72** | Application 70 + Actuator 2 |
+
+## 공통 응답
+
+일반 REST 성공 응답:
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {}
+}
+```
+
+실패 응답:
+
+```json
+{
+  "success": false,
+  "message": "에러 메시지",
+  "code": "ERROR_CODE"
+}
+```
+
+페이징 `data`:
+
+```json
+{
+  "content": [],
+  "page": 0,
+  "size": 20,
+  "totalElements": 0,
+  "totalPages": 0
+}
+```
+
+## 권한 표기
+
+| 표기 | 의미 |
 |---|---|
-| 인증 (Auth) | [auth-api.md](auth-api.md) |
-| 회원 (Member) | [member-api.md](member-api.md) |
-| 식당 (Restaurant) | [restaurant-api.md](restaurant-api.md) |
-| 합석 테이블 / 회차 (Table / Dining Session) | [table-session-api.md](table-session-api.md) |
-| 예약 (Reservation) | [reservation-api.md](reservation-api.md) |
-| 결제 / 환불 / 정산 (Payment / Refund / Settlement) | [payment-api.md](payment-api.md) |
-| 노쇼 (No-show) | [no-show-api.md](no-show-api.md) |
-| 채팅 / 신고 (Chat / Report) | [chat-api.md](chat-api.md) |
-| 관리자 / Moderation (Admin) | [admin-api.md](admin-api.md) |
-| 운영 Endpoint / Webhook | [operations-api.md](operations-api.md) |
+| `PUBLIC` | 인증 없이 허용 |
+| `AUTHENTICATED` | 유효한 JWT Access Token 필요 |
+| `OWNER` | `ROLE_OWNER` 필요 |
+| `ADMIN` | `ROLE_ADMIN` 필요 |
 
-## 공통 계약
+## Error 문서화 원칙
 
-- 일반 REST 응답은 `ApiResponse<T>`를 사용한다.
-- 페이징 응답은 `PageResponse<T>`의 `content/page/size/totalElements/totalPages` 구조를 사용한다.
-- 권한 표기는 `PUBLIC / AUTHENTICATED / OWNER / ADMIN`으로 통일한다.
-- 공통 Validation, Security, ErrorCode 전체 카탈로그는 통합 명세를 기준으로 한다.
-- WebSocket 메시지 계약과 내부 Kafka/Outbox/Redis 흐름은 HTTP API 문서가 아니라 Architecture/ADR/Evidence에서 관리한다.
+- ErrorCode enum에 정의돼 있다는 이유만으로 Endpoint Error 표에 넣지 않는다.
+- **실제 Controller/Service 실행 경로에서 도달 가능한 Error만** Endpoint별 Error에 기재한다.
+- `ResponseEntity<Void>`처럼 에러코드 본문을 반환하지 않는 Endpoint는 코드명을 임의로 붙이지 않는다.
 
 ## 정합성 유지 규칙
 
-API 변경 시 **실제 코드가 최종 Source of Truth**다.
+1. 실제 코드가 최종 Source of Truth다.
+2. Controller `Method + Path` 변경 시 해당 도메인 문서도 같은 PR에서 수정한다.
+3. DTO/Validation 변경 시 해당 API의 Request/Response 예시와 필드 계약도 수정한다.
+4. Security/ErrorCode 변경 시 권한·Error 섹션도 함께 수정한다.
+5. 최종 QA에서 전체 Controller와 문서를 `Method + Path` 기준으로 다시 비교한다.
 
-1. Controller의 `Method + Path`를 변경하면 해당 도메인 문서와 통합 명세를 같은 PR에서 함께 수정한다.
-2. Request/Response DTO 또는 Validation이 바뀌면 해당 도메인 문서의 DTO 계약도 같이 수정한다.
-3. Security 또는 ErrorCode가 바뀌면 영향받는 도메인 문서와 통합 명세를 같이 수정한다.
-4. 최종 QA에서 Controller 전체와 문서 전체를 `Method + Path` 기준으로 다시 비교한다.
+## 현재 코드에 존재하지 않는 과거 API
 
-현재 Application Controller HTTP API는 70개이며, 운영 Actuator Endpoint 2개를 별도로 문서화한다.
+아래 API는 수정 전 명세에는 있었지만 최신 develop에는 존재하지 않는다.
+
+- `DELETE /api/members/me`
+- `GET /api/admin/refunds/failed`
+- `GET /api/owner/restaurants/{restaurantId}/settlements/summary`
+- `GET /api/reservations/{reservationId}`
+- `GET /api/reservations/{reservationId}/participations`
+- `GET /api/reservations/{reservationId}/participations/me`
+- `PATCH /api/reservations/{reservationId}/recruitment`
+- `POST /api/admin/payments/{paymentId}/retry`
+- `POST /api/admin/refunds/{refundId}/retry`
+- `POST /api/admin/settlements/recalculate`
+
+> WebSocket/STOMP 메시지 계약과 내부 Kafka/Outbox/Redis 흐름은 HTTP API 명세가 아니라 Architecture/ADR/Evidence에서 관리한다.
