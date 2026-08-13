@@ -5,6 +5,15 @@
 
 현재 문서화 대상은 Application HTTP API **70개**와 Actuator Endpoint **2개**, 총 **72개**다. 실제 코드의 `Controller / DTO / Validation / SecurityConfig / ErrorCode`를 최종 기준으로 하며, 이 문서는 상세 계약을 중복하지 않는다.
 
+## #245 정적 계약 검증 기준선
+
+- 검증 기준 `develop` SHA: `8e17ffc1b61626ff7f4b6fd2186eaf2341f0bbd2` (2026-08-13)
+- 대상: Application HTTP API 70개(PortOne Webhook 포함), Actuator Endpoint 2개
+- 대조: Controller의 Method + Path, Request DTO와 Validation, Response DTO의 중첩·nullable 구조, `SecurityConfig` 인가 경계, 성공 Status, 실제 실행 경로의 ErrorCode, Webhook·Actuator의 비-`ApiResponse` 계약
+- 결과: 코드 전용·문서 전용 HTTP endpoint와 API Spec ↔ ERD 간 명백한 정적 계약 모순을 확인하지 못했다. BLOCKER / MAJOR / MINOR는 0건이다.
+
+이 기준선은 현재 구현의 정적 계약만 대상으로 하며, 성능·신뢰성·AWS·Kafka·K6 Evidence 및 최종 Claim Gate는 #67에서 별도로 관리한다.
+
 ## 상세 명세로 이동
 
 | 도메인 | API 수 | 상세 명세 |
