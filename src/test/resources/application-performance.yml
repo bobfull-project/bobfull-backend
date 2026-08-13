@@ -13,6 +13,8 @@ spring:
 payment:
   expiration:
     enabled: false
+  refund-reconciliation:
+    enabled: false
 
 jwt:
   secret: performance-test-secret-key-must-be-at-least-32-bytes
