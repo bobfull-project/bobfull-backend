@@ -16,7 +16,7 @@
 |---|---:|---:|
 | LLM Calls | 88 | 71 |
 | LLM Call Reduction | - | 19.3% |
-| Total Tokens | 66,766 | 53,795 |
+| Total Tokens | 66,766 | 53,801 |
 | Token Reduction | - | 19.4% |
 | Result Accuracy | 62/66 | 62/66 |
 | Category Exact | 61/66 | 62/66 |
@@ -34,6 +34,10 @@ production 입력에서의 품질·절감 보장이 아니라 단일 Frozen Data
 LLM_REQUIRED의 Provider 결과 차이는 Rule 결과와 분리한다. Context는 일부 Split 공격 탐지에는 효과가 있었으나
 정상 경계 회귀 때문에 production에 채택하지 않았다. Rule Fast Path는 외부 Provider 호출 없이 처리되며,
 millisecond 단위 측정에서 0ms로 관측됐지만 이를 절대적 latency 보장으로 표현하지 않는다. `COST = NOT_CALCULATED`.
+
+PR #255 MAJOR boundary 수정으로 공개 사업장 `010` 번호, `시발점` substring, 스팸 경고·비판 문장, 복합 category
+후보는 모두 LLM_REQUIRED로 좁혔다. Frozen routing은 `CLEAR_FLAGGED=17`, `LLM_REQUIRED=49`로 유지됐으며,
+최종 After Implementation SHA는 `131d3cf4c8c38bcc5eda259e401a43fb0189387e`다.
 
 ## 검증 대상
 

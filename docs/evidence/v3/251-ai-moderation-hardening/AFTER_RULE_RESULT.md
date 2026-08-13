@@ -4,8 +4,8 @@
 
 - 실행: 2026-08-13 20:38~20:39 KST, 실제 OpenAI Provider 1회 순차 Run
 - baseline commit SHA: `32059bcae3642717e952e424ca4d4bea3f1a9953`
-- After Implementation SHA: `8898e2c35444711ace70718dbf69ece724052017`
-- 측정 당시에는 위 #251 Rule 변경이 미커밋이었고, 측정 후 production Rule source 변경 없이 After Implementation SHA로 고정했다.
+- After Implementation SHA: `131d3cf4c8c38bcc5eda259e401a43fb0189387e`
+- PR #255 MAJOR boundary 수정 후 위 SHA 기준으로 2026-08-13 21:07~21:08 KST에 최종 1회 재측정했다.
 - Dataset: `issue-251-hardening-v1` / SHA-256 `9caf442202e82faaedd333ee5eaf57b422b06b48669bc7c5c1418e7487afbaba`
 - requested model: `gpt-4o-mini`; actual returned model: `gpt-4o-mini-2024-07-18`
 - promptVersion / policyVersion: `moderation-prompt-v3-scope` / `moderation-policy-v2`
@@ -22,8 +22,8 @@
 | LLM_REQUIRED | 88 traversals | 71 traversals | -17 |
 | 실제 OpenAI calls | 88 | 71 | -19.3% |
 | Prompt Tokens | 65,395 | 52,742 | -19.3% |
-| Completion Tokens | 1,371 | 1,053 | -23.2% |
-| Total Tokens | 66,766 | 53,795 | -19.4% |
+| Completion Tokens | 1,371 | 1,059 | -22.8% |
+| Total Tokens | 66,766 | 53,801 | -19.4% |
 
 단건 workload 기준 routing 후보는 `52 → 35`(32.7%)이고, 위 표는 split fragment를 포함한 실제 Frozen traversal
 측정값이다. 비용은 측정 시점의 공식 단가 Source를 이 Evidence에 고정하지 않았으므로 `COST = NOT_CALCULATED`다.
@@ -68,9 +68,9 @@ Provider failure 0, Structured Output failure 0, Application Validation failure 
 
 ## Latency
 
-- 전체 traversal avg / p50 / p95: 638.6ms / 716ms / 937ms
+- 전체 traversal avg / p50 / p95: 731.3ms / 809ms / 1,362ms
 - Rule Fast Path avg: 0.0ms (`ChatModeration.latencyMillis` 밀리초 단위 반올림; 외부 Provider 호출 없음)
-- LLM path avg: 791.5ms
+- LLM path avg: 906.4ms
 
 외부 Provider latency 변동을 성능 개선으로 과장하지 않는다. Rule Fast Path의 구조적 이점은 외부 호출 0회이며,
 전체 workload latency는 해당 단일 측정값이다.
@@ -93,3 +93,12 @@ ISSUE251_AFTER=true ./gradlew :test \
 ```
 
 결과: `BUILD SUCCESSFUL`
+
+최종 SHA 기준 일반 build는 Provider opt-in 환경 변수와 `OPENAI_API_KEY`를 제거한 다음 명령으로도 성공했다.
+
+```bash
+env -u OPENAI_API_KEY -u ISSUE251_PROVIDER -u ISSUE251_CONTEXT_V2_SPIKE -u ISSUE251_AFTER \
+  ./gradlew clean build --console=plain
+```
+
+결과: `BUILD SUCCESSFUL` (Provider 평가 미실행)
