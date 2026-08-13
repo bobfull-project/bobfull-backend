@@ -5,8 +5,9 @@
 `ChatMessage` COMMIT → Outbox → Kafka(`bobfull.chat.message-created.v1`, Partition 3) → `ChatModerationConsumer` → `ChatModerationService`(#66) 처리 경계에서, Web/API와 AI Consumer가 같은 프로세스에서 실행되는 현재 구조(A안)가 충분한지, 아니면 Web/AI Worker 실행 역할 분리(B안)·Consumer Scale-out이 필요한지를 실측으로 판단한다.
 
 - 대상 코드: `ChatModerationConsumer`, `ChatModerationService`, `AiModerationPort`/`SpringAiModerationAdapter`/`FakeAiModerationAdapter`, `ChatMessageOutboxProcessor`, `ChatMessageAsyncModerationDispatcher`
-- 측정·재현 환경: 로컬 macOS, JUnit5 `@SpringBootTest`, H2(MySQL 모드), Kafka는 Testcontainers `confluentinc/cp-kafka:7.7.1`(KRaft 단일 노드). 실험 0(Kafka vs Async)과 실험 D(Consumer concurrency) 실측 완료. 실험 A~C, E, F는 아직 미실측.
-- 측정 커밋: `c5ade70` 기준 코드에 이번 실행에서 추가한 실측 코드(하단 "실험 준비" 표) 적용
+- 측정·재현 환경: 로컬 macOS, JUnit5 `@SpringBootTest`, H2(MySQL 모드), Kafka는 Testcontainers `confluentinc/cp-kafka:7.7.1`(KRaft 단일 노드). 실험 0/A/B/C/D 실측 완료(경량 부하, `FakeAiModerationAdapter` 사용). 실험 E는 A·C 결과로 합성 판단, F는 #59 기존 Evidence 재인용. 실제 OpenAI Provider·프로덕션 규모 부하는 미실측(아래 "검증 한계" 참고).
+- 측정 커밋: `7802364` 이후 이번 실행에서 추가한 실측 코드 적용(아래 "실험 준비" 표)
+- 검증 한계(공통): (1) 모든 AI 처리는 `FakeAiModerationAdapter`로 대체해 실제 OpenAI 지연·429·비용 변동성은 반영하지 않음 (2) 부하 규모가 경량(요청 15~30건, 동시 사용자 10명 수준)이라 프로덕션 피크 트래픽과는 다름 (3) CPU/Heap/DB Pool 등 실제 리소스 사용량은 측정하지 않고 지연시간·처리량·성공/실패 건수로 대체 측정함
 
 이 문서의 수치는 모두 **실측 완료 후에만** 채운다. 미측정 항목은 "검증 예정"으로 남기며 임의 수치를 기록하지 않는다.
 
@@ -57,72 +58,98 @@ hyeonseung-dev 리뷰(PR #243) 제안대로, "Kafka가 더 빠르다"가 아니�
 
 결론: **"Kafka가 더 빠르다"는 근거로 Kafka를 선택한 게 아니다.** 이번 실측에서는 오히려 Async가 특정 조건(단일 채팅방 몰림)에서 완료 처리량이 더 빨랐다. Kafka를 선택한 근거는 **적체·재시도·실패 격리·재처리·독립 확장이 가능한 처리 경계**라는 점이며, Async Baseline에는 이 중 어느 것도 기본으로 없다(재시도 없음, DLT 없음, 큐 유실 위험, Consumer processes 단위 확장 불가). Consumer 수 확장(실험 D)도 Partition key 분산과 함께 봐야 한다는 것이 이번 실측에서 드러난 추가 발견이다.
 
-## 실험 A — AI 지연이 채팅 처리에 전파되는가 (검증 예정)
+## 실험 A — AI 지연이 채팅 처리에 전파되는가 (실측 완료)
 
-| AI latency | Chat SEND p95/p99 | AI 처리 p95/p99 | Consumer Lag | Web CPU/Thread/DB Pool |
-|---|---|---|---|---|
-| 100ms | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 |
-| 1s | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 |
-| 3s | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 |
+`ChatModerationConsumerConcurrencyIntegrationTest`(동시 사용자 10명 × 2건, 채팅방 3개 분산, Consumer concurrency=3, `FakeAiModerationAdapter` latency만 변경).
 
-판정: 검증 예정
+| AI latency | Chat SEND p50 | Chat SEND p95 | Chat SEND max |
+|---|---|---|---|
+| 100ms | 13ms | 15ms | 15ms |
+| 1s | 9ms | 12ms | 12ms |
+| 3s | 12ms | 18ms | 18ms |
 
-## 실험 B — Consumer 중단 중 적체와 복구 (검증 예정)
+판정: **AI 처리 지연이 100ms→3s로 30배 늘어도 Chat SEND p95는 12~18ms 구간에 머물렀다.** 통합 프로세스라도 signal 디스패치(#59 MAJOR 수정)와 Kafka Consumer 스레드가 요청 스레드와 분리돼 있어 자원 경쟁이 Web 응답에 전파되지 않았다. Consumer Lag(오프셋 기준)과 실제 CPU/Thread/DB Pool 수치는 측정하지 않았고 완료 건수 기반 처리량으로만 간접 확인했다(검증 한계 참고).
 
-| 지표 | 값 |
-|---|---|
-| produced N건 | 검증 예정 |
-| peak lag | 검증 예정 |
-| processed N/N | 검증 예정 |
-| lost event | 검증 예정 |
-| recovery time(Lag 0까지) | 검증 예정 |
+## 실험 B — Consumer 중단 중 적체와 복구 (실측 완료)
 
-## 실험 C — 실패 격리 / Retry / DLT / 재처리 (검증 예정)
+`ChatModerationConsumerConcurrencyIntegrationTest`(Consumer Container `stop()` → 15건 `send()` → `start()`).
 
 | 지표 | 값 |
 |---|---|
-| 정상 Event 처리 성공률 | 검증 예정 |
-| Retry 횟수 / 성공 건수 | 검증 예정 |
-| DLT 건수 | 검증 예정 |
-| DLT Replay 성공 건수 | 검증 예정 |
-| 최종 Moderation 누락/중복 | 검증 예정 |
+| produced | 15건 |
+| peak backlog(중단 중 미처리) | 15건(100%, 중단 중 처리 0건 확인) |
+| processed N/N | 15/15 |
+| lost event | **0건** |
+| recovery time(재개 후 15건 완료까지) | 7.8초 |
 
-## 실험 D — Partition 3 / Consumer 1 → 2 → 3 확장 (검증 예정)
+판정: Consumer를 완전히 멈춰도 이벤트는 Kafka에 보존되고, 재개 즉시 순서대로 이어서 처리해 유실 없이 복구됨을 실측으로 확인.
 
-| Consumer 수 | consume rate | peak Lag | Lag drain time | AI 처리 p95/p99 | Rebalance | Provider 429/timeout | Retry/token·cost |
-|---|---|---|---|---|---|---|---|
-| 1 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 |
-| 2 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 |
-| 3 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 | 검증 예정 |
+## 실험 C — 실패 격리 / Retry / DLT / 재처리 (부분 실측)
 
-판정: 검증 예정(Consumer 수 증가 = 무조건 성능 향상으로 결론내리지 않음). 단, 실험 0에서 Consumer concurrency=3 고정 상태로 Partition key(`chatRoomId`) 분산도에 따라 완료 처리량이 크게 달라짐을 이미 확인했다(단일 방 몰림 15.5초 vs 3방 분산 10.7초, 이론적 3배 단축인 5초대에는 못 미침). 1→2→3 순차 확장을 실측할 때는 이 key 분산 변수를 반드시 같은 조건으로 통제해야 한다.
+`ChatModerationConsumerConcurrencyIntegrationTest`(정상 15건 + `FakeAiModerationAdapter.FORCE_FAIL_MARKER`로 강제 실패 5건을 다른 채팅방에 동시 유입).
 
-## 실험 E — AI 장애 격리 (검증 예정)
+| 지표 | 값 |
+|---|---|
+| 정상 Event 처리 성공률 | **15/15(100%)** — 실패 이벤트와 같은 시간대에 유입돼도 영향 없음 |
+| Retry 횟수(consumer-max-attempts) | 최초 처리 포함 최대 3회(기존 #59 설정 그대로, 이번 실행에서 변경 없음) |
+| DLT 건수 | **5/5(100%)** — 강제 실패 5건 전부 재시도 소진 후 DLT로 격리, `ANALYSIS_FAILED` 기록 |
+| DLT Replay 성공 건수 | **미구현** — Issue #192 코멘트에 "이번 V3 이후 개선사항"으로 명시된 DLT 관리자 Replay 도구가 아직 없어 측정 불가 |
+| 최종 Moderation 누락/중복 | 0건(정상 15건 SAFE, 실패 5건 ANALYSIS_FAILED, 중복 저장 없음) |
 
-AI timeout/5xx/429 강제 주입 시 Retry/DLT 발생과 Web/API 정상 동작 여부. 검증 예정.
+판정: 실패 이벤트는 자신이 속한 Partition/채팅방 범위에서만 재시도·DLT로 격리되고, 다른 채팅방의 정상 이벤트 처리에는 영향을 주지 않음을 확인. DLT Replay는 도구 자체가 없어 이번에도 검증 불가 상태로 남음(기존 #59 Evidence와 동일한 한계).
 
-## 실험 F — Kafka 장애 (검증 예정)
+## 실험 D — Partition 3 / Consumer 1 → 2 → 3 확장 (실측 완료)
 
-Kafka 중단 시 Web ChatMessage+Outbox 정상 저장, 실시간 채팅 유지, 복구 후 Outbox backlog 발행·AI 처리 회복 여부. 검증 예정.
+`ChatModerationConsumerConcurrencyIntegrationTest`(같은 채팅방 3개에 30건 고정, Consumer Container `stop()`→`setConcurrency(n)`→`start()`로 재구성, Fake AI 지연 500ms 고정).
 
-## 브로셔 대표 수치 후보 (실측 완료 후 채움)
+| Consumer 수 | drain time(30건) | consume rate |
+|---|---|---|
+| 1 | 15.4초 | 1.94건/초 |
+| 2 | 15.5초 | 1.93건/초 |
+| 3 | 10.4초 | 2.88건/초 |
+
+판정: **1→2에서는 거의 개선이 없었고 2→3에서만 뚜렷하게 개선됐다.** 3개 채팅방 key가 Partition 3개에 반드시 고르게 분산되는 게 아니라서(해시 충돌 가능), Consumer 2개 구간에서는 한쪽 Consumer가 여전히 대부분의 메시지를 떠안은 것으로 보인다. **"Consumer 수를 늘리면 늘리는 만큼 처리량이 오른다"는 가정은 이번 실측에서 기각됐다** — Partition key(`chatRoomId`) 분산도가 함께 맞아야 실제 병렬 처리 효과가 난다. Provider 429/timeout·token/cost는 Fake AI라 측정 대상이 아님(실제 Provider 대상 재실측 필요).
+
+## 실험 E — AI 장애 격리 (실험 A·C 결과로 합성 판단, 별도 신규 테스트 없음)
+
+전용 테스트를 새로 만들지 않고, 실험 A(Web은 AI 지연과 무관하게 항상 빠름)와 실험 C(강제 실패 5건이 정상 15건에 영향 없음, 재시도·DLT로 격리)를 합치면 "AI 장애가 Web/API 정상 동작을 막지 않는다"는 이슈의 요구 조건을 실측으로 충족한다. 다만 실제 OpenAI timeout/5xx/429 응답 코드별 세분화된 거동(예: 429만 별도로 급증하는 상황)은 Fake Adapter로 재현하지 않았으므로 검증 예정으로 남긴다.
+
+## 실험 F — Kafka 장애 (신규 실측 없음, #59 기존 Evidence 재인용)
+
+새 테스트를 만들지 않고 `docs/evidence/v3/59-kafka-ai-pipeline/README.md`의 기존 실측 결과를 그대로 인용한다(코드 변경 없어 재검증 불필요, `ChatMessageSendLatencyEvidenceTest` 전체 스위트에서 계속 통과 확인됨):
+
+- Kafka에 전혀 도달할 수 없는 상태(`bootstrap-servers=localhost:59999`)에서도 `send()` p50 1ms/p95 4ms/max 30ms로 응답 — Web/실시간 채팅은 Kafka 장애와 무관하게 정상 동작
+- Outbox→Kafka 발행 실패 1건 강제 → PENDING(attemptCount=1) 유지 → backoff 후 재처리 → 1/1 실제 broker 발행·COMPLETED로 복구
+
+## 브로셔 대표 수치 후보
 
 ```text
-Kafka vs Async Baseline — send() 응답성: 거의 동일(p95 4~8ms). Kafka가 더 빠르다는 주장은 실측으로 기각(실험 0 완료)
-Kafka vs Async Baseline — 완료 처리량(30건, AI 지연 500ms): Async 5.2~5.5초 vs Kafka 10.7~15.5초(Partition key 분산도에 좌우, 실험 0 완료)
-Kafka vs Async Baseline — 신뢰성: Async는 큐 대기 작업이 프로세스 종료 시 재시도 없이 유실, Kafka는 브로커 보존·재시작 복구(실험 0 완료, #59 Evidence 재확인)
-AI 지연 증가 시 Chat SEND p95 변화: 검증 예정
-Consumer 중단 N건 적체 후 유실 건수 / 복구 시간: 검증 예정
-Consumer 1→3 처리량 및 Lag 해소 시간 변화: 검증 예정(Partition key 분산도 통제 필요, 실험 0에서 이미 확인)
-DLT N건 중 N/N 재처리 성공 / 최종 중복·누락 건수: 검증 예정
+Kafka vs Async Baseline — send() 응답성: 거의 동일(p95 4~8ms). Kafka가 더 빠르다는 주장은 실측으로 기각(실험 0)
+Kafka vs Async Baseline — 완료 처리량(30건, AI 지연 500ms): Async 5.2~5.5초 vs Kafka 10.7~15.5초(Partition key 분산도에 좌우, 실험 0)
+Kafka vs Async Baseline — 신뢰성: Async는 큐 대기 작업이 프로세스 종료 시 재시도 없이 유실, Kafka는 브로커 보존·재시작 복구(실험 0, #59 재확인)
+AI 지연 100ms→3s(30배)에도 Chat SEND p95는 12~18ms로 거의 변화 없음(실험 A)
+Consumer 중단 15건 적체 → 재개 후 유실 0건, 복구 7.8초(실험 B)
+정상 15건은 실패 5건과 동시 유입에도 100% 성공, 실패 5건은 재시도 소진 후 5/5 DLT 격리(실험 C)
+Consumer 1→2→3 확장 시 drain time 15.4초→15.5초→10.4초 — 2에서는 거의 개선 없었고 3에서만 개선(Partition key 분산도 영향, 실험 D)
 ```
 
-## 최종 판정 (검증 예정)
+## 최종 판정 (실측 기반 임시 결론 — Human 최종 확인 필요)
 
 ```text
-통합 모놀리스 유지
-실행 역할만 Web / AI Worker 분리
-MSA 후속 검토
+통합 모놀리스 유지 (임시 채택)
 ```
 
-측정 완료 전까지 결론을 내리지 않는다.
+근거: Human 결정 Q1의 분리 착수 기준(Lag 미회복 5분+/AI 처리 p99 3초 반복 초과/HTTP p95 20%+ 동반 악화) 중 어느 것도 이번 실측 범위에서 관찰되지 않았다. AI 지연이 30배(100ms→3s) 늘어도 Chat SEND p95는 거의 그대로였고, Consumer 중단·AI 반복 실패도 Web이나 다른 채팅방 처리에 영향을 주지 않았다. Kafka 채택 근거도 속도가 아니라 신뢰성(적체·재시도·격리·복구)이라는 것이 실험 0에서 확인됐다.
+
+**이 결론이 최종이 아닌 이유(Human 확인 필요):**
+- 실제 OpenAI Provider가 아닌 `FakeAiModerationAdapter`로만 측정함 — Provider 429/Rate Limit·실제 지연 변동성은 미반영
+- 부하 규모가 경량(요청 15~30건, 동시 10명)이라 프로덕션 피크 트래픽에서는 재확인 필요
+- CPU/Heap/DB Pool 등 실제 리소스 경쟁은 측정하지 않음(지연·처리량 결과로 간접 추정만 함)
+- Worker Scale-out 시 Partition 수보다 Consumer를 늘렸을 때의 유휴 Consumer 문제, Rebalance 발생 빈도는 미실측
+
+다음 후보는 위 갭이 실제로 문제가 되는 것이 확인될 때만 재검토한다:
+
+```text
+실행 역할만 Web / AI Worker 분리 (B안)
+MSA 후속 검토 (C안)
+```

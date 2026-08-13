@@ -21,6 +21,8 @@ import org.springframework.stereotype.Component;
 public class FakeAiModerationAdapter implements AiModerationPort {
     /** ModerationResultValidator는 FLAGGED에 빈 category를 허용하지 않으므로 고정 category를 채운다. */
     private static final Set<ModerationCategory> DEFAULT_FLAGGED_CATEGORIES = Set.of(ModerationCategory.PROFANITY);
+    /** 실험 C(실패 격리)에서 특정 메시지만 강제로 실패시키기 위한 마커. 운영 콘텐츠와 충돌하지 않는 고유 문자열이다. */
+    public static final String FORCE_FAIL_MARKER = "FAKE_AI_FORCE_FAIL";
 
     private final long latencyMs;
     private final ModerationResultType resultType;
@@ -35,6 +37,9 @@ public class FakeAiModerationAdapter implements AiModerationPort {
     @Override
     public AiModerationResponse analyze(String content) {
         simulateLatency();
+        if (content != null && content.contains(FORCE_FAIL_MARKER)) {
+            throw new IllegalStateException("Fake AI 강제 실패(실험 C 격리 테스트)");
+        }
         Set<ModerationCategory> categories = resultType == ModerationResultType.SAFE
                 ? Set.of() : DEFAULT_FLAGGED_CATEGORIES;
         RiskLevel riskLevel = resultType == ModerationResultType.SAFE ? RiskLevel.LOW : RiskLevel.HIGH;

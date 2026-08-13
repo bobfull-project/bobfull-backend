@@ -1,6 +1,7 @@
 package com.bobfull.chat.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bobfull.chat.dto.AiModerationResponse;
 import com.bobfull.chat.entity.ChatMessage;
@@ -61,6 +62,14 @@ class FakeAiModerationAdapterTest {
         Mockito.verify(moderations).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getResult()).isEqualTo(ModerationResultType.FLAGGED);
         assertThat(captor.getValue().getCategories()).containsExactly(ModerationCategory.PROFANITY);
+    }
+
+    @Test
+    void FORCE_FAIL_MARKER를_포함한_content는_강제로_실패한다() {
+        FakeAiModerationAdapter adapter = new FakeAiModerationAdapter(0L, ModerationResultType.SAFE);
+
+        assertThatThrownBy(() -> adapter.analyze(FakeAiModerationAdapter.FORCE_FAIL_MARKER + " 실패 유도"))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
