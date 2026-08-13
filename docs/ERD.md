@@ -2,12 +2,20 @@
 
 ## 1. 문서 목적과 기준
 
-이 문서는 확정된 API와 프로젝트 정책을 구현 가능한 관계형 데이터 모델로 표현한다.
+이 문서는 확정된 API와 프로젝트 정책을 구현 가능한 관계형 데이터 모델로 표현한다. 현재 정적 스키마의 Source of Truth는 실제 `Entity / @Table / @Column / @ElementCollection / Repository / Migration / Index` 정의이며, ERD는 그 구현을 사람이 검토할 수 있는 형태로 기록한다.
 
 - 기준: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md), [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)
 - 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회, V3 채팅 AI moderation에 필요한 영속 데이터
-- 비범위: Java Entity, Migration, SQL Schema, Redis, Kafka, 실제 계좌 송금
+- 비범위: Redis, Kafka, 실제 계좌 송금 및 아직 도입하지 않은 별도 영속 모델
 - 원칙: API Response DTO를 테이블로 만들지 않고, 기준 문서에 없는 정책은 확정하지 않는다. Mermaid의 표현 한계가 있으면 아래 엔티티 상세 표를 기준으로 한다.
+
+### #245 정적 계약 검증 기준선
+
+- 검증 기준 `develop` SHA: `8e17ffc1b61626ff7f4b6fd2186eaf2341f0bbd2` (2026-08-13)
+- 대조: Entity/Table/Column 타입·NULL·PK·FK·UNIQUE·값 기반 참조, `@ElementCollection` 테이블, 실제 `@Index`와 `@UniqueConstraint`, API Spec의 식별자·저장값·계산값
+- 결과: 코드 전용·문서 전용 스키마 요소와 API Spec ↔ ERD 간 명백한 정적 계약 모순을 확인하지 못했다. BLOCKER / MAJOR / MINOR는 0건이다.
+
+이 결과는 정적 설계 문서 기준선이며, 성능 측정 뒤 Index 채택·제거 또는 #67 Final Claim Gate를 확정하는 근거는 아니다.
 
 ## 2. 핵심 데이터 모델 요약
 
@@ -640,7 +648,21 @@ erDiagram
 
 OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_history`에 처리·해제 이력을 남긴다. `NO_SHOW` 이후 MEMBER 취소는 허용하지 않는다.
 
-## 10. 인덱스 후보
+## 10. 인덱스
+
+### 현재 구현된 Index
+
+| 대상 | 실제 Index | 정의 위치·조회 근거 |
+|---|---|---|
+| `shared_table` | `idx_shared_table_restaurant_id(restaurant_id)` | `SharedTable.@Table`; 식당 조건 테이블 조회와 식당 검색 date·time 3-way join |
+| `payment` | `idx_payment_status_expires_at_id(payment_status, expires_at, payment_id)` | `Payment.@Table`; READY 만료 후보의 상태·시각·내부 PK 정렬 |
+| `chat_message` | `idx_chat_message_room_id(chat_room_id, chat_message_id)` | `ChatMessage.@Table`; room별 messageId cursor 조회 |
+| `outbox_event` | `idx_outbox_event_status_next_attempt(status, next_attempt_at, outbox_event_id)` | `OutboxEvent.@Table`; 처리 가능·stale Outbox 후보 조회 |
+| `email_outbox_delivery` | `idx_email_outbox_delivery_event_status(outbox_event_id, status)` | `EmailOutboxDelivery.@Table`; 이벤트별 미발송 수신자 조회 |
+
+아래 표는 실제 정의가 아닌 **후보**다. UNIQUE 제약으로 생성되는 인덱스는 각 엔티티 상세 표와 섹션 6을 기준으로 한다.
+
+### 인덱스 후보
 
 | 대상 | 후보 | API·조회 근거 |
 |---|---|---|
