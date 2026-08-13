@@ -128,6 +128,9 @@ erDiagram
         enum refund_status "REQUESTED, PROCESSING, COMPLETED, FAILED"
         datetime(6) requested_at "요청 시각"
         datetime(6) completed_at "완료 시각"
+        varchar(64) cancellation_id UK "PortOne 취소 식별자. 접수 시점 NULL"
+        varchar(256) idempotency_key UK "외부 요청 멱등 키. 변경 불가"
+        varchar(255) request_reason "최초 환불 요청 사유. 변경 불가"
         datetime(6) last_pg_checked_at "마지막 PG 조회 시각"
         datetime(6) created_at "생성 시각"
         datetime(6) updated_at "수정 시각"
@@ -151,7 +154,14 @@ erDiagram
         enum event_type "CHAT_ROOM_CREATION_REQUESTED 등 6종. Chat/Email 공통 유형"
         varchar(32) aggregate_type "RESERVATION, CHAT_MESSAGE, RESERVATION_PARTICIPANT. Java enum 아닌 String 필드"
         bigint aggregate_id "event_type별 대상 식별자 값. 물리 FK 아님"
+        int payload_version "현재 1. Payload 원문·개인정보는 저장하지 않음"
         enum status "PENDING, PROCESSING, COMPLETED, FAILED"
+        int attempt_count "처리 실패 횟수. 5회 재시도 후 다음 실패에서 FAILED"
+        datetime(6) next_attempt_at "다음 처리 가능 시각"
+        datetime(6) processing_started_at "stale PROCESSING 회수 기준. NULL 허용"
+        varchar(36) processing_token "claim 소유자 토큰. NULL 허용"
+        varchar(128) last_error_code "예외 유형만 기록. NULL 허용"
+        datetime(6) processed_at "COMPLETED 처리 시각. NULL 허용"
         datetime(6) created_at "생성 시각"
         datetime(6) updated_at "수정 시각"
     }
@@ -247,6 +257,8 @@ erDiagram
 
 모든 Enum 표기는 애플리케이션 Enum 값이다. 이 값은 Java `enum` 타입 필드에 `@Enumerated(EnumType.STRING)`으로 매핑되며, Spring Boot 4.1.0(Hibernate 7 계열) 기본 MySQL Dialect는 별도 `@JdbcTypeCode` 오버라이드가 없는 이 필드들을 VARCHAR가 아닌 네이티브 MySQL `ENUM(...)` 컬럼으로 생성한다(이 저장소에는 그런 오버라이드가 없다). 따라서 아래 표의 Java `enum` 필드는 `ENUM(...)` 타입으로 표기하고, 실제로는 `String` 필드(예: `outbox_event.aggregate_type`)인 값은 `VARCHAR(N)`로 구분해 표기한다.
 
+`created_at`/`updated_at`은 `BaseTimeEntity`(`@MappedSuperclass`)의 `@CreatedDate`/`@LastModifiedDate` 필드로 상속된다. 이 두 필드는 `@Column(updatable = false)`(`createdAt`)와 무옵션(`updatedAt`)만 선언돼 있고 `nullable = false`가 없어, DB 컬럼 자체는 NULL을 허용한다(NULL 컬럼 `Y`). Spring Data JPA Auditing(`AuditingEntityListener`)이 `@PrePersist`/`@PreUpdate` 시점에 항상 값을 채워 실제로는 NULL이 저장되지 않지만, 이는 애플리케이션 레벨 보장이며 DB 제약이 아니다. `NoShowHistory`는 `BaseTimeEntity`를 상속하지 않아 이 두 컬럼이 없다.
+
 ### 4.1 `member`
 
 목적: 인증 사용자와 `MEMBER`·`OWNER`·`ADMIN` 역할을 보관한다.
@@ -261,7 +273,7 @@ erDiagram
 | `business_number`          | VARCHAR(255) | Y | UNIQUE | OWNER 회원가입 시 저장하는 사업자등록번호. MEMBER는 NULL. NULL은 중복 허용, 값이 있으면 중복 금지. `@Column`에 별도 `length` 지정이 없어 Hibernate 기본값 255 적용 |
 | `role`                     | ENUM('MEMBER', 'OWNER', 'ADMIN') | N |  | 역할 |
 | `deleted_at`               | DATETIME(6) | Y |  | 회원 소프트 삭제 시각 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 회원 탈퇴 후에도 동일 `email`, `phone_number`, `business_number` 재사용은 허용하지 않는다. 탈퇴 회원의 고유 식별자 값은 변경하지 않고 보존하며, DB UNIQUE 제약도 유지한다.
 
@@ -282,7 +294,7 @@ erDiagram
 | `image_key` | VARCHAR(500) | Y |  | S3 최종 Object Key. `restaurants/{ownerId}/{uuid}.{extension}` 형식만 저장하며 URL은 저장하지 않음 |
 | `status` | ENUM('ACTIVE') | N |  | 생성 시 서버 기본값. 현재 `ACTIVE`만 사용 |
 | `deleted_at` | DATETIME(6) | Y |  | API의 소프트 삭제 정책 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 `ACTIVE` 외 상태값과 상태 전이는 기준 문서에 없다. 상태 변경 API도 이번 범위에 없다.
 
@@ -298,7 +310,7 @@ erDiagram
 | `capacity` | INTEGER | N | CHECK 후보: `2,4,6,8` | 허용 정원 |
 | `status` | ENUM('ACTIVE') | N |  | 생성 시 서버 기본값. 현재 `ACTIVE`만 사용 |
 | `deleted_at` | DATETIME(6) | Y |  | API의 소프트 삭제 정책 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 ### 4.4 `time_slot`
 
@@ -311,7 +323,7 @@ erDiagram
 | `start_at`, `end_at` | DATETIME(6) | N | `end_at > start_at` | 회차 시작·종료 시각 |
 | `active_start_at` | DATETIME(6) | Y | GENERATED, 복합 UNIQUE `uk_time_slot_active_start`의 후행 컬럼(실제 구현됨) | 활성 회차 중복 방지용 생성 컬럼. `deleted_at IS NULL`이면 `start_at`, 삭제된 회차는 NULL. API 입력·응답 값이 아니다 |
 | `deleted_at` | DATETIME(6) | Y |  | API의 소프트 삭제 정책 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 동일 테이블의 동일 날짜·시작 시간 중복은 `deleted_at IS NULL`인 활성 회차끼리만 금지한다. 삭제된 회차 이력은 보존하지만, 같은 테이블·같은 시작 시각의 신규 회차를 다시 생성할 수 있다. DB 강제는 `active_start_at = CASE WHEN deleted_at IS NULL THEN start_at ELSE NULL END` 생성 컬럼과 `UNIQUE(shared_table_id, active_start_at)` 조합으로 적용한다.
 
@@ -326,7 +338,7 @@ erDiagram
 | `creator_member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | 최초 예약자 |
 | `reservation_status` | ENUM('RECRUITING', 'CONFIRMED', 'CANCELLING', 'CANCELLED', 'CLOSED') | N |  | 예약 상태 |
 | `recruitment_status` | ENUM('OPEN', 'CLOSED') | N |  | 모집 상태 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 최초 예약자는 `reservation_participant`에도 존재한다. `creator_member_id`는 최초 예약자만 가능한 모집 마감·취소 권한을 빠르고 명확하게 검증하기 위한 중복 저장이다. 결제 완료 시 최초 참여자와 동일 회원인지 같은 트랜잭션에서 보장해야 한다. `CANCELLED` 예약은 이력을 위해 TimeSlot 연결을 유지하고, 해당 회차의 다음 예약 생성은 활성 Reservation 유무를 트랜잭션에서 확인한다. `CANCELLING`은 취소가 접수돼 외부 환불을 기다리는 중간 상태이며(#44), `isActive()`는 `RECRUITING`·`CONFIRMED`만 참으로 취급해 `CANCELLING`도 신규 JOIN·결제 확정 대상에서 제외한다.
 
@@ -343,7 +355,7 @@ erDiagram
 | `participation_status` | ENUM('RESERVED', 'NO_SHOW', 'CANCEL_REQUESTED', 'CANCELLED') | N |  | 참여자 상태 |
 | `cancelled_at` | DATETIME(6) | Y |  | 전체 참여 취소 시각 |
 | `cancel_reason` | VARCHAR(255) | Y |  | 취소 사유(MEMBER 본인 취소·식당 귀책 취소 공통). 노쇼는 사유를 저장하지 않는다 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 `(reservation_id, member_id)`는 유니크다. 최초 참여자는 `reservation.creator_member_id`와 같은 회원으로 판별한다. 부분 인원 변경·부분 취소·부분 노쇼는 모델 범위에 없다. MEMBER 취소는 서버 시간 기준 식사 시작 2시간 전에 접수되며, `RESERVED → CANCEL_REQUESTED`로 즉시 전이해 취소 접수를 커밋하고, 연결된 Payment 전체 금액의 외부 환불이 완료된 뒤에야 `CANCEL_REQUESTED → CANCELLED`로 확정된다(#44, #45). `cancelled_at`은 이 최종 확정 시각을 기록한다.
 예약 전체 취소 사유도 각 유효 `reservation_participant.cancel_reason`에 동일하게 기록한다. `reservation`에는 별도 취소 사유 컬럼을 두지 않는다.
@@ -367,7 +379,7 @@ erDiagram
 | `payment_status` | ENUM('READY', 'PAID', 'EXPIRED', 'FAILED', 'REFUNDED') | N | 복합 INDEX `idx_payment_status_expires_at_id`의 선행 컬럼 | 결제 상태 |
 | `expires_at` | DATETIME(6) | N | 복합 INDEX `idx_payment_status_expires_at_id`의 중간 컬럼 | READY 임시 선점 만료 시각 |
 | `paid_at` | DATETIME(6) | Y |  | PAID 전환 시각 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 `payment_id`는 DB 내부 PK이며 Java 필드 `id`에 매핑한다. `portone_payment_id`는 Java 필드 `paymentId`에 매핑하며, 외부 식별자 중복을 막고 결제 완료 API·웹훅 멱등 처리의 기준이 된다. `CREATE`는 READY 생성 시 `reservation_id`, `reservation_participant_id`가 NULL이고, PAID 전환 후 생성된 예약·최초 참여자와 연결한다. 시간 만료는 `READY && expires_at <= now`에서만 `EXPIRED`로 정규화하며, 좌석 계산은 정규화 전에도 `expires_at > now`인 READY만 포함한다. 만료 후보 조회 인덱스는 `(payment_status, expires_at, payment_id)`이고 외부 `portone_payment_id`가 아닌 내부 PK를 반환·잠금 대상으로 사용한다. 동일 `time_slot_id`에는 만료되지 않은 `payment_purpose=CREATE`, `payment_status=READY` Payment를 최대 1건만 허용한다. CREATE READY가 만료되거나 `EXPIRED`가 된 뒤에는 새 CREATE READY를 생성할 수 있다. `JOIN`은 기존 예약을 참조하며 `availableCapacity`를 기준으로 별도 처리한다.
 
@@ -386,7 +398,7 @@ erDiagram
 | `idempotency_key` | VARCHAR(256) | N | UNIQUE, 변경 불가 | PortOne 환불 POST 전에 생성하는 외부 요청 식별자. DB에는 따옴표 없는 원본 값을 저장한다(#145) |
 | `request_reason` | VARCHAR(255) | N | 변경 불가 | 최초 환불 요청 사유. `@Column`에 별도 `length` 지정이 없어 Hibernate 기본값 255 적용. amount·paymentId·idempotencyKey와 함께 동일 외부 요청 본문으로 고정한다(#145) |
 | `last_pg_checked_at` | DATETIME(6) | Y |  | 외부 PG 조회를 실제로 시도한 시각. `updated_at`과 분리해 재확인 후보를 공정하게 순환한다(#141) |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 한 사용자의 `partySize` 결제 전체만 환불하므로 결제당 환불은 0..1건으로 모델링한다. 실패 재시도는 새 환불 행이 아니라 같은 환불의 상태 전이로 처리한다.
 
@@ -414,8 +426,8 @@ erDiagram
 |---|---|---:|---|---|
 | `chat_room_id` | BIGINT | N | PK | 채팅방 식별자 |
 | `reservation_id` | BIGINT | N | 값 참조 → `reservation.reservation_id`(물리 FK 아님), UNIQUE | 예약당 1개 |
-| `created_at` | DATETIME(6) | N |  | 최초 예약 결제 완료 후 생성 |
-| `updated_at` | DATETIME(6) | N |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
+| `created_at` | DATETIME(6) | Y |  | 최초 예약 결제 완료 후 생성 |
+| `updated_at` | DATETIME(6) | Y |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
 
 ### 4.11 `chat_message`
 
@@ -428,8 +440,8 @@ erDiagram
 | `sender_member_id` | BIGINT | N | 값 참조 → `member.member_id`(물리 FK 아님) | 발신 회원 |
 | `sender_participant_id` | BIGINT | N | 값 참조 → `reservation_participant.reservation_participant_id`(물리 FK 아님) | 유효 참여자 검증 |
 | `content` | VARCHAR(1000) | N |  | 메시지 본문 |
-| `created_at` | DATETIME(6) | N |  | 생성 시각 |
-| `updated_at` | DATETIME(6) | N |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
+| `created_at` | DATETIME(6) | Y |  | 생성 시각 |
+| `updated_at` | DATETIME(6) | Y |  | `BaseTimeEntity` 상속으로 생성되는 컬럼. 별도 갱신 로직 없이 생성 시각과 함께 초기화 |
 
 읽음 처리, 이미지·파일, 수정·삭제, 차단은 현재 범위에서 제외한다. 사용자 신고는 V3 #218에 포함하며, AI Moderation과 신고 누적은 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN 경로로 사용하지 않는다.
 
@@ -453,7 +465,7 @@ erDiagram
 | `prompt_tokens`, `completion_tokens`, `total_tokens` | BIGINT | Y |  | Provider가 제공한 token 관측값; 실패면 NULL 가능 |
 | `analyzed_at` | DATETIME(6) | N |  | 결과·최종 실패 기록 시각 |
 | `error_code` | VARCHAR(128) | Y |  | 최종 실패 예외 유형; 완료면 NULL |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 #### `chat_moderation_category` (`@ElementCollection`)
 
@@ -489,7 +501,7 @@ erDiagram
 | `processing_token` | VARCHAR(36) | Y |  | claim 소유자 토큰. 오래된 작업자의 상태 덮어쓰기를 방지 |
 | `last_error_code` | VARCHAR(128) | Y |  | 예외 유형만 기록하며 민감 payload는 저장하지 않음 |
 | `processed_at` | DATETIME(6) | Y |  | COMPLETED 처리 시각 |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 ### 4.14 `email_outbox_delivery`
 
@@ -504,7 +516,7 @@ erDiagram
 | `recipient_member_id` | BIGINT | N | 위 복합 UNIQUE | 수신 회원. 물리 FK 아님 |
 | `status` | ENUM('PENDING', 'SENT') | N | 복합 INDEX `idx_email_outbox_delivery_event_status`의 후행 컬럼(선행 컬럼은 `outbox_event_id`) | 발송 상태 |
 | `sent_at` | DATETIME(6) | Y |  | `SENT` 전환 시각. `PENDING`은 NULL |
-| `created_at`, `updated_at` | DATETIME(6) | N |  | 생성·수정 시각 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
 
 `UNIQUE(outbox_event_id, recipient_member_id)`로 같은 발송 의도에 대한 같은 수신자 중복 생성을 막는다. `idx_email_outbox_delivery_event_status(outbox_event_id, status)`는 이벤트별 미발송(`PENDING`) 수신자 조회에 사용한다. `outbox_event_id`, `reservation_id`, `reservation_participant_id`, `recipient_member_id`는 모두 원본 식별자 값이며 JPA 연관관계·물리 FK로 매핑하지 않는다.
 
