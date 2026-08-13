@@ -2,6 +2,7 @@ package com.bobfull.chat.adapter;
 
 import com.bobfull.chat.dto.AiModerationResponse;
 import com.bobfull.chat.dto.ModerationResult;
+import com.bobfull.chat.entity.ModerationCategory;
 import com.bobfull.chat.entity.ModerationResultType;
 import com.bobfull.chat.entity.RiskLevel;
 import com.bobfull.chat.port.AiModerationPort;
@@ -18,6 +19,9 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = "bobfull.ai.moderation", name = "fake-enabled", havingValue = "true")
 public class FakeAiModerationAdapter implements AiModerationPort {
+    /** ModerationResultValidator는 FLAGGED에 빈 category를 허용하지 않으므로 고정 category를 채운다. */
+    private static final Set<ModerationCategory> DEFAULT_FLAGGED_CATEGORIES = Set.of(ModerationCategory.PROFANITY);
+
     private final long latencyMs;
     private final ModerationResultType resultType;
 
@@ -31,8 +35,10 @@ public class FakeAiModerationAdapter implements AiModerationPort {
     @Override
     public AiModerationResponse analyze(String content) {
         simulateLatency();
+        Set<ModerationCategory> categories = resultType == ModerationResultType.SAFE
+                ? Set.of() : DEFAULT_FLAGGED_CATEGORIES;
         RiskLevel riskLevel = resultType == ModerationResultType.SAFE ? RiskLevel.LOW : RiskLevel.HIGH;
-        return new AiModerationResponse(new ModerationResult(resultType, Set.of(), riskLevel),
+        return new AiModerationResponse(new ModerationResult(resultType, categories, riskLevel),
                 "Fake", "fake-model", 0L, 0L, 0L);
     }
 
