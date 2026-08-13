@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BobFull V3 Operations Flow Lab</title>
+  <link rel="stylesheet" href="style.css">
+  <style>.quick-state{display:grid;gap:4px;margin:9px 0 0}.quick-state div{display:grid;grid-template-columns:92px 1fr;gap:7px}.quick-state dt{color:#71b6ff;font:10px ui-monospace,monospace}.quick-state dd{margin:0;color:#eaf3ff;font-size:12px}</style>
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="eyebrow">BOBFULL V3</span><strong>OPERATIONS FLOW LAB</strong><nav><a href="../../v1/index.html">V1</a><a href="../../v2/index.html">V2</a><a href="./index.html" aria-current="page">V3</a></nav></div>
+    <p>코드·Evidence 기반 정적 인터랙티브 시뮬레이션 — 라이브 JVM/인프라 제어 화면이 아닙니다.</p>
+  </header>
+  <main>
+    <section class="controls" aria-label="시나리오 제어">
+      <label>Chapter <select id="chapterSelect"></select></label>
+      <label>Scenario <select id="scenarioSelect"></select></label>
+      <div class="mode" role="group" aria-label="표시 모드"><button data-mode="presentation" class="active">발표 모드</button><button data-mode="learning">학습 모드</button><button data-mode="ops">운영자 시점</button></div>
+      <span id="factBadge" class="badge"></span>
+    </section>
+
+    <section class="playback" aria-label="재생 제어">
+      <button id="play">▶ 자동 재생</button><button id="pause">⏸ Pause</button><button id="prev">◀ Prev</button><button id="next">Next ▶</button><button id="reset">↺ Reset</button>
+      <label>Speed <select id="speed"><option value="1600">1×</option><option value="950">1.5×</option><option value="650">2×</option></select></label>
+      <strong id="counter"></strong>
+    </section>
+
+    <section class="narration-panel">
+      <div><span class="eyebrow">CURRENT STEP</span><h1 id="stepTitle"></h1><p id="narration"></p></div>
+      <div id="stepFact" class="fact"></div>
+    </section>
+
+    <section id="comparison" class="comparison" hidden></section>
+
+    <section class="canvas-section">
+      <div class="canvas-heading"><h2>System Flow Canvas</h2><span>좌 → 우 고정 흐름 · 현재 Scenario에 관계없는 노드는 흐리게 표시</span></div>
+      <div id="canvas" class="canvas" aria-label="시스템 흐름"></div>
+      <div class="legend"><span>● request</span><span>◆ event</span><span>✓ committed</span><span>↻ retry</span><span>↓ DLT</span><span>↠ Redis broadcast</span><span>× failure</span></div>
+    </section>
+
+    <section class="state-section"><h2>핵심 상태</h2><div id="stateGrid" class="state-grid"></div></section>
+
+    <section id="learningPanel" class="learning" hidden>
+      <h2>학습 상세</h2>
+      <div id="detailGrid" class="detail-grid"></div>
+    </section>
+    <section id="opsPanel" class="ops" hidden><h2>운영자 시점</h2><p>현재 Step에서 Evidence로 확인된 구조화 로그·메트릭만 표시합니다. 수치·그래프는 만들지 않습니다.</p><div id="opsGrid" class="detail-grid"></div></section>
+
+    <section class="evidence-gate">
+      <div><span class="badge future">FUTURE · NOT VERIFIED</span><h2>Evidence Gate</h2><p>#169 ALB·다중 EC2 Blue-Green, #191 Auto Scaling, #192 AI Worker 분리는 아직 재생 Chapter가 아닙니다. 실제 Evidence가 생기면 Scenario/Chapter로 승격할 수 있도록 데이터 구조만 열어 둡니다.</p></div>
+      <ul><li>#169 — cross-EC2 / ALB WSS / traffic switch evidence 필요</li><li>#191 — 2→N 동일 조건 측정 및 도입 판단 필요</li><li>#192 — 통합 기준선·Worker 분리·scale evidence 필요</li></ul>
+    </section>
+  </main>
+  <script src="scenario-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
