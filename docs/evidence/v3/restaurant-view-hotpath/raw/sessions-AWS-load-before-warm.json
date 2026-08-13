@@ -1,0 +1,151 @@
+{
+    "metrics": {
+        "data_sent": {
+            "count": 743121,
+            "rate": 2447.095663881865
+        },
+        "http_req_duration{expected_response:true}": {
+            "p(95)": 802.662,
+            "p(99)": 1705.9818,
+            "avg": 299.22525413810416,
+            "min": 107.472,
+            "med": 203.686,
+            "max": 3474.487,
+            "p(90)": 456.675
+        },
+        "http_req_blocked": {
+            "p(90)": 0.008,
+            "p(95)": 0.01,
+            "p(99)": 6.7669999999999995,
+            "avg": 0.15236264838656088,
+            "min": 0.002,
+            "med": 0.004,
+            "max": 42.291
+        },
+        "iteration_duration": {
+            "p(95)": 803.58088575,
+            "p(99)": 1709.4051562499997,
+            "avg": 300.3955636403934,
+            "min": 149.487667,
+            "med": 204.74170800000002,
+            "max": 3475.417416,
+            "p(90)": 459.25266650000026
+        },
+        "vus_max": {
+            "min": 20,
+            "max": 45,
+            "value": 45
+        },
+        "iterations": {
+            "count": 5976,
+            "rate": 19.67895361234311
+        },
+        "data_received": {
+            "count": 109705114,
+            "rate": 361258.6762789178
+        },
+        "vus": {
+            "value": 22,
+            "min": 0,
+            "max": 43
+        },
+        "http_req_duration": {
+            "avg": 299.22525413810416,
+            "min": 107.472,
+            "med": 203.686,
+            "max": 3474.487,
+            "p(90)": 456.675,
+            "p(95)": 802.662,
+            "p(99)": 1705.9818
+        },
+        "http_req_waiting": {
+            "p(99)": 1699.4519999999998,
+            "avg": 288.32915448921574,
+            "min": 107.372,
+            "med": 195.569,
+            "max": 3467.992,
+            "p(90)": 436.425,
+            "p(95)": 767.6
+        },
+        "http_reqs": {
+            "count": 5981,
+            "rate": 19.695418600305246
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0
+        },
+        "http_req_receiving": {
+            "avg": 10.877349439892985,
+            "min": 0.05,
+            "med": 6.238,
+            "max": 547.25,
+            "p(90)": 15.278,
+            "p(95)": 25.751,
+            "p(99)": 106.39139999999983
+        },
+        "http_req_failed": {
+            "fails": 5981,
+            "passes": 0,
+            "value": 0
+        },
+        "http_req_sending": {
+            "p(95)": 0.032,
+            "p(99)": 0.0743999999999999,
+            "avg": 0.018750208995151688,
+            "min": 0.006,
+            "med": 0.016,
+            "max": 0.312,
+            "p(90)": 0.027
+        },
+        "http_req_connecting": {
+            "avg": 0.1461558267848186,
+            "min": 0,
+            "med": 0,
+            "max": 42.226,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 6.688199999999999
+        },
+        "checks": {
+            "passes": 11952,
+            "fails": 0,
+            "value": 1
+        },
+        "dropped_iterations": {
+            "count": 25,
+            "rate": 0.08232493981067232
+        }
+    },
+    "setup_data": {
+        "restaurantId": 6,
+        "date": "2026-08-14"
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "hotpath_dining_sessions status is 200": {
+                    "name": "hotpath_dining_sessions status is 200",
+                    "path": "::hotpath_dining_sessions status is 200",
+                    "id": "fc87c310fd922d1f0205ec78c4af5f7a",
+                    "passes": 5976,
+                    "fails": 0
+                },
+                "hotpath_dining_sessions body.success is true": {
+                    "passes": 5976,
+                    "fails": 0,
+                    "name": "hotpath_dining_sessions body.success is true",
+                    "path": "::hotpath_dining_sessions body.success is true",
+                    "id": "5577d279d11a6fbe601362fede754c3c"
+                }
+            }
+    }
+}
