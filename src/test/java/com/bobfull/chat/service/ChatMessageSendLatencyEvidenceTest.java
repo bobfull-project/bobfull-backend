@@ -53,7 +53,8 @@ import org.springframework.test.util.ReflectionTestUtils;
         "bobfull.ai.moderation.fake-enabled=true",
         "bobfull.ai.moderation.fake-latency-ms=500",
         "bobfull.chat.moderation.async-baseline-enabled=true",
-        "bobfull.chat.moderation.async-baseline-concurrency=3"
+        "bobfull.chat.moderation.async-baseline-concurrency=3",
+        "bobfull.chat.moderation.async-baseline-queue-capacity=1000"
 })
 @ContextConfiguration(classes = ChatMessageSendLatencyEvidenceTest.Configuration.class)
 class ChatMessageSendLatencyEvidenceTest {
@@ -128,6 +129,38 @@ class ChatMessageSendLatencyEvidenceTest {
         // 완료 처리량은 전용 스레드풀 동시성(3)만큼만 나가므로, 지연×(N/동시성) 근처에서 끝난다.
         assertThat(drainMillis).isGreaterThanOrEqualTo(
                 FAKE_AI_LATENCY_MILLIS * (ASYNC_BASELINE_SAMPLE_SIZE / ASYNC_BASELINE_CONCURRENCY));
+    }
+
+    @Test void Async_Baseline_채팅방_30개에_300건을_균등분산해도_동시성_3만큼만_처리된다() {
+        // 같은 컨텍스트를 쓰는 다른 테스트가 남긴 처리 중 작업이 있으면 먼저 다 빠지도록 기다린다(측정 오염 방지).
+        await().atMost(Duration.ofSeconds(60)).untilAsserted(() ->
+                assertThat(chatModerationRepository.count()).isEqualTo(chatMessageRepository.count()));
+
+        int roomCount = 30;
+        int totalMessages = 300;
+        AuthMember member = new AuthMember(1L, MemberRole.MEMBER);
+        List<ChatRoom> rooms = new ArrayList<>();
+        for (int i = 0; i < roomCount; i++) {
+            rooms.add(chatRoomRepository.saveAndFlush(ChatRoom.create(10_000L + i)));
+        }
+        long baselineCompleted = chatModerationRepository.count();
+
+        Instant startedAt = Instant.now();
+        for (int i = 0; i < totalMessages; i++) {
+            ChatRoom room = rooms.get(i % roomCount);
+            service.send(room.getId(), member, "30방-300건 Async 균등분산 측정용 메시지 " + i);
+        }
+
+        long expectedTotal = baselineCompleted + totalMessages;
+        await().atMost(Duration.ofSeconds(120)).untilAsserted(() ->
+                assertThat(chatModerationRepository.count()).isGreaterThanOrEqualTo(expectedTotal));
+        long drainMillis = Duration.between(startedAt, Instant.now()).toMillis();
+        double messagesPerSecond = totalMessages / (drainMillis / 1000.0);
+
+        log.info("event=ASYNC_WIDE_DISTRIBUTION_EVIDENCE roomCount={} totalMessages={} fakeAiLatencyMillis={} "
+                        + "concurrency={} drainMillis={} messagesPerSecond={}",
+                roomCount, totalMessages, FAKE_AI_LATENCY_MILLIS, ASYNC_BASELINE_CONCURRENCY, drainMillis,
+                String.format("%.2f", messagesPerSecond));
     }
 
     @TestConfiguration(proxyBeanMethods = false)

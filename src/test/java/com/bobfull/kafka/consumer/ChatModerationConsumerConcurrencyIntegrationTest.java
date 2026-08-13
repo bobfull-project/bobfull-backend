@@ -22,11 +22,19 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +70,9 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
         "portone.api-secret=chat-moderation-consumer-concurrency-test-api-secret",
         "portone.store-id=chat-moderation-consumer-concurrency-test-store-id",
         "portone.webhook-secret=Y2hhdC1tb2RlcmF0aW9uLWNvbmN1cnJlbmN5LXRlc3Q=",
-        "outbox.chat-message.enabled=false",
+        "outbox.chat-message.enabled=true",
+        "outbox.chat-message.fixed-delay=1000",
+        "outbox.chat-message.batch-size=200",
         "bobfull.kafka.chat-message.consumer-enabled=true",
         "bobfull.kafka.chat-message.topic-auto-create-enabled=true",
         "bobfull.kafka.chat-message.topic=chat-moderation-concurrency-it.v1",
@@ -78,6 +88,7 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
     private static final int SAMPLE_SIZE = 30;
     private static final long FAKE_AI_LATENCY_MILLIS = 500;
     private static final int CONCURRENCY = 3;
+    private static final String TOPIC = "chat-moderation-concurrency-it.v1";
 
     @Container
     @org.springframework.boot.testcontainers.service.connection.ServiceConnection
@@ -405,6 +416,81 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
 
         assertThat(normalSuccessCount).isEqualTo(normalCount);
         assertThat(failingDltCount).isEqualTo(failingCount);
+    }
+
+    @Test
+    void 채팅방_30개_이상에_300건을_균등분산하면_Partition_3개가_모두_활용된다() throws InterruptedException {
+        int roomCount = 30;
+        int totalMessages = 300;
+        int messagesPerRoom = totalMessages / roomCount;
+        AuthMember member = new AuthMember(1L, MemberRole.MEMBER);
+
+        // 이전 테스트가 concurrency를 바꿔놨을 수 있으니 리뷰 요청 조건(Partition 3 / Consumer 3)으로 되돌린다.
+        ConcurrentMessageListenerContainer<?, ?> container =
+                (ConcurrentMessageListenerContainer<?, ?>) registry.getListenerContainers().iterator().next();
+        if (container.getConcurrency() != CONCURRENCY || !container.isRunning()) {
+            if (container.isRunning()) {
+                container.stop();
+            }
+            container.setConcurrency(CONCURRENCY);
+            container.start();
+            await().atMost(Duration.ofSeconds(10)).until(container::isRunning);
+            Thread.sleep(2000);
+        }
+
+        List<ChatRoom> rooms = new ArrayList<>();
+        for (int i = 0; i < roomCount; i++) {
+            rooms.add(chatRoomRepository.saveAndFlush(ChatRoom.create(1_000L + i)));
+        }
+
+        Map<Integer, Long> partitionOffsetsBefore = readEndOffsetsByPartition();
+        long baselineCompleted = chatModerationRepository.count();
+
+        Instant startedAt = Instant.now();
+        for (int i = 0; i < totalMessages; i++) {
+            ChatRoom room = rooms.get(i % roomCount);
+            service.send(room.getId(), member, "30방-300건 균등분산 측정용 메시지 " + i);
+        }
+
+        long expectedTotal = baselineCompleted + totalMessages;
+        await().atMost(Duration.ofSeconds(300)).untilAsserted(() ->
+                assertThat(chatModerationRepository.count()).isEqualTo(expectedTotal));
+        long drainMillis = Duration.between(startedAt, Instant.now()).toMillis();
+        double messagesPerSecond = totalMessages / (drainMillis / 1000.0);
+
+        Map<Integer, Long> partitionOffsetsAfter = readEndOffsetsByPartition();
+        Map<Integer, Long> messagesByPartition = new TreeMap<>();
+        partitionOffsetsAfter.forEach((partition, afterOffset) ->
+                messagesByPartition.put(partition, afterOffset - partitionOffsetsBefore.getOrDefault(partition, 0L)));
+
+        log.info("event=KAFKA_WIDE_DISTRIBUTION_EVIDENCE roomCount={} messagesPerRoom={} totalMessages={} "
+                        + "fakeAiLatencyMillis={} consumerConcurrency={} drainMillis={} messagesPerSecond={} "
+                        + "messagesByPartition={}",
+                roomCount, messagesPerRoom, totalMessages, FAKE_AI_LATENCY_MILLIS, CONCURRENCY, drainMillis,
+                String.format("%.2f", messagesPerSecond), messagesByPartition);
+
+        // Partition 3개가 이번 유입에서 전부 최소 1건 이상 받았는지 확인한다(파티션 병렬성이 실제로 활용됨).
+        assertThat(messagesByPartition).hasSize(3);
+        assertThat(messagesByPartition.values()).allMatch(count -> count > 0);
+        assertThat(messagesByPartition.values().stream().mapToLong(Long::longValue).sum()).isEqualTo(totalMessages);
+    }
+
+    private Map<Integer, Long> readEndOffsetsByPartition() {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "chat-moderation-concurrency-it-partition-probe");
+        try (KafkaConsumer<String, String> rawConsumer = new KafkaConsumer<>(props)) {
+            List<PartitionInfo> partitionInfos = rawConsumer.partitionsFor(TOPIC);
+            List<TopicPartition> partitions = partitionInfos.stream()
+                    .map(info -> new TopicPartition(TOPIC, info.partition()))
+                    .toList();
+            Map<TopicPartition, Long> endOffsets = rawConsumer.endOffsets(partitions);
+            Map<Integer, Long> byPartition = new TreeMap<>();
+            endOffsets.forEach((topicPartition, offset) -> byPartition.put(topicPartition.partition(), offset));
+            return byPartition;
+        }
     }
 
     @TestConfiguration(proxyBeanMethods = false)

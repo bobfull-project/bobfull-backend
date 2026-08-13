@@ -74,6 +74,34 @@ hyeonseung-dev 리뷰(PR #243) 제안대로, "Kafka가 더 빠르다"가 아니�
 
 Async Baseline에는 이 중 어느 것도 기본으로 없다(재시도 없음, DLT 없음, 큐 유실 위험, Consumer 프로세스 단위 확장 불가). **"재처리(DLT Replay)"는 별개다** — 현재 구현이 보장하는 것은 "Retry → DLT 격리 → Consumer 재시작 후 이어서 처리"까지이며, DLT에 격리된 이벤트를 다시 꺼내 재처리하는 관리자 도구는 아직 없다(실험 C 참고, 후속 개선사항). Consumer 수 확장(실험 D)도 Partition key 분산과 함께 봐야 한다는 것이 이번 실측에서 드러난 추가 발견이다.
 
+## 실험 0-1 — Kafka Partition/Consumer 병렬성이 실제로 활용되는 조건 재검증 (2026-08-13, hyeonseung-dev 리뷰 요청, 실측 완료)
+
+실험 0은 채팅방 3개로만 비교해 `chatRoomId` 3개가 Partition 3개에 균등 분배됐다는 보장이 없었다. 그래서 **채팅방을 최소 30개 이상으로 늘려 Partition 3개 / Consumer 3개가 실제로 모두 활용되는 조건**에서 Async concurrency=3과 다시 비교했다(Consumer 1→2→3 재측정은 실험 D에서 이미 완료했으므로 하지 않음).
+
+### 비교 조건
+
+- 메시지 300건, 채팅방 30개(방당 10건 균등 분산), Fake AI 지연 500ms 동일, Async concurrency=3 / Kafka Partition=3·Consumer=3 동일
+
+### 측정 중 발견한 버그: Outbox Signal Dispatcher 큐 포화로 메시지가 영구 유실될 수 있음
+
+300건을 빠르게 연속 `send()`하자 완료 건수가 260건대에서 멈추고 5분(300초)을 기다려도 더 늘지 않았다. 원인은 `ChatMessageOutboxSignalDispatcher`(커밋 후 Kafka 발행을 즉시 트리거하는 컴포넌트)가 스레드 2개·큐 용량 100(하드코딩)으로 고정돼 있어, 순간적으로 100건을 초과하는 signal이 몰리면 초과분을 **재시도 없이 그대로 버리기** 때문이다(`discardAndLog()`). 이 테스트 환경에서는 Outbox 스케줄러도 꺼져 있어(`outbox.chat-message.enabled=false`) 버려진 signal을 회수할 방법이 없어 해당 메시지는 **영구히 Kafka에 발행되지 않았다**.
+
+- 재현: 300건 연속 `send()` → 완료 262/300에서 멈춤(300초 대기해도 증가 없음)
+- 조치: 이 실험에서만 Outbox 스케줄러를 안전망으로 켬(`outbox.chat-message.enabled=true`, `fixed-delay=1000ms`) → 버려진 signal도 스케줄러가 최대 1초 뒤 재발행 → 300/300 정상 완료
+- **이것은 이번 실행에서 코드를 고친 게 아니라 실측 중 발견한 기존 동작이다.** 프로덕션(`application-prod.yml`)은 이미 `outbox.chat-message.enabled`가 기본 `true`라 이 안전망이 항상 켜져 있지만, **버스트 상황에서 즉시 발행이 아니라 최대 스케줄러 주기(기본 5초)만큼 지연될 수 있다**는 것은 이번에 새로 확인된 사실이다. `QUEUE_CAPACITY=100`은 코드에 하드코딩돼 있어 설정으로 조절할 수 없다 — 버스트 규모가 커지면 이 상수도 재검토 대상이 될 수 있다(이번 PR 범위 밖, 후속 개선사항으로 별도 기록 권장).
+
+### 측정 결과 (`ChatModerationConsumerConcurrencyIntegrationTest`, `ChatMessageSendLatencyEvidenceTest`, 실제 테스트 실행, Outbox 스케줄러 안전망 활성화 상태)
+
+| 지표 | Async Baseline(concurrency=3) | Kafka(Partition=3, Consumer=3, 30방 균등분산) |
+|---|---|---|
+| 300건 완료까지(drain time) | **50.9초** | **71.8~72.5초** |
+| 처리량(messages/sec) | **5.90** | **4.14~4.18** |
+| Partition별 메시지 분포(300건 중) | - | 예: `{P0: 140, P1: 100~110, P2: 50~60}`(실행마다 정확한 수치는 다르지만 항상 뚜렷하게 불균등) |
+
+판정: **채팅방을 30개로 늘려 Partition 3개가 전부 사용되는 조건에서도 Async(50.9초)가 Kafka(71.8~72.5초)보다 빨랐다.** 원인은 Partition별 메시지 분포가 여전히 불균등하기 때문이다(가장 많이 받은 Partition이 가장 적게 받은 Partition의 약 2~3배). `chatRoomId` 문자열을 murmur2로 해싱해 3개 Partition에 배정하는 방식은, 키가 30개로 늘어나도 "균등 분배"를 보장하지 않는다 — 우연히 여러 방이 같은 Partition에 몰릴 수 있다. 전체 drain time은 평균이 아니라 **가장 많이 받은 Partition(가장 느린 Consumer)이 끝나는 시점**으로 결정되므로, Kafka의 실제 병렬 처리 이득은 Consumer 수보다 **Partition별 실제 분포**에 더 크게 좌우된다.
+
+따라서 리뷰의 질문("충분히 많은 채팅방이 동시에 유입되어 Partition 3/Consumer 3 병렬성이 실제로 활용되는 상황에서 처리량이 어떻게 달라지는가")에 대한 답은: **여전히 Async가 더 빨랐다.** Kafka 우세로 뒤집히지 않았으므로, Kafka 채택 근거는 (실험 0 결론과 동일하게) 속도가 아니라 신뢰성·복구·격리·독립 확장 구조에 있다는 결론을 그대로 유지한다. 다만 이번 실험은 **Kafka Partition 기반 병렬성의 한계**(hash 분산의 불균등성이 Consumer 수 확장 효과를 갉아먹을 수 있음)를 규모를 키운 조건에서 한 번 더 확인해준 추가 근거다.
+
 ## 실험 A — AI 지연이 채팅 처리에 전파되는가 (실측 완료)
 
 `ChatModerationConsumerConcurrencyIntegrationTest`(동시 사용자 10명 × 2건, 채팅방 3개 분산, Consumer concurrency=3, `FakeAiModerationAdapter` latency만 변경).
@@ -149,6 +177,7 @@ AI 지연 100ms→3s(30배)에도 Chat SEND application service p95는 12~18ms�
 Consumer 중단 15건 적체 → 재개 후 유실 0건, 복구 7.8초(실험 B)
 정상 15건은 실패 5건과 동시 유입에도 100% 성공, 실패 5건은 재시도 소진 후 5/5 DLT 격리(실험 C)
 Consumer 1→2→3 확장 시 drain time 15.4초→15.5초→10.4초 — 2에서는 거의 개선 없었고 3에서만 개선(Partition key 분산도 영향, 실험 D)
+채팅방 30개·300건으로 늘려 Partition 3개를 실제로 다 써도 Async(50.9초)가 Kafka(71.8~72.5초)보다 여전히 빠름 — Partition별 분포가 불균등(최대/최소 약 2~3배 차이)해서(실험 0-1)
 ```
 
 ## 최종 판정 (2026-08-13 Human 확정)
