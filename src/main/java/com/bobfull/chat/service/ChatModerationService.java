@@ -21,13 +21,18 @@ import org.springframework.stereotype.Service;
 @Service
 public class ChatModerationService {
     private static final Logger log = LoggerFactory.getLogger(ChatModerationService.class);
+    private static final String RULE_PROVIDER = "BOBFULL_RULE";
+    private static final String RULE_MODEL = "rule-filter-v1";
+    private static final String RULE_PROMPT_VERSION = "NO_LLM";
     private final ChatMessageRepository messages;
     private final ChatModerationRepository moderations;
     private final AiModerationPort aiModerationPort;
+    private final ModerationRuleFilter ruleFilter;
     private final Clock clock;
     public ChatModerationService(ChatMessageRepository messages, ChatModerationRepository moderations,
-            AiModerationPort aiModerationPort, Clock clock) {
-        this.messages = messages; this.moderations = moderations; this.aiModerationPort = aiModerationPort; this.clock = clock;
+            AiModerationPort aiModerationPort, ModerationRuleFilter ruleFilter, Clock clock) {
+        this.messages = messages; this.moderations = moderations; this.aiModerationPort = aiModerationPort;
+        this.ruleFilter = ruleFilter; this.clock = clock;
     }
     public void analyze(Long messageId) {
         ChatModeration existing = moderations.findByMessageId(messageId).orElse(null);
@@ -39,7 +44,9 @@ public class ChatModerationService {
                 .orElseThrow(() -> new CustomException(ChatErrorCode.CHAT_MESSAGE_ID_NOT_FOUND));
         long startedAt = System.nanoTime();
         try {
-            AiModerationResponse response = aiModerationPort.analyze(message.getContent());
+            AiModerationResponse response = ruleFilter.clearFlagged(message.getContent())
+                    .map(this::ruleResponse)
+                    .orElseGet(() -> aiModerationPort.analyze(message.getContent()));
             ModerationResultValidator.validate(response == null ? null : response.result());
             persistCompleted(messageId, existing, response, elapsedMillis(startedAt));
         } catch (ModerationAnalysisException exception) {
@@ -49,6 +56,9 @@ public class ChatModerationService {
             throw new ModerationAnalysisException(errorCode, exception);
         }
     }
+    private AiModerationResponse ruleResponse(com.bobfull.chat.dto.ModerationResult result) {
+        return new AiModerationResponse(result, RULE_PROVIDER, RULE_MODEL, null, null, null);
+    }
     /** #59가 Kafka Retry를 소진하고 DLT로 보낼 때만 호출하는 최종 실패 기록 진입점이다. */
     public void recordFinalFailure(Long messageId, String errorCode) {
         ChatModeration existing = moderations.findByMessageId(messageId).orElse(null);
@@ -57,11 +67,12 @@ public class ChatModerationService {
     }
     private void persistCompleted(Long messageId, ChatModeration existing, AiModerationResponse response, long latencyMillis) {
         Instant now = clock.instant();
+        String promptVersion = promptVersion(response);
         ChatModeration moderation = existing == null ? ChatModeration.completed(messageId, response.result().result(), response.result().categories(),
-                response.result().riskLevel(), response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis,
+                response.result().riskLevel(), response.provider(), response.model(), promptVersion, ModerationPrompt.POLICY_VERSION, latencyMillis,
                 response.promptTokens(), response.completionTokens(), response.totalTokens(), now) : existing;
         if (existing != null) moderation.complete(response.result().result(), response.result().categories(), response.result().riskLevel(),
-                response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis, response.promptTokens(),
+                response.provider(), response.model(), promptVersion, ModerationPrompt.POLICY_VERSION, latencyMillis, response.promptTokens(),
                 response.completionTokens(), response.totalTokens(), now);
         try {
             moderations.saveAndFlush(moderation);
@@ -69,7 +80,7 @@ public class ChatModerationService {
             ChatModeration latest = moderations.findByMessageId(messageId).orElseThrow(() -> exception);
             if (latest.isCompleted()) return;
             latest.complete(response.result().result(), response.result().categories(), response.result().riskLevel(),
-                    response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis,
+                    response.provider(), response.model(), promptVersion, ModerationPrompt.POLICY_VERSION, latencyMillis,
                     response.promptTokens(), response.completionTokens(), response.totalTokens(), now);
             try {
                 moderations.saveAndFlush(latest);
@@ -80,6 +91,9 @@ public class ChatModerationService {
         }
         log.info("event=CHAT_MODERATION_COMPLETED messageId={} result={} categories={} riskLevel={} latencyMillis={}",
                 messageId, response.result().result(), response.result().categories(), response.result().riskLevel(), latencyMillis);
+    }
+    private static String promptVersion(AiModerationResponse response) {
+        return RULE_PROVIDER.equals(response.provider()) ? RULE_PROMPT_VERSION : ModerationPrompt.PROMPT_VERSION;
     }
     private void persistFailure(Long messageId, ChatModeration existing, long latencyMillis, String errorCode) {
         Instant now = clock.instant();
