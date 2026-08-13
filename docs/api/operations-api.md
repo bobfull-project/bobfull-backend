@@ -1,7 +1,5 @@
 # 운영 Endpoint / Webhook
 
-> 문서 생성 기준: `develop` HEAD `1ff40d50c4060c79a686d5254928b027211a18cb`
-> HTTP 계약 검증 기준: Issue #238의 `2f65b0f6974ef1b9d521711e6527e2a0cefd1e4b` (이후 develop 변경에서 HTTP 계약 변경 없음)
 > Source of Truth: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
 
 이 문서는 현재 `develop`의 실제 HTTP 계약을 사람이 읽기 쉬운 상세 명세 형태로 풀어쓴 문서다.
