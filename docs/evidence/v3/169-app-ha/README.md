@@ -4,7 +4,7 @@
 
 Issue #169의 보장 범위는 **HTTP API App 계층 HA**다.
 
-이번 검증으로 ALB 뒤 App EC2 2대 구성, Target Group health 기반 장애 우회, Blue/Green Target Group weight 전환, GitHub Actions 기반 Blue-Green 배포 자동화가 실제 AWS 환경에서 동작함을 확인했다.
+이번 검증으로 ALB 뒤 App EC2 2대 구성, Target Group health 기반 장애 우회, Blue/Green Target Group weight 전환, GitHub Actions 기반 Blue-Green 배포 자동화, public endpoint 기준 배포/rollback 중 요청 연속성을 실제 AWS 환경에서 확인했다.
 
 다만 전체 시스템 HA로 표현하지 않는다. 현재 RDS는 Single-AZ이고, Kafka는 단일 EC2의 단일 KRaft broker 구성이다. 따라서 DB 계층과 메시징 계층 장애까지 포함한 전체 서비스 고가용성은 이번 범위가 아니다.
 
@@ -32,7 +32,7 @@ Issue #169의 보장 범위는 **HTTP API App 계층 HA**다.
 
 | 항목 | 현재 구성 |
 |---|---|
-| Redis | ElastiCache Valkey, In-transit encryption 사용 |
+| Redis | ElastiCache Valkey, in-transit encryption 사용 |
 | Kafka | 전용 EC2, 단일 KRaft broker |
 | RDS | MySQL Single-AZ |
 | 배포 | GitHub Actions, ECR SHA image, SSM Run Command, ALB Listener weight |
@@ -111,20 +111,150 @@ BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS
 
 결론: App EC2 1대 장애 시 ALB가 정상 Target으로 요청을 전달해 HTTP API App 계층 요청 처리가 지속됨을 확인했다.
 
-### GitHub Actions Blue-Green 배포
+### Blue-Green 정상 배포 중 public 요청 연속성
 
-| 검증 항목 | 결과 |
+Public readiness endpoint:
+
+```text
+https://api.bobfull.click/actuator/health/readiness
+```
+
+외부 사용자 관점에서 로컬 PowerShell로 0.1초 sleep 기반 연속 요청을 수행하면서 실제 GitHub Actions Blue-Green 배포를 실행했다.
+
+| 항목 | 값 |
+|---|---:|
+| 측정 시작 | `2026-08-14 01:23:21.912` |
+| 측정 종료 | `2026-08-14 01:29:27.690` |
+| 측정 시간 | 약 6분 6초 |
+| 전체 요청 | 2,787 |
+| HTTP 200 | 2,787 |
+| 실패 요청 | 0 |
+| 성공률 | 100% |
+| 평균 응답시간 | 약 20.1ms |
+| 최대 응답시간 | 123ms |
+| 관측 다운타임 | 0초 |
+
+Before/After:
+
+| 항목 | Before - 단일 EC2 | After - Blue-Green |
+|---|---:|---:|
+| 배포 구조 | 단일 EC2 container 교체 | Inactive 환경 배포 후 traffic switch |
+| 대표 다운타임 | 약 40.25초 | 0초 |
+| After 전체 요청 | - | 2,787 |
+| After 실패 요청 | - | 0 |
+| After 성공률 | - | 100% |
+
+주의: Before는 EC2 내부에서 application 중단 구간을 측정했고, After는 ALB traffic switch까지 포함한 실제 사용자 관점 public endpoint 측정이다. 완전히 동일한 측정 위치라고 표현하지 않는다.
+
+### Blue-Green 자동 rollback 검증
+
+검증 전 ALB Listener:
+
+| Target Group | Weight |
+|---|---:|
+| Blue | 100 |
+| Green | 0 |
+
+Rollback 검증을 위해 `BACKEND_PUBLIC_API_VERIFY_URL`을 테스트용 실패 URL로 임시 변경했다.
+
+```text
+https://api.bobfull.click/rollback-test-not-found
+```
+
+Application과 Green Target 자체는 정상 배포되도록 유지하고, traffic switch 이후 public API 검증만 실패하도록 구성했다.
+
+실제 GitHub Actions 로그에서 확인한 흐름:
+
+```text
+Blue target group weight: 100
+Green target group weight: 0
+Target group healthy: Green EC2 2대 모두 healthy
+Switching ALB listener traffic: blue=0 green=100
+Listener weights confirmed: active=0 inactive=100
+Public readiness check attempt 1/6: HTTP 200
+Public api check attempt 1/6: HTTP 401
+...
+Public api check attempt 6/6: HTTP 401
+Public api verification failed
+Rolling back ALB listener to the previous default actions.
+Listener weights confirmed: active=100 inactive=0
+Rollback confirmed: active target group restored to weight 100.
+```
+
+최종 workflow exit code는 `1`이었다. 이는 rollback 실패가 아니라 public 검증 실패 배포를 성공 처리하지 않은 결과다.
+
+Rollback 완료 후 ALB Listener:
+
+| Target Group | Weight |
+|---|---:|
+| Blue | 100 |
+| Green | 0 |
+
+실제 흐름:
+
+```text
+Blue 100 / Green 0
+-> Green 배포
+-> Green Target 2대 Healthy
+-> Blue 0 / Green 100
+-> Public readiness 200
+-> Public API 검증 401
+-> 자동 rollback
+-> Blue 100 / Green 0
+```
+
+### Rollback 중 public 요청 연속성
+
+Rollback 테스트 중에도 동일한 public readiness endpoint를 0.1초 sleep 기반으로 연속 호출했다.
+
+| 항목 | 값 |
+|---|---:|
+| 측정 시작 | `2026-08-14 01:48:06.885` |
+| 측정 종료 | `2026-08-14 01:54:21.388` |
+| 측정 시간 | 약 6분 15초 |
+| 전체 요청 | 2,758 |
+| HTTP 200 | 2,758 |
+| 실패 요청 | 0 |
+| 성공률 | 100% |
+| 평균 응답시간 | 약 23.6ms |
+| 최대 응답시간 | 152ms |
+| p95 | 33ms |
+| p99 | 40ms |
+| 관측 다운타임 | 0초 |
+
+다음 전체 과정 동안 public readiness 요청 실패가 관측되지 않았다.
+
+```text
+Blue 서비스
+-> Green 배포
+-> Blue -> Green traffic switch
+-> Public 검증 실패
+-> Green -> Blue 자동 rollback
+-> Blue 서비스 복구
+```
+
+### Redis Pub/Sub 실환경 호환 확인
+
+다중 App EC2와 공용 ElastiCache Redis 환경에서 기존 Redis Pub/Sub 기반 실시간 채팅 동작을 실제 사용자 화면에서 확인했다.
+
+| 항목 | 결과 |
 |---|---|
-| Inactive Target Group EC2 2대 조회 | 확인 |
-| 두 EC2 SSM Online 확인 | 확인 |
-| 동일 ECR SHA image 배포 | 확인 |
-| 두 EC2 local readiness 성공 | 확인 |
-| Inactive Target Group 두 Target Healthy | 확인 |
-| ALB Listener weight 전환 | 확인 |
-| Public readiness/API 검증 | 확인 |
-| 실제 GitHub Actions Blue-Green 배포 실행 | 성공 |
+| 동일 채팅방 사용자 2명 | 확인 |
+| A -> B 실시간 메시지 수신 | 정상 |
+| B -> A 실시간 메시지 수신 | 정상 |
+| 다중 EC2 전환 후 실시간 채팅 기능 | 정상 |
 
-## 4. DB Connection Budget
+Redis Pub/Sub 자체 구현은 Issue #170 범위다. #169에서는 다중 EC2와 공용 Redis 환경 전환 이후 기존 기능 호환 확인 Evidence로만 기록한다.
+
+## 4. PR #257 AI Review MAJOR 대응 상태
+
+| 기존 리뷰 항목 | 현재 Evidence 반영 |
+|---|---|
+| Blue-Green 다운타임 Before/After 실측 없음 | 정상 Blue-Green 배포 중 public readiness 2,787건 연속 요청, 실패 0건, 관측 다운타임 0초 기록 |
+| 실패 Green 배포 및 rollback 실제 시나리오 미검증 | public API 검증 실패 URL을 사용해 traffic switch 후 자동 rollback 실행, Listener weight Blue 100 / Green 0 복구 확인 |
+| Redis Pub/Sub 실제 AWS 다중 EC2 Evidence 없음 | 다중 App EC2 + 공용 ElastiCache Redis 환경에서 동일 채팅방 양방향 실시간 메시지 수신 정상 확인 |
+
+## 5. DB Connection Budget
 
 ### 설정 근거
 
@@ -151,22 +281,24 @@ BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS
 
 Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connections`, App pool size, 비 App connection을 포함해 connection budget을 다시 계산해야 한다. Auto Scaling은 Issue #191 범위다.
 
-## 5. Scheduler / Outbox 다중 EC2 검증
+## 6. Scheduler / Outbox 다중 EC2 검증
 
 분산 락(ShedLock, Redis lock 등)은 현재 코드에 없다. 모든 작업에 분산 락을 추가하는 대신, 코드상 이미 존재하는 DB 상태 조건, pessimistic lock, conditional claim, processing token, unique constraint, optimistic lock을 기준으로 검토했다.
 
 | 작업 | 다중 인스턴스 동시 실행 가능성 | 현재 방어 방식 | 실제 AWS 검증 결과 | 위험도 |
 |---|---:|---|---|---|
 | READY Payment 만료 | 있음 | 후보 조건 `READY`, `expires_at <= now`, `findWithLockById()`의 `PESSIMISTIC_WRITE`, `expireIfNeeded()` 상태 가드 | `payment_id=5`를 `EXPIRED`에서 `READY`와 과거 `expires_at`으로 테스트 후보화. Scheduler 실행 후 `READY -> EXPIRED`. 한 App EC2에서만 `READY_PAYMENT_EXPIRED` 로그 확인. 중복 상태 변경 없음 | 낮음 |
-| Refund Reconciliation | 있음 | 후보 조건 `REQUESTED/PROCESSING`, `lastPgCheckedAt` 재조회 간격, `findWithLockById()` `PESSIMISTIC_WRITE`, terminal 상태 가드 | `refund_id=1`을 후보로 설정. 한 App EC2에서만 `REFUND_RECONCILIATION_REQUIRED` 확인. 다른 인스턴스 동일 처리 로그 미확인. PortOne response `cancellations=null`에서 `NullPointerException`/`REFUND_LOOKUP_FAILED` 발견. `refund_status=REQUESTED` 유지, `last_pg_checked_at` 갱신 확인 | 중간 |
+| Refund Reconciliation | 있음 | 후보 조건 `REQUESTED/PROCESSING`, `lastPgCheckedAt` 재조회 간격, `findWithLockById()` `PESSIMISTIC_WRITE`, terminal 상태 가드 | `refund_id=1`을 후보로 설정. 한 App EC2에서만 `REFUND_RECONCILIATION_REQUIRED` 확인. 다른 인스턴스 동일 처리 로그 미확인. PortOne response `cancellations=null`에서 `NullPointerException`/`REFUND_LOOKUP_FAILED` 발견. `refund_status=REQUESTED` 유지, `last_pg_checked_at` 갱신 확인. 중복 PG 조회 가능성 자체는 코드상 남음 | 중간 |
 | ChatRoom Outbox | 있음 | 공통 outbox conditional claim/token, stale recovery, `outbox_event` unique, `chat_room.reservation_id` unique, `createIfAbsent()` | `outbox_event_id=1` 재처리. 최종 `COMPLETED` 확인. `reservation_id=2`의 ChatRoom 개수 1개 유지. 중복 ChatRoom 생성 없음 | 낮음 |
-| Email Outbox | 있음 | 공통 outbox conditional claim/token, `email_outbox_delivery` unique, `markSent(status=PENDING)` 조건부 update | `outbox_event_id=9`/Email Delivery 재처리. 한 Active EC2에서만 처리 로그 확인. SMTP 호출 단계까지 확인. `MailAuthenticationException`으로 재시도 발생. 다른 Active EC2에서 동일 Outbox 처리 로그 미확인 | 중간 |
+| Email Outbox | 있음 | 공통 outbox conditional claim/token, `email_outbox_delivery` unique, `markSent(status=PENDING)` 조건부 update | `outbox_event_id=9`/Email Delivery 재처리. 한 Active EC2에서만 SMTP 처리 시도 로그 확인. 다른 Active EC2에서 동일 Outbox 처리 로그 미확인. `MailAuthenticationException`으로 재시도 발생. 실제 이메일 수신 성공까지는 검증하지 못함 | 중간 |
 | ChatMessage Outbox | 있음 | 공통 outbox conditional claim/token, stale recovery, `outbox_event` unique, Kafka producer idempotence, payload `eventId` | 이번 #169 AWS 수동 검증 대상은 아님. 코드 근거로 중복 publish 가능성과 consumer 멱등 처리를 검토 | 중간 |
 | Recruitment Deadline | 있음 | 후보 조건 `recruitmentStatus=OPEN`, active reservation status, `findWithLockById()` `PESSIMISTIC_WRITE`, `acceptRecruitmentDeadline()` 가드 | 이번 #169 AWS 수동 검증 대상은 아님. 코드 근거로 동일 예약 중복 마감 방어 확인 | 낮음 |
 | Reservation Closing | 있음 | 후보 조건 `ReservationStatus.CONFIRMED`, `findWithLockById()` `PESSIMISTIC_WRITE`, `Reservation.close()` 상태 가드 | 이번 #169 AWS 수동 검증 대상은 아님. 코드 근거로 중복 close 방어 확인 | 낮음 |
 | Chat Moderation Kafka Retry | 있음 | 같은 consumer group의 partition 단위 분산, `chat_moderation.chat_message_id` unique, `@Version` optimistic lock, 완료 상태 skip, retry/DLT | 이번 #169 AWS 수동 검증 대상은 아님. Kafka 단일 broker 장애 HA는 이번 범위가 아님 | 중간 |
 
-## 6. WSS / STOMP 검증
+위 결과는 대표 시나리오의 실제 확인과 코드 근거를 함께 기록한 것이다. 모든 scheduler/external side effect의 완전한 exactly-once 보장을 주장하지 않는다.
+
+## 7. WSS / STOMP 검증
 
 브라우저 DevTools에서 실제 운영 endpoint를 확인했다. JWT 원문은 기록하지 않는다.
 
@@ -201,19 +333,20 @@ Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connectio
 - Redis Pub/Sub 실시간 경로의 실패 로그는 `messageId`, `chatRoomId`, 예외 class명 수준이다.
 - 현재 코드 기준 STOMP `Authorization` 또는 JWT 원문을 직접 로그에 남기는 경로는 확인되지 않았다.
 
-다중 EC2 환경의 Redis Pub/Sub 기반 채팅 전파는 기존 검증이 완료된 상태다. 이번 PR은 Redis Pub/Sub 자체 구현 PR이 아니라 HTTP App HA와 Blue-Green 배포 자동화 PR이므로, Redis/Valkey 장애 HA나 broker relay 전환은 이번 완료 범위로 표현하지 않는다.
-
-## 7. 범위 및 한계
+## 8. 범위 및 한계
 
 ### 이번 PR에서 말할 수 있는 것
 
 - HTTP Application Layer HA
 - ALB 기반 다중 App EC2
+- App EC2 한 대 장애 시 요청 우회
 - Target Health 기반 장애 우회
-- ALB Listener weight 기반 Blue-Green 무중단 배포
-- Inactive Target Group 선배포 후 Traffic switch
-- Traffic switch 후 public 검증 실패 시 rollback
-- 다중 EC2 Scheduler/Outbox 정합성 검토 및 일부 실제 AWS 검증
+- ALB Listener weight 기반 Blue-Green 배포
+- Public endpoint 기준 배포 중 요청 연속성
+- Public 검증 실패 시 ALB traffic 자동 rollback
+- Rollback 중 요청 연속성
+- 다중 EC2 환경에서 기존 Scheduler/Outbox 정합성 대표 검증
+- 공용 ElastiCache Redis 연결 및 기존 채팅 기능 호환 확인
 - WSS/STOMP 운영 연결 성공 확인
 
 ### 이번 PR에서 말하지 않는 것
@@ -223,27 +356,31 @@ Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connectio
 - Kafka HA 완료
 - Auto Scaling 동작 검증
 - DB Migration 자동화
+- DB Schema Blue-Green 호환성 완료
 - Redis/Valkey 장애 HA
 - Kafka broker 장애 HA
+- 모든 scheduler/external side effect의 완전한 exactly-once 보장
 
 후속 범위:
 
 - Auto Scaling: Issue #191
-- DB Migration: Issue #198
+- DB Schema Migration / Blue-Green DB 호환성: Issue #198
 - Kafka/RDS HA 고도화: 별도 인프라 이슈 필요
 - Refund Reconciliation의 PortOne `cancellations=null` 처리 보강: 별도 버그/운영 안정화 이슈 필요
 
-## 8. Evidence 링크
+## 9. Evidence 링크
 
 - [배포 #13 - 단일 EC2 한계 분석과 다중 EC2 전환 결정](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-13-%EB%8B%A8%EC%9D%BC-EC2-%ED%95%9C%EA%B3%84-%EB%B6%84%EC%84%9D%EA%B3%BC-%EB%8B%A4%EC%A4%91-EC2-%EC%A0%84%ED%99%98-%EA%B2%B0%EC%A0%95)
 - [배포 #14 - ElastiCache Valkey 기반 공용 Redis 구성](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-14-ElastiCache-Valkey-%EA%B8%B0%EB%B0%98-%EA%B3%B5%EC%9A%A9-Redis-%EA%B5%AC%EC%84%B1)
 - [배포 #15 - Kafka 전용 EC2 구성 및 애플리케이션 연결](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-15-Kafka-%EC%A0%84%EC%9A%A9-EC2-%EA%B5%AC%EC%84%B1-%EB%B0%8F-%EC%95%A0%ED%94%8C%EB%A6%AC%EC%BC%80%EC%9D%B4%EC%85%98-%EC%97%B0%EA%B2%B0)
 - [배포 #16 - ALB 기반 다중 EC2 고가용성 구성](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-16-ALB-%EA%B8%B0%EB%B0%98-%EB%8B%A4%EC%A4%91-EC2-%EA%B3%A0%EA%B0%80%EC%9A%A9%EC%84%B1-%EA%B5%AC%EC%84%B1)
 - [배포 #17 - ALB 기반 Blue-Green 무중단 배포 환경 구성](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-17-ALB-%EA%B8%B0%EB%B0%98-Blue-Green-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC-%ED%99%98%EA%B2%BD-%EA%B5%AC%EC%84%B1)
+- [배포 #18 - Blue-Green 무중단 배포 시간 실측](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%EB%B0%B0%ED%8F%AC-18-Blue-Green-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC-%EC%8B%9C%EA%B0%84-%EC%8B%A4%EC%B8%A1)
 - [트러블슈팅 - 다중 EC2 전환 후 DB Connection Budget 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-%EB%8B%A4%EC%A4%91-EC2-%EC%A0%84%ED%99%98-%ED%9B%84-DB-Connection-Budget-%EA%B2%80%EC%A6%9D)
+- [트러블슈팅 - Blue-Green 배포 실패 시 자동 Rollback 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-Blue-Green-%EB%B0%B0%ED%8F%AC-%EC%8B%A4%ED%8C%A8-%EC%8B%9C-%EC%9E%90%EB%8F%99-Rollback-%EA%B2%80%EC%A6%9D)
 - [트러블슈팅 - 다중 EC2 환경 Scheduler / Outbox 중복 실행 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-%EB%8B%A4%EC%A4%91-EC2-%ED%99%98%EA%B2%BD%EC%97%90%EC%84%9C-Scheduler-Outbox-%EC%A4%91%EB%B3%B5-%EC%8B%A4%ED%96%89-%EA%B2%80%EC%A6%9D)
 
-## 9. 이번 문서에서 하지 않은 것
+## 10. 이번 문서에서 하지 않은 것
 
 - 애플리케이션 코드 수정 없음
 - Scheduler/Outbox 분산 락 추가 없음
