@@ -262,7 +262,14 @@ public class ReservationCancellationTransactionService {
      */
     void recalculateAfterCompletion(Reservation reservation) {
         int tableCapacity = reservationCapacityReader.readTableCapacity(reservation.getTimeSlotId());
-        int currentCount = reservationParticipantRepository.sumPartySizeByStatuses(reservation.getId(), OCCUPYING_STATUSES);
+        // 잠금 없는 SUM 집계 대신 잠금 조회로 합산한다(Issue #264) — 이 read가 속한 트랜잭션은
+        // 그보다 앞서 RefundTransactionService의 잠금 없는 LAZY 로딩으로 REPEATABLE READ 스냅샷이
+        // 이미 고정돼 있어, 뒤늦게 Reservation 행 락을 잡아도 SUM 집계는 그 옛 스냅샷을 읽는다.
+        int currentCount = reservationParticipantRepository
+                .findAllWithLockByReservationIdAndParticipationStatusIn(reservation.getId(), OCCUPYING_STATUSES)
+                .stream()
+                .mapToInt(ReservationParticipant::getPartySize)
+                .sum();
         if (currentCount >= ReservationCapacityPolicy.confirmationThreshold(tableCapacity)) {
             reservation.confirm();
         } else {
