@@ -74,8 +74,7 @@ const moderationTopology = {
 };
 const stageLabels1 = ["CORE COMMIT", "FOLLOW-UP", "FAILURE", "OUTCOME"];
 
-/* Ch2 PUBLISH_FAILURE / RETRY_EXHAUSTED_DLT step 데이터. Ch5 WHO_RETRIES가 같은 배열을 참조로
-   재사용한다(복사가 아니라 같은 객체를 그대로 이어붙인다 — 같은 내용을 두 번째 진실로 만들지 않는다). */
+/* Ch2 PUBLISH_FAILURE / RETRY_EXHAUSTED_DLT step 데이터. */
 const ch2PublishFailureSteps = [
   step("commit", "Application", "DB", "✓ ChatMessage + Outbox COMMIT", "채팅과 전달 의도는 먼저 확정된다.",
     { domainState: "ChatMessage COMMITTED", outbox: "PENDING", transaction: "COMMITTED", factStatus: FACT.VERIFIED,
@@ -462,7 +461,7 @@ const chapters = [
 }` },
           sideNote: { title: "더 큰 workload에서도 확인 — #192 실험 0-1/0-2",
             body: "메시지 300건·채팅방 30개로 늘려도 결론은 같았다. Async 50.9초(5.90 msg/s) · Kafka+chatRoomId key 71.8~72.5초(4.14~4.18 msg/s) · Kafka+messageId key(실험용) 61.0초(4.92 msg/s). messageId key가 chatRoomId보다 빨라지긴 하지만, 이 규모에서도 Kafka가 Async보다 빠르다는 결론으로 뒤집히지는 않았다. 로컬 Testcontainers·Fake AI 500ms 조건이며 Production 규모 대용량 검증은 아니다." },
-          evidenceReferences: [evidence.partitionKey] }),
+          evidenceReferences: [evidence.partitionKey, evidence.aiWorkerScaling] }),
       step("retry-budget", "Human 설정 확인", "Retry 책임 요약", "▲ 실패 위치에 따라 책임이 다르다", "Outbox publish 실패는 Outbox가, Kafka Consumer 처리 실패는 Kafka Consumer가 재시도를 책임진다 — 이 수치는 실측이 아니라 실제 설정(application-prod.yml)을 코드로 확인한 값이다. 전체 장애·재시도 흐름은 Ch2에서 재생할 수 있다.",
         { factStatus: FACT.VERIFIED, visual: visual(["outbox", "kafka", "consumer", "llm"], [], "commit", null, "kafka"),
           performance: [{ metric: "Outbox MAX_RETRIES", before: "5회" }, { metric: "Kafka Consumer 재시도(최초 처리 포함)", before: "최대 3회" },

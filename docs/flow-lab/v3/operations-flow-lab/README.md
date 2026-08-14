@@ -10,7 +10,7 @@ Operations Flow Lab은 BobFull 내부 구현을 단순 문서로 읽는 대신, 
 - Chapter 2: `ChatMessage → Outbox → Kafka → AI Moderation`과 `NORMAL`, `PUBLISH_FAILURE`, `DUPLICATE_DELIVERY`, `AI_TRANSIENT_FAILURE`, `RETRY_EXHAUSTED_DLT`, `ACK_THEN_CRASH`
 - Chapter 3: `LOCAL_TWO_INSTANCE_NORMAL`, `AWS_CROSS_INSTANCE_NORMAL`(다중 EC2 + 공용 ElastiCache Redis 실제 검증), `REDIS_DELIVERY_MISS`
 - Chapter 4: 인기 회차 조회 Hot-path 병목 개선(#142 발견 → #235 분리·배치 개선 → 동일 조건 Before/After → 남은 한계)
-- Chapter 5 — Kafka Mechanics Lab: Producer Key → Partition → Consumer → Retry/DLT가 BobFull에서 실제로 어떻게 연결되는지 이해하는 Learning Deep Dive(`MESSAGE_ID_PARTITIONING`, `CONSUMER_SCALING`, `ASYNC_VS_KAFKA`, `WHO_RETRIES`)
+- Chapter 5 — Kafka 도입 의사결정 Lab: "Kafka는 왜 도입했을까? — 더 빠르기 위해서가 아니었다"를 가설→실측→기각→신뢰성 비교→Hot-Key 발견→도메인 계약 재검토→Partition Key 개선→결론까지 `kafka-adoption-decision` 1개 연속 Scenario(13 Step)로 재생
 - Chapter 6 — AI Moderation Decision Lab: Rule → DB Context → Split Rule → LLM → Validator → ChatModeration DB 판정 경로를 이해하는 Learning Deep Dive(`CLEAR_FLAGGED_FAST_PATH`, `LLM_REQUIRED`, `SPLIT_MESSAGE_EVASION`, `WHY_NOT_CONTEXT_LLM`, `PROMPT_INJECTION_BOUNDARY`, `MODERATION_DB_RESULT`)
 
 Ch1~Ch4는 시스템 설계/발표 중심이고, Ch5~Ch6는 Learning Deep Dive 중심이다. 발표 모드에서도 Ch5/Ch6를 볼 수 있지만 상세 코드/Evidence는 학습 모드에서만 펼친다.
@@ -46,7 +46,7 @@ Chapter 4의 모든 수치는 [#142 인기 회차 예약 부하 측정](../../..
 
 Chapter 5·6의 Evidence: [#192 Kafka AI Worker Scaling](../../../evidence/v3/192-ai-worker-scaling/README.md), [#258 Moderation Partition Key](../../../evidence/v3/258-moderation-partition-key/README.md), [#251 AI Moderation Rule Fast Path](../../../evidence/v3/251-ai-moderation-hardening/README.md), [#266 Split Message Moderation](../../../evidence/v3/266-split-message-moderation/README.md), [#169 App HA](../../../evidence/v3/169-app-ha/README.md).
 
-`CONSUMER_SCALING`은 발표 화면에도 `#192 measured · legacy chatRoomId key` badge를 표시한다. Consumer concurrency 1/2/3 실측(#192 실험 D)은 당시 기본 key였던 `chatRoomId` 조건에서 측정됐으며, concurrency=3에서 개선이 관측됐더라도 Consumer 수만으로 처리량이 결정되지는 않고 key→partition 분산이 함께 영향을 준다. 현재 Production 기본 key(`#258` 이후 `messageId`)의 결과인 것처럼 표현하지 않는다.
+Ch5의 `consumer-1`/`consumer-2`/`consumer-3` Step은 화면에도 `#192 measured · legacy chatRoomId key` badge를 표시한다. Consumer concurrency 1/2/3 실측(#192 실험 D)은 당시 기본 key였던 `chatRoomId` 조건에서 측정됐으며, concurrency=3에서 개선이 관측됐더라도 Consumer 수만으로 처리량이 결정되지는 않고 key→partition 분산이 함께 영향을 준다. 현재 Production 기본 key(`#258` 이후 `messageId`)의 결과인 것처럼 표현하지 않는다.
 
 `LLM_REQUIRED`의 "바보야" → SAFE 결과는 `ModerationPrompt.SYSTEM_PROMPT`의 few-shot boundary 원문 그대로이며, 이 재생이 실제 OpenAI를 호출한 결과는 아니다(`factStatus=design interpretation`). Split Rule MISS 이후에도 Provider에는 현재 메시지 단건만 전달되며, `ModerationPrompt.withSplitContext()`는 코드에 남아 있어도 현재 production 경로에서 호출되지 않으므로 active flow로 표시하지 않는다(`WHY_NOT_CONTEXT_LLM`의 dbContext→llm 실험 경로는 REJECTED로 명시한다).
 
