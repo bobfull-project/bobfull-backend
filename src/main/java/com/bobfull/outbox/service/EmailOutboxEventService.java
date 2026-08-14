@@ -18,15 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class EmailOutboxEventService {
     private final OutboxEventRepository outboxEventRepository;
     private final EmailOutboxDeliveryRepository deliveryRepository;
-    private final EmailOutboxProcessor emailOutboxProcessor;
+    private final EmailOutboxSignalDispatcher emailOutboxSignalDispatcher;
     private final Clock clock;
 
     public EmailOutboxEventService(OutboxEventRepository outboxEventRepository,
                                    EmailOutboxDeliveryRepository deliveryRepository,
-                                   EmailOutboxProcessor emailOutboxProcessor, Clock clock) {
+                                   EmailOutboxSignalDispatcher emailOutboxSignalDispatcher, Clock clock) {
         this.outboxEventRepository = outboxEventRepository;
         this.deliveryRepository = deliveryRepository;
-        this.emailOutboxProcessor = emailOutboxProcessor;
+        this.emailOutboxSignalDispatcher = emailOutboxSignalDispatcher;
         this.clock = clock;
     }
 
@@ -44,6 +44,6 @@ public class EmailOutboxEventService {
                 OutboxEvent.emailNotificationRequested(type, aggregateType, aggregateId, clock.instant()));
         deliveryRepository.saveAll(participants.stream()
                 .map(p -> EmailOutboxDelivery.pending(event.getId(), reservationId, p.getId(), p.getMemberId())).toList());
-        AfterCommitExecutor.run(() -> emailOutboxProcessor.signal(event.getId()));
+        AfterCommitExecutor.run(() -> emailOutboxSignalDispatcher.dispatch(event.getId()));
     }
 }
