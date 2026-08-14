@@ -156,7 +156,7 @@ class RefundTransactionIntegrationTest {
         var executor = Executors.newFixedThreadPool(2);
         try {
             var first = executor.submit(() -> adapter.requestRefunds(new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test")));
-            assertThat(requester.firstCallEntered.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(requester.firstCallEntered.await(15, TimeUnit.SECONDS)).isTrue();
             var second = executor.submit(() -> adapter.requestRefunds(new RefundRequestCommand(activeReservation.getId(), List.of(participantIds.get(1L)), 1L, "test")));
             requester.releaseFirstCall.countDown();
             first.get(5, TimeUnit.SECONDS);

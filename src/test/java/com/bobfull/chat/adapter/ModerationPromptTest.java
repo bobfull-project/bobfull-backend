@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 class ModerationPromptTest {
     @Test
     void Scope_조정된_prompt와_policy_버전_및_명백한_위반_경계를_관리한다() {
-        assertThat(ModerationPrompt.PROMPT_VERSION).isEqualTo("moderation-prompt-v3-scope");
+        assertThat(ModerationPrompt.PROMPT_VERSION).isEqualTo("moderation-prompt-v3-short-fragment-boundary");
         assertThat(ModerationPrompt.POLICY_VERSION).isEqualTo("moderation-policy-v2");
         assertThat(ModerationPrompt.SYSTEM_PROMPT)
                 .contains("애매한 표현은 FLAGGED로 추정하지 말고 SAFE")
