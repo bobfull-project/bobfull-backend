@@ -21,8 +21,6 @@ public interface ReservationParticipantRepository extends JpaRepository<Reservat
 
     boolean existsByReservationId(Long reservationId);
 
-    boolean existsByReservationIdAndParticipationStatus(Long reservationId, ParticipationStatus status);
-
     /**
      * 취소 완료 확정 직전 "남은 CANCEL_REQUESTED가 있는지"를 잠금 조회로 판단한다(Issue #259).
      * MySQL 기본 격리수준(REPEATABLE READ)에서는 트랜잭션의 첫 번째 잠금 없는 SELECT가 그 트랜잭션
