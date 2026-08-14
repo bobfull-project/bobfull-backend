@@ -233,18 +233,20 @@ Blue 서비스
 -> Blue 서비스 복구
 ```
 
-### Redis Pub/Sub 실환경 호환 확인
+### Redis Pub/Sub cross-instance 전달 검증
 
-다중 App EC2와 공용 ElastiCache Redis 환경에서 기존 Redis Pub/Sub 기반 실시간 채팅 동작을 실제 사용자 화면에서 확인했다.
+다중 App EC2와 공용 ElastiCache Redis 환경에서 기존 Redis Pub/Sub 기반 실시간 채팅이 서로 다른 App EC2 사이에서도 전달되는지 실제 운영 환경에서 확인했다.
 
 | 항목 | 결과 |
 |---|---|
-| 동일 채팅방 사용자 2명 | 확인 |
-| A -> B 실시간 메시지 수신 | 정상 |
-| B -> A 실시간 메시지 수신 | 정상 |
-| 다중 EC2 전환 후 실시간 채팅 기능 | 정상 |
+| 테스트 환경 | 실제 다중 App EC2 Green 환경 |
+| `bobfull-ec2-green-1` | `memberId=6` STOMP CONNECT 확인, `messageId=29`, `30` Redis PUBLISH 확인 |
+| `bobfull-ec2-green-2` | `memberId=7` STOMP CONNECT 확인, 동일 `messageId=29`, `30` Redis SUBSCRIBE 확인 |
+| cross-instance 전달 | 한 EC2에서 publish된 동일 `messageId`가 다른 EC2 subscriber에서 수신됨 |
+| 사용자 화면 | A -> B, B -> A 양방향 실시간 채팅 정상 확인 |
+| 최종 판단 | PASS |
 
-Redis Pub/Sub 자체 구현은 Issue #170 범위다. #169에서는 다중 EC2와 공용 Redis 환경 전환 이후 기존 기능 호환 확인 Evidence로만 기록한다.
+Redis Pub/Sub 자체 구현은 Issue #170 범위다. #169에서는 다중 EC2와 공용 ElastiCache Redis 환경에서 실제 cross-instance 전달이 정상 동작했다는 Evidence로만 기록한다.
 
 ## 4. PR #257 AI Review MAJOR 대응 상태
 
@@ -252,7 +254,7 @@ Redis Pub/Sub 자체 구현은 Issue #170 범위다. #169에서는 다중 EC2와
 |---|---|
 | Blue-Green 다운타임 Before/After 실측 없음 | 정상 Blue-Green 배포 중 public readiness 2,787건 연속 요청, 실패 0건, 관측 다운타임 0초 기록 |
 | 실패 Green 배포 및 rollback 실제 시나리오 미검증 | public API 검증 실패 URL을 사용해 traffic switch 후 자동 rollback 실행, Listener weight Blue 100 / Green 0 복구 확인 |
-| Redis Pub/Sub 실제 AWS 다중 EC2 Evidence 없음 | 다중 App EC2 + 공용 ElastiCache Redis 환경에서 동일 채팅방 양방향 실시간 메시지 수신 정상 확인 |
+| Redis Pub/Sub 실제 AWS 다중 EC2 Evidence 없음 | 다중 App EC2 + 공용 ElastiCache Redis 환경에서 `messageId=29`, `30` publish/subscriber cross-instance 전달 및 동일 채팅방 양방향 실시간 메시지 수신 정상 확인 |
 
 ## 5. DB Connection Budget
 
@@ -346,7 +348,7 @@ Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connectio
 - Public 검증 실패 시 ALB traffic 자동 rollback
 - Rollback 중 요청 연속성
 - 다중 EC2 환경에서 기존 Scheduler/Outbox 정합성 대표 검증
-- 공용 ElastiCache Redis 연결 및 기존 채팅 기능 호환 확인
+- 공용 ElastiCache Redis 기반 Redis Pub/Sub cross-instance 전달 확인
 - WSS/STOMP 운영 연결 성공 확인
 
 ### 이번 PR에서 말하지 않는 것
@@ -378,7 +380,7 @@ Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connectio
 - [배포 #18 - Blue-Green 무중단 배포 시간 실측](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%EB%B0%B0%ED%8F%AC-18-Blue-Green-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC-%EC%8B%9C%EA%B0%84-%EC%8B%A4%EC%B8%A1)
 - [트러블슈팅 - 다중 EC2 전환 후 DB Connection Budget 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-%EB%8B%A4%EC%A4%91-EC2-%EC%A0%84%ED%99%98-%ED%9B%84-DB-Connection-Budget-%EA%B2%80%EC%A6%9D)
 - [트러블슈팅 - Blue-Green 배포 실패 시 자동 Rollback 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-Blue-Green-%EB%B0%B0%ED%8F%AC-%EC%8B%A4%ED%8C%A8-%EC%8B%9C-%EC%9E%90%EB%8F%99-Rollback-%EA%B2%80%EC%A6%9D)
-- [트러블슈팅 - 다중 EC2 환경 Scheduler / Outbox 중복 실행 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-%EB%8B%A4%EC%A4%91-EC2-%ED%99%98%EA%B2%BD%EC%97%90%EC%84%9C-Scheduler-Outbox-%EC%A4%91%EB%B3%B5-%EC%8B%A4%ED%96%89-%EA%B2%80%EC%A6%9D)
+- [트러블슈팅 - 다중 EC2 환경 Scheduler / Outbox 중복 실행 및 Redis Pub/Sub cross-instance 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-%EB%8B%A4%EC%A4%91-EC2-%ED%99%98%EA%B2%BD%EC%97%90%EC%84%9C-Scheduler-Outbox-%EC%A4%91%EB%B3%B5-%EC%8B%A4%ED%96%89-%EA%B2%80%EC%A6%9D)
 
 ## 10. 이번 문서에서 하지 않은 것
 
