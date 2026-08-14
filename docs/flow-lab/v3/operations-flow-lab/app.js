@@ -161,7 +161,7 @@ function findStep(chapterId, scenarioId, stepId) {
 /* whatStep: 무엇을 바꿨는지 설명하는 narration을 가진 step. measureSteps: 그 변경으로 나온 실제 수치. */
 const PERFORMANCE_HIGHLIGHTS = [
   { chapter: "hotpath-performance", scenario: "batch-optimization", whatStep: "batch-fix", measureSteps: ["same-load-result", "stress-result"] },
-  { chapter: "kafka-mechanics", scenario: "message-id-partitioning", whatStep: "after-message-id-key", measureSteps: ["after-message-id-key"] }
+  { chapter: "kafka-mechanics", scenario: "kafka-adoption-decision", whatStep: "after-message-id-key", measureSteps: ["after-message-id-key"] }
 ];
 function renderPerformanceHighlights() {
   $("performanceHighlights").innerHTML = PERFORMANCE_HIGHLIGHTS.map((card) => {
@@ -174,7 +174,7 @@ const DECISION_HIGHLIGHTS = [
   { chapter: "outbox", scenario: "chatroom-outbox", step: "retry" },
   { chapter: "kafka-ai", scenario: "publish-failure", step: "retry" },
   { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "dlt" },
-  { chapter: "kafka-mechanics", scenario: "async-vs-kafka", step: "reliability" },
+  { chapter: "kafka-mechanics", scenario: "kafka-adoption-decision", step: "reliability" },
   { chapter: "ai-moderation", scenario: "clear-flagged-fast-path", step: "persisted" },
   { chapter: "ai-moderation", scenario: "why-not-context-llm", step: "rejected-decision" }
 ];
