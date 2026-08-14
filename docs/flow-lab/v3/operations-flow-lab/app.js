@@ -45,8 +45,8 @@ function edgeLabelSvg(t, edgeId, kind) {
   const position = t.labels[edgeId]; if (!position || !kind) return "";
   const [x, y] = position; return `<g class="edge-label" transform="translate(${x} ${y})"><rect x="-4" y="-12" width="${tokenLabel(kind).length * 6 + 10}" height="18" rx="3"/><text x="1" y="1">${tokenLabel(kind)}</text></g>`;
 }
-function tokenLabel(token) { return ({ request: "● request", event: "◆ event", commit: "✓ commit", retry: "↻ retry", failure: "× failure", dlt: "↓ DLT", broadcast: "↠ broadcast" })[token] || ""; }
-function outcomeLabel(outcome) { return ({ committed: "✓ committed", acknowledged: "✓ broker ACK", completed: "✓ completed", delivered: "↠ delivered", failure: "× failure", dlt: "↓ DLT", skipped: "⏭ skipped", "not verified": "? not verified" })[outcome] || outcome; }
+function tokenLabel(token) { return ({ request: "● 요청", event: "◆ 이벤트", commit: "✓ 확정", retry: "↻ 재시도", failure: "× 실패", dlt: "↓ DLT", broadcast: "↠ 전파" })[token] || ""; }
+function outcomeLabel(outcome) { return ({ committed: "✓ 확정됨", acknowledged: "✓ 브로커 ACK", completed: "✓ 완료", delivered: "↠ 전달됨", failure: "× 실패", dlt: "↓ DLT 이동", skipped: "⏭ 건너뜀", "not verified": "? 미검증" })[outcome] || outcome; }
 function laneNodeSvg(cx, states, labels) {
   const r = 10;
   const lines = states.slice(0, -1).map((state, i) => {
@@ -93,16 +93,19 @@ function renderKafkaPartitions(data) {
     <div class="perf-bar-row"><span class="perf-bar-label">건수</span><div class="perf-bar"><div class="perf-bar-fill ${partition.count > 0 ? "after" : "before"}" style="width:${(partition.count / max) * 100}%"></div></div><span class="perf-bar-value">${partition.count}건</span></div>
     </article>`).join("");
 }
-function linked(refs) { return refs.length ? refs.map((item) => `<a href="${item.href}" target="_blank" rel="noreferrer">${item.label}</a>`).join("<br>") : "not applicable"; }
-/* narration이 이미 "왜"를 설명하므로 여기서는 반복하지 않는다. */
+function linked(refs) { return refs.map((item) => `<a href="${item.href}" target="_blank" rel="noreferrer">${item.label}</a>`).join("<br>"); }
+/* narration이 이미 "왜"를 설명하므로 여기서는 반복하지 않는다. Transaction/Lock/Event/Infra/Logs/Metrics는
+   아래 "핵심 상태"에서 이미 보여주므로 여기서 중복하지 않는다. Code는 "코드로 보기"에서 실제 코드로 보여준다.
+   값이 없는 항목은 "not applicable"로 채우지 않고 아예 표시하지 않는다. */
 function renderDetails(data) {
-  const entries = [["Code", data.codeReferences.length ? data.codeReferences.join(" · ") : "not applicable"],
-    ["Transaction / Lock", `Transaction: ${format(data.transaction)}<br>Lock: ${format(data.lock)}`],
-    ["Event / Infra", `Outbox: ${format(data.outbox)}<br>Kafka: ${format(data.kafka)}<br>Consumer: ${format(data.consumer)}<br>Redis: ${format(data.redis)}`],
-    ["Logs / Metrics", `Logs: ${format(data.logs)}<br>Metrics: ${format(data.metrics)}`], ["Evidence", linked(data.evidenceReferences)], ["Limits", format(data.limits)]];
-  if (data.fullPrompt) entries.push(["Prompt 원문", data.fullPrompt]);
+  const entries = [];
+  if (data.limits) entries.push(["한계", data.limits]);
+  if (data.evidenceReferences.length) entries.push(["근거", linked(data.evidenceReferences)]);
+  if (data.fullPrompt) entries.push(["프롬프트 원문", data.fullPrompt]);
   if (data.sideNote) entries.push([data.sideNote.title, data.sideNote.body]);
-  $("detailGrid").innerHTML = entries.map(([title, value]) => `<article><h3>${title}</h3><p>${value}</p></article>`).join("");
+  const el = $("detailGrid");
+  el.hidden = entries.length === 0;
+  el.innerHTML = entries.map(([title, value]) => `<article><h3>${title}</h3><p>${value}</p></article>`).join("");
 }
 function escapeHtml(text) { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 /* 현재 Step에 실제 코드 발췌(codeSnippet)가 있으면 그대로 보여준다 — 없으면 codeReferences만 안내한다. */
@@ -140,7 +143,7 @@ function render() {
 }
 function quickState(data) {
   const committed = data.domainState || data.transaction;
-  const rows = [["COMMITTED", committed], ["OUTBOX", data.outbox], ["KAFKA", data.kafka], ["RETRY OWNER", data.retryOwner]].filter(([, value]) => value != null);
+  const rows = [["확정 상태", committed], ["Outbox", data.outbox], ["Kafka", data.kafka], ["재시도 담당", data.retryOwner]].filter(([, value]) => value != null);
   return rows.length ? `<dl class="quick-state">${rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join("")}</dl>` : "";
 }
 /* Prompt 원문 전체는 상세 패널의 fullPrompt에서만 펼친다 — 여기서는 정책 구성 블록을 조용한 caption 한 줄로 보여준다. */

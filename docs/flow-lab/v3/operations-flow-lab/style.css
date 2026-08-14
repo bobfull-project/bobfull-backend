@@ -8,7 +8,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
 a{color:var(--accent-strong)}
-main{max-width:1180px;margin:auto;padding:24px max(20px,4vw) 56px}
+main{max-width:1260px;margin:auto;padding:24px max(20px,4vw) 56px}
 
 .topbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:24px;padding:14px max(22px,5vw);background:var(--bg);border-bottom:1px solid var(--line)}
 .brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:14px}
@@ -38,10 +38,10 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .stage-heading{display:flex;justify-content:space-between;gap:16px;align-items:baseline;margin-bottom:14px}
 .stage-heading h2{margin:0;font-size:15px;font-weight:600;color:var(--muted)}
 .stage-heading span{color:var(--muted);font-size:11px}
-.stage-body{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
+.stage-body{display:grid;grid-template-columns:1fr 280px;gap:22px;align-items:start}
 .stage-main{min-width:0}
 .canvas{width:100%;padding:6px 0;overflow-x:auto}
-.topology{display:block;width:100%;height:auto;max-height:455px}
+.topology{display:block;width:100%;height:auto;max-height:540px}
 .connector{fill:none;stroke:var(--line);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .connector.dim{opacity:.4}
 .connector.active{stroke:var(--accent);opacity:1}
@@ -74,11 +74,12 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .fact-caption .fact-strong{color:var(--accent-strong);font-weight:700}
 .fact-caption .decision{color:var(--accent-strong);font-weight:600}
 .quick-state{display:grid;gap:3px;margin:8px 0 0}
-.quick-state div{display:grid;grid-template-columns:96px 1fr;gap:8px}
+.quick-state div{display:grid;grid-template-columns:76px 1fr;gap:8px}
 .quick-state dt{color:var(--muted);font:10px ui-monospace,monospace}
 .quick-state dd{margin:0;color:var(--text);font-size:12px}
 .prompt-blocks{margin:8px 0 0;color:var(--muted);font-size:11px}
 .detail-list{display:flex;flex-direction:column;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.detail-list[hidden]{display:none}
 .detail-list article h3{margin:0 0 3px;color:var(--muted);font-size:11px;font-weight:600}
 .detail-list article p{margin:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere;color:var(--text)}
 .detail-list a{font-size:13px}
