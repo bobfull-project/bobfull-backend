@@ -280,9 +280,10 @@ const chapters = [
           visual: visual(["app", "db", "redis"], ["redis-publish"], "broadcast", null, "redis", ["db"]),
           evidenceReferences: [evidence.appHa] }),
       step("cross-instance", "ElastiCache Redis", "App EC2 #2 → Client B", "↠ cross-instance fan-out", "서로 다른 EC2의 App EC2 #2가 같은 messageId를 구독해 로컬 STOMP로 Client B에 전달한다.",
-        { domainState: "cross-instance 전달 확인(messageId=29, 30)", redis: "bobfull-ec2-green-2 SUBSCRIBE 확인 · 사용자 화면 A↔B 양방향 PASS",
+        { domainState: "서버 간(cross-instance) 전달 확인(messageId=29, 30)", redis: "bobfull-ec2-green-2 SUBSCRIBE 확인 · 사용자 화면 A↔B 양방향 PASS",
           factStatus: FACT.VERIFIED,
           visual: visual(["redis", "app-a", "app-b", "stomp"], ["redis-app-a", "redis-app-b", "local-stomp", "local-stomp-b"], "broadcast", "delivered", "redis", ["db"]),
+          decisionBadge: "#169 verified · 실제 AWS 다중 EC2 + 공용 ElastiCache 환경 검증",
           limits: "Redis Pub/Sub 자체 구현은 #170 범위다. 이 Scenario는 실제 다중 EC2 + 공용 ElastiCache 환경의 cross-instance 전달만 확인한다. Redis는 여전히 best-effort이며 durable queue가 아니다.",
           evidenceReferences: [evidence.appHa] })
     ]},

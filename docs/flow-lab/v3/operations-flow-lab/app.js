@@ -140,6 +140,8 @@ function render() {
     ["Kafka / Consumer", [data.kafka, data.consumer].filter(Boolean).join(" / ") || null], ["Redis", data.redis], ["Outcome", data.visual.outcome]];
   if (data.moderationResult) cards.push(["ChatModeration DB", formatModerationResult(data.moderationResult)]);
   $("stateGrid").innerHTML = cards.map(([title, value]) => `<article class="${value == null ? "na" : ""}"><h3>${title}</h3><p>${format(value)}</p></article>`).join("");
+  renderPerformanceHighlights();
+  renderDecisionHighlights();
 }
 function quickState(data) {
   const committed = data.domainState || data.transaction;
@@ -151,8 +153,9 @@ function promptBlockText(data) {
   if (!data.promptBlocks) return "";
   return `<p class="prompt-blocks">${data.promptBlocks.join(" · ")}</p>`;
 }
-/* 페이지 하단 "성능 개선 / 신뢰성·설계 개선" 요약은 특정 Step이 아니라 항상 고정으로 보여준다.
-   scenario-data.js에 이미 있는 실제 step을 그대로 다시 보여줄 뿐, 새 사실을 추가하지 않는다. */
+/* 페이지 하단 "성능 개선 / 신뢰성·설계 개선" 요약은 현재 선택된 Chapter로 필터링해서 보여준다 —
+   그 Chapter에 해당 성과가 없으면 섹션 자체를 숨긴다. scenario-data.js에 이미 있는 실제 step을
+   그대로 다시 보여줄 뿐, 새 사실을 추가하지 않는다. */
 function findStep(chapterId, scenarioId, stepId) {
   const chapter = chapters.find((item) => item.id === chapterId);
   const scenario = chapter.scenarios.find((item) => item.id === scenarioId);
@@ -164,7 +167,9 @@ const PERFORMANCE_HIGHLIGHTS = [
   { chapter: "kafka-mechanics", scenario: "kafka-adoption-decision", whatStep: "after-message-id-key", measureSteps: ["after-message-id-key"] }
 ];
 function renderPerformanceHighlights() {
-  $("performanceHighlights").innerHTML = PERFORMANCE_HIGHLIGHTS.map((card) => {
+  const cards = PERFORMANCE_HIGHLIGHTS.filter((card) => card.chapter === currentChapter().id);
+  $("performanceOutcome").hidden = cards.length === 0;
+  $("performanceHighlights").innerHTML = cards.map((card) => {
     const whatStep = findStep(card.chapter, card.scenario, card.whatStep);
     const rows = card.measureSteps.flatMap((id) => findStep(card.chapter, card.scenario, id).performance.filter((row) => row.improvement));
     return `<article class="perf-highlight"><h3>${whatStep.action}</h3><p>${whatStep.narration}</p><div class="performance">${rows.map(performanceRowHtml).join("")}</div></article>`;
@@ -174,16 +179,20 @@ const DECISION_HIGHLIGHTS = [
   { chapter: "outbox", scenario: "chatroom-outbox", step: "retry" },
   { chapter: "kafka-ai", scenario: "publish-failure", step: "retry" },
   { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "dlt" },
+  { chapter: "redis", scenario: "aws-cross-instance-normal", step: "cross-instance" },
   { chapter: "kafka-mechanics", scenario: "kafka-adoption-decision", step: "reliability" },
   { chapter: "ai-moderation", scenario: "clear-flagged-fast-path", step: "persisted" },
   { chapter: "ai-moderation", scenario: "why-not-context-llm", step: "rejected-decision" }
 ];
 function renderDecisionHighlights() {
-  $("reliabilityHighlights").innerHTML = DECISION_HIGHLIGHTS.map((ref) => {
+  const cards = DECISION_HIGHLIGHTS.filter((ref) => ref.chapter === currentChapter().id);
+  $("reliabilityOutcome").hidden = cards.length === 0;
+  $("reliabilityHighlights").innerHTML = cards.map((ref) => {
     const step = findStep(ref.chapter, ref.scenario, ref.step);
     const note = step.sideNote ? `<p class="side-note">${step.sideNote.body}</p>` : "";
     return `<article><h3>${step.action}</h3><p>${step.narration}</p>${step.decisionBadge ? `<p class="decision">${step.decisionBadge}</p>` : ""}${note}</article>`;
   }).join("");
+  $("outcomes").hidden = $("performanceOutcome").hidden && $("reliabilityOutcome").hidden;
 }
 function stop() { clearInterval(state.timer); state.timer = null; }
 function resetStep() { stop(); state.step = 0; render(); }
@@ -191,5 +200,3 @@ function advance() { if (state.step >= currentScenario().steps.length - 1) { sto
 $("chapterSelect").onchange = (event) => { state.chapter = Number(event.target.value); state.scenario = 0; resetStep(); }; $("scenarioSelect").onchange = (event) => { state.scenario = Number(event.target.value); resetStep(); };
 $("play").onclick = () => { if (state.step === currentScenario().steps.length - 1) state.step = 0; stop(); render(); state.timer = setInterval(advance, Number($("speed").value)); }; $("pause").onclick = stop; $("next").onclick = advance; $("prev").onclick = () => { stop(); state.step = Math.max(0, state.step - 1); render(); }; $("reset").onclick = resetStep; $("speed").onchange = () => { if (state.timer) $("play").click(); };
 render();
-renderPerformanceHighlights();
-renderDecisionHighlights();
