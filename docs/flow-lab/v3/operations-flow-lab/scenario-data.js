@@ -146,8 +146,8 @@ public void accept(ConsumerRecord<?, ?> record, Exception exception) {
 ];
 
 const chapters = [
-  { id: "outbox", shortLabel: "Ch1 — AFTER_COMMIT → Outbox",
-    title: "핵심 작업은 끝났는데 후속 작업이 사라진다면?", subtitle: "AFTER_COMMIT → Transactional Outbox",
+  { id: "outbox", shortLabel: "Ch1 — 채팅방 생성 안정성 (Outbox)",
+    title: "핵심 작업은 끝났는데 후속 작업이 사라진다면?", subtitle: "결제 확정 후 채팅방 생성 안정성 — Transactional Outbox",
     summary: "같은 failure boundary에서 V2 메모리 후속 처리와 V3 영속 Outbox를 동기화해 비교한다.",
     stageLabels: stageLabels1,
     scenarios: [{ id: "chatroom-outbox", title: "ChatRoom 생성: Before / After", comparison: true, steps: [
@@ -202,10 +202,10 @@ const chapters = [
 }` },
         evidenceReferences: [evidence.chatroom, evidence.email] })
   ]}] },
-  { id: "kafka-ai", shortLabel: "Ch2 — Outbox → Kafka → AI",
-    title: "메시지는 저장됐는데 Kafka나 AI가 실패한다면?", subtitle: "Outbox → Kafka → AI Moderation",
+  { id: "kafka-ai", shortLabel: "Ch2 — AI 검수 파이프라인 장애 대응",
+    title: "메시지는 저장됐는데 Kafka나 AI가 실패한다면?", subtitle: "채팅 메시지 → Kafka → AI 검수 파이프라인 장애 대응",
     summary: "Outbox는 DB→Kafka 전달, Kafka는 AI Consumer retry/DLT를 책임진다.", scenarios: [
-    { id: "normal", title: "NORMAL", steps: [
+    { id: "normal", title: "정상 처리", steps: [
       step("send", "Client", "ChatMessageCommandService", "● STOMP SEND", "메시지 저장 요청이 Application으로 들어온다.",
         { transaction: "ChatMessage + CHAT_MESSAGE_CREATED Outbox transaction", factStatus: FACT.VERIFIED, visual: core,
           codeReferences: ["ChatMessageCommandService.send"], evidenceReferences: [evidence.pipeline] }),
@@ -223,8 +223,8 @@ const chapters = [
           codeReferences: ["ChatModerationConsumer", "ChatModerationService.analyze", "AiModerationPort", "SpringAiModerationAdapter"],
           evidenceReferences: [evidence.pipeline, evidence.moderation] })
     ]},
-    { id: "publish-failure", title: "PUBLISH_FAILURE", steps: ch2PublishFailureSteps },
-    { id: "duplicate", title: "DUPLICATE_DELIVERY", steps: [
+    { id: "publish-failure", title: "발행 실패", steps: ch2PublishFailureSteps },
+    { id: "duplicate", title: "중복 전달", steps: [
       step("delivery", "Kafka", "ChatModerationConsumer", "◆ same event delivered again", "at-least-once 전달은 같은 이벤트를 다시 전달할 수 있다.",
         { domainState: "ChatMessage remains COMMITTED", kafka: "duplicate delivery", consumer: "second receive", factStatus: FACT.VERIFIED,
           visual: visual(["kafka", "consumer"], ["kafka-consume"], "event", null, "kafka", ["db"]), evidenceReferences: [evidence.pipeline] }),
@@ -234,7 +234,7 @@ const chapters = [
           codeReferences: ["ChatModerationService.analyze", "ChatModeration.isCompleted()", "chat_moderation UNIQUE"],
           evidenceReferences: [evidence.pipeline] })
     ]},
-    { id: "ai-transient-failure", title: "AI_TRANSIENT_FAILURE", steps: [
+    { id: "ai-transient-failure", title: "AI 일시 실패", steps: [
       step("call", "Kafka consumer", "LLM provider", "◆ AI call", "AI 호출이 처리 경계에서 한 번 강제 실패한다(#59 실제 fault injection).",
         { domainState: "ChatMessage remains COMMITTED", consumer: "processing failed", kafka: "retry eligible", factStatus: FACT.VERIFIED,
           visual: visual(["consumer", "llm"], ["ai-call"], "event", "failure", "kafka", ["db"]),
@@ -245,8 +245,8 @@ const chapters = [
           visual: visual(["kafka", "consumer"], ["kafka-consume"], "retry", null, "kafka", ["db"]),
           codeReferences: ["FixedBackOff", "spring.ai.retry.max-attempts=1"], evidenceReferences: [evidence.pipeline, evidence.moderation] })
     ]},
-    { id: "retry-exhausted-dlt", title: "RETRY_EXHAUSTED_DLT", steps: ch2RetryExhaustedSteps },
-    { id: "ack-then-crash", title: "ACK_THEN_CRASH", steps: [
+    { id: "retry-exhausted-dlt", title: "재시도 소진 → DLT", steps: ch2RetryExhaustedSteps },
+    { id: "ack-then-crash", title: "ACK 이후 장애 발생", steps: [
       step("boundary", "Outbox processor", "Kafka ACK → Outbox completion", "◆ acknowledged before completion record", "ACK와 Outbox 완료 기록 사이에는 중단 시 중복 전달 가능성 경계가 있다.",
         { domainState: "ChatMessage remains COMMITTED", outbox: "completion not yet recorded", kafka: "broker ACK", factStatus: FACT.DESIGN,
           visual: visual(["outbox", "kafka"], ["outbox-publish"], "event", "acknowledged", "outbox", ["db"]),
@@ -256,10 +256,10 @@ const chapters = [
           visual: visual(["kafka", "consumer", "db"], ["kafka-consume"], "event", "completed", "kafka"), evidenceReferences: [evidence.pipeline] })
     ]}
   ]},
-  { id: "redis", shortLabel: "Ch3 — Redis Pub/Sub fan-out",
-    title: "서버가 달라도 같은 채팅방 메시지를 어떻게 받는가?", subtitle: "Redis Pub/Sub cross-instance fan-out",
+  { id: "redis", shortLabel: "Ch3 — 다중 서버 실시간 채팅 전달",
+    title: "서버가 달라도 같은 채팅방 메시지를 어떻게 받는가?", subtitle: "다중 서버 환경의 실시간 채팅 전달 — Redis Pub/Sub",
     summary: "Redis는 best-effort fan-out이며 DB cursor가 공식 복구 경로다.", scenarios: [
-    { id: "local-two-instance-normal", title: "LOCAL_TWO_INSTANCE_NORMAL", steps: [
+    { id: "local-two-instance-normal", title: "로컬 2대 인스턴스 정상 동작", steps: [
       step("save", "Client A → App A", "DB", "● SEND → ✓ COMMIT", "App A가 ChatMessage를 저장한다. DB가 Source of Truth다.",
         { domainState: "ChatMessage COMMITTED", transaction: "ChatMessage + AI Outbox transaction", factStatus: FACT.VERIFIED,
           visual: core, evidenceReferences: [evidence.redis] }),
@@ -271,7 +271,7 @@ const chapters = [
           visual: visual(["redis", "app-a", "app-b", "stomp"], ["redis-app-a", "redis-app-b", "local-stomp", "local-stomp-b"], "broadcast", "delivered", "redis", ["db"]),
           evidenceReferences: [evidence.redis] })
     ]},
-    { id: "aws-cross-instance-normal", title: "AWS_CROSS_INSTANCE_NORMAL", steps: [
+    { id: "aws-cross-instance-normal", title: "AWS 서버 간 정상 동작", steps: [
       step("send", "Client A(memberId=6) → App EC2 #1", "DB", "● SEND → ✓ COMMIT", "실제 다중 App EC2 + 공용 ElastiCache Redis 환경에서 App EC2 #1이 ChatMessage를 저장한다.",
         { domainState: "ChatMessage COMMITTED(messageId=29)", factStatus: FACT.VERIFIED, visual: core,
           limits: "Blue-Green Green 환경(bobfull-ec2-green-1/-2) 대상 실제 AWS 검증이다.",
@@ -287,7 +287,7 @@ const chapters = [
           limits: "Redis Pub/Sub 자체 구현은 #170 범위다. 이 Scenario는 실제 다중 EC2 + 공용 ElastiCache 환경의 cross-instance 전달만 확인한다. Redis는 여전히 best-effort이며 durable queue가 아니다.",
           evidenceReferences: [evidence.appHa] })
     ]},
-    { id: "redis-delivery-miss", title: "REDIS_DELIVERY_MISS", steps: [
+    { id: "redis-delivery-miss", title: "Redis 전달 누락", steps: [
       step("commit", "Application", "DB", "✓ ChatMessage COMMIT", "DB 저장은 성공하지만 Redis delivery 검증은 별도 경계다.",
         { domainState: "ChatMessage COMMITTED", factStatus: FACT.DESIGN, visual: visual(["app", "db"], ["persist"], "commit", "committed", "core"),
           limits: "Redis 중단·복구와 cursor N/N 실제 복구는 NOT_RUN이다.", evidenceReferences: [evidence.redis] }),
@@ -302,8 +302,8 @@ const chapters = [
           limits: "cursor N/N actual recovery와 ALB/WSS는 NOT_RUN.", evidenceReferences: [evidence.redis] })
     ]}
   ]},
-  { id: "hotpath-performance", shortLabel: "Ch4 — Hot-path Query Batch",
-    title: "조회가 몰리면 어디가 병목이고, 어떻게 줄였는가?", subtitle: "Hot-path Query Batch Optimization",
+  { id: "hotpath-performance", shortLabel: "Ch4 — 예약 조회 성능 개선",
+    title: "조회가 몰리면 어디가 병목이고, 어떻게 줄였는가?", subtitle: "인기 예약 조회 성능 병목 분석과 배치 쿼리 개선",
     summary: "문제 발견 → 병목 분리 → 최소 변경 → 동일 조건 Before/After → 남은 한계.", scenarios: [
     { id: "batch-optimization", title: "인기 회차 조회 병목 개선", steps: [
       step("saturation", "K6 Load/Stress", "bobfull-k6-test-app", "▲ 조회 폭주", "인기 회차 조회가 몰리자 CPU와 DB Connection Pool이 거의 동시에 포화됐다(#142 실측, Stress 20→320 iter/s 계단식).",
@@ -385,10 +385,10 @@ const chapters = [
           evidenceReferences: [evidence.hotpath, evidence.peak, evidence.searchCache] })
     ]}
   ]},
-  { id: "kafka-mechanics", shortLabel: "Ch5 — Kafka Mechanics",
-    title: "Kafka는 내부에서 어떻게 메시지를 나누고 처리하는가?", subtitle: "Producer Key → Partition → Consumer → Retry / DLT",
+  { id: "kafka-mechanics", shortLabel: "Ch5 — Kafka 내부 동작 원리",
+    title: "Kafka는 내부에서 어떻게 메시지를 나누고 처리하는가?", subtitle: "Kafka 내부 동작 원리 — Partition부터 Retry까지",
     summary: "Topic·Partition·Key·Consumer Group·Retry·DLT가 BobFull에서 실제로 어떻게 연결되는지 이해한다.", scenarios: [
-    { id: "message-id-partitioning", title: "MESSAGE_ID_PARTITIONING", steps: [
+    { id: "message-id-partitioning", title: "Partition Key 변경: chatRoomId → messageId", steps: [
       step("before-chatroom-key", "ChatMessageOutboxProcessor", "Kafka Topic(Partition 3)", "● Key = chatRoomId", "같은 채팅방 메시지는 Kafka에서 어떻게 나뉘는가? — 과거 key(chatRoomId)는 같은 방 메시지를 항상 같은 Partition에 몰아넣었다.",
         { factStatus: FACT.MEASURED, visual: visual(["app", "outbox", "kafka", "consumer"], ["outbox-write", "outbox-publish", "kafka-consume"], "event", "failure", "outbox"),
           kafkaPartitions: [{ id: "P0", count: 30 }, { id: "P1", count: 0 }, { id: "P2", count: 0 }],
@@ -417,7 +417,7 @@ const chapters = [
 }` },
           evidenceReferences: [evidence.partitionKey] })
     ]},
-    { id: "consumer-scaling", title: "CONSUMER_SCALING", steps: [
+    { id: "consumer-scaling", title: "Consumer 동시성 확장", steps: [
       step("consumer-1", "Consumer concurrency = 1", "Partition 0/1/2", "● consumer concurrency=1", "Consumer concurrency를 늘려도 왜 무조건 빨라지지 않는가? — 이 chatRoomId-key 실험에서는 concurrency=1이 세 Partition을 처리한다.",
         { factStatus: FACT.MEASURED, visual: visual(["kafka", "consumer"], ["kafka-consume"], "event", null, "kafka"),
           performance: [{ metric: "drain time(같은 채팅방 3개·30건)", before: "15.4s" }, { metric: "consume rate", before: "1.94건/초" }],
@@ -437,7 +437,7 @@ const chapters = [
           limits: "\"Consumer 수를 늘리면 늘리는 만큼 처리량이 오른다\"는 가정은 이 실측에서 기각됐다 — Partition key 분산도가 함께 맞아야 한다(#192 실험 D). chatRoomId key 조건 측정치이며, 현재 Production 기본 key는 messageId(#258).",
           evidenceReferences: [evidence.aiWorkerScaling, evidence.partitionKey] })
     ]},
-    { id: "async-vs-kafka", title: "ASYNC_VS_KAFKA", steps: [
+    { id: "async-vs-kafka", title: "Async vs Kafka 비교", steps: [
       step("commit", "Application", "DB", "✓ ChatMessage COMMIT", "그냥 @Async로 보내면 더 간단하지 않은가? — 같은 COMMIT에서 두 경로를 비교한다.",
         { domainState: "ChatMessage COMMITTED", factStatus: FACT.MEASURED, visual: visual(["app", "db"], ["persist"], "commit", "committed", "core"),
           evidenceReferences: [evidence.aiWorkerScaling] }),
@@ -458,7 +458,7 @@ const chapters = [
           limits: "Kafka를 채택한 이유: Broker 보존, 적체 처리, Retry, 실패 격리, Consumer 복구, 확장 가능한 처리 경계 — 단건 latency 개선이 아니다(#192 최종 판정).",
           evidenceReferences: [evidence.aiWorkerScaling, evidence.pipeline] })
     ]},
-    { id: "who-retries", title: "WHO_RETRIES", steps: [
+    { id: "who-retries", title: "재시도는 누가 담당하는가", steps: [
       ...ch2PublishFailureSteps,
       ...ch2RetryExhaustedSteps,
       step("retry-budget", "Human 설정 확인", "Retry 책임 요약", "▲ 실패 위치에 따라 책임이 다르다", "Outbox publish 실패는 Outbox가, Kafka Consumer 처리 실패는 Kafka Consumer가 재시도를 책임진다.",
@@ -470,10 +470,10 @@ const chapters = [
           evidenceReferences: [evidence.pipeline, evidence.aiWorkerScaling] })
     ]}
   ]},
-  { id: "ai-moderation", shortLabel: "Ch6 — AI Moderation Decision",
-    title: "채팅 AI는 메시지를 어떻게 판단하는가?", subtitle: "Rule → DB Context → Prompt / LLM → Validator → ChatModeration DB",
+  { id: "ai-moderation", shortLabel: "Ch6 — AI 모더레이션 판단 로직",
+    title: "채팅 AI는 메시지를 어떻게 판단하는가?", subtitle: "AI 모더레이션 판단 로직 — Rule Filter부터 LLM까지",
     summary: "메시지 하나가 들어오면 어떤 조건에서 Rule로 끝나고, 언제 DB Context를 보고, 언제 LLM을 호출하고, 무엇이 DB에 남는지 이해한다.", scenarios: [
-    { id: "clear-flagged-fast-path", title: "CLEAR_FLAGGED_FAST_PATH", steps: [
+    { id: "clear-flagged-fast-path", title: "Rule만으로 즉시 판정 (LLM 생략)", steps: [
       step("input", "Client", "ChatModerationService", "● Input", "모든 메시지를 왜 LLM에 보내지 않는가? — \"개새끼야\"",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["input"], [], "event", null, "rule") }),
       step("rule-check", "ModerationRuleFilter", "clearFlagged()", "◆ Rule 고신뢰 패턴 확인", "명백한 개인 전화번호+개인 문맥, 정확한 욕설 패턴, 명백한 투자/리딩방/대출 스팸 같은 고신뢰 표현만 이 Rule이 처리한다.",
@@ -507,7 +507,7 @@ const chapters = [
             body: "LLM Calls 88 → 72(-18.2%), Total Tokens 66,766 → 54,565(-18.3%), Rule Fast Path Precision 16/16(FP 0). 다만 전체 Result Accuracy는 62/66 → 61/66이었다 — \"AI 정확도 개선\"이 아니라 \"Rule attributable regression 없이 호출·Token을 줄였다\"로 정확히 표현한다. Provider 단일 실행·한정 Frozen Dataset 기준이다." },
           codeReferences: ["ChatModerationService.persistCompleted"], evidenceReferences: [evidence.moderationHardening] })
     ]},
-    { id: "llm-required", title: "LLM_REQUIRED", steps: [
+    { id: "llm-required", title: "LLM 판단이 필요한 경우", steps: [
       step("input", "Client", "ChatModerationService", "● Input", "Rule이 확실하지 않으면 AI는 무엇을 보고 판단하는가? — \"바보야\"",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["input"], [], "event", null, "rule") }),
       step("rule-miss", "ModerationRuleFilter", "clearFlagged()", "◆ Rule MISS", "\"바보야\"는 개인정보·정확한 욕설·스팸 유도 고신뢰 패턴 어디에도 매칭되지 않는다 — Split Gate를 포함한 일반 판정 경로로 위임한다.",
@@ -553,7 +553,7 @@ public AiModerationResponse analyze(String content) {
             policyVersion: "moderation-policy-v2", result: "SAFE(few-shot 예시)", categories: "[]", riskLevel: "LOW", tokens: "promptTokens/completionTokens/totalTokens(Provider Usage)" },
           codeReferences: ["ChatModerationService.persistCompleted", "ModerationResultValidator"] })
     ]},
-    { id: "split-message-evasion", title: "SPLIT_MESSAGE_EVASION", steps: [
+    { id: "split-message-evasion", title: "메시지 쪼개기 우회 시도", steps: [
       step("evasion-baseline", "Human E2E", "ChatModerationService(단건 분석)", "× Split Evasion 재현", "욕설을 여러 메시지로 쪼개 보내면? — \"시\"와 \"발\"을 나눠 보내면 각각 단건 분석에서 SAFE로 저장된다. 합치면 욕설이지만 우회된다(Human E2E 실제 재현, #251 STEP0).",
         { factStatus: FACT.MEASURED, topologyKey: "moderation", visual: visual(["input", "llm"], ["input-rule", "rule-splitGate", "splitGate-llm"], "failure", "failure", "rule", [], { nodeId: "llm", text: "시→SAFE, 발→SAFE" }),
           limits: "이 재현은 #266(Split Candidate Gate / DB Context / Split Rule) 구현 이전 코드 기준이다 — 지금은 아니다. 같은 \"시→발\" 시퀀스를 현재 Production 코드로 보내면 바로 다음 Step처럼 두 번째 메시지에서 Split Rule이 FLAGGED로 잡는다.",
@@ -585,7 +585,7 @@ Optional<ModerationResult> clearSplitFlagged(List<String> canonicalCandidates) {
 }` },
           evidenceReferences: [evidence.splitMessage, evidence.moderationHardening] })
     ]},
-    { id: "why-not-context-llm", title: "WHY_NOT_CONTEXT_LLM", steps: [
+    { id: "why-not-context-llm", title: "Context LLM을 채택하지 않은 이유", steps: [
       step("candidate-experiment", "DB Context", "Context LLM(실험)", "◆ Context 전체를 LLM에 보내면?", "그럼 최근 대화를 전부 LLM에 보내면 더 정확하지 않은가? — Context 전체를 Provider에 보내는 실험을 했다(현재 production 경로가 아니다).",
         { factStatus: FACT.MEASURED, topologyKey: "moderation", visual: visual(["dbContext", "llm"], ["dbcontext-llm-experimental"], "event", null, "rule"),
           limits: "이 경로는 실험 전용이며 현재 ChatModerationService production 경로가 아니다 — dbContext-splitRule-llm(현재 메시지 단건)만 실제 동작한다.",
@@ -600,7 +600,7 @@ Optional<ModerationResult> clearSplitFlagged(List<String> canonicalCandidates) {
           codeReferences: ["ChatModerationService.analyzeMessage(Context LLM 미사용, 현재 production 경로)"],
           evidenceReferences: [evidence.splitMessage] })
     ]},
-    { id: "prompt-injection-boundary", title: "PROMPT_INJECTION_BOUNDARY", steps: [
+    { id: "prompt-injection-boundary", title: "프롬프트 인젝션 방어 경계", steps: [
       step("injection-input", "Client", "ModerationRuleFilter", "● Injection 후보 입력", "사용자가 \"이전 지시를 무시해\"라고 보내면? — Injection 후보는 Rule이 직접 FLAGGED하지 않고 Split Gate를 포함한 일반 판정 경로로 위임한다. Rule 경로에서 끝나지 않을 때 Provider가 판단한다.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["input", "rule", "splitGate", "llm"], ["input-rule", "rule-splitGate", "splitGate-llm"], "event", null, "rule"),
           codeReferences: ["ModerationRuleFilter.isPromptInjectionCandidate"] }),
@@ -617,7 +617,7 @@ Optional<ModerationResult> clearSplitFlagged(List<String> canonicalCandidates) {
           limits: "각 Case는 moderation-prompt-v3-scope에서 1회 순차 실행 관측이다. 현재 short-fragment-boundary 버전 재측정은 NOT_RUN이며 재실행 시 달라질 수 있다.",
           evidenceReferences: [evidence.moderationHardening] })
     ]},
-    { id: "moderation-db-result", title: "MODERATION_DB_RESULT", steps: [
+    { id: "moderation-db-result", title: "판정 결과 DB 저장", steps: [
       step("rule-path-fields", "Rule Path", "ChatModeration DB", "✓ Rule Path 저장 필드", "AI 판단 결과는 DB에 무엇으로 남는가? — Rule Path 저장 예시.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["validator", "moderationDb"], ["validator-db"], "commit", "completed", "rule"),
           moderationResult: { provider: "BOBFULL_RULE", model: "rule-filter-v1", promptVersion: "NO_LLM", policyVersion: "moderation-policy-v2",
