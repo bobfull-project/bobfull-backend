@@ -137,3 +137,4 @@ bobfull:
       consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
       consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
       producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}
+      partition-key-strategy: ${KAFKA_CHAT_MESSAGE_PARTITION_KEY_STRATEGY:message-id}

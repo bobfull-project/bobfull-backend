@@ -10,6 +10,8 @@
 | Recent Context v2 | MEASURED_AND_REJECTED |
 | Normalization | DEFERRED |
 | Prompt Hardening | DEFERRED |
+
+Recent Context가 미채택인 현재 Moderation은 message 단위 독립 처리다. 이 전제에 따른 Kafka Partition key 결정은 후속 [Issue #258 Evidence](../258-moderation-partition-key/README.md)를 따른다. 향후 Context 재도입은 Kafka 소비 순서가 아니라 DB 이력의 명시적 정렬 계약을 별도 설계해야 한다.
 | Final | ADOPT_PARTIAL |
 
 | Metric | Before | After |

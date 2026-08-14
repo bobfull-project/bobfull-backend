@@ -1,5 +1,7 @@
 # Issue #192 — Kafka AI Consumer 독립 실행·확장 및 MSA 분리 판단 Evidence
 
+> Partition key의 production 최종 결정은 후속 [Issue #258 Evidence](../258-moderation-partition-key/README.md)를 따른다. #192의 과거 방 단위 순서 보장 전제는 현재 Moderation 계약의 근거로 사용하지 않는다.
+
 ## 검증 대상
 
 `ChatMessage` COMMIT → Outbox → Kafka(`bobfull.chat.message-created.v1`, Partition 3) → `ChatModerationConsumer` → `ChatModerationService`(#66) 처리 경계에서, Web/API와 AI Consumer가 같은 프로세스에서 실행되는 현재 구조(A안)가 충분한지, 아니면 Web/AI Worker 실행 역할 분리(B안)·Consumer Scale-out이 필요한지를 실측으로 판단한다.
