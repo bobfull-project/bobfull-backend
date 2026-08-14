@@ -19,7 +19,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "payment", indexes = {
         @jakarta.persistence.Index(name = "idx_payment_status_expires_at_id", columnList = "payment_status, expires_at, payment_id"),
-        @jakarta.persistence.Index(name = "idx_payment_reservation_id", columnList = "reservation_id")
+        @jakarta.persistence.Index(name = "idx_payment_reservation_id", columnList = "reservation_id"),
+        @jakarta.persistence.Index(name = "idx_payment_time_slot_id", columnList = "time_slot_id")
 })
 public class Payment extends BaseTimeEntity {
 
