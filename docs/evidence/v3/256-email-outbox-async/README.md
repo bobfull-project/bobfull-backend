@@ -14,7 +14,7 @@
 ## 기준 코드
 
 - Before SHA: `e108c72faef56f4ee7708951f1f885a234f19044`
-- After SHA: `d8fe8ddaf9176243b86a4419556475e0886e3a4b` (구현·테스트 변경 커밋)
+- After SHA: `3d6d1a2` (최신 develop rebase 뒤 구현·테스트 변경 커밋)
 
 ## 환경·데이터·실행 조건
 
@@ -62,6 +62,8 @@
 
 - 실제 SMTP 서버, 실제 HTTP 요청, K6/AWS 환경에서 timeout 및 health 회복을 재측정하지 않았다.
 - latch/Fake 기반 테스트는 executor 제출 경계와 상태 분리를 검증하지만 SMTP 프로토콜 자체의 timeout 동작은 검증하지 않는다.
+- 최신 develop rebase 뒤 전체 테스트 컴파일은 #256과 무관한
+  `FakeAiModerationAdapterTest`의 `ChatModerationService` 생성자 인자 불일치로 차단됐다.
 
 ## 관련
 
