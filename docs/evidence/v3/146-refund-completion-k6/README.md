@@ -18,6 +18,8 @@
 
 **결론(§8 참고): A안(현재 동기 Port·Adapter 구조 유지)** — 단, 조건부. **현재 상태**(지연 주입 없음)에서는 Spring Event 전환 게이트 조건이 하나도 충족되지 않아 구조를 유지한다. 다만 D의 발견은 "향후 예약 완료 로직에 통계·알림 등 후속 처리를 추가할 계획이 있다면, 그 전에 반드시 Pool 크기 조정이나 처리 비용 최적화(B안)를 먼저 검토해야 한다"는 강한 근거로 남긴다 — 이 결론에 도달하는 순간(예: 로직 추가로 300~500ms 이상의 처리 시간이 늘어나는 순간) 시스템은 점진적으로 나빠지는 게 아니라 급격히 무너진다.
 
+**DB 최종 상태 검증 중 별도 발견(§ DB 최종 상태 검증 참고)**: 시나리오 B(그룹 3명 동시 완료)에서 개별 참여자는 전부 정확히 완료되지만 **Reservation 전체 상태가 CANCELLED로 전이되지 않는 실제 동시성 결함**을 발견했다 — V2 그룹 취소 기능의 실제 버그이며 이 Issue 범위를 넘어 `#259`로 분리했다. C/E는 DB 상태까지 직접 대조해 계약대로 동작함을 확인했다.
+
 **이번 측정의 한계(§7)**: 실메일 발송 지연으로 `setup()` 자체가 오래 걸려, 이번 측정은 Issue 본문이 제시한 1/10/30/50/100 VU 단계적 확대와 Stress 단계를 전부 수행하지 못하고 **Load 단계 1개 지점**만 실측했다. InnoDB 레벨 실제 row lock wait(`performance_schema.data_lock_waits`)도 MySQL exporter 부재로 수집하지 못해 HikariCP active/pending을 대리 지표로 사용했다(#235와 동일한 기존 한계).
 
 ## 측정 환경
@@ -118,6 +120,18 @@ InnoDB 레벨 실제 row lock wait 카운터(`performance_schema.data_lock_waits
 | F(외부 PortOne 지연) | 500~3000ms | **선형**(3000ms→avg 3055ms) | active 항상 2 이하 | 외부 지연은 응답시간만 그대로 늘릴 뿐 DB 자원은 전혀 늘리지 않는다 |
 
 같은 크기의 지연이라도 **어디서 발생하느냐에 따라 결과가 완전히 다르다** — D는 비선형 붕괴, F는 깨끗한 선형 증가. PortOne 요청이 Reservation 락·내부 완료 트랜잭션 밖(두 `REQUIRES_NEW` 트랜잭션 사이의 평범한 메서드 호출)에서 실행되도록 만든 기존 Port·Adapter 분리 설계가, 바로 이 차이 덕분에 실측으로 검증됐다.
+
+## DB 최종 상태 검증 — B/C/E 정합성 직접 확인
+
+PR #250 리뷰(hyeonseung-dev, 2026-08-13)에서 응답시간·Pool 지표만으로는 Issue #146이 요구한 "Refund/Payment/Participant/Reservation 최종 상태 정합성"·"완료 실패 시 롤백 상태"가 검증되지 않는다는 지적을 받아, 회원 본인 조회 API(`GET /api/payments/{id}`, `/api/refunds/{id}`, `/api/members/me/reservations/{id}`)로 실제 AWS 인스턴스(`bobfull-k6-test-app`, 이후 `52.79.235.56`으로 재배포)에서 B/C/E 각각 직접 확인했다.
+
+- **C(즉시응답+웹훅 동시 경쟁)**: Refund가 정확히 1건만 `COMPLETED`로 존재 — 멱등성 확인.
+- **E(완료 실패, 즉시응답·웹훅 두 경로 모두)**: `Payment=PAID`(REFUNDED 아님)·`Refund=REQUESTED/PROCESSING`(`completedAt=null`)·`Participant=CANCEL_REQUESTED`(CANCELLED 아님) — 계약대로 정확히 롤백됨을 확인.
+- **B(그룹 3명 동시 완료 웹훅) — 실제 결함 발견**: 참여자 전원 개별적으로는 `CANCELLED`·`REFUNDED`로 정확히 끝났지만, **`Reservation.reservationStatus`가 `CANCELLED`로 전이되지 않고 `CANCELLING`에 영구히 멈춘다**(3초 대기 후 재조회해도 동일, 3회 연속 100% 재현). 같은 3명을 **순차** 처리하면 3번째에서 정확히 `CANCELLED`로 전이돼, 로직 자체가 아니라 **진짜 동시 요청에서만** 발생하는 결함임을 확인했다. `findWithLockById`의 `PESSIMISTIC_WRITE` 락이 이론상 이 구간을 직렬화해야 하나 정확한 근본 원인은 특정하지 못했다.
+
+**중요**: 이 결함은 V2에서 이미 배포된 그룹 예약 취소 기능(#44/#131/#45)의 실제 동시성 버그이며, Issue #146(성능 측정)이나 이 PR의 범위를 넘는 별도 애플리케이션 결함이라 **#259로 분리**했다. 이 발견은 시나리오 B의 "부하 수준에서 여유 있다"는 성능 결론(§4~5) 자체에는 영향이 없다 — 원인이 부하량이 아니라 참여자 완료가 정말로 동시에 도착하는지 여부이기 때문이다. 다만 이 PR이 "checks 100%"로 보고한 B의 검증은 HTTP 상태 코드만 확인했을 뿐 Reservation의 최종 집계 상태까지는 검증하지 않았다는 한계가 있었다는 점도 함께 기록해 둔다.
+
+구조화 로그(`event=REFUND_COMPENSATION_REQUIRED` 등에 paymentId·refundId·cancellationId 포함 여부)와 `#141` Reconciliation 스케줄러의 실제 식별·복구 여부는 애플리케이션 로그(`docker logs`) 접근 권한이 없어 이번 라운드에서 직접 확인하지 못했다 — 필요 시 인프라 담당자에게 로그 확인을 요청해야 한다.
 
 ## 이번 측정의 한계
 
