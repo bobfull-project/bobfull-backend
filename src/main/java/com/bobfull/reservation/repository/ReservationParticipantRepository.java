@@ -21,7 +21,20 @@ public interface ReservationParticipantRepository extends JpaRepository<Reservat
 
     boolean existsByReservationId(Long reservationId);
 
-    boolean existsByReservationIdAndParticipationStatus(Long reservationId, ParticipationStatus status);
+    /**
+     * 취소 완료 확정 직전 "남은 CANCEL_REQUESTED가 있는지"를 잠금 조회로 판단한다(Issue #259).
+     * MySQL 기본 격리수준(REPEATABLE READ)에서는 트랜잭션의 첫 번째 잠금 없는 SELECT가 그 트랜잭션
+     * 전체의 스냅샷 시점을 고정한다. 이 흐름이 실행되는 트랜잭션(웹훅 완료 처리)은 Reservation 락보다
+     * 먼저 Refund→Payment의 LAZY 연관관계 로딩 같은 잠금 없는 SELECT가 먼저 실행될 수 있어, 잠금 없는
+     * exists 조회로는 방금 커밋된 다른 참여자의 상태를 못 볼 수 있다. 잠금 조회는 트랜잭션에 이미
+     * 고정된 스냅샷과 무관하게 항상 최신 커밋 데이터를 읽으므로 이 문제를 우회한다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select p from ReservationParticipant p "
+            + "where p.reservationId = :reservationId and p.participationStatus = :status")
+    List<ReservationParticipant> findAllWithLockByReservationIdAndParticipationStatus(
+            @Param("reservationId") Long reservationId, @Param("status") ParticipationStatus status);
+
     Optional<ReservationParticipant> findByReservationIdAndMemberId(Long reservationId, Long memberId);
 
     List<ReservationParticipant> findAllByReservationIdAndParticipationStatus(
