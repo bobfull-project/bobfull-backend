@@ -12,6 +12,8 @@ import com.bobfull.common.security.JwtTokenProvider;
 import com.bobfull.common.security.MemberRole;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.support.ChannelInterceptor;
@@ -24,6 +26,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 /** CONNECT 인증과 채팅방 SUBSCRIBE 인가만 처리하는 STOMP inbound interceptor다. */
 @Component
 public class ChatStompInterceptor implements ChannelInterceptor {
+    private static final Logger log = LoggerFactory.getLogger(ChatStompInterceptor.class);
     private static final String BEARER_PREFIX = "Bearer ";
     private static final Pattern CHAT_ROOM_DESTINATION = Pattern.compile("^/sub/chat/rooms/(\\d+)$");
     private static final Pattern SEND_DESTINATION = Pattern.compile("^/pub/chat/rooms/[1-9]\\d*/messages$");
@@ -65,6 +68,7 @@ public class ChatStompInterceptor implements ChannelInterceptor {
         catch (InvalidJwtException exception) { throw new StompAuthenticationException(StompAuthenticationException.Reason.INVALID_TOKEN); }
         if (authMember.role() != MemberRole.MEMBER) throw new StompAuthenticationException(StompAuthenticationException.Reason.ROLE_NOT_ALLOWED);
         accessor.setUser(new StompPrincipal(authMember));
+        log.info("CHAT_STOMP_CONNECTED memberId={} sessionId={}", authMember.id(), accessor.getSessionId());
         return MessageBuilder.createMessage(message.getPayload(), accessor.getMessageHeaders());
     }
 
