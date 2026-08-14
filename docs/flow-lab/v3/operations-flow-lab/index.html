@@ -5,19 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BobFull V3 Operations Flow Lab</title>
   <link rel="stylesheet" href="style.css">
-  <style>.quick-state{display:grid;gap:4px;margin:9px 0 0}.quick-state div{display:grid;grid-template-columns:92px 1fr;gap:7px}.quick-state dt{color:#71b6ff;font:10px ui-monospace,monospace}.quick-state dd{margin:0;color:#eaf3ff;font-size:12px}</style>
 </head>
 <body>
   <header class="topbar">
-    <div><span class="eyebrow">BOBFULL V3</span><strong>OPERATIONS FLOW LAB</strong><nav><a href="../../v1/index.html">V1</a><a href="../../v2/index.html">V2</a><a href="./index.html" aria-current="page">V3</a></nav></div>
-    <p>코드·Evidence 기반 정적 인터랙티브 시뮬레이션 — 라이브 JVM/인프라 제어 화면이 아닙니다.</p>
+    <div class="brand">BobFull Flow Lab<nav><a href="../../v1/index.html">V1</a><a href="../../v2/index.html">V2</a><a href="./index.html" aria-current="page">V3</a></nav></div>
+    <div class="mode" role="group" aria-label="표시 모드"><button data-mode="presentation" class="active">발표 모드</button><button data-mode="learning">학습 모드</button><button data-mode="ops">운영자 시점</button></div>
   </header>
   <main>
-    <section class="controls" aria-label="시나리오 제어">
+    <section class="scenario-select" aria-label="시나리오 제어">
       <label>Chapter <select id="chapterSelect"></select></label>
       <label>Scenario <select id="scenarioSelect"></select></label>
-      <div class="mode" role="group" aria-label="표시 모드"><button data-mode="presentation" class="active">발표 모드</button><button data-mode="learning">학습 모드</button><button data-mode="ops">운영자 시점</button></div>
-      <span id="factBadge" class="badge"></span>
+      <p class="hint">코드·Evidence 기반 정적 인터랙티브 시뮬레이션 — 라이브 JVM/인프라 제어 화면이 아닙니다.</p>
     </section>
 
     <section class="chapter-intro" aria-label="Chapter 질문">
@@ -33,21 +31,24 @@
       <strong id="counter"></strong>
     </section>
 
-    <section class="narration-panel">
-      <div><span class="eyebrow">CURRENT STEP</span><h2 id="stepTitle"></h2><p id="narration"></p></div>
-      <div id="stepFact" class="fact"></div>
-    </section>
-
-    <section id="comparison" class="comparison" hidden></section>
-
-    <section class="canvas-section">
-      <div class="canvas-heading"><h2>System Flow Canvas</h2><span>좌 → 우 고정 흐름 · 현재 Scenario에 관계없는 노드는 흐리게 표시</span></div>
-      <div id="canvas" class="canvas" aria-label="시스템 흐름"></div>
+    <section class="stage" aria-label="시스템 흐름">
+      <div class="stage-heading"><h2>시스템 흐름</h2><span>좌 → 우 고정 흐름 · 현재 Scenario에 관계없는 노드는 흐리게 표시</span></div>
+      <div id="canvas" class="canvas" aria-label="시스템 흐름 Canvas"></div>
       <div class="legend"><span>● request</span><span>◆ event</span><span>✓ committed</span><span>↻ retry</span><span>↓ DLT</span><span>↠ Redis broadcast</span><span>× failure</span></div>
+
+      <section id="comparison" class="comparison" hidden></section>
+      <section id="performance" class="performance" hidden></section>
+      <section id="kafkaPartitions" class="performance" hidden></section>
+
+      <div class="stage-caption">
+        <span class="kicker">현재 단계</span>
+        <h3 id="stepTitle"></h3>
+        <p id="narration"></p>
+        <div id="stepFact" class="fact"></div>
+      </div>
     </section>
 
-    <section id="performance" class="performance" hidden></section>
-    <section id="kafkaPartitions" class="performance" hidden></section>
+    <div class="evidence-link"><button id="viewEvidence">근거 보기 ↗</button></div>
 
     <section class="state-section"><h2>핵심 상태</h2><div id="stateGrid" class="state-grid"></div></section>
 
@@ -58,13 +59,15 @@
     <section id="opsPanel" class="ops" hidden><h2>운영자 시점</h2><p>현재 Step에서 Evidence로 확인된 구조화 로그·메트릭만 표시합니다. 수치·그래프는 만들지 않습니다.</p><div id="opsGrid" class="detail-grid"></div></section>
 
     <section id="evidenceGate" class="evidence-gate">
-      <div><span class="badge future">#191만 FUTURE · NOT VERIFIED</span><h2>Evidence Gate</h2><p>#169(App HA + AWS Redis cross-instance), #192(Kafka Async 비교·Consumer scaling·통합 모놀리스 결정), #258(messageId Partition Key), #251(Rule Fast Path), #266(Split Message Rule Context)은 실제 검증이 끝나 Ch3·Ch5·Ch6에 반영됐습니다. #191(Auto Scaling)만 아직 재생 Chapter가 아닙니다.</p></div>
-      <ul><li>#169 — VERIFIED/MEASURED, App HA + AWS Redis cross-instance → Ch3 AWS_CROSS_INSTANCE_NORMAL 반영</li>
-        <li>#192 — MEASURED, Async/Kafka·Consumer scaling·통합 모놀리스 유지 결정 → Ch5 반영</li>
-        <li>#258 — MEASURED, messageId Partition Key → Ch5 MESSAGE_ID_PARTITIONING 반영</li>
-        <li>#251 — MEASURED, Moderation Rule Fast Path → Ch6 CLEAR_FLAGGED_FAST_PATH 반영</li>
-        <li>#266 — VERIFIED + Provider 6-case observation, Split Message Rule Context → Ch6 SPLIT_MESSAGE_EVASION 반영</li>
-        <li>#191 — FUTURE / NOT YET FINAL, Auto Scaling 도입 판단 필요(2→N 동일 조건 측정 필요)</li></ul>
+      <span class="gate-status">#191만 future improvement · not yet final</span>
+      <h2>검증 범위</h2>
+      <p>#169(App HA + AWS Redis cross-instance), #192(Kafka Async 비교·Consumer scaling·통합 모놀리스 결정), #258(messageId Partition Key), #251(Rule Fast Path), #266(Split Message Rule Context)은 실제 검증이 끝나 Ch3·Ch5·Ch6에 반영됐습니다. #191(Auto Scaling)만 아직 재생 Chapter가 아닙니다.</p>
+      <ul><li>#169 — verified, measured · App HA + AWS Redis cross-instance → Ch3 AWS_CROSS_INSTANCE_NORMAL 반영</li>
+        <li>#192 — measured · Async/Kafka·Consumer scaling·통합 모놀리스 유지 결정 → Ch5 반영</li>
+        <li>#258 — measured · messageId Partition Key → Ch5 MESSAGE_ID_PARTITIONING 반영</li>
+        <li>#251 — measured · Moderation Rule Fast Path → Ch6 CLEAR_FLAGGED_FAST_PATH 반영</li>
+        <li>#266 — verified + Provider 6-case observation · Split Message Rule Context → Ch6 SPLIT_MESSAGE_EVASION 반영</li>
+        <li>#191 — future improvement · Auto Scaling 도입 판단 필요(2→N 동일 조건 측정 필요)</li></ul>
     </section>
   </main>
   <script src="scenario-data.js"></script>

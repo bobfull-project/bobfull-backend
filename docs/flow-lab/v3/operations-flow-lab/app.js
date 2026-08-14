@@ -4,7 +4,6 @@ const state = { chapter: 0, scenario: 0, step: 0, mode: "presentation", timer: n
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
-const statusClass = (value) => ({ [FACT.VERIFIED]: "verified", [FACT.MEASURED]: "measured", [FACT.DESIGN]: "design", [FACT.REJECTED]: "decision", [FACT.FUTURE]: "future", [FACT.MERGED]: "merged" }[value]);
 const format = (value) => value == null ? "not applicable" : value;
 /* Ch6는 서버 topology 대신 moderationTopology(판정 경로)를 쓴다. 두 topology 모두 같은
    canvas-node/connector/token 렌더링을 그대로 재사용한다 — 별도 renderer를 새로 만들지 않는다. */
@@ -27,7 +26,7 @@ function renderCanvas(data) {
     const committed = !active && v.committedNodes.includes(id);
     const cls = active ? "active" : committed ? "committed" : "dim";
     const text = committed ? `${label} ✓` : label;
-    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><rect width="100" height="70" rx="10"/><text x="50" y="42">${text}</text></g>`;
+    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="42">${text}</text></g>`;
   }).join("");
   const badgeSvg = badgeSvgFor(t, v.badge);
   $("canvas").innerHTML = `<svg class="topology" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
@@ -36,7 +35,7 @@ function badgeSvgFor(t, badge) {
   if (!badge) return "";
   const [x, y] = t.nodePositions[badge.nodeId];
   const width = badge.text.length * 6.5 + 16;
-  return `<g class="node-badge" transform="translate(${x + 50} ${y - 14})"><rect x="${-width / 2}" y="-11" width="${width}" height="20" rx="6"/><text x="0" y="4">${badge.text}</text></g>`;
+  return `<g class="node-badge" transform="translate(${x + 50} ${y - 14})"><rect x="${-width / 2}" y="-11" width="${width}" height="20" rx="4"/><text x="0" y="4">${badge.text}</text></g>`;
 }
 function tokenSvgFor(t, edgeId, kind) {
   const shape = kind === "event" ? "<rect x=\"-5\" y=\"-5\" width=\"10\" height=\"10\" transform=\"rotate(45)\"/>" : kind === "broadcast" ? "<path d=\"M-6 -5 L6 0 L-6 5 Z\"/>" : kind === "retry" ? "<text y=\"5\">↻</text>" : kind === "failure" ? "<text y=\"5\">×</text>" : kind === "dlt" ? "<text y=\"5\">↓</text>" : "<circle r=\"5\"/>";
@@ -44,7 +43,7 @@ function tokenSvgFor(t, edgeId, kind) {
 }
 function edgeLabelSvg(t, edgeId, kind) {
   const position = t.labels[edgeId]; if (!position || !kind) return "";
-  const [x, y] = position; return `<g class="edge-label" transform="translate(${x} ${y})"><rect x="-4" y="-12" width="${tokenLabel(kind).length * 6 + 10}" height="18" rx="5"/><text x="1" y="1">${tokenLabel(kind)}</text></g>`;
+  const [x, y] = position; return `<g class="edge-label" transform="translate(${x} ${y})"><rect x="-4" y="-12" width="${tokenLabel(kind).length * 6 + 10}" height="18" rx="3"/><text x="1" y="1">${tokenLabel(kind)}</text></g>`;
 }
 function tokenLabel(token) { return ({ request: "● request", event: "◆ event", commit: "✓ commit", retry: "↻ retry", failure: "× failure", dlt: "↓ DLT", broadcast: "↠ broadcast" })[token] || ""; }
 function outcomeLabel(outcome) { return ({ committed: "✓ committed", acknowledged: "✓ broker ACK", completed: "✓ completed", delivered: "↠ delivered", failure: "× failure", dlt: "↓ DLT", skipped: "⏭ skipped", "not verified": "? not verified" })[outcome] || outcome; }
@@ -63,9 +62,9 @@ function renderComparison(data) {
   const lanes = data.comparison;
   const cx = [45, 130, 215, 300];
   const stageLabels = currentChapter().stageLabels || [];
-  element.innerHTML = `<article class="lane"><span class="badge verified">V2 BEFORE — baseline Evidence</span><h2>AFTER_COMMIT</h2>
+  element.innerHTML = `<article class="lane"><span class="lane-tag">V2 BEFORE — baseline Evidence</span><h3>AFTER_COMMIT</h3>
     <svg class="lane-strip" viewBox="0 0 345 62">${laneNodeSvg(cx, lanes.v2States, stageLabels)}</svg><p>${lanes.v2}</p></article>
-    <article class="lane"><span class="badge verified">V3 AFTER — Transactional Outbox</span><h2>Outbox</h2>
+    <article class="lane"><span class="lane-tag">V3 AFTER — Transactional Outbox</span><h3>Outbox</h3>
     <svg class="lane-strip" viewBox="0 0 345 62">${laneNodeSvg(cx, lanes.v3States, stageLabels)}</svg><p>${lanes.v3}</p></article>`;
 }
 function renderPerformance(data) {
@@ -107,6 +106,14 @@ function renderOps(data) { $("opsGrid").innerHTML = [["Structured log", data.log
 function formatModerationResult(result) {
   return `provider=${result.provider} · model=${result.model}<br>promptVersion=${result.promptVersion} · policyVersion=${result.policyVersion}<br>result=${result.result} · categories=${result.categories} · riskLevel=${result.riskLevel}<br>tokens=${result.tokens}`;
 }
+/* 발표 모드에서도 "이건 실제 측정인가?"에 화면만 보고 답할 수 있도록 남기는 최소 caption이다.
+   REJECTED/FUTURE만 강조하고 나머지 factStatus는 evidence 1건과 함께 조용한 caption으로 보여준다. */
+function factCaption(data) {
+  const primary = data.evidenceReferences.length ? data.evidenceReferences[0].label.split(" ")[0] : null;
+  const label = primary ? `${data.factStatus} · ${primary}` : data.factStatus;
+  const strong = data.factStatus === FACT.REJECTED || data.factStatus === FACT.FUTURE;
+  return `<span class="${strong ? "fact-strong" : ""}">${label}</span>${data.decisionBadge ? ` — <span class="decision">${data.decisionBadge}</span>` : ""}`;
+}
 function render() {
   const data = currentStep();
   document.body.dataset.mode = state.mode;
@@ -115,14 +122,14 @@ function render() {
   $("chapterSubtitle").textContent = currentChapter().subtitle;
   renderCanvas(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data); renderDetails(data); renderOps(data);
   $("stepTitle").textContent = data.action; $("narration").textContent = data.narration; $("counter").textContent = `Step ${state.step + 1} / ${currentScenario().steps.length}`;
-  $("factBadge").textContent = data.factStatus; $("factBadge").className = `badge ${statusClass(data.factStatus)}`;
-  $("stepFact").innerHTML = `<span class="badge ${statusClass(data.factStatus)}">${data.factStatus}</span>${data.decisionBadge ? `<span class="badge decision">${data.decisionBadge}</span>` : ""}${quickState(data)}${promptBlockSvg(data)}<p>${data.limits || "Evidence 범위 안에서 표시"}</p>`;
+  $("stepFact").innerHTML = `<p class="fact-caption">${factCaption(data)}</p>${quickState(data)}${promptBlockText(data)}`;
   const cards = [["Domain", data.domainState], ["Transaction", data.transaction], ["Outbox", data.outbox],
     ["Kafka / Consumer", [data.kafka, data.consumer].filter(Boolean).join(" / ") || null], ["Redis", data.redis], ["Outcome", data.visual.outcome]];
   if (data.moderationResult) cards.push(["ChatModeration DB", formatModerationResult(data.moderationResult)]);
   $("stateGrid").innerHTML = cards.map(([title, value]) => `<article class="${value == null ? "na" : ""}"><h3>${title}</h3><p>${format(value)}</p></article>`).join("");
   $("learningPanel").hidden = state.mode !== "learning"; $("opsPanel").hidden = state.mode !== "ops";
   $("evidenceGate").hidden = state.mode !== "learning";
+  $("viewEvidence").hidden = state.mode !== "presentation";
   document.querySelectorAll("[data-mode]").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
 }
 function quickState(data) {
@@ -130,14 +137,15 @@ function quickState(data) {
   const rows = [["COMMITTED", committed], ["OUTBOX", data.outbox], ["KAFKA", data.kafka], ["RETRY OWNER", data.retryOwner]].filter(([, value]) => value != null);
   return rows.length ? `<dl class="quick-state">${rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join("")}</dl>` : "";
 }
-/* Prompt 원문 전체는 학습 상세(fullPrompt)에서만 펼친다 — 여기서는 정책 구성 블록만 pill로 보여준다. */
-function promptBlockSvg(data) {
+/* Prompt 원문 전체는 학습 상세(fullPrompt)에서만 펼친다 — 여기서는 정책 구성 블록을 조용한 caption 한 줄로 보여준다. */
+function promptBlockText(data) {
   if (!data.promptBlocks) return "";
-  return `<div class="prompt-blocks">${data.promptBlocks.map((block) => `<span class="badge">${block}</span>`).join("")}</div>`;
+  return `<p class="prompt-blocks">${data.promptBlocks.join(" · ")}</p>`;
 }
 function stop() { clearInterval(state.timer); state.timer = null; }
 function resetStep() { stop(); state.step = 0; render(); }
 function advance() { if (state.step >= currentScenario().steps.length - 1) { stop(); state.step = 0; render(); return; } state.step++; render(); }
 $("chapterSelect").onchange = (event) => { state.chapter = Number(event.target.value); state.scenario = 0; resetStep(); }; $("scenarioSelect").onchange = (event) => { state.scenario = Number(event.target.value); resetStep(); };
 $("play").onclick = () => { if (state.step === currentScenario().steps.length - 1) state.step = 0; stop(); render(); state.timer = setInterval(advance, Number($("speed").value)); }; $("pause").onclick = stop; $("next").onclick = advance; $("prev").onclick = () => { stop(); state.step = Math.max(0, state.step - 1); render(); }; $("reset").onclick = resetStep; $("speed").onchange = () => { if (state.timer) $("play").click(); };
+$("viewEvidence").onclick = () => { state.mode = "learning"; render(); };
 document.querySelectorAll("[data-mode]").forEach((button) => button.onclick = () => { state.mode = button.dataset.mode; render(); }); render();
