@@ -21,7 +21,6 @@ import com.bobfull.reservation.entity.ReservationStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -36,6 +35,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +46,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
-import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.junit.jupiter.Container;
@@ -54,12 +53,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 
 /**
- * #192 {@code bobfull.kafka.chat-message.consumer-concurrency} 설정이 실제
- * {@link ConcurrentMessageListenerContainer}에 반영되는지 검증하고, 같은 컨텍스트에서
- * "Kafka vs Async Baseline" 비교의 Kafka 축(send()→Outbox→Kafka→Consumer 실측)도 측정한다.
+ * #192 Kafka/Testcontainers Evidence: "Kafka vs Async Baseline" 비교의 Kafka 축
+ * (send()→Outbox→Kafka→Consumer 실측)과 Consumer 확장·복구를 측정한다.
  * Async 축은 {@code ChatMessageAsyncModerationBaselineEvidenceTest}에서 같은 Fake AI 지연·메시지 수로 측정한다.
  */
 @Testcontainers
+@Tag("kafka-evidence")
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:chat-moderation-consumer-concurrency-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver",
@@ -79,6 +78,7 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
         "bobfull.kafka.chat-message.topic=chat-moderation-concurrency-it.v1",
         "bobfull.kafka.chat-message.dlt-topic=chat-moderation-concurrency-it.dlt.v1",
         "bobfull.kafka.chat-message.consumer-concurrency=3",
+        "bobfull.kafka.chat-message.partition-key-strategy=chat-room",
         "bobfull.ai.moderation.fake-enabled=true",
         "bobfull.ai.moderation.fake-latency-ms=500"
 })
@@ -109,16 +109,6 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
     private FakeAiModerationAdapter fakeAiModerationAdapter;
     @Autowired
     private ChatMessageOutboxProcessor outboxProcessor;
-
-    @Test
-    void consumer_concurrency_설정이_리스너_컨테이너에_반영된다() {
-        Collection<MessageListenerContainer> containers = registry.getListenerContainers();
-
-        assertThat(containers).hasSize(1);
-        MessageListenerContainer container = containers.iterator().next();
-        assertThat(container).isInstanceOf(ConcurrentMessageListenerContainer.class);
-        assertThat(((ConcurrentMessageListenerContainer<?, ?>) container).getConcurrency()).isEqualTo(3);
-    }
 
     @Test
     void Kafka_경로는_같은_AI_지연에서도_send는_빠르고_Consumer_동시성만큼_완료된다() {
@@ -419,6 +409,79 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
 
         assertThat(normalSuccessCount).isEqualTo(normalCount);
         assertThat(failingDltCount).isEqualTo(failingCount);
+    }
+
+    @Test
+    void 같은_채팅방_30건에서_messageId_key는_여러_Partition에_분산되고_결과를_각_messageId에_저장한다() throws InterruptedException {
+        // given
+        ConcurrentMessageListenerContainer<?, ?> container =
+                (ConcurrentMessageListenerContainer<?, ?>) registry.getListenerContainers().iterator().next();
+        if (container.getConcurrency() != CONCURRENCY || !container.isRunning()) {
+            if (container.isRunning()) {
+                container.stop();
+            }
+            container.setConcurrency(CONCURRENCY);
+            container.start();
+            await().atMost(Duration.ofSeconds(10)).until(container::isRunning);
+            Thread.sleep(2000);
+        }
+
+        try {
+            // when
+            KeyExperimentEvidence chatRoomKey = runSameRoomKeyExperiment("chat-room", 600L);
+            KeyExperimentEvidence messageIdKey = runSameRoomKeyExperiment("message-id", 601L);
+
+            // then
+            assertThat(chatRoomKey.messagesByPartition().values()).containsExactlyInAnyOrder(0L, 0L, 30L);
+            assertThat(messageIdKey.messagesByPartition().values()).allMatch(count -> count > 0L);
+            assertThat(messageIdKey.activePartitionCount()).isGreaterThan(1);
+            assertThat(messageIdKey.drainMillis()).isLessThan(chatRoomKey.drainMillis());
+        } finally {
+            // 이 클래스의 기존 #192 baseline은 chat-room key를 전제로 하므로 테스트 격리를 위해 복구한다.
+            ReflectionTestUtils.setField(outboxProcessor, "partitionKeyStrategy", "chat-room");
+        }
+    }
+
+    private KeyExperimentEvidence runSameRoomKeyExperiment(String partitionKeyStrategy, Long reservationId) {
+        ReflectionTestUtils.setField(outboxProcessor, "partitionKeyStrategy", partitionKeyStrategy);
+        ChatRoom room = chatRoomRepository.saveAndFlush(ChatRoom.create(reservationId));
+        AuthMember member = new AuthMember(1L, MemberRole.MEMBER);
+        Map<Integer, Long> partitionOffsetsBefore = readEndOffsetsByPartition();
+        long baselineCompleted = chatModerationRepository.count();
+        List<Long> messageIds = new ArrayList<>(SAMPLE_SIZE);
+
+        Instant startedAt = Instant.now();
+        for (int i = 0; i < SAMPLE_SIZE; i++) {
+            messageIds.add(service.send(room.getId(), member,
+                    partitionKeyStrategy + " 동일 방 Partition key 비교 메시지 " + i).messageId());
+        }
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            assertThat(chatModerationRepository.count()).isEqualTo(baselineCompleted + SAMPLE_SIZE);
+            for (Long messageId : messageIds) {
+                assertThat(chatModerationRepository.findByMessageId(messageId).map(ChatModeration::getStatus))
+                        .contains(ModerationProcessingStatus.SAFE);
+            }
+        });
+        long drainMillis = Duration.between(startedAt, Instant.now()).toMillis();
+        double messagesPerSecond = SAMPLE_SIZE / (drainMillis / 1000.0);
+
+        Map<Integer, Long> partitionOffsetsAfter = readEndOffsetsByPartition();
+        Map<Integer, Long> messagesByPartition = new TreeMap<>();
+        partitionOffsetsAfter.forEach((partition, afterOffset) ->
+                messagesByPartition.put(partition, afterOffset - partitionOffsetsBefore.getOrDefault(partition, 0L)));
+        long activePartitionCount = messagesByPartition.values().stream().filter(count -> count > 0L).count();
+
+        log.info("event=PARTITION_KEY_258_EVIDENCE partitionKeyStrategy={} sampleSize={} "
+                        + "fakeAiLatencyMillis={} drainMillis={} messagesPerSecond={} activePartitionCount={} "
+                        + "messagesByPartition={}",
+                partitionKeyStrategy, SAMPLE_SIZE, FAKE_AI_LATENCY_MILLIS, drainMillis,
+                String.format("%.2f", messagesPerSecond), activePartitionCount, messagesByPartition);
+        return new KeyExperimentEvidence(drainMillis, messagesByPartition, activePartitionCount);
+    }
+
+    private record KeyExperimentEvidence(long drainMillis, Map<Integer, Long> messagesByPartition,
+                                         long activePartitionCount) {
     }
 
     @Test

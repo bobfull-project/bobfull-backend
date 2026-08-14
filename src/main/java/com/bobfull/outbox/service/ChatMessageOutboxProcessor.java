@@ -44,7 +44,7 @@ public class ChatMessageOutboxProcessor {
             KafkaOperations<Object, Object> kafkaTemplate, Clock clock,
             @Value("${bobfull.kafka.chat-message.topic:bobfull.chat.message-created.v1}") String topic,
             @Value("${bobfull.kafka.chat-message.producer-ack-timeout-seconds:10}") long ackTimeoutSeconds,
-            @Value("${bobfull.kafka.chat-message.partition-key-strategy:chat-room}") String partitionKeyStrategy
+            @Value("${bobfull.kafka.chat-message.partition-key-strategy:message-id}") String partitionKeyStrategy
     ) {
         this.outboxEventRepository = outboxEventRepository;
         this.transactionService = transactionService;

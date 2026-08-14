@@ -75,6 +75,7 @@ class RecruitmentDeadlineNotificationIntegrationTest {
 
         transactionService.acceptRecruitmentDeadline(reservation.getId());
 
+        awaitUntil(() -> notificationAdapter.confirmedNotifications().size() == 3);
         assertThat(notificationAdapter.confirmedNotifications()).hasSize(3);
         assertThat(notificationAdapter.confirmedNotifications().get(0).reservationId()).isEqualTo(reservation.getId());
         assertThat(notificationAdapter.cancelledNotifications()).isEmpty();
@@ -86,6 +87,7 @@ class RecruitmentDeadlineNotificationIntegrationTest {
 
         transactionService.acceptRecruitmentDeadline(reservation.getId());
 
+        awaitUntil(() -> notificationAdapter.cancelledNotifications().size() == 2);
         assertThat(notificationAdapter.cancelledNotifications()).hasSize(2);
         assertThat(notificationAdapter.confirmedNotifications()).isEmpty();
     }
@@ -133,6 +135,22 @@ class RecruitmentDeadlineNotificationIntegrationTest {
                     ReservationParticipant.create(reservation.getId(), participantMember.getId(), 1));
         }
         return reservation;
+    }
+
+    private void awaitUntil(java.util.function.BooleanSupplier condition) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }
+        assertThat(condition.getAsBoolean()).isTrue();
     }
 
     @TestConfiguration(proxyBeanMethods = false)

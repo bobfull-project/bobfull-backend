@@ -1,6 +1,9 @@
 name: CI Backend V1
 
 on:
+  pull_request:
+    branches:
+      - develop
   push:
     branches:
       - develop
