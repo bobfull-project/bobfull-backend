@@ -102,6 +102,28 @@ Async Baseline에는 이 중 어느 것도 기본으로 없다(재시도 없음,
 
 따라서 리뷰의 질문("충분히 많은 채팅방이 동시에 유입되어 Partition 3/Consumer 3 병렬성이 실제로 활용되는 상황에서 처리량이 어떻게 달라지는가")에 대한 답은: **여전히 Async가 더 빨랐다.** Kafka 우세로 뒤집히지 않았으므로, Kafka 채택 근거는 (실험 0 결론과 동일하게) 속도가 아니라 신뢰성·복구·격리·독립 확장 구조에 있다는 결론을 그대로 유지한다. 다만 이번 실험은 **Kafka Partition 기반 병렬성의 한계**(hash 분산의 불균등성이 Consumer 수 확장 효과를 갉아먹을 수 있음)를 규모를 키운 조건에서 한 번 더 확인해준 추가 근거다.
 
+## 실험 0-2 — Partition key를 chatRoomId 대신 messageId로 바꾸면 더 빨라지는가 (2026-08-13, Human·hyeonseung-dev 논의 후 실측)
+
+실험 0-1에서 "채팅방(key) 30개로도 Partition 분산이 불균등했다"는 결과를 보고, "그건 chatRoomId가 30개뿐이라 그런 거고 messageId(300개, 메시지마다 고유)를 key로 쓰면 Kafka가 더 균등해지고 결국 Async보다 빨라지지 않겠냐"는 질문이 나왔다. **결론을 먼저 말하면: 더 균등해지고 더 빨라지지만, Async를 넘어서지는 못한다.**
+
+이유는 이론적으로 이렇다. Async(스레드풀)는 "공유 작업 큐"라서 스레드가 노는 순간 바로 다음 작업을 가져간다 — 어떤 key를 쓰든 상관없이 항상 이론적 최적(300건/3스레드=정확히 50초)에 가깝다. Kafka는 "고정 배정"이라 한 번 어떤 Partition에 배정된 메시지는 그 Partition을 담당하는 Consumer만 처리하고, 다른 Consumer가 놀아도 넘겨줄 수 없다. 그래서 Partition별 분포가 완벽히 균등해야만 Async와 동률이 될 수 있고, 그보다 빨라질 수는 없다 — 이걸 실측으로 확인했다.
+
+### 구현
+
+`ChatMessageOutboxProcessor`에 `bobfull.kafka.chat-message.partition-key-strategy` 설정을 추가했다(`chat-room`(기본값, 운영 동작 불변) / `message-id`(실험용)). 운영 기본값은 바뀌지 않으며, 이 실험에서만 리플렉션으로 전략을 바꿔 측정했다.
+
+### 측정 결과 (`ChatModerationConsumerConcurrencyIntegrationTest`, 300건·채팅방 30개, 그 외 조건 실험 0-1과 동일)
+
+| 지표 | chatRoomId key(실험 0-1) | messageId key(이번 실험) | Async(참고) |
+|---|---|---|---|
+| 300건 완료까지(drain time) | 71.8~72.5초 | **61.0초** | 50.9초 |
+| 처리량(messages/sec) | 4.14~4.18 | **4.92** | 5.90 |
+| Partition별 분포(300건 중) | 예: `{140, 100~110, 50~60}` | 예: `{118, 95, 87}` | - |
+
+판정: **messageId key로 바꾸면 분포가 더 균등해지고(최대/최소 비율 약 2.8배 → 약 1.4배) drain time도 줄었다(71.8~72.5초 → 61.0초). 하지만 Async(50.9초)보다는 여전히 느렸다.** 300개라는 충분히 많은 고유 key로도 murmur2 해시가 3개 Partition에 완벽히 균등 분배(100/100/100)되지는 않았다 — 이 정도의 잔여 편차(118 vs 87)는 유한한 샘플을 해싱할 때 통계적으로 자연스러운 변동이다. 반대로 Async는 이런 통계적 변동 자체가 없다(스레드가 노는 즉시 다음 일을 가져가므로 항상 결정론적으로 최적).
+
+**질문에 대한 최종 답:** messageId key로 바꾸면 Kafka 처리량이 개선되는 것은 맞지만(약 15% 단축), 그 개선의 대가로 **같은 채팅방 메시지의 처리 순서 보장을 잃는다**(현재 `chatRoomId` key는 속도가 아니라 같은 방 메시지를 한 Consumer가 순서대로 처리하게 하기 위한 설계다). 이번 실측 결과로는 "속도 15% 개선"이 "방별 순서 보장을 포기"할 만한 근거가 되지 못한다고 판단한다. 운영 Partition key는 `chatRoomId`로 유지하는 것을 권장하며, 코드는 실험 전용 설정(`partition-key-strategy`, 기본값 유지)만 추가하고 운영 동작은 바꾸지 않았다.
+
 ## 실험 A — AI 지연이 채팅 처리에 전파되는가 (실측 완료)
 
 `ChatModerationConsumerConcurrencyIntegrationTest`(동시 사용자 10명 × 2건, 채팅방 3개 분산, Consumer concurrency=3, `FakeAiModerationAdapter` latency만 변경).

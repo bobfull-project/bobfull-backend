@@ -15,6 +15,7 @@ import com.bobfull.chat.repository.ChatRoomRepository;
 import com.bobfull.chat.service.ChatMessageCommandService;
 import com.bobfull.common.security.AuthMember;
 import com.bobfull.common.security.MemberRole;
+import com.bobfull.outbox.service.ChatMessageOutboxProcessor;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.ReservationStatus;
 import java.time.Duration;
@@ -106,6 +107,8 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
     private ChatMessageRepository chatMessageRepository;
     @Autowired
     private FakeAiModerationAdapter fakeAiModerationAdapter;
+    @Autowired
+    private ChatMessageOutboxProcessor outboxProcessor;
 
     @Test
     void consumer_concurrency_설정이_리스너_컨테이너에_반영된다() {
@@ -473,6 +476,65 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
         assertThat(messagesByPartition).hasSize(3);
         assertThat(messagesByPartition.values()).allMatch(count -> count > 0);
         assertThat(messagesByPartition.values().stream().mapToLong(Long::longValue).sum()).isEqualTo(totalMessages);
+    }
+
+    @Test
+    void Partition_key를_messageId로_바꾸면_분산이_더_균등해지고_Async에_근접하는지_실측한다() throws InterruptedException {
+        int roomCount = 30;
+        int totalMessages = 300;
+        AuthMember member = new AuthMember(1L, MemberRole.MEMBER);
+
+        ConcurrentMessageListenerContainer<?, ?> container =
+                (ConcurrentMessageListenerContainer<?, ?>) registry.getListenerContainers().iterator().next();
+        if (container.getConcurrency() != CONCURRENCY || !container.isRunning()) {
+            if (container.isRunning()) {
+                container.stop();
+            }
+            container.setConcurrency(CONCURRENCY);
+            container.start();
+            await().atMost(Duration.ofSeconds(10)).until(container::isRunning);
+            Thread.sleep(2000);
+        }
+
+        List<ChatRoom> rooms = new ArrayList<>();
+        for (int i = 0; i < roomCount; i++) {
+            rooms.add(chatRoomRepository.saveAndFlush(ChatRoom.create(2_000L + i)));
+        }
+
+        // 실험 전용: Partition key를 chatRoomId 대신 messageId로 바꾼다(운영 기본값은 그대로 chat-room).
+        ReflectionTestUtils.setField(outboxProcessor, "partitionKeyStrategy", "message-id");
+        try {
+            Map<Integer, Long> partitionOffsetsBefore = readEndOffsetsByPartition();
+            long baselineCompleted = chatModerationRepository.count();
+
+            Instant startedAt = Instant.now();
+            for (int i = 0; i < totalMessages; i++) {
+                ChatRoom room = rooms.get(i % roomCount);
+                service.send(room.getId(), member, "messageId key 실험용 메시지 " + i);
+            }
+
+            long expectedTotal = baselineCompleted + totalMessages;
+            await().atMost(Duration.ofSeconds(300)).untilAsserted(() ->
+                    assertThat(chatModerationRepository.count()).isEqualTo(expectedTotal));
+            long drainMillis = Duration.between(startedAt, Instant.now()).toMillis();
+            double messagesPerSecond = totalMessages / (drainMillis / 1000.0);
+
+            Map<Integer, Long> partitionOffsetsAfter = readEndOffsetsByPartition();
+            Map<Integer, Long> messagesByPartition = new TreeMap<>();
+            partitionOffsetsAfter.forEach((partition, afterOffset) ->
+                    messagesByPartition.put(partition, afterOffset - partitionOffsetsBefore.getOrDefault(partition, 0L)));
+
+            log.info("event=KAFKA_MESSAGE_ID_KEY_EVIDENCE roomCount={} totalMessages={} fakeAiLatencyMillis={} "
+                            + "consumerConcurrency={} drainMillis={} messagesPerSecond={} messagesByPartition={}",
+                    roomCount, totalMessages, FAKE_AI_LATENCY_MILLIS, CONCURRENCY, drainMillis,
+                    String.format("%.2f", messagesPerSecond), messagesByPartition);
+
+            assertThat(messagesByPartition).hasSize(3);
+            assertThat(messagesByPartition.values().stream().mapToLong(Long::longValue).sum()).isEqualTo(totalMessages);
+        } finally {
+            // 다음 테스트가 기본 전략(chat-room)을 쓴다고 가정하므로 반드시 되돌린다.
+            ReflectionTestUtils.setField(outboxProcessor, "partitionKeyStrategy", "chat-room");
+        }
     }
 
     private Map<Integer, Long> readEndOffsetsByPartition() {
