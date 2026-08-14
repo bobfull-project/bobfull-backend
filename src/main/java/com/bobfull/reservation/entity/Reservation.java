@@ -16,7 +16,7 @@ import jakarta.persistence.Table;
  * TimeSlot 연결을 유지한다.
  */
 @Entity
-@Table(name = "reservation")
+@Table(name = "reservation", indexes = @jakarta.persistence.Index(name = "idx_reservation_time_slot_id", columnList = "time_slot_id"))
 public class Reservation extends BaseTimeEntity {
 
     @Id

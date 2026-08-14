@@ -149,7 +149,7 @@ export function buildCreateTargetPool(prefix, poolSize, baseDate) {
             `(테이블 ${tableIds.length}개 × ${daysNeeded}일 사용, 상한 테이블 ${maxTables}/일 ${maxDays})`
         );
     }
-    return { restaurantId, sessionIds };
+    return { ownerHeaders, restaurantId, sessionIds };
 }
 
 function addDays(dateStr, days) {
