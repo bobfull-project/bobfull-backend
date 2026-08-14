@@ -18,8 +18,7 @@ public class SplitMessageCandidateGate {
 
     boolean isSplitCandidate(List<ChatMessage> messages, SplitMessageContext context) {
         return context.containsMultipleMessages()
-                && messages.stream().allMatch(message -> message.getContent().codePointCount(0, message.getContent().length()) <= MAX_FRAGMENT_LENGTH)
-                && containsSuspiciousFragment(context.joinedNormalized());
+                && context.recentCanonicalCandidates().stream().anyMatch(SplitMessageCandidateGate::containsSuspiciousFragment);
     }
 
     private static boolean containsSuspiciousFragment(String joined) {

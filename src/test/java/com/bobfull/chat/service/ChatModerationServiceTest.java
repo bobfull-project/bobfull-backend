@@ -174,6 +174,21 @@ class ChatModerationServiceTest {
     }
 
     @Test
+    void 앞선_긴_메시지가_있어도_현재_suffix의_시1발은_Rule로_FLAGGED한다() {
+        ChatMessage longMessage = message(200L, 1L, 2L, NOW.minusSeconds(3), "오늘 어디서 함께 저녁을 먹을까요");
+        ChatMessage first = message(201L, 1L, 2L, NOW.minusSeconds(2), "시");
+        ChatMessage noise = message(202L, 1L, 2L, NOW.minusSeconds(1), "1");
+        ChatMessage current = prepareMessage(203L, "발");
+        given(messages.findRecentModerationContext(1L, 2L, NOW, 203L, NOW.minusSeconds(30), PageRequest.of(0, 5)))
+                .willReturn(List.of(current, noise, first, longMessage));
+
+        service.analyze(203L);
+
+        assertThat(ai.callCount).isZero();
+        assertThat(savedModeration().getProvider()).isEqualTo("BOBFULL_RULE");
+    }
+
+    @Test
     void 명백한_Rule이_아닌_의심_결합은_기존_단건_Provider_경로를_유지한다() {
         ChatMessage first = message(126L, 1L, 2L, NOW.minusSeconds(2), "죽");
         ChatMessage middle = message(1261L, 1L, 2L, NOW.minusSeconds(1), "먹고");
