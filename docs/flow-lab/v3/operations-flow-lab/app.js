@@ -128,6 +128,28 @@ function factCaption(data) {
   const strong = data.factStatus === FACT.REJECTED || data.factStatus === FACT.FUTURE;
   return `<span class="${strong ? "fact-strong" : ""}">${label}</span>${data.decisionBadge ? ` — <span class="decision">${data.decisionBadge}</span>` : ""}`;
 }
+/* 사람이 이해할 상태를 narration 바로 아래, 기술 정보보다 먼저 보여준다. checklist가 있으면
+   checklist를, 없으면 currentStatus 한 줄을 보여준다. */
+function renderStepStatus(data) {
+  const el = $("stepStatus");
+  if (data.statusChecklist && data.statusChecklist.length) {
+    el.hidden = false;
+    el.innerHTML = data.statusChecklist.map(([label, state]) => {
+      const icon = state === "done" ? "✅" : state === "failed" ? "❌" : "⏳";
+      return `<div class="step-status-item ${state}"><span class="icon">${icon}</span><span>${label}</span></div>`;
+    }).join("");
+  } else if (data.currentStatus) {
+    el.hidden = false;
+    el.innerHTML = `<p class="step-status-line"><span class="arrow">현재 →</span>${data.currentStatus}</p>`;
+  } else {
+    el.hidden = true; el.innerHTML = "";
+  }
+}
+function renderStepNext(data) {
+  const el = $("stepNext");
+  el.hidden = !data.nextAction;
+  el.innerHTML = data.nextAction ? `<span class="arrow">다음 →</span>${data.nextAction}` : "";
+}
 function render() {
   const data = currentStep();
   populateSelects();
@@ -135,6 +157,7 @@ function render() {
   $("chapterSubtitle").textContent = currentChapter().subtitle;
   renderCanvas(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data); renderDetails(data); renderCodeView(data);
   $("stepTitle").textContent = data.action; $("narration").textContent = data.narration; $("counter").textContent = `Step ${state.step + 1} / ${currentScenario().steps.length}`;
+  renderStepStatus(data); renderStepNext(data);
   $("stepFact").innerHTML = `<p class="fact-caption">${factCaption(data)}</p>${quickState(data)}${promptBlockText(data)}`;
   const cards = [["Domain", data.domainState], ["Transaction", data.transaction], ["Outbox", data.outbox],
     ["Kafka / Consumer", [data.kafka, data.consumer].filter(Boolean).join(" / ") || null], ["Redis", data.redis], ["Outcome", data.visual.outcome]];

@@ -68,7 +68,19 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .stage-notes{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
 .kicker{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
 .stage-notes h3{margin:0 0 4px;font-size:18px}
-.narration{margin:0 0 12px;color:var(--text);font-size:14px;line-height:1.6}
+.narration{margin:0 0 10px;color:var(--text);font-size:14px;line-height:1.6}
+.step-status{display:flex;flex-direction:column;gap:4px;margin:0 0 6px}
+.step-status[hidden]{display:none}
+.step-status-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)}
+.step-status-item .icon{width:16px;text-align:center}
+.step-status-item.failed{color:var(--failure)}
+.step-status-item.pending{color:var(--muted)}
+.step-status-line{margin:0;font-size:13px;color:var(--text)}
+.step-status-line .arrow{color:var(--accent-strong);font-weight:600;margin-right:4px}
+.step-next{margin:0 0 4px;font-size:13px;color:var(--text)}
+.step-next[hidden]{display:none}
+.step-next .arrow{color:var(--accent-strong);font-weight:700;margin-right:4px}
+.tech-label{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .fact{margin-top:2px}
 .fact-caption{margin:0;color:var(--muted);font-size:12px}
 .fact-caption .fact-strong{color:var(--accent-strong);font-weight:700}
