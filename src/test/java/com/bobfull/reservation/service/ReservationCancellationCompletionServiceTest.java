@@ -38,10 +38,15 @@ class ReservationCancellationCompletionServiceTest {
     @Mock ReservationCancellationTransactionService transactionService;
     @Mock Reservation reservation;
     @Mock BusinessMetricRecorder businessMetricRecorder;
+    @Mock ReservationCompletionTestHook completionTestHook;
 
     private ReservationCancellationCompletionService service() {
+        return service(Optional.empty());
+    }
+
+    private ReservationCancellationCompletionService service(Optional<ReservationCompletionTestHook> delayHook) {
         return new ReservationCancellationCompletionService(
-                reservationRepository, participantRepository, transactionService, businessMetricRecorder);
+                reservationRepository, participantRepository, transactionService, businessMetricRecorder, delayHook);
     }
 
     @Test
@@ -135,6 +140,31 @@ class ReservationCancellationCompletionServiceTest {
         service().complete(1L, 2L, now);
 
         verify(transactionService).recalculateAfterCompletion(reservation);
+    }
+
+    @Test
+    void 지연_Hook이_있으면_락_획득_직후_완료_처리_전에_호출한다() {
+        Instant now = Instant.now();
+        when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
+        when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(0);
+
+        service(Optional.of(completionTestHook)).complete(1L, 2L, now);
+
+        InOrder order = inOrder(reservationRepository, completionTestHook, participantRepository);
+        order.verify(reservationRepository).findWithLockById(1L);
+        order.verify(completionTestHook).beforeCompletion(1L);
+        order.verify(participantRepository).completeCancelIfRequested(2L, now);
+    }
+
+    @Test
+    void 지연_Hook이_없으면_아무_영향이_없다() {
+        Instant now = Instant.now();
+        when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
+        when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(0);
+
+        service(Optional.empty()).complete(1L, 2L, now);
+
+        verifyNoInteractions(completionTestHook);
     }
 
     @Test

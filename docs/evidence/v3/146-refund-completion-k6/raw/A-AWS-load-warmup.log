@@ -1,0 +1,77 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: k6/scenarios/refund-completion-baseline.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 45s max duration (incl. graceful stop):
+              * refund_completion_baseline: 20.00 iterations/s for 15s (maxVUs: 40-100, gracefulStop: 30s)
+
+running (7m11.9s), 002/040 VUs, 0 complete and 0 interrupted iterations
+
+running (7m12.9s), 001/040 VUs, 21 complete and 0 interrupted iterations
+
+running (7m13.9s), 001/040 VUs, 41 complete and 0 interrupted iterations
+
+running (7m14.9s), 001/040 VUs, 61 complete and 0 interrupted iterations
+
+running (7m15.9s), 001/040 VUs, 81 complete and 0 interrupted iterations
+
+running (7m16.9s), 001/040 VUs, 101 complete and 0 interrupted iterations
+
+running (7m17.9s), 001/040 VUs, 121 complete and 0 interrupted iterations
+
+running (7m18.9s), 001/040 VUs, 141 complete and 0 interrupted iterations
+
+running (7m19.9s), 001/040 VUs, 161 complete and 0 interrupted iterations
+
+running (7m20.9s), 001/040 VUs, 181 complete and 0 interrupted iterations
+
+running (7m21.9s), 003/040 VUs, 199 complete and 0 interrupted iterations
+
+running (7m22.9s), 001/040 VUs, 221 complete and 0 interrupted iterations
+
+running (7m23.9s), 001/040 VUs, 241 complete and 0 interrupted iterations
+
+running (7m24.9s), 001/040 VUs, 261 complete and 0 interrupted iterations
+
+running (7m25.9s), 001/040 VUs, 281 complete and 0 interrupted iterations
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 750     1.678394/s
+    checks_succeeded...: 100.00% 750 out of 750
+    checks_failed......: 0.00%   0 out of 750
+
+    ✓ refund_cancel_immediate status is 200
+    ✓ refund_cancel_immediate body.success is true
+    ✓ refund_cancel_processing status is 200
+    ✓ refund_cancel_processing body.success is true
+    ✓ refund_webhook_cancelled status is 200
+
+    CUSTOM
+    refund_immediate_completion_duration...: avg=44.42    min=33      med=39      max=213      p(90)=49      p(95)=61.65   p(99)=184.09 
+    refund_webhook_completion_duration.....: avg=20.9     min=16      med=19      max=68       p(90)=26      p(95)=29.65   p(99)=51.02  
+
+    HTTP
+    http_req_duration......................: avg=371.69ms min=15.84ms med=35.23ms max=3.41s    p(90)=1.24s   p(95)=1.28s   p(99)=1.46s  
+      { expected_response:true }...........: avg=371.69ms min=15.84ms med=35.23ms max=3.41s    p(90)=1.24s   p(95)=1.28s   p(99)=1.46s  
+    http_req_failed........................: 0.00%  0 out of 1202
+    http_reqs..............................: 1202   2.689906/s
+
+    EXECUTION
+    iteration_duration.....................: avg=52.11ms  min=32.62ms med=50.24ms max=212.94ms p(90)=62.99ms p(95)=75.07ms p(99)=180.7ms
+    iterations.............................: 300    0.671358/s
+    vus....................................: 1      min=0         max=3 
+    vus_max................................: 40     min=40        max=40
+
+    NETWORK
+    data_received..........................: 723 kB 1.6 kB/s
+    data_sent..............................: 549 kB 1.2 kB/s
+
+running (7m26.9s), 000/040 VUs, 300 complete and 0 interrupted iterations

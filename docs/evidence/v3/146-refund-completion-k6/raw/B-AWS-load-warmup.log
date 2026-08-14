@@ -1,0 +1,75 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: k6/scenarios/refund-completion-lock-contention.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 45s max duration (incl. graceful stop):
+              * refund_lock_contention: 10.00 iterations/s for 15s (maxVUs: 40-100, gracefulStop: 30s)
+
+running (14m01.0s), 001/040 VUs, 2 complete and 0 interrupted iterations
+
+running (14m02.0s), 001/040 VUs, 12 complete and 0 interrupted iterations
+
+running (14m03.0s), 002/040 VUs, 21 complete and 0 interrupted iterations
+
+running (14m04.0s), 001/040 VUs, 32 complete and 0 interrupted iterations
+
+running (14m05.0s), 001/040 VUs, 42 complete and 0 interrupted iterations
+
+running (14m06.0s), 001/040 VUs, 52 complete and 0 interrupted iterations
+
+running (14m07.0s), 002/040 VUs, 61 complete and 0 interrupted iterations
+
+running (14m08.0s), 003/040 VUs, 70 complete and 0 interrupted iterations
+
+running (14m09.0s), 005/040 VUs, 78 complete and 0 interrupted iterations
+
+running (14m10.0s), 001/040 VUs, 92 complete and 0 interrupted iterations
+
+running (14m11.0s), 001/040 VUs, 102 complete and 0 interrupted iterations
+
+running (14m12.0s), 001/040 VUs, 112 complete and 0 interrupted iterations
+
+running (14m13.0s), 001/040 VUs, 122 complete and 0 interrupted iterations
+
+running (14m14.0s), 001/040 VUs, 132 complete and 0 interrupted iterations
+
+running (14m15.0s), 001/040 VUs, 142 complete and 0 interrupted iterations
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 755     0.882163/s
+    checks_succeeded...: 100.00% 755 out of 755
+    checks_failed......: 0.00%   0 out of 755
+
+    ✓ refund_cancel_group_accept status is 200
+    ✓ refund_cancel_group_accept body.success is true
+    ✓ refund_webhook_group_participant status is 200
+
+    CUSTOM
+    refund_group_cancel_batch_duration.........: avg=43.629139 min=29      med=34       max=218      p(90)=52       p(95)=110      p(99)=173      
+    refund_group_cancel_participant_duration...: avg=32.382009 min=15.044  med=25.933   max=218.062  p(90)=43.3586  p(95)=85.9536  p(99)=163.09844
+
+    HTTP
+    http_req_duration..........................: avg=288.09ms  min=15.04ms med=89.77ms  max=2.05s    p(90)=1.13s    p(95)=1.24s    p(99)=1.45s    
+      { expected_response:true }...............: avg=288.09ms  min=15.04ms med=89.77ms  max=2.05s    p(90)=1.13s    p(95)=1.24s    p(99)=1.45s    
+    http_req_failed............................: 0.00%  0 out of 3014
+    http_reqs..................................: 3014   3.521642/s
+
+    EXECUTION
+    iteration_duration.........................: avg=136.89ms  min=91.73ms med=104.21ms max=536.29ms p(90)=230.09ms p(95)=397.82ms p(99)=503.19ms 
+    iterations.................................: 151    0.176433/s
+    vus........................................: 1      min=0         max=5 
+    vus_max....................................: 40     min=40        max=40
+
+    NETWORK
+    data_received..............................: 1.8 MB 2.1 kB/s
+    data_sent..................................: 1.2 MB 1.4 kB/s
+
+running (14m15.9s), 000/040 VUs, 151 complete and 0 interrupted iterations

@@ -1,0 +1,77 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: k6/scenarios/refund-completion-duplicate-webhook.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 45s max duration (incl. graceful stop):
+              * refund_duplicate_webhook: 20.00 iterations/s for 15s (maxVUs: 40-100, gracefulStop: 30s)
+
+running (7m05.0s), 001/040 VUs, 4 complete and 0 interrupted iterations
+
+running (7m06.0s), 001/040 VUs, 24 complete and 0 interrupted iterations
+
+running (7m07.0s), 001/040 VUs, 44 complete and 0 interrupted iterations
+
+running (7m08.0s), 001/040 VUs, 64 complete and 0 interrupted iterations
+
+running (7m09.0s), 001/040 VUs, 84 complete and 0 interrupted iterations
+
+running (7m10.0s), 001/040 VUs, 104 complete and 0 interrupted iterations
+
+running (7m11.0s), 001/040 VUs, 124 complete and 0 interrupted iterations
+
+running (7m12.0s), 001/040 VUs, 144 complete and 0 interrupted iterations
+
+running (7m13.0s), 001/040 VUs, 164 complete and 0 interrupted iterations
+
+running (7m14.0s), 001/040 VUs, 184 complete and 0 interrupted iterations
+
+running (7m15.0s), 001/040 VUs, 204 complete and 0 interrupted iterations
+
+running (7m16.0s), 001/040 VUs, 224 complete and 0 interrupted iterations
+
+running (7m17.0s), 001/040 VUs, 244 complete and 0 interrupted iterations
+
+running (7m18.0s), 001/040 VUs, 264 complete and 0 interrupted iterations
+
+running (7m19.0s), 001/040 VUs, 284 complete and 0 interrupted iterations
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 753     1.7121/s
+    checks_succeeded...: 100.00% 753 out of 753
+    checks_failed......: 0.00%   0 out of 753
+
+    ✓ refund_cancel_immediate_before_duplicate status is 200
+    ✓ refund_cancel_immediate_before_duplicate body.success is true
+    ✓ refund_webhook_duplicate_after_immediate status is 200
+    ✓ refund_cancel_concurrent_race status is 200
+    ✓ refund_webhook_concurrent_race status is 200
+
+    CUSTOM
+    refund_concurrent_race_batch_duration...............: avg=37.9      min=31      med=36.5    max=72      p(90)=45      p(95)=47     p(99)=52.51  
+    refund_duplicate_webhook_after_immediate_duration...: avg=10.364238 min=8       med=10      max=18      p(90)=12      p(95)=13     p(99)=15     
+
+    HTTP
+    http_req_duration...................................: avg=323.85ms  min=7.79ms  med=33.04ms max=1.85s   p(90)=1.15s   p(95)=1.25s  p(99)=1.44s  
+      { expected_response:true }........................: avg=323.85ms  min=7.79ms  med=33.04ms max=1.85s   p(90)=1.15s   p(95)=1.25s  p(99)=1.44s  
+    http_req_failed.....................................: 0.00%  0 out of 1354
+    http_reqs...........................................: 1354   3.078597/s
+
+    EXECUTION
+    iteration_duration..................................: avg=42.97ms   min=31.54ms med=43.53ms max=72.02ms p(90)=50.58ms p(95)=54.6ms p(99)=65.23ms
+    iterations..........................................: 301    0.684385/s
+    vus.................................................: 1      min=0         max=1 
+    vus_max.............................................: 40     min=40        max=40
+
+    NETWORK
+    data_received.......................................: 773 kB 1.8 kB/s
+    data_sent...........................................: 633 kB 1.4 kB/s
+
+running (7m19.8s), 000/040 VUs, 301 complete and 0 interrupted iterations

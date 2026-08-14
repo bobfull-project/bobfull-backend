@@ -1,0 +1,107 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: k6/scenarios/refund-completion-external-delay.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 1m0s max duration (incl. graceful stop):
+              * refund_external_delay: 20.00 iterations/s for 30s (maxVUs: 40-100, gracefulStop: 30s)
+
+running (14m30.0s), 003/040 VUs, 5 complete and 0 interrupted iterations
+
+running (14m31.0s), 022/040 VUs, 6 complete and 0 interrupted iterations
+
+running (14m32.0s), 022/040 VUs, 26 complete and 0 interrupted iterations
+
+running (14m33.0s), 021/040 VUs, 47 complete and 0 interrupted iterations
+
+running (14m34.0s), 022/040 VUs, 66 complete and 0 interrupted iterations
+
+running (14m35.0s), 020/040 VUs, 88 complete and 0 interrupted iterations
+
+running (14m36.0s), 020/040 VUs, 108 complete and 0 interrupted iterations
+
+running (14m37.0s), 020/040 VUs, 128 complete and 0 interrupted iterations
+
+running (14m38.0s), 020/040 VUs, 148 complete and 0 interrupted iterations
+
+running (14m39.0s), 020/040 VUs, 168 complete and 0 interrupted iterations
+
+running (14m40.0s), 020/040 VUs, 188 complete and 0 interrupted iterations
+
+running (14m41.0s), 020/040 VUs, 208 complete and 0 interrupted iterations
+
+running (14m42.0s), 020/040 VUs, 228 complete and 0 interrupted iterations
+
+running (14m43.0s), 020/040 VUs, 248 complete and 0 interrupted iterations
+
+running (14m44.0s), 020/040 VUs, 268 complete and 0 interrupted iterations
+
+running (14m45.0s), 021/040 VUs, 287 complete and 0 interrupted iterations
+
+running (14m46.0s), 020/040 VUs, 308 complete and 0 interrupted iterations
+
+running (14m47.0s), 020/040 VUs, 328 complete and 0 interrupted iterations
+
+running (14m48.0s), 020/040 VUs, 348 complete and 0 interrupted iterations
+
+running (14m49.0s), 021/040 VUs, 367 complete and 0 interrupted iterations
+
+running (14m50.0s), 020/040 VUs, 388 complete and 0 interrupted iterations
+
+running (14m51.0s), 020/040 VUs, 408 complete and 0 interrupted iterations
+
+running (14m52.0s), 020/040 VUs, 428 complete and 0 interrupted iterations
+
+running (14m53.0s), 021/040 VUs, 447 complete and 0 interrupted iterations
+
+running (14m54.0s), 020/040 VUs, 468 complete and 0 interrupted iterations
+
+running (14m55.0s), 020/040 VUs, 488 complete and 0 interrupted iterations
+
+running (14m56.0s), 020/040 VUs, 508 complete and 0 interrupted iterations
+
+running (14m57.0s), 020/040 VUs, 528 complete and 0 interrupted iterations
+
+running (14m58.0s), 020/040 VUs, 548 complete and 0 interrupted iterations
+
+running (14m59.0s), 021/040 VUs, 567 complete and 0 interrupted iterations
+
+running (15m00.0s), 012/040 VUs, 588 complete and 0 interrupted iterations
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1200   1.332424/s
+    checks_succeeded...: 99.16% 1190 out of 1200
+    checks_failed......: 0.83%  10 out of 1200
+
+    ✗ refund_cancel_external_delay status is 200
+      ↳  99% — ✓ 595 / ✗ 5
+    ✗ refund_cancel_external_delay body.success is true
+      ↳  99% — ✓ 595 / ✗ 5
+
+    CUSTOM
+    refund_external_delay_duration...: avg=1037.886667 min=15      med=1038  max=1293  p(90)=1062.1 p(95)=1101.05 p(99)=1183.15
+
+    HTTP
+    http_req_duration................: avg=723.94ms    min=9.3ms   med=1.03s max=2.12s p(90)=1.25s  p(95)=1.32s   p(99)=1.48s  
+      { expected_response:true }.....: avg=725.68ms    min=13.5ms  med=1.03s max=2.12s p(90)=1.25s  p(95)=1.33s   p(99)=1.48s  
+    http_req_failed..................: 0.24%  5 out of 2060
+    http_reqs........................: 2060   2.287328/s
+
+    EXECUTION
+    iteration_duration...............: avg=1.03s       min=15.72ms med=1.03s max=1.29s p(90)=1.06s  p(95)=1.1s    p(99)=1.18s  
+    iterations.......................: 600    0.666212/s
+    vus..............................: 12     min=0         max=22
+    vus_max..........................: 40     min=40        max=40
+
+    NETWORK
+    data_received....................: 1.3 MB 1.5 kB/s
+    data_sent........................: 937 kB 1.0 kB/s
+
+running (15m00.6s), 000/040 VUs, 600 complete and 0 interrupted iterations

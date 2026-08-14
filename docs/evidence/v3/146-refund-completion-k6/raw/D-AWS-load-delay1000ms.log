@@ -1,0 +1,127 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: k6/scenarios/refund-completion-delay-injection.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 1m0s max duration (incl. graceful stop):
+              * refund_delay_injection: 20.00 iterations/s for 30s (maxVUs: 40-100, gracefulStop: 30s)
+
+running (14m34.0s), 011/040 VUs, 3 complete and 0 interrupted iterations
+
+running (14m35.0s), 021/040 VUs, 13 complete and 0 interrupted iterations
+
+running (14m36.0s), 031/040 VUs, 23 complete and 0 interrupted iterations
+
+running (14m37.0s), 038/043 VUs, 33 complete and 0 interrupted iterations
+
+running (14m38.0s), 044/048 VUs, 42 complete and 0 interrupted iterations
+
+running (14m39.0s), 051/053 VUs, 50 complete and 0 interrupted iterations
+
+running (14m40.0s), 056/058 VUs, 60 complete and 0 interrupted iterations
+
+running (14m41.0s), 062/064 VUs, 68 complete and 0 interrupted iterations
+
+running (14m42.0s), 068/069 VUs, 77 complete and 0 interrupted iterations
+
+running (14m43.0s), 073/074 VUs, 87 complete and 0 interrupted iterations
+
+running (14m44.0s), 078/079 VUs, 97 complete and 0 interrupted iterations
+
+running (14m45.0s), 082/085 VUs, 107 complete and 0 interrupted iterations
+
+running (14m46.0s), 089/090 VUs, 115 complete and 0 interrupted iterations
+
+running (14m47.0s), 094/095 VUs, 125 complete and 0 interrupted iterations
+
+running (14m48.0s), 099/100 VUs, 135 complete and 0 interrupted iterations
+time="2026-08-13T22:31:29+09:00" level=warning msg="Insufficient VUs, reached 100 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=refund_delay_injection
+
+running (14m49.0s), 099/100 VUs, 145 complete and 0 interrupted iterations
+
+running (14m50.0s), 100/100 VUs, 154 complete and 0 interrupted iterations
+
+running (14m51.0s), 100/100 VUs, 164 complete and 0 interrupted iterations
+
+running (14m52.0s), 100/100 VUs, 174 complete and 0 interrupted iterations
+
+running (14m53.0s), 099/100 VUs, 184 complete and 0 interrupted iterations
+
+running (14m54.0s), 099/100 VUs, 194 complete and 0 interrupted iterations
+
+running (14m55.0s), 100/100 VUs, 203 complete and 0 interrupted iterations
+
+running (14m56.0s), 100/100 VUs, 213 complete and 0 interrupted iterations
+
+running (14m57.0s), 100/100 VUs, 223 complete and 0 interrupted iterations
+
+running (14m58.0s), 100/100 VUs, 233 complete and 0 interrupted iterations
+
+running (14m59.0s), 099/100 VUs, 243 complete and 0 interrupted iterations
+
+running (15m00.0s), 100/100 VUs, 252 complete and 0 interrupted iterations
+
+running (15m01.0s), 100/100 VUs, 261 complete and 0 interrupted iterations
+
+running (15m02.0s), 100/100 VUs, 271 complete and 0 interrupted iterations
+
+running (15m03.0s), 100/100 VUs, 281 complete and 0 interrupted iterations
+
+running (15m04.0s), 093/100 VUs, 291 complete and 0 interrupted iterations
+
+running (15m05.0s), 083/100 VUs, 301 complete and 0 interrupted iterations
+
+running (15m06.0s), 073/100 VUs, 311 complete and 0 interrupted iterations
+
+running (15m07.0s), 064/100 VUs, 320 complete and 0 interrupted iterations
+
+running (15m08.0s), 054/100 VUs, 330 complete and 0 interrupted iterations
+
+running (15m09.0s), 044/100 VUs, 340 complete and 0 interrupted iterations
+
+running (15m10.0s), 034/100 VUs, 350 complete and 0 interrupted iterations
+
+running (15m11.0s), 024/100 VUs, 360 complete and 0 interrupted iterations
+
+running (15m12.0s), 014/100 VUs, 370 complete and 0 interrupted iterations
+
+running (15m13.0s), 005/100 VUs, 379 complete and 0 interrupted iterations
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 768    0.840787/s
+    checks_succeeded...: 99.21% 762 out of 768
+    checks_failed......: 0.78%  6 out of 768
+
+    ✗ refund_cancel_delay_injection status is 200
+      ↳  99% — ✓ 381 / ✗ 3
+    ✗ refund_cancel_delay_injection body.success is true
+      ↳  99% — ✓ 381 / ✗ 3
+
+    CUSTOM
+    refund_delay_injection_duration...: avg=7536.908854 min=15      med=8253.5 max=14561  p(90)=10436.6 p(95)=10876.75 p(99)=13903.78
+
+    HTTP
+    http_req_duration.................: avg=2.04s       min=8.11ms  med=1.11s  max=14.56s p(90)=8.96s   p(95)=10.16s   p(99)=11.08s  
+      { expected_response:true }......: avg=2.04s       min=12.92ms med=1.11s  max=14.56s p(90)=8.97s   p(95)=10.17s   p(99)=11.09s  
+    http_req_failed...................: 0.16%  3 out of 1844
+    http_reqs.........................: 1844   2.018764/s
+
+    EXECUTION
+    dropped_iterations................: 217    0.237566/s
+    iteration_duration................: avg=7.53s       min=15.77ms med=8.25s  max=14.56s p(90)=10.43s  p(95)=10.87s   p(99)=13.9s   
+    iterations........................: 384    0.420393/s
+    vus...............................: 5      min=0         max=100
+    vus_max...........................: 100    min=40        max=100
+
+    NETWORK
+    data_received.....................: 1.2 MB 1.3 kB/s
+    data_sent.........................: 821 kB 898 B/s
+
+running (15m13.4s), 000/100 VUs, 384 complete and 0 interrupted iterations

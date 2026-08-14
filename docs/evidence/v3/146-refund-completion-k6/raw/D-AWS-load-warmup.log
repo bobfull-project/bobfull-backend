@@ -1,0 +1,75 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: k6/scenarios/refund-completion-delay-injection.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 45s max duration (incl. graceful stop):
+              * refund_delay_injection: 20.00 iterations/s for 15s (maxVUs: 40-100, gracefulStop: 30s)
+
+running (7m16.0s), 001/040 VUs, 0 complete and 0 interrupted iterations
+
+running (7m17.0s), 001/040 VUs, 20 complete and 0 interrupted iterations
+
+running (7m18.0s), 001/040 VUs, 40 complete and 0 interrupted iterations
+
+running (7m19.0s), 001/040 VUs, 60 complete and 0 interrupted iterations
+
+running (7m20.0s), 001/040 VUs, 80 complete and 0 interrupted iterations
+
+running (7m21.0s), 001/040 VUs, 100 complete and 0 interrupted iterations
+
+running (7m22.0s), 001/040 VUs, 120 complete and 0 interrupted iterations
+
+running (7m23.0s), 001/040 VUs, 140 complete and 0 interrupted iterations
+
+running (7m24.0s), 001/040 VUs, 160 complete and 0 interrupted iterations
+
+running (7m25.0s), 001/040 VUs, 180 complete and 0 interrupted iterations
+
+running (7m26.0s), 003/040 VUs, 198 complete and 0 interrupted iterations
+
+running (7m27.0s), 002/040 VUs, 219 complete and 0 interrupted iterations
+
+running (7m28.0s), 001/040 VUs, 240 complete and 0 interrupted iterations
+
+running (7m29.0s), 001/040 VUs, 260 complete and 0 interrupted iterations
+
+running (7m30.0s), 001/040 VUs, 280 complete and 0 interrupted iterations
+
+running (7m31.0s), 001/040 VUs, 300 complete and 0 interrupted iterations
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 602     1.334736/s
+    checks_succeeded...: 100.00% 602 out of 602
+    checks_failed......: 0.00%   0 out of 602
+
+    ✓ refund_cancel_delay_injection status is 200
+    ✓ refund_cancel_delay_injection body.success is true
+
+    CUSTOM
+    refund_delay_injection_duration...: avg=68.883721 min=32      med=38      max=734      p(90)=113      p(95)=243      p(99)=638    
+
+    HTTP
+    http_req_duration.................: avg=433.14ms  min=14.96ms med=38.83ms max=2.28s    p(90)=1.25s    p(95)=1.33s    p(99)=1.48s  
+      { expected_response:true }......: avg=433.14ms  min=14.96ms med=38.83ms max=2.28s    p(90)=1.25s    p(95)=1.33s    p(99)=1.48s  
+    http_req_failed...................: 0.00%  0 out of 1053
+    http_reqs.........................: 1053   2.33468/s
+
+    EXECUTION
+    iteration_duration................: avg=69.12ms   min=32.03ms med=38.04ms max=734.97ms p(90)=113.59ms p(95)=243.09ms p(99)=638.1ms
+    iterations........................: 301    0.667368/s
+    vus...............................: 1      min=0         max=3 
+    vus_max...........................: 40     min=40        max=40
+
+    NETWORK
+    data_received.....................: 673 kB 1.5 kB/s
+    data_sent.........................: 458 kB 1.0 kB/s
+
+running (7m31.0s), 000/040 VUs, 301 complete and 0 interrupted iterations
