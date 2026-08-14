@@ -1,15 +1,21 @@
 # BobFull V3 Operations Flow Lab
 
-## Phase 1 범위
+Operations Flow Lab은 BobFull 내부 구현을 단순 문서로 읽는 대신, 실제 코드와 Evidence를 기반으로 시스템 흐름을 단계별로 재생하며 이해하기 위한 시뮬레이션 학습 도구다.
+
+## 범위
 
 이 Lab은 코드·Evidence를 재생하는 정적 인터랙티브 시뮬레이터다. 실제 JVM, Kafka, Redis, AWS를 제어하거나 실시간 runtime 상태를 표시하지 않는다.
 
 - Chapter 1: V2 `AFTER_COMMIT`과 V3 Transactional Outbox의 동일 failure boundary를 동기화된 two-lane 진행 상태(4-stage lane strip)로 비교
 - Chapter 2: `ChatMessage → Outbox → Kafka → AI Moderation`과 `NORMAL`, `PUBLISH_FAILURE`, `DUPLICATE_DELIVERY`, `AI_TRANSIENT_FAILURE`, `RETRY_EXHAUSTED_DLT`, `ACK_THEN_CRASH`
-- Chapter 3: `LOCAL_TWO_INSTANCE_NORMAL`과 `REDIS_DELIVERY_MISS`
+- Chapter 3: `LOCAL_TWO_INSTANCE_NORMAL`, `AWS_CROSS_INSTANCE_NORMAL`(다중 EC2 + 공용 ElastiCache Redis 실제 검증), `REDIS_DELIVERY_MISS`
 - Chapter 4: 인기 회차 조회 Hot-path 병목 개선(#142 발견 → #235 분리·배치 개선 → 동일 조건 Before/After → 남은 한계)
+- Chapter 5 — Kafka Mechanics Lab: Producer Key → Partition → Consumer → Retry/DLT가 BobFull에서 실제로 어떻게 연결되는지 이해하는 Learning Deep Dive(`MESSAGE_ID_PARTITIONING`, `CONSUMER_SCALING`, `ASYNC_VS_KAFKA`, `WHO_RETRIES`)
+- Chapter 6 — AI Moderation Decision Lab: Rule → DB Context → Split Rule → LLM → Validator → ChatModeration DB 판정 경로를 이해하는 Learning Deep Dive(`CLEAR_FLAGGED_FAST_PATH`, `LLM_REQUIRED`, `SPLIT_MESSAGE_EVASION`, `WHY_NOT_CONTEXT_LLM`, `PROMPT_INJECTION_BOUNDARY`, `MODERATION_DB_RESULT`)
 
-Canvas는 `Client → Web/STOMP → Application → DB` 뒤에 Outbox/Kafka/DLT Topic/AI와 Redis/App A·B/Local STOMP를 별도 lane으로 둔다. connector는 고정되고, 활성 path 위의 token만 이동한다. 이미 커밋되어 여전히 유효한 노드(예: 장애 발생 순간의 ChatMessage)는 `committed` 상태(초록 점선)로 dim과 구분해 지속 표시하며, `retryOwner`는 Step 데이터에 명시적으로 선언한다(추론하지 않음).
+Ch1~Ch4는 시스템 설계/발표 중심이고, Ch5~Ch6는 Learning Deep Dive 중심이다. 발표 모드에서도 Ch5/Ch6를 볼 수 있지만 상세 코드/Evidence는 학습 모드에서만 펼친다.
+
+Ch1~Ch4 Canvas는 `Client → Web/STOMP → Application → DB` 뒤에 Outbox/Kafka/DLT Topic/AI/Async Queue와 Redis/App A·B/Local STOMP를 별도 lane으로 둔다. Ch6은 서버 topology 대신 `ChatModerationService.analyzeMessage`의 실제 분기(Rule → Split Gate → DB Context → Split Rule → LLM → Validator → DB)를 그대로 옮긴 판정 경로 Canvas를 쓴다(같은 connector/token/committed 렌더링을 재사용하며 별도 renderer를 새로 만들지 않았다). connector는 고정되고, 활성 path 위의 token만 이동한다. 이미 커밋되어 여전히 유효한 노드(예: 장애 발생 순간의 ChatMessage)는 `committed` 상태(초록 점선)로 dim과 구분해 지속 표시하며, `retryOwner`는 Step 데이터에 명시적으로 선언한다(추론하지 않음). Kafka Partition 분포와 성능 Before/After는 같은 `perf-bar` 구조를 재사용한다.
 
 ## 구조
 
@@ -33,7 +39,13 @@ Canvas는 `Client → Web/STOMP → Application → DB` 뒤에 Outbox/Kafka/DLT 
 
 Chapter 4의 모든 수치는 [#142 인기 회차 예약 부하 측정](../../../evidence/v3/142-reservation-peak/README.md), [#235 Hot-path 병목 개선](../../../evidence/v3/restaurant-view-hotpath/README.md), [#62 검색 Redis Cache 판단](../../../evidence/v3/62-search-cache/README.md)의 실측값을 그대로 인용한다(`factStatus=measured`). "병목 완전 제거"라고 쓰지 않고 "포화 시작 임계점이 약 40 iter/s에서 약 320 iter/s로 8배 이동했으며, 최고 부하 단계에서는 CPU·HikariCP Pool이 다시 포화된다"고 명시한다. #62(검색 Redis Cache)는 별도 Chapter가 아니라 Chapter 4 학습 상세의 "다른 성능 의사결정" 카드로만 짧게 연결한다.
 
-`#169`, `#191`, `#192`는 아직 `future / not verified` Evidence Gate다. 실제 Evidence가 생길 때만 Scenario 또는 Chapter로 승격한다. 발표 모드에서는 지금 보고 있는 Chapter와 무관하므로 학습 모드에서만 노출한다.
+`#191`(Auto Scaling)만 아직 `future / not verified` Evidence Gate다. `#169`(App HA + AWS Redis cross-instance), `#192`(Kafka Async 비교·Consumer scaling·통합 모놀리스 결정), `#258`(messageId Partition Key), `#251`(Rule Fast Path), `#266`(Split Message Rule Context)는 실제 검증이 끝나 각각 Ch3/Ch5/Ch6에 반영됐다. 실제 Evidence가 생길 때만 Scenario 또는 Chapter로 추가 승격한다. 발표 모드에서는 지금 보고 있는 Chapter와 무관하므로 학습 모드에서만 노출한다.
+
+Chapter 5·6의 Evidence: [#192 Kafka AI Worker Scaling](../../../evidence/v3/192-ai-worker-scaling/README.md), [#258 Moderation Partition Key](../../../evidence/v3/258-moderation-partition-key/README.md), [#251 AI Moderation Rule Fast Path](../../../evidence/v3/251-ai-moderation-hardening/README.md), [#266 Split Message Moderation](../../../evidence/v3/266-split-message-moderation/README.md), [#169 App HA](../../../evidence/v3/169-app-ha/README.md).
+
+`CONSUMER_SCALING`의 Consumer 1→2→3 실측(#192 실험 D)은 당시 기본 key였던 `chatRoomId` 조건에서 측정됐다 — 이 Scenario는 그 사실을 매 Step `limits`에 명시하며, 현재 Production 기본 key(`#258` 이후 `messageId`)의 결과인 것처럼 표현하지 않는다.
+
+`LLM_REQUIRED`의 "바보야" → SAFE 결과는 `ModerationPrompt.SYSTEM_PROMPT`의 few-shot boundary 원문 그대로이며, 이 재생이 실제 OpenAI를 호출한 결과는 아니다(`factStatus=design interpretation`). Split Rule MISS 이후에도 Provider에는 현재 메시지 단건만 전달되며, `ModerationPrompt.withSplitContext()`는 코드에 남아 있어도 현재 production 경로에서 호출되지 않으므로 active flow로 표시하지 않는다(`WHY_NOT_CONTEXT_LLM`의 dbContext→llm 실험 경로는 REJECTED로 명시한다).
 
 ## 알려진 UX 한계
 

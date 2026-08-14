@@ -47,6 +47,7 @@
     </section>
 
     <section id="performance" class="performance" hidden></section>
+    <section id="kafkaPartitions" class="performance" hidden></section>
 
     <section class="state-section"><h2>핵심 상태</h2><div id="stateGrid" class="state-grid"></div></section>
 
@@ -57,8 +58,13 @@
     <section id="opsPanel" class="ops" hidden><h2>운영자 시점</h2><p>현재 Step에서 Evidence로 확인된 구조화 로그·메트릭만 표시합니다. 수치·그래프는 만들지 않습니다.</p><div id="opsGrid" class="detail-grid"></div></section>
 
     <section id="evidenceGate" class="evidence-gate">
-      <div><span class="badge future">FUTURE · NOT VERIFIED</span><h2>Evidence Gate</h2><p>#169 ALB·다중 EC2 Blue-Green, #191 Auto Scaling, #192 AI Worker 분리는 아직 재생 Chapter가 아닙니다. 실제 Evidence가 생기면 Scenario/Chapter로 승격할 수 있도록 데이터 구조만 열어 둡니다.</p></div>
-      <ul><li>#169 — cross-EC2 / ALB WSS / traffic switch evidence 필요</li><li>#191 — 2→N 동일 조건 측정 및 도입 판단 필요</li><li>#192 — 통합 기준선·Worker 분리·scale evidence 필요</li></ul>
+      <div><span class="badge future">#191만 FUTURE · NOT VERIFIED</span><h2>Evidence Gate</h2><p>#169(App HA + AWS Redis cross-instance), #192(Kafka Async 비교·Consumer scaling·통합 모놀리스 결정), #258(messageId Partition Key), #251(Rule Fast Path), #266(Split Message Rule Context)은 실제 검증이 끝나 Ch3·Ch5·Ch6에 반영됐습니다. #191(Auto Scaling)만 아직 재생 Chapter가 아닙니다.</p></div>
+      <ul><li>#169 — VERIFIED/MEASURED, App HA + AWS Redis cross-instance → Ch3 AWS_CROSS_INSTANCE_NORMAL 반영</li>
+        <li>#192 — MEASURED, Async/Kafka·Consumer scaling·통합 모놀리스 유지 결정 → Ch5 반영</li>
+        <li>#258 — MEASURED, messageId Partition Key → Ch5 MESSAGE_ID_PARTITIONING 반영</li>
+        <li>#251 — MEASURED, Moderation Rule Fast Path → Ch6 CLEAR_FLAGGED_FAST_PATH 반영</li>
+        <li>#266 — VERIFIED + Provider 6-case observation, Split Message Rule Context → Ch6 SPLIT_MESSAGE_EVASION 반영</li>
+        <li>#191 — FUTURE / NOT YET FINAL, Auto Scaling 도입 판단 필요(2→N 동일 조건 측정 필요)</li></ul>
     </section>
   </main>
   <script src="scenario-data.js"></script>
