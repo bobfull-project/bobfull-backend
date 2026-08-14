@@ -26,11 +26,61 @@ docker compose up -d
 필수 값:
 
 ```text
-BOBFULL_BACKEND_METRICS_TARGET=<app-ec2-private-ip>:8080
+BOBFULL_BACKEND_METRICS_TARGETS=<active-app-ec2-private-ip-1>:8080,<active-app-ec2-private-ip-2>:8080
 GRAFANA_ADMIN_PASSWORD=<strong-password>
 GRAFANA_SLACK_WEBHOOK_URL=<slack-incoming-webhook-url>
 GRAFANA_SLACK_RECIPIENT=<slack-channel-name>
 ```
+
+`BOBFULL_BACKEND_METRICS_TARGET`는 기존 단일 App EC2 측정용 fallback이다. `BOBFULL_BACKEND_METRICS_TARGETS`가 비어 있을 때만 사용한다.
+
+## Blue/Green Active App 2대 측정 설정
+
+#191 기준선 측정은 현재 ALB Listener weight가 100인 Active Target Group의 App EC2 2대만 대상으로 한다. Inactive 환경까지 함께 scrape하면 HTTP RPS, latency, Hikari 지표가 섞이므로 같은 job에 넣지 않는다. Inactive 측정이 필요하면 별도 job 또는 label로 분리한다.
+
+ALB DNS를 Prometheus target으로 사용하지 않는다. Prometheus target은 App EC2 private IP 또는 private DNS와 `8080` 포트를 직접 지정해야 instance별 지표를 분리할 수 있다.
+
+1. GitHub Variables 또는 운영 기록에서 Blue/Green Listener와 Target Group ARN을 확인한다.
+
+```bash
+export BACKEND_ALB_LISTENER_ARN=<listener-arn>
+export BACKEND_BLUE_TARGET_GROUP_ARN=<blue-target-group-arn>
+export BACKEND_GREEN_TARGET_GROUP_ARN=<green-target-group-arn>
+```
+
+2. Listener default action에서 weight가 100인 Target Group을 Active로 판단한다.
+
+```bash
+aws elbv2 describe-listeners \
+  --listener-arns "${BACKEND_ALB_LISTENER_ARN}" \
+  --query 'Listeners[0].DefaultActions'
+```
+
+3. Active Target Group에 등록된 target instance id를 확인한다.
+
+```bash
+aws elbv2 describe-target-health \
+  --target-group-arn "<active-target-group-arn>" \
+  --query 'TargetHealthDescriptions[].Target.Id' \
+  --output text
+```
+
+4. 해당 instance id 2개의 private IP를 확인한다.
+
+```bash
+aws ec2 describe-instances \
+  --instance-ids <instance-id-1> <instance-id-2> \
+  --query 'Reservations[].Instances[].PrivateIpAddress' \
+  --output text
+```
+
+5. Monitoring EC2의 `monitoring/.env`에 Active App 2대를 comma-separated 값으로 입력한다.
+
+```text
+BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
+```
+
+6. Prometheus와 Grafana를 재기동한 뒤 Prometheus UI `Status -> Targets`에서 `bobfull-backend` target 2개가 모두 `UP`인지 확인한다.
 
 ## 확인 순서
 
@@ -51,6 +101,45 @@ histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_buc
 sum(jvm_memory_used_bytes{job="bobfull-backend",area="heap"}) / sum(jvm_memory_max_bytes{job="bobfull-backend",area="heap"})
 max(hikaricp_connections_pending{job="bobfull-backend"})
 sum by (event) (increase(bobfull_business_events_total[5m]))
+```
+
+## #191 instance별 측정 PromQL
+
+```promql
+process_cpu_usage{job="bobfull-backend"}
+
+sum by (instance, area) (
+  jvm_memory_used_bytes{job="bobfull-backend"}
+)
+
+sum by (instance) (
+  rate(http_server_requests_seconds_count{job="bobfull-backend",uri!~"/actuator/.*"}[1m])
+)
+
+histogram_quantile(0.95,
+  sum by (instance, le) (
+    rate(http_server_requests_seconds_bucket{job="bobfull-backend",uri!~"/actuator/.*"}[5m])
+  )
+)
+
+histogram_quantile(0.99,
+  sum by (instance, le) (
+    rate(http_server_requests_seconds_bucket{job="bobfull-backend",uri!~"/actuator/.*"}[5m])
+  )
+)
+
+sum by (instance, status) (
+  rate(http_server_requests_seconds_count{job="bobfull-backend",status=~"4..",uri!~"/actuator/.*"}[1m])
+)
+
+sum by (instance, status) (
+  rate(http_server_requests_seconds_count{job="bobfull-backend",status=~"5..",uri!~"/actuator/.*"}[1m])
+)
+
+hikaricp_connections_active{job="bobfull-backend"}
+hikaricp_connections_idle{job="bobfull-backend"}
+hikaricp_connections_pending{job="bobfull-backend"}
+hikaricp_connections_max{job="bobfull-backend"}
 ```
 
 ## Alert 기준
