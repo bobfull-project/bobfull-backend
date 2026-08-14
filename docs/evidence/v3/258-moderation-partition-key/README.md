@@ -13,12 +13,12 @@
 - workload: 같은 `chatRoomId`에서 메시지 30건
 - 실행: `./gradlew kafkaEvidenceTest --tests 'com.bobfull.kafka.consumer.ChatModerationConsumerConcurrencyIntegrationTest.같은_채팅방_30건에서_messageId_key는_여러_Partition과_Consumer를_활용하고_결과를_각_messageId에_저장한다' --rerun-tasks -PshowTestOutput`
 
-| Producer key | Partition별 메시지 건수 | 실제 작업 Consumer 수 | drain time | 처리량 |
+| Producer key | Partition별 메시지 건수 | 활성 Partition 수 | drain time | 처리량 |
 |---|---:|---:|---:|---:|
-| `chatRoomId` | `{0=30, 1=0, 2=0}` | 1 | 15.704s | 1.91 msg/s |
-| `messageId` | `{0=14, 1=9, 2=7}` | 3 | 7.286s | 4.12 msg/s |
+| `chatRoomId` | `{0=30, 1=0, 2=0}` | 1 | 15.616s | 1.92 msg/s |
+| `messageId` | `{0=14, 1=9, 2=7}` | 3 | 7.271s | 4.13 msg/s |
 
-`messageId` key는 모든 Partition과 Consumer를 사용했고, 동일 workload의 drain time을 약 53.6% 줄였다. Async보다 빨라야 한다는 조건은 두지 않았다. 이 비교는 Kafka 유지 여부가 아니라 현재 Kafka 내부 key가 독립 Moderation 작업과 맞는지를 검증한다.
+`messageId` key는 세 Partition 모두에 메시지를 분산했고, 동일 workload의 drain time을 약 53.4% 줄였다. 이 측정은 Consumer thread/instance별 처리 건수를 식별하지 않으므로 실제 작업 Consumer 수를 직접 주장하지 않는다. Async보다 빨라야 한다는 조건은 두지 않았다. 이 비교는 Kafka 유지 여부가 아니라 현재 Kafka 내부 key가 독립 Moderation 작업과 맞는지를 검증한다.
 
 ## 신뢰성·순서 계약 확인
 

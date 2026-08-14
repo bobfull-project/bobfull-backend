@@ -412,7 +412,7 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
     }
 
     @Test
-    void 같은_채팅방_30건에서_messageId_key는_여러_Partition과_Consumer를_활용하고_결과를_각_messageId에_저장한다() throws InterruptedException {
+    void 같은_채팅방_30건에서_messageId_key는_여러_Partition에_분산되고_결과를_각_messageId에_저장한다() throws InterruptedException {
         // given
         ConcurrentMessageListenerContainer<?, ?> container =
                 (ConcurrentMessageListenerContainer<?, ?>) registry.getListenerContainers().iterator().next();
@@ -434,7 +434,7 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
             // then
             assertThat(chatRoomKey.messagesByPartition().values()).containsExactlyInAnyOrder(0L, 0L, 30L);
             assertThat(messageIdKey.messagesByPartition().values()).allMatch(count -> count > 0L);
-            assertThat(messageIdKey.activeConsumerCount()).isGreaterThan(1);
+            assertThat(messageIdKey.activePartitionCount()).isGreaterThan(1);
             assertThat(messageIdKey.drainMillis()).isLessThan(chatRoomKey.drainMillis());
         } finally {
             // 이 클래스의 기존 #192 baseline은 chat-room key를 전제로 하므로 테스트 격리를 위해 복구한다.
@@ -470,18 +470,18 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
         Map<Integer, Long> messagesByPartition = new TreeMap<>();
         partitionOffsetsAfter.forEach((partition, afterOffset) ->
                 messagesByPartition.put(partition, afterOffset - partitionOffsetsBefore.getOrDefault(partition, 0L)));
-        long activeConsumerCount = messagesByPartition.values().stream().filter(count -> count > 0L).count();
+        long activePartitionCount = messagesByPartition.values().stream().filter(count -> count > 0L).count();
 
         log.info("event=PARTITION_KEY_258_EVIDENCE partitionKeyStrategy={} sampleSize={} "
-                        + "fakeAiLatencyMillis={} drainMillis={} messagesPerSecond={} activeConsumerCount={} "
+                        + "fakeAiLatencyMillis={} drainMillis={} messagesPerSecond={} activePartitionCount={} "
                         + "messagesByPartition={}",
                 partitionKeyStrategy, SAMPLE_SIZE, FAKE_AI_LATENCY_MILLIS, drainMillis,
-                String.format("%.2f", messagesPerSecond), activeConsumerCount, messagesByPartition);
-        return new KeyExperimentEvidence(drainMillis, messagesByPartition, activeConsumerCount);
+                String.format("%.2f", messagesPerSecond), activePartitionCount, messagesByPartition);
+        return new KeyExperimentEvidence(drainMillis, messagesByPartition, activePartitionCount);
     }
 
     private record KeyExperimentEvidence(long drainMillis, Map<Integer, Long> messagesByPartition,
-                                         long activeConsumerCount) {
+                                         long activePartitionCount) {
     }
 
     @Test

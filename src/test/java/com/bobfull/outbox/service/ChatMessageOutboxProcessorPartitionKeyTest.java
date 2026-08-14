@@ -21,7 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * #192 실험: {@code bobfull.kafka.chat-message.partition-key-strategy}가 실제 발행 key를
- * 바꾸는지 검증한다. 기본값(`message-id`, 미설정 포함)은 messageId를 사용해야 한다.
+ * 바꾸는지 검증한다. 이 단위 테스트는 생성자에 주입된 전략의 발행 key만 검증한다.
  */
 class ChatMessageOutboxProcessorPartitionKeyTest {
 
@@ -30,18 +30,6 @@ class ChatMessageOutboxProcessorPartitionKeyTest {
     private final ChatMessageRepository chatMessageRepository = mock(ChatMessageRepository.class);
     private final KafkaOperations<Object, Object> kafkaTemplate = mock(KafkaOperations.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC);
-
-    @Test
-    void 기본값은_messageId를_key로_사용한다() {
-        ChatMessageOutboxProcessor processor = new ChatMessageOutboxProcessor(
-                outboxEventRepository, transactionService, chatMessageRepository, kafkaTemplate, clock,
-                "bobfull.chat.message-created.v1", 10L, "message-id");
-        prepare(processor, 501L, 42L, 7L);
-
-        processor.process(501L);
-
-        verify(kafkaTemplate).send(eq("bobfull.chat.message-created.v1"), eq("7"), any());
-    }
 
     @Test
     void message_id_전략을_설정하면_messageId를_key로_사용한다() {
