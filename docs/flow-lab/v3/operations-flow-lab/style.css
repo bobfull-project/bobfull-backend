@@ -29,6 +29,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .chapter-intro{padding:18px 0;border-bottom:1px solid var(--line)}
 .chapter-intro h1{margin:0 0 6px;font-size:clamp(20px,2.6vw,30px);font-weight:700}
 .chapter-intro p{margin:0;color:var(--muted);font-size:13px}
+.chapter-origin{margin-top:10px !important;color:var(--text) !important;font-size:13.5px;line-height:1.6;max-width:68ch}
 
 .playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;align-items:center;gap:16px;padding:14px max(20px,4vw);flex-wrap:wrap;background:var(--bg);border-top:1px solid var(--line)}
 #secondaryControls{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.75;transform:scale(.96);transform-origin:left center}
@@ -98,6 +99,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 
 .comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0}
 .comparison[hidden]{display:none}
+.comparison-intro{grid-column:1/-1;margin:0 0 4px;color:var(--muted);font-size:12px}
 .comparison article{border:1px solid var(--line);border-radius:8px;padding:14px}
 .lane-tag{color:var(--muted);font-size:11px}
 .lane h3{margin:2px 0 0;font-size:15px}

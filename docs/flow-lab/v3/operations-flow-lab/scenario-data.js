@@ -150,7 +150,7 @@ public void accept(ConsumerRecord<?, ?> record, Exception exception) {
 const chapters = [
   { id: "outbox", shortLabel: "Ch1 — 채팅방 생성 안정성 (Outbox)",
     title: "핵심 작업은 끝났는데 후속 작업이 사라진다면?", subtitle: "결제 확정 후 채팅방 생성 안정성 — Transactional Outbox",
-    summary: "같은 failure boundary에서 V2 메모리 후속 처리와 V3 영속 Outbox를 동기화해 비교한다.",
+    summary: "결제와 예약이 확정되면, 함께 식사할 사람들이 미리 대화하고 조율할 수 있도록 채팅방을 자동으로 만들어준다. 문제는 결제 확정이 PortOne 외부 결제 검증을 거쳐야 끝난다는 점이다 — 이미 끝난 외부 결제를 채팅방 생성이 실패했다고 되돌릴 수는 없다. 그래서 채팅방 생성 실패가 이미 확정된 결제·예약까지 함께 실패시키지 않도록, 실패한 채팅방 생성 작업만 따로 보관해뒀다가 안전하게 다시 시도하는 구조가 필요했다.",
     stageLabels: stageLabels1,
     scenarios: [{ id: "chatroom-outbox", title: "ChatRoom 생성: Before / After", comparison: true, steps: [
     step("commit", "Payment completion", "Core transaction", "✅ 결제와 예약이 확정됐어요", "결제가 정상적으로 끝났고 예약과 참여자 정보도 저장됐습니다. 아직 채팅방은 만들기 전입니다.",
@@ -160,7 +160,7 @@ const chapters = [
         comparison: { v2: "확정(COMMIT)", v3: "핵심 업무 + Outbox 함께 확정",
           v2States: ["active", "pending", "pending", "pending"], v3States: ["active", "pending", "pending", "pending"] },
         evidenceReferences: [evidence.chatroom] }),
-    step("after-commit", "V2 listener / V3 processor", "Follow-up work", "◆ 이제 채팅방을 만들어요", "결제와 예약은 이미 끝났습니다. 이제 같은 식사에 참여하는 사람들이 대화할 채팅방을 만드는 작업을 시작합니다.",
+    step("after-commit", "V2 listener / V3 processor", "Follow-up work", "◆ 이제 채팅방을 만들어요", "결제와 예약은 이미 끝났습니다. 이제 같은 식사에 참여하는 사람들이 대화할 채팅방을 만드는 작업을 시작합니다 — 이 작업은 결제·예약과 따로 대기하고 있다가 지금 실행되는 것이라, 화면에서는 대기 중이던 Outbox가 Application에게 실행을 맡기는 화살표로 보입니다.",
       { outbox: "V3 방식: 대기 중", factStatus: FACT.VERIFIED,
         currentStatus: "채팅방 생성 대기",
         visual: visual(["db", "outbox", "app"], ["outbox-claim"], "event", null, "outbox", ["db"]),
@@ -211,7 +211,7 @@ const chapters = [
   ]}] },
   { id: "kafka-ai", shortLabel: "Ch2 — AI 검수 파이프라인 장애 대응",
     title: "메시지는 저장됐는데 Kafka나 AI가 실패한다면?", subtitle: "채팅 메시지 → Kafka → AI 검수 파이프라인 장애 대응",
-    summary: "Outbox는 DB→Kafka 전달, Kafka는 AI Consumer retry/DLT를 책임진다.", scenarios: [
+    summary: "채팅 메시지는 욕설·스팸 등을 걸러내기 위해 AI 검토를 거치지만, 메시지를 보낼 때마다 AI 응답을 기다리게 하면 채팅이 느려진다. 그렇다고 AI 검토를 그냥 비동기로 던져두기만 하면, AI 호출이나 Kafka에 문제가 생겼을 때 메시지가 검토되지 않은 채 조용히 사라질 수 있다. 그래서 메시지 저장과 AI 검토를 분리하면서도, 검토 요청 자체는 안전하게 보존하고 실패하면 다시 시도하거나 따로 격리할 수 있는 구조가 필요했다.", scenarios: [
     { id: "normal", title: "정상 처리", steps: [
       step("send", "Client", "ChatMessageCommandService", "● 메시지를 보냈어요", "사용자가 채팅 메시지를 보내면 서버가 저장할 준비를 시작합니다.",
         { transaction: "ChatMessage 저장 + 메시지 생성 이벤트(Outbox)를 한 트랜잭션으로 묶음", factStatus: FACT.VERIFIED, visual: core,
@@ -268,7 +268,7 @@ const chapters = [
   ]},
   { id: "redis", shortLabel: "Ch3 — 다중 서버 실시간 채팅 전달",
     title: "서버가 달라도 같은 채팅방 메시지를 어떻게 받는가?", subtitle: "다중 서버 환경의 실시간 채팅 전달 — Redis Pub/Sub",
-    summary: "Redis는 best-effort fan-out이며 DB cursor가 공식 복구 경로다.", scenarios: [
+    summary: "BobFull은 여러 대의 서버로 나눠 운영된다. 그런데 채팅방에 있는 두 사람이 서로 다른 서버에 접속해 있으면, 한 서버가 메시지를 저장해도 그 소식이 다른 서버에 접속한 상대방에게 저절로 전달되지 않는다. 그래서 서버가 달라도 실시간으로 서로에게 메시지를 알려줄 수 있는 방법이 필요했다.", scenarios: [
     { id: "local-two-instance-normal", title: "로컬 2대 인스턴스 정상 동작", steps: [
       step("save", "Client A → App A", "DB", "● 메시지가 저장됐어요", "사용자가 채팅방에 메시지를 보냈고, 서버(App A)가 이 메시지를 데이터베이스에 안전하게 저장했습니다.",
         { domainState: "ChatMessage 확정 저장됨(COMMITTED)", transaction: "ChatMessage 저장 + AI 처리 예약(Outbox)을 한 트랜잭션으로 묶음", factStatus: FACT.VERIFIED,
@@ -318,7 +318,7 @@ const chapters = [
   ]},
   { id: "hotpath-performance", shortLabel: "Ch4 — 예약 조회 성능 개선",
     title: "조회가 몰리면 어디가 병목이고, 어떻게 줄였는가?", subtitle: "인기 예약 조회 성능 병목 분석과 배치 쿼리 개선",
-    summary: "문제 발견 → 병목 분리 → 최소 변경 → 동일 조건 Before/After → 남은 한계.", scenarios: [
+    summary: "인기 있는 회차(시간대)에 조회가 몰리면 서비스가 느려질 수 있다. 실제로 부하를 걸어 측정해보니 회차 조회 하나가 DB 연결을 거의 다 써버리는 것을 확인했고, 그 원인을 찾아 최소한의 변경으로 개선한 뒤 다시 측정해 실제로 나아졌는지 확인해야 했다.", scenarios: [
     { id: "batch-optimization", title: "인기 회차 조회 병목 개선", steps: [
       step("saturation", "K6 Load/Stress", "bobfull-k6-test-app", "🔥 손님이 몰리자 서비스가 느려졌어요", "인기 회차 조회가 몰리자 CPU와 DB Connection Pool이 거의 동시에 포화됐다(#142 실측, Stress 20→320 iter/s 계단식).",
         { factStatus: FACT.MEASURED, visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "event", "failure", "core", [], { nodeId: "db", text: "CPU 88~98% · Pool 10/10" }),
@@ -492,7 +492,7 @@ const chapters = [
   ]},
   { id: "ai-moderation", shortLabel: "Ch6 — AI 모더레이션 판단 로직",
     title: "채팅 AI는 메시지를 어떻게 판단하는가?", subtitle: "AI 모더레이션 판단 로직 — Rule Filter부터 LLM까지",
-    summary: "메시지 하나가 들어오면 어떤 조건에서 Rule로 끝나고, 언제 DB Context를 보고, 언제 LLM을 호출하고, 무엇이 DB에 남는지 이해한다.", scenarios: [
+    summary: "채팅에 욕설·스팸·개인정보 유출 같은 문제가 있으면 안 되지만, 메시지마다 AI에게 판단을 맡기면 느리고 비용도 많이 든다. 그래서 명백한 경우는 규칙만으로 빠르게 걸러내고, 애매한 경우에만 AI에게 판단을 맡기는 구조가 필요했다 — 욕설을 여러 메시지로 나눠 보내 규칙을 피하려는 시도까지 고려해야 했다.", scenarios: [
     { id: "clear-flagged-fast-path", title: "Rule만으로 즉시 판정 (LLM 생략)", steps: [
       step("input", "Client", "ChatModerationService", "● 이런 메시지가 왔어요: \"개새끼야\"", "모든 메시지를 매번 AI에게 보내야 할까? — 이렇게 명백한 욕설도 있다.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["input"], [], "event", null, "rule") }),

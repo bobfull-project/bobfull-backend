@@ -62,7 +62,8 @@ function renderComparison(data) {
   const lanes = data.comparison;
   const cx = [45, 130, 215, 300];
   const stageLabels = currentChapter().stageLabels || [];
-  element.innerHTML = `<article class="lane"><span class="lane-tag">V2 이전 방식 — 실패 사례</span><h3>확정 후 메모리 처리(AFTER_COMMIT)</h3>
+  element.innerHTML = `<p class="comparison-intro">위 Canvas는 지금 실제로 쓰는 V3 방식의 흐름입니다. 아래 두 칸은 "만약 예전 V2 방식이었다면 같은 순간 어떻게 됐을까"를 나란히 비교한 것입니다 — 같은 흐름이 두 번 움직이는 게 아니라 서로 다른 두 방식을 비교하는 것입니다.</p>
+    <article class="lane"><span class="lane-tag">V2 이전 방식 — 실패 사례</span><h3>확정 후 메모리 처리(AFTER_COMMIT)</h3>
     <svg class="lane-strip" viewBox="0 0 345 62">${laneNodeSvg(cx, lanes.v2States, stageLabels)}</svg><p>${lanes.v2}</p></article>
     <article class="lane"><span class="lane-tag">V3 현재 방식 — 안전 장치 추가</span><h3>발행 대기함 패턴(Outbox)</h3>
     <svg class="lane-strip" viewBox="0 0 345 62">${laneNodeSvg(cx, lanes.v3States, stageLabels)}</svg><p>${lanes.v3}</p></article>`;
@@ -155,6 +156,7 @@ function render() {
   populateSelects();
   $("chapterQuestion").textContent = currentChapter().title;
   $("chapterSubtitle").textContent = currentChapter().subtitle;
+  $("chapterOrigin").textContent = currentChapter().summary;
   renderCanvas(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data); renderDetails(data); renderCodeView(data);
   $("stepTitle").textContent = data.action; $("narration").textContent = data.narration; $("counter").textContent = `Step ${state.step + 1} / ${currentScenario().steps.length}`;
   renderStepStatus(data); renderStepNext(data);
