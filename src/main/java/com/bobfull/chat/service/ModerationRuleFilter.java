@@ -35,6 +35,13 @@ public class ModerationRuleFilter {
         return flagged(ModerationCategory.SPAM, RiskLevel.HIGH);
     }
 
+    Optional<ModerationResult> clearSplitFlagged(String joinedNormalized) {
+        if (joinedNormalized.matches("^(씨발|시발|병신|개새끼(야)?|죽여버린다)$")) {
+            return flagged(ModerationCategory.PROFANITY, RiskLevel.HIGH);
+        }
+        return Optional.empty();
+    }
+
     private static Optional<ModerationResult> flagged(ModerationCategory category, RiskLevel riskLevel) {
         return Optional.of(new ModerationResult(ModerationResultType.FLAGGED, java.util.Set.of(category), riskLevel));
     }
