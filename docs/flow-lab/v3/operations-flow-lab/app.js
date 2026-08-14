@@ -158,14 +158,17 @@ function findStep(chapterId, scenarioId, stepId) {
   const scenario = chapter.scenarios.find((item) => item.id === scenarioId);
   return scenario.steps.find((item) => item.id === stepId);
 }
+/* whatStep: 무엇을 바꿨는지 설명하는 narration을 가진 step. measureSteps: 그 변경으로 나온 실제 수치. */
 const PERFORMANCE_HIGHLIGHTS = [
-  { chapter: "hotpath-performance", scenario: "batch-optimization", step: "same-load-result" },
-  { chapter: "hotpath-performance", scenario: "batch-optimization", step: "stress-result" },
-  { chapter: "kafka-mechanics", scenario: "message-id-partitioning", step: "after-message-id-key" }
+  { chapter: "hotpath-performance", scenario: "batch-optimization", whatStep: "batch-fix", measureSteps: ["same-load-result", "stress-result"] },
+  { chapter: "kafka-mechanics", scenario: "message-id-partitioning", whatStep: "after-message-id-key", measureSteps: ["after-message-id-key"] }
 ];
 function renderPerformanceHighlights() {
-  const rows = PERFORMANCE_HIGHLIGHTS.flatMap((ref) => findStep(ref.chapter, ref.scenario, ref.step).performance.filter((row) => row.improvement));
-  $("performanceHighlights").innerHTML = rows.map(performanceRowHtml).join("");
+  $("performanceHighlights").innerHTML = PERFORMANCE_HIGHLIGHTS.map((card) => {
+    const whatStep = findStep(card.chapter, card.scenario, card.whatStep);
+    const rows = card.measureSteps.flatMap((id) => findStep(card.chapter, card.scenario, id).performance.filter((row) => row.improvement));
+    return `<article class="perf-highlight"><h3>${whatStep.action}</h3><p>${whatStep.narration}</p><div class="performance">${rows.map(performanceRowHtml).join("")}</div></article>`;
+  }).join("");
 }
 const DECISION_HIGHLIGHTS = [
   { chapter: "outbox", scenario: "chatroom-outbox", step: "retry" },

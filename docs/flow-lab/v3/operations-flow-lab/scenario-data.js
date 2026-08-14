@@ -323,7 +323,7 @@ const chapters = [
         { factStatus: FACT.MEASURED, visual: visual(["app", "db"], ["persist"], "retry", "failure", "core", [], { nodeId: "db", text: "83 SQL(TimeSlot 20건)" }),
           performance: [{ metric: "SQL 실행 수(TimeSlot 20건)", before: "83개" }],
           codeReferences: ["TimeSlotService.getAvailableDiningSessions(#235 Before SHA — PR #242 머지 전 develop 기준)"], evidenceReferences: [evidence.hotpath] }),
-      step("batch-fix", "TimeSlotService", "배치 쿼리(GROUP BY / IN)", "✓ 4종 쿼리를 배치로 전환", "회차 ID를 이미 다 알고 있으므로 4개 쿼리를 회차 수와 무관한 고정 배치 쿼리로 바꿨다.",
+      step("batch-fix", "TimeSlotService", "배치 쿼리(GROUP BY / IN)", "✓ 4종 쿼리를 배치로 전환", "회차 ID를 이미 다 알고 있으므로, 회차마다 4번씩 반복하던 쿼리를 IN절 + GROUP BY 집계 쿼리 4개로 한 번에 처리하도록 바꿨다 — 인덱스를 새로 추가하거나 캐시를 도입한 것은 아니다.",
         { factStatus: FACT.MEASURED, visual: visual(["app", "db"], ["persist"], "commit", "completed", "core", [], { nodeId: "db", text: "7 SQL(고정)" }),
           performance: [{ metric: "SQL 실행 수(TimeSlot 20건)", before: "83개", after: "7개", beforeValue: 83, afterValue: 7, scaleUnit: "개", improvement: "고정값, 회차 수와 무관" }],
           codeReferences: ["TimeSlotService.loadAvailableDiningSessionBatchContext",

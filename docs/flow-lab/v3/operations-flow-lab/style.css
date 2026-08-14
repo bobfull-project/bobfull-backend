@@ -8,7 +8,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
 a{color:var(--accent-strong)}
-main{max-width:1260px;margin:auto;padding:24px max(20px,4vw) 56px}
+main{max-width:1260px;margin:auto;padding:24px max(20px,4vw) 110px}
 
 .topbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:24px;padding:14px max(22px,5vw);background:var(--bg);border-bottom:1px solid var(--line)}
 .brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:14px}
@@ -30,7 +30,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .chapter-intro h1{margin:0 0 6px;font-size:clamp(20px,2.6vw,30px);font-weight:700}
 .chapter-intro p{margin:0;color:var(--muted);font-size:13px}
 
-.playback{display:flex;align-items:center;gap:16px;padding:16px 0;flex-wrap:wrap}
+.playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;align-items:center;gap:16px;padding:14px max(20px,4vw);flex-wrap:wrap;background:var(--bg);border-top:1px solid var(--line)}
 #secondaryControls{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.75;transform:scale(.96);transform-origin:left center}
 #counter{color:var(--muted);font:12px ui-monospace,monospace;margin-left:auto}
 
@@ -137,6 +137,11 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .outcomes h2{font-size:14px;color:var(--muted);font-weight:600;margin:20px 0 6px}
 .outcomes h2:first-child{margin-top:0}
 .outcomes-hint{margin:0 0 4px;color:var(--muted);font-size:12px}
+.perf-highlights{display:flex;flex-direction:column;gap:16px;margin:14px 0}
+.perf-highlight{border:1px solid var(--line);border-radius:8px;padding:16px;background:var(--panel)}
+.perf-highlight h3{margin:0 0 6px;font-size:15px;color:var(--text)}
+.perf-highlight>p{margin:0 0 14px;font-size:13px;color:var(--text);line-height:1.6}
+.perf-highlight .performance{margin:0}
 .outcome-list{margin-top:10px;padding-top:0;border-top:none}
 .outcome-list article{border-left:3px solid var(--success);border-radius:0 6px 6px 0;background:var(--panel);padding:10px 14px}
 .outcome-list article h3{margin:0 0 4px;color:var(--text);font-size:13px;font-weight:700}
@@ -157,9 +162,10 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
   .stage-body{grid-template-columns:1fr}
   .state-grid{grid-template-columns:1fr 1fr}
   .comparison{grid-template-columns:1fr}
+  main{padding-bottom:150px}
 }
 @media(max-width:520px){
-  main{padding:16px}
+  main{padding:16px;padding-bottom:190px}
   .state-grid{grid-template-columns:1fr}
   .comparison{grid-template-columns:1fr}
   .topology{min-width:760px}
