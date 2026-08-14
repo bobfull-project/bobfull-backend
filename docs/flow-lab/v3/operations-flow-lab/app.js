@@ -4,7 +4,7 @@ const state = { chapter: 0, scenario: 0, step: 0, mode: "presentation", timer: n
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
-const statusClass = (value) => ({ [FACT.VERIFIED]: "verified", [FACT.MEASURED]: "measured", [FACT.DESIGN]: "design", [FACT.FUTURE]: "future", [FACT.MERGED]: "merged" }[value]);
+const statusClass = (value) => ({ [FACT.VERIFIED]: "verified", [FACT.MEASURED]: "measured", [FACT.DESIGN]: "design", [FACT.REJECTED]: "decision", [FACT.FUTURE]: "future", [FACT.MERGED]: "merged" }[value]);
 const format = (value) => value == null ? "not applicable" : value;
 /* Ch6는 서버 topology 대신 moderationTopology(판정 경로)를 쓴다. 두 topology 모두 같은
    canvas-node/connector/token 렌더링을 그대로 재사용한다 — 별도 renderer를 새로 만들지 않는다. */
