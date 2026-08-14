@@ -27,8 +27,12 @@ permissions:
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  BACKEND_EC2_INSTANCE_ID: ${{ vars.BACKEND_EC2_INSTANCE_ID }}
   BACKEND_PARAMETER_PREFIX: ${{ vars.BACKEND_PARAMETER_PREFIX }}
+  BACKEND_ALB_LISTENER_ARN: ${{ vars.BACKEND_ALB_LISTENER_ARN }}
+  BACKEND_BLUE_TARGET_GROUP_ARN: ${{ vars.BACKEND_BLUE_TARGET_GROUP_ARN }}
+  BACKEND_GREEN_TARGET_GROUP_ARN: ${{ vars.BACKEND_GREEN_TARGET_GROUP_ARN }}
+  BACKEND_PUBLIC_READINESS_URL: ${{ vars.BACKEND_PUBLIC_READINESS_URL }}
+  BACKEND_PUBLIC_API_VERIFY_URL: ${{ vars.BACKEND_PUBLIC_API_VERIFY_URL }}
 
 jobs:
   ci:
@@ -79,8 +83,12 @@ jobs:
           required_values=(
             AWS_REGION
             ECR_REPOSITORY
-            BACKEND_EC2_INSTANCE_ID
             BACKEND_PARAMETER_PREFIX
+            BACKEND_ALB_LISTENER_ARN
+            BACKEND_BLUE_TARGET_GROUP_ARN
+            BACKEND_GREEN_TARGET_GROUP_ARN
+            BACKEND_PUBLIC_READINESS_URL
+            BACKEND_PUBLIC_API_VERIFY_URL
             AWS_ROLE_TO_ASSUME
           )
 
@@ -174,14 +182,21 @@ jobs:
           set -euo pipefail
           echo "Using existing ECR image '${{ steps.image.outputs.image_uri }}' for SSM deployment."
 
-      - name: Deploy on EC2 with SSM Run Command
+      - name: Blue-Green deploy with SSM and ALB
         env:
-          BACKEND_EC2_INSTANCE_ID: ${{ env.BACKEND_EC2_INSTANCE_ID }}
           ECR_IMAGE_URI: ${{ steps.image.outputs.image_uri }}
           PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
+          BACKEND_TARGET_PORT: ${{ vars.BACKEND_TARGET_PORT }}
+          BACKEND_TG_HEALTH_TIMEOUT_SECONDS: ${{ vars.BACKEND_TG_HEALTH_TIMEOUT_SECONDS }}
+          BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS }}
+          BACKEND_PUBLIC_VERIFY_ATTEMPTS: ${{ vars.BACKEND_PUBLIC_VERIFY_ATTEMPTS }}
+          BACKEND_PUBLIC_VERIFY_DELAY_SECONDS: ${{ vars.BACKEND_PUBLIC_VERIFY_DELAY_SECONDS }}
+          BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS: ${{ vars.BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS }}
+          BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS: ${{ vars.BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS }}
+          BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS }}
         run: |
           set -euo pipefail
-          bash scripts/aws/run-ssm-backend-deploy-v1.sh
+          bash scripts/aws/deploy-backend-blue-green-v1.sh
 
       - name: Verify backend deployment
         env:
