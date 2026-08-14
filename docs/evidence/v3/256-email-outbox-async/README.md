@@ -66,6 +66,20 @@
 
 제출 거부 시 `event=EMAIL_OUTBOX_SIGNAL_REJECTED`, `outboxEventId`, `status=PENDING`을 남긴다. 새 메트릭은 추가하지 않았다.
 
+## Executor 초기 sizing 근거
+
+#146 AWS 실측에서 실제 SMTP 발송 시간은 평균 약 0.5~1초, p99 약 1.5초로 관측됐다.
+이 범위를 초기값 판단 근거로 삼아 `core-pool-size=2`, `max-pool-size=2`, `queue-capacity=100`을 유지한다.
+
+- 평균 SMTP 1초를 기준으로 worker 2개는 약 2건/초의 병렬 처리 용량이다.
+- p99 SMTP 1.5초를 기준으로도 약 1.3건/초의 병렬 처리 용량이다.
+- 이메일은 핵심 요청 응답과 분리돼 있고, 순간 적체는 queue 100이 흡수한다.
+- executor가 포화돼도 제출 거부 시 Outbox는 `PENDING`으로 남고 기존 Scheduler가 재처리한다.
+
+따라서 worker를 과도하게 늘리기보다 외부 SMTP 지연·장애 시 동시 연결과 자원 사용을 제한하는
+보수적 초기 bounded 설정으로 판단했다. 이 값은 실제 이메일 도착률을 기준으로 최적화한 값이 아니며,
+운영에서 queue depth와 rejection 로그를 관측한 뒤 환경변수로 조정할 수 있는 초기값이다.
+
 ## 결과 해석
 
 이번 검증은 요청 스레드와 SMTP I/O의 코드 경계 및 실패 격리를 확인한다. Outbox의 내구성·stale 복구·수신자별 멱등성은 #183 공통 구현과 기존 Scheduler 정책을 재사용한다.
