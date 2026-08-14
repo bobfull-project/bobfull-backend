@@ -4,6 +4,7 @@ import com.bobfull.chat.dto.ModerationResult;
 import com.bobfull.chat.entity.ModerationCategory;
 import com.bobfull.chat.entity.ModerationResultType;
 import com.bobfull.chat.entity.RiskLevel;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,10 @@ public class ModerationRuleFilter {
             return flagged(ModerationCategory.PROFANITY, RiskLevel.HIGH);
         }
         return Optional.empty();
+    }
+
+    Optional<ModerationResult> clearSplitFlagged(List<String> canonicalCandidates) {
+        return canonicalCandidates.stream().map(this::clearSplitFlagged).flatMap(Optional::stream).findFirst();
     }
 
     private static Optional<ModerationResult> flagged(ModerationCategory category, RiskLevel riskLevel) {

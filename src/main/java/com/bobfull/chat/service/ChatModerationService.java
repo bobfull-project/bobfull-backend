@@ -63,7 +63,7 @@ public class ChatModerationService {
         if (singleMessageRule.isPresent()) return ruleAnalysis(singleMessageRule.get());
         SplitMessageContext context = recentSplitContext(message);
         if (context == null) return providerAnalysis(aiModerationPort.analyze(message.getContent()), ModerationPrompt.PROMPT_VERSION);
-        var splitRule = ruleFilter.clearSplitFlagged(context.joinedNormalized());
+        var splitRule = ruleFilter.clearSplitFlagged(context.recentCanonicalCandidates());
         if (splitRule.isPresent()) return ruleAnalysis(splitRule.get());
         return providerAnalysis(aiModerationPort.analyze(message.getContent()), ModerationPrompt.PROMPT_VERSION);
     }

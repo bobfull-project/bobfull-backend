@@ -167,8 +167,10 @@ class ChatModerationServiceTest {
     @Test
     void 반복문자와_중간_noise를_제거해도_명백한_시발만_Rule로_FLAGGED한다() {
         assertSplitRule("씨이이이", "발");
+        assertSplitRule("시이잉", "발");
         assertSplitRule("시", "1", "발");
         assertSplitRule("시", "-", "발");
+        assertSplitRule("씨이이이", "발", "시", "1", "발");
     }
 
     @Test
@@ -373,7 +375,7 @@ class ChatModerationServiceTest {
     private void assertSplitRule(String... fragments) {
         java.util.List<ChatMessage> messages = new java.util.ArrayList<>();
         for (int index = 0; index < fragments.length; index++) messages.add(message((long) index + 300L, 1L, 2L, NOW.plusMillis(index), fragments[index]));
-        assertThat(new ModerationRuleFilter().clearSplitFlagged(SplitMessageContext.from(messages).joinedNormalized())).isPresent();
+        assertThat(new ModerationRuleFilter().clearSplitFlagged(SplitMessageContext.from(messages).recentCanonicalCandidates())).isPresent();
     }
     private AiModerationResponse response(ModerationResultType result, EnumSet<ModerationCategory> categories, RiskLevel riskLevel) {
         return new AiModerationResponse(new ModerationResult(result, categories, riskLevel), "OpenAI", "gpt-4o-mini", 1L, 2L, 3L);
