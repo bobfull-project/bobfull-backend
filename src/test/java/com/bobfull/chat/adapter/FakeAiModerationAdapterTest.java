@@ -50,7 +50,7 @@ class FakeAiModerationAdapterTest {
         ChatMessageRepository messages = Mockito.mock(ChatMessageRepository.class);
         ChatModerationRepository moderations = Mockito.mock(ChatModerationRepository.class);
         FakeAiModerationAdapter adapter = new FakeAiModerationAdapter(0L, ModerationResultType.FLAGGED);
-        ChatModerationService service = new ChatModerationService(messages, moderations, adapter, new ModerationRuleFilter(),
+        ChatModerationService service = new ChatModerationService(messages, moderations, adapter, new ModerationRuleFilter(), new com.bobfull.chat.service.SplitMessageCandidateGate(),
                 Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC));
         ChatMessage message = ChatMessage.create(1L, 2L, 3L, "금지어 포함 메시지");
         org.springframework.test.util.ReflectionTestUtils.setField(message, "id", 100L);
