@@ -228,13 +228,78 @@ Conclusion:
 
 S3 presigned `imageUrl` values may differ by request time because `X-Amz-Date` and signature values are generated per request. The actual restaurant data was compatible.
 
-## Schema Change Rollback DB Compatibility
+## Additive Schema Rollback Compatibility
 
-Status: not verified.
+Status: PASS for nullable-column additive change.
 
-Reason: the actual Blue-Green deployment for this issue did not include a schema change.
+Verification environment:
 
-This issue does not mark "Green changed schema then Blue rollback DB compatibility" as PASS. ALB traffic rollback itself was already verified in Issue #169 and was not re-tested here.
+| Item | Value |
+|---|---|
+| Production DB | Not changed |
+| Temporary DB | `bobfull_schema_rollback_test` |
+| Blue old image | `643685ecc4b4d30d6791051a795c6d6f4a5ff558` |
+| Green new image | `1fa1027cdc96e9543efa4b32abaf6f6f881f9975` |
+| Production traffic state | Green 100 / Blue 0 |
+| Production ALB / containers | Not changed |
+
+1. Blue old image reproduced the base schema on the temporary DB with `JPA_DDL_AUTO=update`.
+
+   | Check | Result |
+   |---|---|
+   | Temp container | `bobfull-schema-blue-update` |
+   | Port | `18080` |
+   | Startup | `Started BobfullBackendApplication in 28.35 seconds` |
+   | Readiness | HTTP 200, `UP` |
+   | `/api/restaurants` | HTTP 200, 0 rows on the empty temp DB |
+
+2. A nullable test column was added to the same temporary DB in DBeaver.
+
+   ```sql
+   ALTER TABLE restaurant
+   ADD COLUMN rollback_test_note VARCHAR(100) NULL;
+   ```
+
+   Verified column state:
+
+   | Column | Type | Nullable |
+   |---|---|---|
+   | `rollback_test_note` | `varchar(100)` | `YES` |
+
+3. Green new image started against the changed temporary DB with `JPA_DDL_AUTO=validate`.
+
+   | Check | Result |
+   |---|---|
+   | Temp container | `bobfull-schema-green-validate` |
+   | Port | `18081` |
+   | Startup | `Started BobfullBackendApplication in 21.221 seconds` |
+   | Hibernate validation | No schema validation failure |
+   | Readiness | HTTP 200, `UP` |
+   | `/api/restaurants` | HTTP 200 |
+
+4. The additional column was kept, and Blue old image was restarted against the changed temporary DB with `JPA_DDL_AUTO=validate`.
+
+   | Check | Result |
+   |---|---|
+   | Temp container | `bobfull-schema-blue-validate` |
+   | Port | `18080` |
+   | Startup | `Started BobfullBackendApplication in 23.261 seconds` |
+   | Hibernate validation | No schema validation failure |
+   | Readiness | HTTP 200, `UP` |
+   | `/api/restaurants` | HTTP 200 |
+
+Conclusion:
+
+- nullable column 추가와 같은 하위 호환 Additive Schema 변경에 대해 구버전 Application이 변경된 DB Schema에서 `validate`로 정상 기동하고 대표 API를 정상 처리함을 확인했다.
+
+Limit:
+
+- 본 검증은 nullable column 추가와 같은 Additive Schema 변경에 대한 호환성 검증이며, 기존 column `MODIFY / RENAME / DROP` 등 destructive migration의 Rollback 안전성을 보장하지 않는다.
+- Not verified: existing column `MODIFY`, `RENAME`, `DROP`, type change, `NOT NULL` enforcement, and other destructive migration patterns.
+
+Cleanup:
+
+- Pending. Cleanup result will be recorded only after manual cleanup evidence is provided.
 
 ## Production ddl-auto update To validate
 
@@ -339,14 +404,17 @@ Completed:
 - Existing data preservation
 - Different Blue / Green versions sharing the same RDS
 - Actual write followed by Blue and Green read
+- Additive Schema rollback compatibility for a nullable column
 - Production `ddl-auto` transition from `update` to `validate`
 - Schema SQL failure / fix / re-run
 
-Not verified:
+Scope limits:
 
 | Item | Reason |
 |---|---|
-| DB compatibility after Green schema change followed by Blue rollback | The actual deployment did not include a schema change |
+| Existing column `MODIFY` / `RENAME` / `DROP` rollback compatibility | Not verified; destructive migration rollback safety is outside this verification |
+| Type change / `NOT NULL` enforcement rollback compatibility | Not verified; only nullable-column additive change was tested |
+| Rollback test cleanup | Pending until manual cleanup evidence is provided |
 
 ## Final Schema Management Policy
 
