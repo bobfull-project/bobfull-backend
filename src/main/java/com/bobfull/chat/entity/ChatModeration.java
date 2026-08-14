@@ -102,5 +102,7 @@ public class ChatModeration extends BaseTimeEntity {
     public RiskLevel getRiskLevel() { return riskLevel; } public String getProvider() { return provider; } public String getModel() { return model; }
     public String getPromptVersion() { return promptVersion; } public String getPolicyVersion() { return policyVersion; }
     public long getLatencyMillis() { return latencyMillis; } public Instant getAnalyzedAt() { return analyzedAt; }
+    public Long getPromptTokens() { return promptTokens; } public Long getCompletionTokens() { return completionTokens; }
+    public Long getTotalTokens() { return totalTokens; }
     public String getErrorCode() { return errorCode; }
 }
