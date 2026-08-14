@@ -32,6 +32,7 @@ import com.bobfull.timeslot.repository.TimeSlotRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -103,6 +104,8 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(reservationParticipantRepository.count()).isEqualTo(1);
         assertThat(chatRoomRepository.count()).isEqualTo(1);
         assertThat(outboxEventRepository.count()).isEqualTo(2);
+        awaitUntil(() -> outboxEventRepository.findAll().stream()
+                .allMatch(event -> event.getStatus() == OutboxEventStatus.COMPLETED));
         assertThat(outboxEventRepository.findAll()).allSatisfy(event ->
                 assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.COMPLETED));
         assertThat(completed.getReservationId()).isNotNull();
@@ -115,6 +118,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(participant.getReservationId()).isEqualTo(reservation.getId());
         assertThat(chatRoomRepository.findByReservationId(reservation.getId())).isPresent();
         // 핵심 트랜잭션 커밋 후 AFTER_COMMIT 리스너가 예약 접수 이메일 이벤트를 실제로 처리한다.
+        awaitUntil(() -> notificationAdapter.reservationCreatedNotifications().size() == 1);
         assertThat(notificationAdapter.reservationCreatedNotifications()).hasSize(1);
         assertThat(notificationAdapter.participationCompletedNotifications()).isEmpty();
     }
@@ -145,6 +149,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(completed.getReservationId()).isEqualTo(reservation.getId());
         assertThat(completed.getReservationParticipantId()).isNotNull();
         // 핵심 트랜잭션 커밋 후 AFTER_COMMIT 리스너가 참여 완료 이메일 이벤트를 실제로 처리한다.
+        awaitUntil(() -> notificationAdapter.participationCompletedNotifications().size() == 1);
         assertThat(notificationAdapter.participationCompletedNotifications()).hasSize(1);
         assertThat(notificationAdapter.reservationCreatedNotifications()).isEmpty();
     }
@@ -163,6 +168,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         assertThat(updated.getRecruitmentStatus()).isEqualTo(RecruitmentStatus.CLOSED);
         // 정원 도달로 같은 트랜잭션 안에서 모집이 즉시 CLOSED돼도, 참여 완료 알림 자체는 그대로
         // 발송된다 — 문구가 실제 상태(이미 CLOSED)와 충돌하지 않는지는 어댑터 단위 테스트에서 검증한다.
+        awaitUntil(() -> notificationAdapter.participationCompletedNotifications().size() == 1);
         assertThat(notificationAdapter.participationCompletedNotifications()).hasSize(1);
     }
 
@@ -186,7 +192,28 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
             assertThat(event.getAttemptCount()).isEqualTo(1);
         });
         // ChatRoom 생성 실패는 Outbox 재시도로 남고 이메일 접수 알림에는 영향이 없다.
+        awaitUntil(() -> notificationAdapter.reservationCreatedNotifications().size() == 1);
         assertThat(notificationAdapter.reservationCreatedNotifications()).hasSize(1);
+    }
+
+    @Test
+    void 이메일_발송이_실패해도_결제와_예약_트랜잭션은_커밋되고_Email_Outbox는_PENDING으로_남는다() {
+        // given
+        TimeSlot timeSlot = timeSlot(4);
+        Payment payment = readyCreatePayment(timeSlot, 3);
+        failureMode.set(FailureMode.Type.EMAIL_DELIVERY_FAILURE);
+
+        // when
+        paymentCompletionTransactionService.complete(payment.getPaymentId(), payment.getMemberId());
+
+        // then
+        awaitUntil(() -> outboxEventRepository.findAll().stream().anyMatch(event ->
+                event.getEventType() == OutboxEventType.EMAIL_RESERVATION_CREATED
+                        && event.getStatus() == OutboxEventStatus.PENDING
+                        && event.getAttemptCount() == 1));
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(reservationRepository.count()).isEqualTo(1);
+        assertThat(reservationParticipantRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -273,6 +300,22 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
         return "payment-" + UUID.randomUUID();
     }
 
+    private void awaitUntil(BooleanSupplier condition) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        }
+        assertThat(condition.getAsBoolean()).isTrue();
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     static class FailureInjectionConfiguration {
         @Bean
@@ -282,8 +325,16 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
 
         @Bean
         @Primary
-        ReservationNotificationPort fakeReservationNotificationPort() {
-            return new FakeReservationNotificationAdapter();
+        ReservationNotificationPort fakeReservationNotificationPort(FailureMode failureMode) {
+            return new FakeReservationNotificationAdapter() {
+                @Override
+                public void notifyReservationCreated(ReservationNotificationPort.ReservationResultNotification notification) {
+                    if (failureMode.type == FailureMode.Type.EMAIL_DELIVERY_FAILURE) {
+                        throw new IllegalStateException("강제 이메일 발송 실패(테스트)");
+                    }
+                    super.notifyReservationCreated(notification);
+                }
+            };
         }
 
         @Bean
@@ -331,7 +382,7 @@ class PaymentReservationConfirmationTransactionIntegrationTest {
     }
 
     static class FailureMode {
-        enum Type { NONE, RESERVATION_SAVE_FAILURE, PARTICIPANT_SAVE_FAILURE, RESULT_LINK_FAILURE, CHAT_ROOM_CREATION_FAILURE }
+        enum Type { NONE, RESERVATION_SAVE_FAILURE, PARTICIPANT_SAVE_FAILURE, RESULT_LINK_FAILURE, CHAT_ROOM_CREATION_FAILURE, EMAIL_DELIVERY_FAILURE }
         private Type type = Type.NONE;
         void set(Type type) { this.type = type; }
         void reset() { this.type = Type.NONE; }

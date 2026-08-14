@@ -69,10 +69,22 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags 'kafka-evidence'
+	}
 	if (project.hasProperty('showTestOutput')) {
 		testLogging {
 			showStandardStreams = true
 		}
+	}
+}
+
+tasks.register('kafkaEvidenceTest', Test) {
+	description = 'Runs Kafka/Testcontainers evidence experiments excluded from the default test task.'
+	group = 'verification'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'kafka-evidence'
 	}
 }

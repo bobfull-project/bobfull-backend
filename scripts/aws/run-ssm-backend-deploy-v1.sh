@@ -26,10 +26,46 @@ require_commands() {
   fi
 }
 
+parse_instance_ids() {
+  local raw="${BACKEND_EC2_INSTANCE_IDS:-}"
+  local normalized
+  local instance_id
+  local existing_id
+
+  normalized="$(printf '%s' "${raw}" | tr ',\n\t' '   ')"
+  read -r -a BACKEND_INSTANCE_IDS <<< "${normalized}"
+
+  if [ "${#BACKEND_INSTANCE_IDS[@]}" -eq 0 ]; then
+    echo "Missing required environment variable: BACKEND_EC2_INSTANCE_IDS" >&2
+    exit 1
+  fi
+
+  for instance_id in "${BACKEND_INSTANCE_IDS[@]}"; do
+    if [ -z "${instance_id}" ]; then
+      echo "BACKEND_EC2_INSTANCE_IDS contains an empty instance id." >&2
+      exit 1
+    fi
+
+    if [ "${#UNIQUE_BACKEND_INSTANCE_IDS[@]}" -gt 0 ]; then
+      for existing_id in "${UNIQUE_BACKEND_INSTANCE_IDS[@]}"; do
+        if [ "${instance_id}" = "${existing_id}" ]; then
+          echo "BACKEND_EC2_INSTANCE_IDS contains duplicate instance id: ${instance_id}" >&2
+          exit 1
+        fi
+      done
+    fi
+
+    UNIQUE_BACKEND_INSTANCE_IDS+=("${instance_id}")
+  done
+}
+
 required_env AWS_REGION
-required_env BACKEND_EC2_INSTANCE_ID
 required_env ECR_IMAGE_URI
 required_env PARAMETER_PREFIX
+
+BACKEND_INSTANCE_IDS=()
+UNIQUE_BACKEND_INSTANCE_IDS=()
+parse_instance_ids
 
 DEPLOY_SCRIPT_PATH="${DEPLOY_SCRIPT_PATH:-scripts/aws/deploy-backend-v1.sh}"
 SSM_DOCUMENT_NAME="${SSM_DOCUMENT_NAME:-AWS-RunShellScript}"
@@ -117,7 +153,7 @@ ssm_comment="${ssm_comment:0:100}"
 command_id="$(
   aws ssm send-command \
     --region "${AWS_REGION}" \
-    --instance-ids "${BACKEND_EC2_INSTANCE_ID}" \
+    --instance-ids "${BACKEND_INSTANCE_IDS[@]}" \
     --document-name "${SSM_DOCUMENT_NAME}" \
     --comment "${ssm_comment}" \
     --parameters "file://${command_payload}" \
@@ -126,60 +162,81 @@ command_id="$(
 )"
 
 echo "SSM command id: ${command_id}"
+printf 'SSM target instances: %s\n' "${BACKEND_INSTANCE_IDS[*]}"
 
 deadline=$((SECONDS + SSM_POLL_TIMEOUT_SECONDS))
+deployment_failed=false
 
 while true; do
-  status="$(
-    aws ssm get-command-invocation \
-      --region "${AWS_REGION}" \
-      --command-id "${command_id}" \
-      --instance-id "${BACKEND_EC2_INSTANCE_ID}" \
-      --query 'Status' \
-      --output text 2>/dev/null || true
-  )"
+  all_success=true
 
-  case "${status}" in
-    Success)
-      echo "SSM command status: Success"
-      break
-      ;;
-    Pending|InProgress|Delayed|"")
-      if [ "${SECONDS}" -ge "${deadline}" ]; then
-        echo "SSM command timed out while waiting for completion." >&2
-        status="TimedOut"
-        break
-      fi
-      echo "SSM command status: ${status:-Pending}"
-      sleep "${SSM_POLL_INTERVAL_SECONDS}"
-      ;;
-    *)
-      echo "SSM command status: ${status}" >&2
-      break
-      ;;
-  esac
+  for instance_id in "${BACKEND_INSTANCE_IDS[@]}"; do
+    status="$(
+      aws ssm get-command-invocation \
+        --region "${AWS_REGION}" \
+        --command-id "${command_id}" \
+        --instance-id "${instance_id}" \
+        --query 'Status' \
+        --output text 2>/dev/null || true
+    )"
+
+    case "${status}" in
+      Success)
+        ;;
+      Pending|InProgress|Delayed|"")
+        all_success=false
+        ;;
+      *)
+        echo "SSM command status for ${instance_id}: ${status}" >&2
+        deployment_failed=true
+        all_success=false
+        ;;
+    esac
+  done
+
+  if [ "${deployment_failed}" = "true" ]; then
+    break
+  fi
+
+  if [ "${all_success}" = "true" ]; then
+    echo "SSM command status: Success for all target instances"
+    break
+  fi
+
+  if [ "${SECONDS}" -ge "${deadline}" ]; then
+    echo "SSM command timed out while waiting for all target instances." >&2
+    deployment_failed=true
+    break
+  fi
+
+  echo "SSM command status: waiting for all target instances"
+  sleep "${SSM_POLL_INTERVAL_SECONDS}"
 done
 
-aws ssm get-command-invocation \
-  --region "${AWS_REGION}" \
-  --command-id "${command_id}" \
-  --instance-id "${BACKEND_EC2_INSTANCE_ID}" \
-  --query 'StandardOutputContent' \
-  --output text
-
-standard_error="$(
+for instance_id in "${BACKEND_INSTANCE_IDS[@]}"; do
+  echo "----- SSM stdout ${instance_id} -----"
   aws ssm get-command-invocation \
     --region "${AWS_REGION}" \
     --command-id "${command_id}" \
-    --instance-id "${BACKEND_EC2_INSTANCE_ID}" \
-    --query 'StandardErrorContent' \
-    --output text
-)"
+    --instance-id "${instance_id}" \
+    --query 'StandardOutputContent' \
+    --output text || true
 
-if [ "${standard_error}" != "None" ] && [ -n "${standard_error}" ]; then
-  echo "${standard_error}" >&2
-fi
+  echo "----- SSM stderr ${instance_id} -----" >&2
+  standard_error="$(
+    aws ssm get-command-invocation \
+      --region "${AWS_REGION}" \
+      --command-id "${command_id}" \
+      --instance-id "${instance_id}" \
+      --query 'StandardErrorContent' \
+      --output text 2>/dev/null || true
+  )"
 
-if [ "${status}" != "Success" ]; then
+  if [ "${standard_error}" != "None" ] && [ -n "${standard_error}" ]; then
+    echo "${standard_error}" >&2
+  fi
+done
+
+if [ "${deployment_failed}" = "true" ]; then
   exit 1
 fi

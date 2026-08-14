@@ -1,0 +1,439 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+required_env() {
+  local key="$1"
+  if [ -z "${!key:-}" ]; then
+    echo "Missing required environment variable: ${key}" >&2
+    exit 1
+  fi
+}
+
+require_commands() {
+  local missing_commands=()
+  local command_name
+
+  for command_name in "$@"; do
+    if ! command -v "${command_name}" >/dev/null 2>&1; then
+      missing_commands+=("${command_name}")
+    fi
+  done
+
+  if [ "${#missing_commands[@]}" -gt 0 ]; then
+    echo "Missing required commands on the GitHub Actions runner:" >&2
+    printf '  - %s\n' "${missing_commands[@]}" >&2
+    exit 1
+  fi
+}
+
+load_listener_actions() {
+  local output_file="$1"
+
+  aws elbv2 describe-listeners \
+    --region "${AWS_REGION}" \
+    --listener-arns "${BACKEND_ALB_LISTENER_ARN}" \
+    --query 'Listeners[0].DefaultActions' \
+    --output json > "${output_file}"
+}
+
+read_blue_green_state() {
+  python3 - "${listener_actions_file}" "${BACKEND_BLUE_TARGET_GROUP_ARN}" "${BACKEND_GREEN_TARGET_GROUP_ARN}" <<'PY'
+import json
+import sys
+
+actions_path, blue_arn, green_arn = sys.argv[1:4]
+with open(actions_path, encoding="utf-8") as source:
+    actions = json.load(source)
+
+forward_actions = [action for action in actions if action.get("Type") == "forward"]
+if len(forward_actions) != 1:
+    raise SystemExit("Listener must have exactly one forward default action.")
+
+forward_config = forward_actions[0].get("ForwardConfig")
+if not forward_config:
+    raise SystemExit("Listener forward action must use ForwardConfig with blue and green target groups.")
+
+target_groups = forward_config.get("TargetGroups", [])
+if len(target_groups) != 2:
+    raise SystemExit(f"Listener ForwardConfig must contain exactly 2 target groups. actual={len(target_groups)}")
+
+weights = {}
+for target_group in target_groups:
+    arn = target_group.get("TargetGroupArn")
+    if arn in (blue_arn, green_arn):
+        weights[arn] = int(target_group.get("Weight", 1))
+
+missing = [arn for arn in (blue_arn, green_arn) if arn not in weights]
+if missing:
+    raise SystemExit("Listener ForwardConfig must include both blue and green target groups.")
+
+blue_weight = weights[blue_arn]
+green_weight = weights[green_arn]
+if (blue_weight, green_weight) == (100, 0):
+    print(f"blue|{blue_arn}|green|{green_arn}|{blue_weight}|{green_weight}")
+elif (blue_weight, green_weight) == (0, 100):
+    print(f"green|{green_arn}|blue|{blue_arn}|{blue_weight}|{green_weight}")
+else:
+    raise SystemExit(
+        f"Listener weights must be exactly 100/0 or 0/100. actual blue={blue_weight} green={green_weight}"
+    )
+PY
+}
+
+extract_target_instance_ids() {
+  local target_group_arn="$1"
+
+  aws elbv2 describe-target-health \
+    --region "${AWS_REGION}" \
+    --target-group-arn "${target_group_arn}" \
+    --output json > "${target_health_file}"
+
+  python3 - "${target_health_file}" "${EXPECTED_TARGET_COUNT}" "${BACKEND_TARGET_PORT}" <<'PY'
+import json
+import sys
+
+health_path, expected_count, expected_port = sys.argv[1:4]
+expected_count = int(expected_count)
+expected_port = int(expected_port)
+with open(health_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+descriptions = payload.get("TargetHealthDescriptions", [])
+if len(descriptions) != expected_count:
+    raise SystemExit(f"Target group must have exactly {expected_count} targets. actual={len(descriptions)}")
+
+instance_ids = []
+for description in descriptions:
+    target = description.get("Target", {})
+    instance_id = target.get("Id", "")
+    port = int(target.get("Port", -1))
+    if not instance_id.startswith("i-"):
+        raise SystemExit(f"Target group must use EC2 instance targets. invalid target id={instance_id}")
+    if port != expected_port:
+        raise SystemExit(f"Target {instance_id} must use port {expected_port}. actual={port}")
+    instance_ids.append(instance_id)
+
+if len(set(instance_ids)) != expected_count:
+    raise SystemExit("Target group contains duplicate instance targets.")
+
+for instance_id in sorted(instance_ids):
+    print(instance_id)
+PY
+}
+
+join_by_comma() {
+  local IFS=,
+  printf '%s' "$*"
+}
+
+validate_ssm_online() {
+  local instance_ids_csv
+
+  instance_ids_csv="$(join_by_comma "$@")"
+  aws ssm describe-instance-information \
+    --region "${AWS_REGION}" \
+    --filters "Key=InstanceIds,Values=${instance_ids_csv}" \
+    --output json > "${ssm_info_file}"
+
+  python3 - "${ssm_info_file}" "$@" <<'PY'
+import json
+import sys
+
+info_path = sys.argv[1]
+expected_ids = sys.argv[2:]
+with open(info_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+instances = {
+    item.get("InstanceId"): item.get("PingStatus")
+    for item in payload.get("InstanceInformationList", [])
+}
+missing = [instance_id for instance_id in expected_ids if instance_id not in instances]
+offline = [
+    f"{instance_id}:{instances.get(instance_id)}"
+    for instance_id in expected_ids
+    if instance_id in instances and instances.get(instance_id) != "Online"
+]
+
+if missing or offline:
+    if missing:
+        print("Missing SSM managed instances: " + ", ".join(missing), file=sys.stderr)
+    if offline:
+        print("SSM instances not Online: " + ", ".join(offline), file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
+target_group_health_is_healthy() {
+  local target_group_arn="$1"
+  shift
+
+  aws elbv2 describe-target-health \
+    --region "${AWS_REGION}" \
+    --target-group-arn "${target_group_arn}" \
+    --output json > "${target_health_file}"
+
+  python3 - "${target_health_file}" "$@" <<'PY'
+import json
+import sys
+
+health_path = sys.argv[1]
+expected_ids = set(sys.argv[2:])
+with open(health_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+descriptions = payload.get("TargetHealthDescriptions", [])
+states = {
+    description.get("Target", {}).get("Id"): description.get("TargetHealth", {}).get("State")
+    for description in descriptions
+}
+summary = ", ".join(f"{instance_id}:{states.get(instance_id, 'missing')}" for instance_id in sorted(expected_ids))
+print(summary)
+
+if set(states) != expected_ids:
+    raise SystemExit(1)
+if any(states.get(instance_id) != "healthy" for instance_id in expected_ids):
+    raise SystemExit(1)
+PY
+}
+
+wait_target_group_healthy() {
+  local target_group_arn="$1"
+  shift
+  local deadline=$((SECONDS + BACKEND_TG_HEALTH_TIMEOUT_SECONDS))
+  local health_summary
+
+  while true; do
+    if health_summary="$(target_group_health_is_healthy "${target_group_arn}" "$@" 2>&1)"; then
+      echo "Target group healthy: ${health_summary}"
+      return 0
+    fi
+
+    echo "Target group health pending: ${health_summary}"
+    if [ "${SECONDS}" -ge "${deadline}" ]; then
+      echo "Target group did not become healthy before timeout: ${target_group_arn}" >&2
+      return 1
+    fi
+
+    sleep "${BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS}"
+  done
+}
+
+build_switch_actions() {
+  python3 - "${listener_actions_file}" "${switch_actions_file}" "${active_target_group_arn}" "${inactive_target_group_arn}" <<'PY'
+import json
+import sys
+
+source_path, output_path, active_arn, inactive_arn = sys.argv[1:5]
+with open(source_path, encoding="utf-8") as source:
+    actions = json.load(source)
+
+for action in actions:
+    if action.get("Type") != "forward":
+        continue
+    for target_group in action["ForwardConfig"]["TargetGroups"]:
+        arn = target_group.get("TargetGroupArn")
+        if arn == active_arn:
+            target_group["Weight"] = 0
+        elif arn == inactive_arn:
+            target_group["Weight"] = 100
+
+with open(output_path, "w", encoding="utf-8") as output:
+    json.dump(actions, output, separators=(",", ":"))
+PY
+}
+
+listener_weights_match() {
+  local expected_active_weight="$1"
+  local expected_inactive_weight="$2"
+
+  load_listener_actions "${current_listener_actions_file}"
+  python3 - "${current_listener_actions_file}" "${active_target_group_arn}" "${inactive_target_group_arn}" \
+      "${expected_active_weight}" "${expected_inactive_weight}" <<'PY'
+import json
+import sys
+
+actions_path, active_arn, inactive_arn, expected_active_weight, expected_inactive_weight = sys.argv[1:6]
+expected_active_weight = int(expected_active_weight)
+expected_inactive_weight = int(expected_inactive_weight)
+with open(actions_path, encoding="utf-8") as source:
+    actions = json.load(source)
+
+forward_actions = [action for action in actions if action.get("Type") == "forward"]
+if len(forward_actions) != 1:
+    raise SystemExit(1)
+
+weights = {
+    target_group.get("TargetGroupArn"): int(target_group.get("Weight", 1))
+    for target_group in forward_actions[0].get("ForwardConfig", {}).get("TargetGroups", [])
+}
+actual_active_weight = weights.get(active_arn)
+actual_inactive_weight = weights.get(inactive_arn)
+print(f"active={actual_active_weight} inactive={actual_inactive_weight}")
+
+if actual_active_weight != expected_active_weight or actual_inactive_weight != expected_inactive_weight:
+    raise SystemExit(1)
+PY
+}
+
+wait_listener_weights() {
+  local expected_active_weight="$1"
+  local expected_inactive_weight="$2"
+  local deadline=$((SECONDS + BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS))
+  local weight_summary
+
+  while true; do
+    if weight_summary="$(listener_weights_match "${expected_active_weight}" "${expected_inactive_weight}" 2>&1)"; then
+      echo "Listener weights confirmed: ${weight_summary}"
+      return 0
+    fi
+
+    echo "Listener weight confirmation pending: ${weight_summary}"
+    if [ "${SECONDS}" -ge "${deadline}" ]; then
+      return 1
+    fi
+
+    sleep "${BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS}"
+  done
+}
+
+rollback_listener() {
+  echo "Rolling back ALB listener to the previous default actions." >&2
+  aws elbv2 modify-listener \
+    --region "${AWS_REGION}" \
+    --listener-arn "${BACKEND_ALB_LISTENER_ARN}" \
+    --default-actions "file://${listener_actions_file}" >/dev/null
+
+  if wait_listener_weights 100 0; then
+    echo "Rollback confirmed: active target group restored to weight 100."
+  else
+    echo "Rollback command completed, but listener weights were not confirmed." >&2
+    return 1
+  fi
+}
+
+verify_public_url() {
+  local label="$1"
+  local url="$2"
+  local response_file="${tmp_dir}/public-${label}.txt"
+  local attempt
+  local http_code
+  local curl_output
+
+  for ((attempt = 1; attempt <= BACKEND_PUBLIC_VERIFY_ATTEMPTS; attempt++)); do
+    : > "${response_file}"
+    if curl_output="$(curl --silent --show-error --location \
+        --max-time "${BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS}" \
+        --output "${response_file}" \
+        --write-out '%{http_code}' \
+        "${url}" 2>&1)"; then
+      http_code="${curl_output}"
+    else
+      http_code="000"
+      echo "Public ${label} check attempt ${attempt}/${BACKEND_PUBLIC_VERIFY_ATTEMPTS} curl error: ${curl_output}" >&2
+    fi
+
+    echo "Public ${label} check attempt ${attempt}/${BACKEND_PUBLIC_VERIFY_ATTEMPTS}: HTTP ${http_code}"
+    if [[ "${http_code}" =~ ^[0-9]{3}$ ]] \
+        && [ "${http_code}" -ge 200 ] \
+        && [ "${http_code}" -lt 400 ] \
+        && [ -s "${response_file}" ]; then
+      return 0
+    fi
+
+    if [ "${attempt}" -lt "${BACKEND_PUBLIC_VERIFY_ATTEMPTS}" ]; then
+      sleep "${BACKEND_PUBLIC_VERIFY_DELAY_SECONDS}"
+    fi
+  done
+
+  echo "Public ${label} verification failed: ${url}" >&2
+  return 1
+}
+
+cleanup() {
+  if [ -n "${tmp_dir:-}" ] && [ -d "${tmp_dir}" ]; then
+    rm -rf "${tmp_dir}" || true
+  fi
+}
+
+trap cleanup EXIT
+
+required_env AWS_REGION
+required_env ECR_IMAGE_URI
+required_env PARAMETER_PREFIX
+required_env BACKEND_ALB_LISTENER_ARN
+required_env BACKEND_BLUE_TARGET_GROUP_ARN
+required_env BACKEND_GREEN_TARGET_GROUP_ARN
+required_env BACKEND_PUBLIC_READINESS_URL
+required_env BACKEND_PUBLIC_API_VERIFY_URL
+
+require_commands aws bash curl python3 mktemp
+
+EXPECTED_TARGET_COUNT=2
+BACKEND_TARGET_PORT="${BACKEND_TARGET_PORT:-8080}"
+BACKEND_TG_HEALTH_TIMEOUT_SECONDS="${BACKEND_TG_HEALTH_TIMEOUT_SECONDS:-300}"
+BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS="${BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS:-10}"
+BACKEND_PUBLIC_VERIFY_ATTEMPTS="${BACKEND_PUBLIC_VERIFY_ATTEMPTS:-6}"
+BACKEND_PUBLIC_VERIFY_DELAY_SECONDS="${BACKEND_PUBLIC_VERIFY_DELAY_SECONDS:-10}"
+BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS="${BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS:-10}"
+BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS="${BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS:-60}"
+BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS="${BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS:-3}"
+
+tmp_dir="$(mktemp -d)"
+listener_actions_file="${tmp_dir}/listener-actions-before.json"
+current_listener_actions_file="${tmp_dir}/listener-actions-current.json"
+switch_actions_file="${tmp_dir}/listener-actions-switch.json"
+target_health_file="${tmp_dir}/target-health.json"
+ssm_info_file="${tmp_dir}/ssm-info.json"
+
+load_listener_actions "${listener_actions_file}"
+IFS='|' read -r active_color active_target_group_arn inactive_color inactive_target_group_arn blue_weight green_weight \
+  < <(read_blue_green_state)
+
+echo "Blue target group weight: ${blue_weight}"
+echo "Green target group weight: ${green_weight}"
+echo "Active target group: ${active_color} ${active_target_group_arn}"
+echo "Inactive target group: ${inactive_color} ${inactive_target_group_arn}"
+
+mapfile -t inactive_instance_ids < <(extract_target_instance_ids "${inactive_target_group_arn}")
+if [ "${#inactive_instance_ids[@]}" -ne "${EXPECTED_TARGET_COUNT}" ]; then
+  echo "Inactive target group must resolve to exactly ${EXPECTED_TARGET_COUNT} EC2 instance ids." >&2
+  exit 1
+fi
+
+printf 'Inactive target instances: %s\n' "${inactive_instance_ids[*]}"
+validate_ssm_online "${inactive_instance_ids[@]}"
+echo "All inactive target instances are SSM managed and Online."
+
+BACKEND_EC2_INSTANCE_IDS="${inactive_instance_ids[*]}" \
+  bash scripts/aws/run-ssm-backend-deploy-v1.sh
+
+wait_target_group_healthy "${inactive_target_group_arn}" "${inactive_instance_ids[@]}"
+
+build_switch_actions
+echo "Switching ALB listener traffic: ${active_color}=0 ${inactive_color}=100"
+if ! aws elbv2 modify-listener \
+    --region "${AWS_REGION}" \
+    --listener-arn "${BACKEND_ALB_LISTENER_ARN}" \
+    --default-actions "file://${switch_actions_file}" >/dev/null; then
+  echo "Failed to switch ALB listener traffic. Active target group remains unchanged." >&2
+  exit 1
+fi
+
+if ! wait_listener_weights 0 100; then
+  echo "ALB listener traffic switch was not confirmed; starting rollback." >&2
+  rollback_listener
+  exit 1
+fi
+
+if ! verify_public_url readiness "${BACKEND_PUBLIC_READINESS_URL}"; then
+  rollback_listener
+  exit 1
+fi
+
+if ! verify_public_url api "${BACKEND_PUBLIC_API_VERIFY_URL}"; then
+  rollback_listener
+  exit 1
+fi
+
+echo "Blue-Green deployment completed. New active target group: ${inactive_color} ${inactive_target_group_arn}"

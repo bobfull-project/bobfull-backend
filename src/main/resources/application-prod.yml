@@ -45,6 +45,9 @@ spring:
           auth: ${MAIL_SMTP_AUTH:true}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS:true}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:5000}
+          timeout: ${MAIL_SMTP_TIMEOUT:5000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:5000}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -104,6 +107,10 @@ outbox:
     enabled: ${OUTBOX_EMAIL_ENABLED:true}
     fixed-delay: ${OUTBOX_EMAIL_FIXED_DELAY:5s}
     batch-size: ${OUTBOX_EMAIL_BATCH_SIZE:100}
+    executor:
+      core-pool-size: ${OUTBOX_EMAIL_EXECUTOR_CORE_POOL_SIZE:2}
+      max-pool-size: ${OUTBOX_EMAIL_EXECUTOR_MAX_POOL_SIZE:2}
+      queue-capacity: ${OUTBOX_EMAIL_EXECUTOR_QUEUE_CAPACITY:100}
   chat-message:
     enabled: ${OUTBOX_CHAT_MESSAGE_ENABLED:true}
     fixed-delay: ${OUTBOX_CHAT_MESSAGE_FIXED_DELAY:5s}
@@ -126,6 +133,8 @@ bobfull:
       partitions: ${KAFKA_CHAT_MESSAGE_PARTITIONS:3}
       replicas: ${KAFKA_CHAT_MESSAGE_REPLICAS:1}
       consumer-enabled: ${KAFKA_CHAT_MESSAGE_CONSUMER_ENABLED:true}
+      consumer-concurrency: ${KAFKA_CHAT_MESSAGE_CONSUMER_CONCURRENCY:1}
       consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
       consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
       producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}
+      partition-key-strategy: ${KAFKA_CHAT_MESSAGE_PARTITION_KEY_STRATEGY:message-id}
