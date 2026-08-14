@@ -14,7 +14,7 @@
 ## 기준 코드
 
 - Before SHA: `e108c72faef56f4ee7708951f1f885a234f19044`
-- After SHA: `3d6d1a2` (최신 develop rebase 뒤 구현·테스트 변경 커밋)
+- 최신 develop 병합 검증 SHA: `759b87da1e095e159c581e2beac2ef250bddfa15`
 
 ## 환경·데이터·실행 조건
 
@@ -48,7 +48,19 @@
 
 - `AfterCommitExecutorTest`: 트랜잭션 동기화가 있으면 afterCommit에서 동기 실행되는 기존 계약을 확인했다.
 - `PaymentReservationConfirmationTransactionIntegrationTest`: 이메일 실패가 핵심 결제·예약 트랜잭션을 롤백하지 않으며 PENDING 재시도 상태를 남기는 것을 확인했다.
-- ChatRoom 경로의 구현 파일은 변경하지 않았고, 전체 build에 기존 ChatRoom 테스트가 포함된다.
+- `ChatRoomOutboxProcessorIntegrationTest`, `ReservationConfirmationServiceTest`: ChatRoom Outbox의 기존 AFTER_COMMIT 경로 회귀를 확인했다.
+- `RecruitmentDeadlineNotificationIntegrationTest`: 이메일 AFTER_COMMIT 처리의 비동기 완료를 즉시 단정하지 않고 2초 이내 eventual 처리로 검증한다.
+
+## 최신 검증 결과 (latest develop merge 이후)
+
+- 관련 회귀 8개 클래스: `BUILD SUCCESSFUL in 12s`
+  - `EmailOutboxSignalDispatcherTest`, `EmailOutboxEventServiceTest`, `EmailOutboxProcessorTest`
+  - `PaymentReservationConfirmationTransactionIntegrationTest`, `AfterCommitExecutorTest`
+  - `ChatRoomOutboxProcessorIntegrationTest`, `ReservationConfirmationServiceTest`
+- `RecruitmentDeadlineNotificationIntegrationTest`: `BUILD SUCCESSFUL in 10s`
+- 일반 CI 조건(OpenAI API key·provider·heldout opt-in 환경변수 제거):
+  `./gradlew clean build --console=plain` → `BUILD SUCCESSFUL in 2m 22s`
+- 이전 `FakeAiModerationAdapterTest`의 `compileTestJava` blocker와 전체 build BLOCK은 #261 / PR #262가 develop에 병합되며 해결됐다. 이 PR에서는 해당 코드를 변경하지 않았다.
 
 ## 구조화 로그·메트릭
 
@@ -62,8 +74,6 @@
 
 - 실제 SMTP 서버, 실제 HTTP 요청, K6/AWS 환경에서 timeout 및 health 회복을 재측정하지 않았다.
 - latch/Fake 기반 테스트는 executor 제출 경계와 상태 분리를 검증하지만 SMTP 프로토콜 자체의 timeout 동작은 검증하지 않는다.
-- 최신 develop rebase 뒤 전체 테스트 컴파일은 #256과 무관한
-  `FakeAiModerationAdapterTest`의 `ChatModerationService` 생성자 인자 불일치로 차단됐다.
 
 ## 관련
 
