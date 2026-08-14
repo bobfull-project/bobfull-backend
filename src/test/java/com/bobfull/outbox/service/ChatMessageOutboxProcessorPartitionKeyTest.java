@@ -21,7 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * #192 실험: {@code bobfull.kafka.chat-message.partition-key-strategy}가 실제 발행 key를
- * 바꾸는지 검증한다. 기본값(`chat-room`, 미설정 포함)은 기존 동작(chatRoomId)과 동일해야 한다.
+ * 바꾸는지 검증한다. 기본값(`message-id`, 미설정 포함)은 messageId를 사용해야 한다.
  */
 class ChatMessageOutboxProcessorPartitionKeyTest {
 
@@ -32,15 +32,15 @@ class ChatMessageOutboxProcessorPartitionKeyTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC);
 
     @Test
-    void 기본값은_chatRoomId를_key로_사용한다() {
+    void 기본값은_messageId를_key로_사용한다() {
         ChatMessageOutboxProcessor processor = new ChatMessageOutboxProcessor(
                 outboxEventRepository, transactionService, chatMessageRepository, kafkaTemplate, clock,
-                "bobfull.chat.message-created.v1", 10L, "chat-room");
+                "bobfull.chat.message-created.v1", 10L, "message-id");
         prepare(processor, 501L, 42L, 7L);
 
         processor.process(501L);
 
-        verify(kafkaTemplate).send(eq("bobfull.chat.message-created.v1"), eq("42"), any());
+        verify(kafkaTemplate).send(eq("bobfull.chat.message-created.v1"), eq("7"), any());
     }
 
     @Test
@@ -56,16 +56,15 @@ class ChatMessageOutboxProcessorPartitionKeyTest {
     }
 
     @Test
-    void 전략을_설정하지_않아도_ReflectionTestUtils로_바꿀_수_있다() {
+    void chat_room_전략을_설정하면_chatRoomId를_key로_사용한다() {
         ChatMessageOutboxProcessor processor = new ChatMessageOutboxProcessor(
                 outboxEventRepository, transactionService, chatMessageRepository, kafkaTemplate, clock,
                 "bobfull.chat.message-created.v1", 10L, "chat-room");
-        ReflectionTestUtils.setField(processor, "partitionKeyStrategy", "message-id");
         prepare(processor, 503L, 42L, 9L);
 
         processor.process(503L);
 
-        verify(kafkaTemplate).send(eq("bobfull.chat.message-created.v1"), eq("9"), any());
+        verify(kafkaTemplate).send(eq("bobfull.chat.message-created.v1"), eq("42"), any());
     }
 
     private void prepare(ChatMessageOutboxProcessor processor, Long eventId, Long roomId, Long messageId) {
