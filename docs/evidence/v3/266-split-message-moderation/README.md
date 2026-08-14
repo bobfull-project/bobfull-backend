@@ -38,3 +38,7 @@
 ## 한계
 
 Provider 결과는 단일 실행이다. 공개 사업장 번호 FP 때문에 Context LLM production 채택 근거는 없다.
+
+## Human E2E 후속
+
+Human E2E에서 단건 `죽`과 `010`이 각각 위협·개인정보로 과대판정된 것을 확인했다. 이는 Split Context가 아닌 단건 LLM boundary 문제였다. Policy 의미는 유지한 채 Few-shot에 두 불완전 조각의 SAFE boundary를 추가했고, local Provider 재검증에서 `죽`, `010`, `시`, `간`은 모두 SAFE였다. 반복 문자·중간 noise Split 우회에는 bounded canonicalization을 적용해 기존 명백 욕설과 정확히 일치할 때만 Rule Fast Path로 FLAGGED한다.

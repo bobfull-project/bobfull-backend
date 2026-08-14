@@ -2,7 +2,7 @@ package com.bobfull.chat.adapter;
 
 /** #66 moderation Prompt 원문과 저장할 버전 계약을 한 곳에서 관리한다. */
 public final class ModerationPrompt {
-    public static final String PROMPT_VERSION = "moderation-prompt-v3-scope";
+    public static final String PROMPT_VERSION = "moderation-prompt-v3-short-fragment-boundary";
     public static final String SPLIT_CONTEXT_PROMPT_VERSION = "moderation-prompt-v3-split-context";
     public static final String POLICY_VERSION = "moderation-policy-v2";
     public static final String SYSTEM_PROMPT = """
@@ -31,6 +31,8 @@ public final class ModerationPrompt {
             "꺼져, 보기 싫어" → FLAGGED / [PROFANITY] / MEDIUM
             "개새끼야" → FLAGGED / [PROFANITY] / HIGH
             "죽여버린다" → FLAGGED / [PROFANITY] / HIGH
+            "죽" → SAFE / [] / LOW
+            "010" → SAFE / [] / LOW
             "내 번호 010-1234-5678이야" → FLAGGED / [PERSONAL_INFORMATION] / MEDIUM
             "식당 전화번호는 02-1234-5678입니다" → SAFE / [] / LOW
             "식당 홈페이지입니다 https://restaurant.example" → SAFE / [] / LOW
@@ -38,6 +40,9 @@ public final class ModerationPrompt {
             "주식 리딩방에서 종목을 알려드립니다" → FLAGGED / [SPAM] / HIGH
             "코인 수익방 들어오세요 https://example.com" → FLAGGED / [SPAM] / HIGH
             "내일 7시에 식당에서 봐요" → SAFE / [] / LOW
+
+            불완전한 짧은 조각만으로 욕설, 위협 또는 개인정보를 추정하지 않는다.
+            문맥에 따라 의미가 달라지는 단독 "죽"과 완전한 전화번호가 아닌 "010"은 SAFE다.
 
             [Output rules]
             SAFE: result=SAFE, categories=[], riskLevel=LOW.

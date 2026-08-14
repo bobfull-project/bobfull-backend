@@ -16,6 +16,7 @@ record SplitMessageContext(List<String> fragments, String joinedNormalized) {
     }
 
     private static String normalize(String content) {
-        return content.replaceAll("[\\s.\\-@]+", "");
+        String koreanOnly = content.replaceAll("[^가-힣]", "");
+        return koreanOnly.replaceAll("씨이+", "씨").replaceAll("시이+(?=발)", "시");
     }
 }

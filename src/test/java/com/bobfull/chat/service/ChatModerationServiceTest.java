@@ -133,7 +133,7 @@ class ChatModerationServiceTest {
         ChatModeration saved = savedModeration();
         assertThat(ai.callCount).isEqualTo(1);
         assertThat(saved.getProvider()).isEqualTo("OpenAI");
-        assertThat(saved.getPromptVersion()).isEqualTo("moderation-prompt-v3-scope");
+        assertThat(saved.getPromptVersion()).isEqualTo("moderation-prompt-v3-short-fragment-boundary");
     }
 
     @Test
@@ -165,6 +165,13 @@ class ChatModerationServiceTest {
     }
 
     @Test
+    void 반복문자와_중간_noise를_제거해도_명백한_시발만_Rule로_FLAGGED한다() {
+        assertSplitRule("씨이이이", "발");
+        assertSplitRule("시", "1", "발");
+        assertSplitRule("시", "-", "발");
+    }
+
+    @Test
     void 명백한_Rule이_아닌_의심_결합은_기존_단건_Provider_경로를_유지한다() {
         ChatMessage first = message(126L, 1L, 2L, NOW.minusSeconds(2), "죽");
         ChatMessage middle = message(1261L, 1L, 2L, NOW.minusSeconds(1), "먹고");
@@ -178,7 +185,7 @@ class ChatModerationServiceTest {
 
         assertThat(ai.callCount).isEqualTo(1);
         assertThat(ai.lastInput).isEqualTo("싶다");
-        assertThat(savedModeration().getPromptVersion()).isEqualTo("moderation-prompt-v3-scope");
+        assertThat(savedModeration().getPromptVersion()).isEqualTo("moderation-prompt-v3-short-fragment-boundary");
     }
 
     @Test
@@ -362,6 +369,11 @@ class ChatModerationServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(message, "id", id);
         org.springframework.test.util.ReflectionTestUtils.setField(message, "createdAt", createdAt);
         return message;
+    }
+    private void assertSplitRule(String... fragments) {
+        java.util.List<ChatMessage> messages = new java.util.ArrayList<>();
+        for (int index = 0; index < fragments.length; index++) messages.add(message((long) index + 300L, 1L, 2L, NOW.plusMillis(index), fragments[index]));
+        assertThat(new ModerationRuleFilter().clearSplitFlagged(SplitMessageContext.from(messages).joinedNormalized())).isPresent();
     }
     private AiModerationResponse response(ModerationResultType result, EnumSet<ModerationCategory> categories, RiskLevel riskLevel) {
         return new AiModerationResponse(new ModerationResult(result, categories, riskLevel), "OpenAI", "gpt-4o-mini", 1L, 2L, 3L);

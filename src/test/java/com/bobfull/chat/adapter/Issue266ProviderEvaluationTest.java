@@ -20,6 +20,10 @@ class Issue266ProviderEvaluationTest {
     @Autowired @Qualifier("moderationChatClient") ChatClient client;
 
     @Test void 핵심_Context_Case를_실제_Provider로_기록한다() {
+        for (String fragment : List.of("죽", "010", "시", "간")) {
+            ModerationResult result = client.prompt().system(ModerationPrompt.SYSTEM_PROMPT).user(fragment).call().entity(ModerationResult.class);
+            System.out.printf("[266-SINGLE] input=%s result=%s categories=%s risk=%s%n", fragment, result.result(), result.categories(), result.riskLevel());
+        }
         for (Case c : List.of(new Case("SPLIT-SIBAL", "아", List.of("시", "발", "아")), new Case("SPLIT-BYEONGSIN", "신", List.of("병", "신")),
                 new Case("SAFE-SIGAN", "간", List.of("시", "간")), new Case("SAFE-JUK", "싶다", List.of("죽", "먹고", "싶다")),
                 new Case("PERSONAL-010", "5678", List.of("내 번호", "010", "1234", "5678")), new Case("PUBLIC-010", "5678", List.of("식당 전화번호", "010", "1234", "5678")))) {

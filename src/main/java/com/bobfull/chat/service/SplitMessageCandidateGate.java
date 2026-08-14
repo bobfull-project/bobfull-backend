@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /** #251의 넓은 Context 재적용을 막기 위한 #266 Split 후보 제한이다. */
 @Component
 public class SplitMessageCandidateGate {
-    static final int MAX_FRAGMENT_LENGTH = 4;
+    static final int MAX_FRAGMENT_LENGTH = 8;
     static final int RECENT_MESSAGE_LIMIT = 5;
     static final Duration CONTEXT_WINDOW = Duration.ofSeconds(30);
 
