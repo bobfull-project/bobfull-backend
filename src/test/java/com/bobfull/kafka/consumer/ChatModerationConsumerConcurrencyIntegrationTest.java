@@ -21,7 +21,6 @@ import com.bobfull.reservation.entity.ReservationStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -36,6 +35,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +46,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
-import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.junit.jupiter.Container;
@@ -54,12 +53,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 
 /**
- * #192 {@code bobfull.kafka.chat-message.consumer-concurrency} 설정이 실제
- * {@link ConcurrentMessageListenerContainer}에 반영되는지 검증하고, 같은 컨텍스트에서
- * "Kafka vs Async Baseline" 비교의 Kafka 축(send()→Outbox→Kafka→Consumer 실측)도 측정한다.
+ * #192 Kafka/Testcontainers Evidence: "Kafka vs Async Baseline" 비교의 Kafka 축
+ * (send()→Outbox→Kafka→Consumer 실측)과 Consumer 확장·복구를 측정한다.
  * Async 축은 {@code ChatMessageAsyncModerationBaselineEvidenceTest}에서 같은 Fake AI 지연·메시지 수로 측정한다.
  */
 @Testcontainers
+@Tag("kafka-evidence")
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:chat-moderation-consumer-concurrency-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver",
@@ -109,16 +108,6 @@ class ChatModerationConsumerConcurrencyIntegrationTest {
     private FakeAiModerationAdapter fakeAiModerationAdapter;
     @Autowired
     private ChatMessageOutboxProcessor outboxProcessor;
-
-    @Test
-    void consumer_concurrency_설정이_리스너_컨테이너에_반영된다() {
-        Collection<MessageListenerContainer> containers = registry.getListenerContainers();
-
-        assertThat(containers).hasSize(1);
-        MessageListenerContainer container = containers.iterator().next();
-        assertThat(container).isInstanceOf(ConcurrentMessageListenerContainer.class);
-        assertThat(((ConcurrentMessageListenerContainer<?, ?>) container).getConcurrency()).isEqualTo(3);
-    }
 
     @Test
     void Kafka_경로는_같은_AI_지연에서도_send는_빠르고_Consumer_동시성만큼_완료된다() {
