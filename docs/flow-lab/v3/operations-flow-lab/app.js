@@ -62,9 +62,9 @@ function renderComparison(data) {
   const lanes = data.comparison;
   const cx = [45, 130, 215, 300];
   const stageLabels = currentChapter().stageLabels || [];
-  element.innerHTML = `<article class="lane"><span class="lane-tag">V2 BEFORE — baseline Evidence</span><h3>AFTER_COMMIT</h3>
+  element.innerHTML = `<article class="lane"><span class="lane-tag">V2 이전 방식 — 실패 사례</span><h3>확정 후 메모리 처리(AFTER_COMMIT)</h3>
     <svg class="lane-strip" viewBox="0 0 345 62">${laneNodeSvg(cx, lanes.v2States, stageLabels)}</svg><p>${lanes.v2}</p></article>
-    <article class="lane"><span class="lane-tag">V3 AFTER — Transactional Outbox</span><h3>Outbox</h3>
+    <article class="lane"><span class="lane-tag">V3 현재 방식 — 안전 장치 추가</span><h3>발행 대기함 패턴(Outbox)</h3>
     <svg class="lane-strip" viewBox="0 0 345 62">${laneNodeSvg(cx, lanes.v3States, stageLabels)}</svg><p>${lanes.v3}</p></article>`;
 }
 /* beforeValue/afterValue는 display 문자열과 별개인 같은-unit(scaleUnit) 계산값이다.
