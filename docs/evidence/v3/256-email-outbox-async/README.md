@@ -14,7 +14,7 @@
 ## 기준 코드
 
 - Before SHA: `e108c72faef56f4ee7708951f1f885a234f19044`
-- After SHA: Draft PR 생성 전 최종 커밋으로 갱신 예정
+- After SHA: `d8fe8ddaf9176243b86a4419556475e0886e3a4b` (구현·테스트 변경 커밋)
 
 ## 환경·데이터·실행 조건
 
