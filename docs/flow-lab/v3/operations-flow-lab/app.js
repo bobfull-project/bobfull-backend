@@ -1,6 +1,6 @@
 /* Playback and rendering only. Every visual decision comes from step.visual. */
 const $ = (id) => document.getElementById(id);
-const state = { chapter: 0, scenario: 0, step: 0, mode: "presentation", timer: null };
+const state = { chapter: 0, scenario: 0, step: 0, timer: null };
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
@@ -67,21 +67,23 @@ function renderComparison(data) {
     <article class="lane"><span class="lane-tag">V3 AFTER — Transactional Outbox</span><h3>Outbox</h3>
     <svg class="lane-strip" viewBox="0 0 345 62">${laneNodeSvg(cx, lanes.v3States, stageLabels)}</svg><p>${lanes.v3}</p></article>`;
 }
+/* beforeValue/afterValue는 display 문자열과 별개인 같은-unit(scaleUnit) 계산값이다.
+   display 문자열의 단위가 서로 다를 수 있어(예: "1.706s" vs "265.54ms") 문자열에서
+   숫자만 뽑아 비교하면 방향이 뒤집힐 수 있다 — 명시 값이 없을 때만 문자열 파싱으로 대체한다.
+   Step 패널과 하단 성능 개선 요약이 이 렌더링을 그대로 공유한다. */
+function performanceRowHtml(row) {
+  if (row.after == null) return `<article class="perf-stat"><h3>${row.metric}</h3><p class="perf-value">${row.before}</p></article>`;
+  const beforeNum = row.beforeValue != null ? row.beforeValue : parseFloat(String(row.before).replace(/[^0-9.]/g, "")) || 1;
+  const afterNum = row.afterValue != null ? row.afterValue : parseFloat(String(row.after).replace(/[^0-9.]/g, "")) || 0;
+  const max = Math.max(beforeNum, afterNum, 1);
+  return `<article class="perf-compare"><h3>${row.metric}</h3>
+    <div class="perf-bar-row"><span class="perf-bar-label">Before</span><div class="perf-bar"><div class="perf-bar-fill before" style="width:${(beforeNum / max) * 100}%"></div></div><span class="perf-bar-value">${row.before}</span></div>
+    <div class="perf-bar-row"><span class="perf-bar-label">After</span><div class="perf-bar"><div class="perf-bar-fill after" style="width:${(afterNum / max) * 100}%"></div></div><span class="perf-bar-value">${row.after}</span></div>
+    ${row.improvement ? `<p class="perf-improvement">${row.improvement}</p>` : ""}</article>`;
+}
 function renderPerformance(data) {
   const element = $("performance"); element.hidden = !data.performance; if (element.hidden) { element.innerHTML = ""; return; }
-  element.innerHTML = data.performance.map((row) => {
-    if (row.after == null) return `<article class="perf-stat"><h3>${row.metric}</h3><p class="perf-value">${row.before}</p></article>`;
-    /* beforeValue/afterValue는 display 문자열과 별개인 같은-unit(scaleUnit) 계산값이다.
-       display 문자열의 단위가 서로 다를 수 있어(예: "1.706s" vs "265.54ms") 문자열에서
-       숫자만 뽑아 비교하면 방향이 뒤집힐 수 있다 — 명시 값이 없을 때만 문자열 파싱으로 대체한다. */
-    const beforeNum = row.beforeValue != null ? row.beforeValue : parseFloat(String(row.before).replace(/[^0-9.]/g, "")) || 1;
-    const afterNum = row.afterValue != null ? row.afterValue : parseFloat(String(row.after).replace(/[^0-9.]/g, "")) || 0;
-    const max = Math.max(beforeNum, afterNum, 1);
-    return `<article class="perf-compare"><h3>${row.metric}</h3>
-      <div class="perf-bar-row"><span class="perf-bar-label">Before</span><div class="perf-bar"><div class="perf-bar-fill before" style="width:${(beforeNum / max) * 100}%"></div></div><span class="perf-bar-value">${row.before}</span></div>
-      <div class="perf-bar-row"><span class="perf-bar-label">After</span><div class="perf-bar"><div class="perf-bar-fill after" style="width:${(afterNum / max) * 100}%"></div></div><span class="perf-bar-value">${row.after}</span></div>
-      ${row.improvement ? `<p class="perf-improvement">${row.improvement}</p>` : ""}</article>`;
-  }).join("");
+  element.innerHTML = data.performance.map(performanceRowHtml).join("");
 }
 /* Kafka Partition 분포. #performance와 같은 perf-stat/perf-bar 구조를 재사용한다 — 별도 CSS 없음. */
 function renderKafkaPartitions(data) {
@@ -92,9 +94,9 @@ function renderKafkaPartitions(data) {
     </article>`).join("");
 }
 function linked(refs) { return refs.length ? refs.map((item) => `<a href="${item.href}" target="_blank" rel="noreferrer">${item.label}</a>`).join("<br>") : "not applicable"; }
+/* narration이 이미 "왜"를 설명하므로 여기서는 반복하지 않는다. */
 function renderDetails(data) {
-  const entries = [["Why", data.narration], ["Code", data.codeReferences.length ? data.codeReferences.join(" · ") : "not applicable"],
-    ["Runtime", "코드·Evidence 기반 정적 시뮬레이션 — 라이브 JVM이 아님"],
+  const entries = [["Code", data.codeReferences.length ? data.codeReferences.join(" · ") : "not applicable"],
     ["Transaction / Lock", `Transaction: ${format(data.transaction)}<br>Lock: ${format(data.lock)}`],
     ["Event / Infra", `Outbox: ${format(data.outbox)}<br>Kafka: ${format(data.kafka)}<br>Consumer: ${format(data.consumer)}<br>Redis: ${format(data.redis)}`],
     ["Logs / Metrics", `Logs: ${format(data.logs)}<br>Metrics: ${format(data.metrics)}`], ["Evidence", linked(data.evidenceReferences)], ["Limits", format(data.limits)]];
@@ -102,12 +104,21 @@ function renderDetails(data) {
   if (data.sideNote) entries.push([data.sideNote.title, data.sideNote.body]);
   $("detailGrid").innerHTML = entries.map(([title, value]) => `<article><h3>${title}</h3><p>${value}</p></article>`).join("");
 }
-function renderOps(data) { $("opsGrid").innerHTML = [["Structured log", data.logs], ["Metric", data.metrics], ["Evidence", linked(data.evidenceReferences)], ["Limit", data.limits]].map(([title, value]) => `<article class="${value == null ? "na" : ""}"><h3>${title}</h3><p>${format(value)}</p></article>`).join(""); }
+function escapeHtml(text) { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+/* 현재 Step에 실제 코드 발췌(codeSnippet)가 있으면 그대로 보여준다 — 없으면 codeReferences만 안내한다. */
+function renderCodeView(data) {
+  const el = $("codeCard");
+  if (data.codeSnippet) {
+    el.innerHTML = `<div class="code-card-head"><span class="code-file">${data.codeSnippet.file}</span></div><pre class="code-block"><code>${escapeHtml(data.codeSnippet.code)}</code></pre>`;
+    return;
+  }
+  el.innerHTML = `<p class="code-empty">이 Step에는 별도로 발췌한 코드가 없습니다.${data.codeReferences.length ? ` 참고: ${data.codeReferences.join(" · ")}` : ""}</p>`;
+}
 function formatModerationResult(result) {
   return `provider=${result.provider} · model=${result.model}<br>promptVersion=${result.promptVersion} · policyVersion=${result.policyVersion}<br>result=${result.result} · categories=${result.categories} · riskLevel=${result.riskLevel}<br>tokens=${result.tokens}`;
 }
-/* 발표 모드에서도 "이건 실제 측정인가?"에 화면만 보고 답할 수 있도록 남기는 최소 caption이다.
-   REJECTED/FUTURE만 강조하고 나머지 factStatus는 evidence 1건과 함께 조용한 caption으로 보여준다. */
+/* 화면에 항상 보이는 최소 caption이다. REJECTED/FUTURE만 강조하고
+   나머지 factStatus는 evidence 1건과 함께 조용한 caption으로 보여준다. */
 function factCaption(data) {
   const primary = data.evidenceReferences.length ? data.evidenceReferences[0].label.split(" ")[0] : null;
   const label = primary ? `${data.factStatus} · ${primary}` : data.factStatus;
@@ -116,36 +127,63 @@ function factCaption(data) {
 }
 function render() {
   const data = currentStep();
-  document.body.dataset.mode = state.mode;
   populateSelects();
   $("chapterQuestion").textContent = currentChapter().title;
   $("chapterSubtitle").textContent = currentChapter().subtitle;
-  renderCanvas(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data); renderDetails(data); renderOps(data);
+  renderCanvas(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data); renderDetails(data); renderCodeView(data);
   $("stepTitle").textContent = data.action; $("narration").textContent = data.narration; $("counter").textContent = `Step ${state.step + 1} / ${currentScenario().steps.length}`;
   $("stepFact").innerHTML = `<p class="fact-caption">${factCaption(data)}</p>${quickState(data)}${promptBlockText(data)}`;
   const cards = [["Domain", data.domainState], ["Transaction", data.transaction], ["Outbox", data.outbox],
     ["Kafka / Consumer", [data.kafka, data.consumer].filter(Boolean).join(" / ") || null], ["Redis", data.redis], ["Outcome", data.visual.outcome]];
   if (data.moderationResult) cards.push(["ChatModeration DB", formatModerationResult(data.moderationResult)]);
   $("stateGrid").innerHTML = cards.map(([title, value]) => `<article class="${value == null ? "na" : ""}"><h3>${title}</h3><p>${format(value)}</p></article>`).join("");
-  $("learningPanel").hidden = state.mode !== "learning"; $("opsPanel").hidden = state.mode !== "ops";
-  $("evidenceGate").hidden = state.mode !== "learning";
-  $("viewEvidence").hidden = state.mode !== "presentation";
-  document.querySelectorAll("[data-mode]").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
 }
 function quickState(data) {
   const committed = data.domainState || data.transaction;
   const rows = [["COMMITTED", committed], ["OUTBOX", data.outbox], ["KAFKA", data.kafka], ["RETRY OWNER", data.retryOwner]].filter(([, value]) => value != null);
   return rows.length ? `<dl class="quick-state">${rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join("")}</dl>` : "";
 }
-/* Prompt 원문 전체는 학습 상세(fullPrompt)에서만 펼친다 — 여기서는 정책 구성 블록을 조용한 caption 한 줄로 보여준다. */
+/* Prompt 원문 전체는 상세 패널의 fullPrompt에서만 펼친다 — 여기서는 정책 구성 블록을 조용한 caption 한 줄로 보여준다. */
 function promptBlockText(data) {
   if (!data.promptBlocks) return "";
   return `<p class="prompt-blocks">${data.promptBlocks.join(" · ")}</p>`;
+}
+/* 페이지 하단 "성능 개선 / 신뢰성·설계 개선" 요약은 특정 Step이 아니라 항상 고정으로 보여준다.
+   scenario-data.js에 이미 있는 실제 step을 그대로 다시 보여줄 뿐, 새 사실을 추가하지 않는다. */
+function findStep(chapterId, scenarioId, stepId) {
+  const chapter = chapters.find((item) => item.id === chapterId);
+  const scenario = chapter.scenarios.find((item) => item.id === scenarioId);
+  return scenario.steps.find((item) => item.id === stepId);
+}
+const PERFORMANCE_HIGHLIGHTS = [
+  { chapter: "hotpath-performance", scenario: "batch-optimization", step: "same-load-result" },
+  { chapter: "hotpath-performance", scenario: "batch-optimization", step: "stress-result" },
+  { chapter: "kafka-mechanics", scenario: "message-id-partitioning", step: "after-message-id-key" }
+];
+function renderPerformanceHighlights() {
+  const rows = PERFORMANCE_HIGHLIGHTS.flatMap((ref) => findStep(ref.chapter, ref.scenario, ref.step).performance.filter((row) => row.improvement));
+  $("performanceHighlights").innerHTML = rows.map(performanceRowHtml).join("");
+}
+const DECISION_HIGHLIGHTS = [
+  { chapter: "outbox", scenario: "chatroom-outbox", step: "retry" },
+  { chapter: "kafka-ai", scenario: "publish-failure", step: "retry" },
+  { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "dlt" },
+  { chapter: "kafka-mechanics", scenario: "async-vs-kafka", step: "reliability" },
+  { chapter: "ai-moderation", scenario: "clear-flagged-fast-path", step: "persisted" },
+  { chapter: "ai-moderation", scenario: "why-not-context-llm", step: "rejected-decision" }
+];
+function renderDecisionHighlights() {
+  $("reliabilityHighlights").innerHTML = DECISION_HIGHLIGHTS.map((ref) => {
+    const step = findStep(ref.chapter, ref.scenario, ref.step);
+    const note = step.sideNote ? `<p class="side-note">${step.sideNote.body}</p>` : "";
+    return `<article><h3>${step.action}</h3><p>${step.narration}</p>${step.decisionBadge ? `<p class="decision">${step.decisionBadge}</p>` : ""}${note}</article>`;
+  }).join("");
 }
 function stop() { clearInterval(state.timer); state.timer = null; }
 function resetStep() { stop(); state.step = 0; render(); }
 function advance() { if (state.step >= currentScenario().steps.length - 1) { stop(); state.step = 0; render(); return; } state.step++; render(); }
 $("chapterSelect").onchange = (event) => { state.chapter = Number(event.target.value); state.scenario = 0; resetStep(); }; $("scenarioSelect").onchange = (event) => { state.scenario = Number(event.target.value); resetStep(); };
 $("play").onclick = () => { if (state.step === currentScenario().steps.length - 1) state.step = 0; stop(); render(); state.timer = setInterval(advance, Number($("speed").value)); }; $("pause").onclick = stop; $("next").onclick = advance; $("prev").onclick = () => { stop(); state.step = Math.max(0, state.step - 1); render(); }; $("reset").onclick = resetStep; $("speed").onchange = () => { if (state.timer) $("play").click(); };
-$("viewEvidence").onclick = () => { state.mode = "learning"; render(); };
-document.querySelectorAll("[data-mode]").forEach((button) => button.onclick = () => { state.mode = button.dataset.mode; render(); }); render();
+render();
+renderPerformanceHighlights();
+renderDecisionHighlights();

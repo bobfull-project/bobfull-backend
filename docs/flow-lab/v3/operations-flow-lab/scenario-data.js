@@ -26,7 +26,7 @@ const step = (id, actor, target, action, narration, details) => {
     kafka: null, consumer: null, redis: null, logs: null, metrics: null, retryOwner: null, performance: null,
     sideNote: null, codeReferences: [], evidenceReferences: [], limits: null, topologyKey: null,
     kafkaPartitions: null, moderationResult: null, promptBlocks: null, fullPrompt: null, decisionBadge: null,
-    ...details };
+    codeSnippet: null, ...details };
 };
 /* Client -> Web/STOMP -> Application -> DB 전체 경로. 세 edge 모두 포함해야 token이 중간에서
    순간이동하지 않는다(request-app 누락은 독립 리뷰에서 확인된 실제 버그였다). */
@@ -41,10 +41,10 @@ const topology = {
     "app-a": [850, 290], "app-b": [850, 390], stomp: [1050, 340], async: [335, 350] },
   edges: {
     request: "M125 225 H180", "request-app": "M280 225 H335", persist: "M435 225 H500",
-    "outbox-write": "M600 225 H630 V70 H670", "outbox-claim": "M670 70 H630 V160 H435", "outbox-complete": "M435 160 H630 V70 H670",
+    "outbox-write": "M600 225 H630 V70 H670", "outbox-claim": "M670 70 H630 V205 H435", "outbox-complete": "M435 205 H630 V70 H670",
     "outbox-publish": "M770 70 H825", "kafka-consume": "M925 70 H980", "ai-call": "M1080 70 H1135",
     "kafka-dlt": "M875 105 V145", "dlt-db": "M825 180 H630 V225 H600",
-    "redis-publish": "M600 225 H630 V385 H670", "redis-app-a": "M770 385 H810 V325 H850", "redis-app-b": "M770 385 H850",
+    "redis-publish": "M600 225 H630 V385 H670", "redis-app-a": "M770 385 H810 V325 H850", "redis-app-b": "M770 385 H810 V425 H850",
     "local-stomp": "M950 325 H1000 V375 H1050", "local-stomp-b": "M950 425 H1000 V375 H1050",
     "commit-async": "M385 260 V350"
   },
@@ -85,7 +85,33 @@ const ch2PublishFailureSteps = [
     { domainState: "ChatMessage remains COMMITTED", outbox: "PENDING · attemptCount 증가", kafka: "publish failed",
       retryOwner: "Outbox", logs: "event=OUTBOX_RETRY_SCHEDULED", factStatus: FACT.VERIFIED,
       visual: visual(["outbox", "kafka"], ["outbox-publish"], "failure", "failure", "outbox", ["db"]),
-      limits: "verified — fault injection. actual broker outage / Kafka HA는 검증하지 않았다.", evidenceReferences: [evidence.pipeline] }),
+      limits: "verified — fault injection. actual broker outage / Kafka HA는 검증하지 않았다.",
+      codeSnippet: { file: "ChatMessageOutboxProcessor.java", code: `private void processClaimed(OutboxEventTransactionService.ClaimedOutboxEvent event) {
+    log.info("event=OUTBOX_PROCESSING_STARTED outboxEventId={} eventType={} aggregateType=CHAT_MESSAGE aggregateId={} attemptCount={} status=PROCESSING",
+            event.id(), event.eventType(), event.aggregateId(), event.attemptCount());
+    try {
+        publish(event);
+        if (transactionService.complete(event, clock.instant())) {
+            log.info("event=OUTBOX_PROCESSING_COMPLETED outboxEventId={} eventType={} aggregateType=CHAT_MESSAGE aggregateId={} attemptCount={} status=COMPLETED",
+                    event.id(), event.eventType(), event.aggregateId(), event.attemptCount());
+        }
+    } catch (ExecutionException | TimeoutException | InterruptedException | RuntimeException exception) {
+        if (exception instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        String errorCode = exception.getClass().getSimpleName();
+        OutboxEventTransactionService.FailureResult result = transactionService.fail(event, errorCode,
+                clock.instant(), MAX_RETRIES);
+        if (!result.updated()) return;
+        if (result.failed()) {
+            log.error("event=OUTBOX_PROCESSING_FAILED outboxEventId={} eventType={} aggregateType=CHAT_MESSAGE aggregateId={} attemptCount={} status=FAILED errorCode={}",
+                    event.id(), event.eventType(), event.aggregateId(), result.attemptCount(), errorCode, exception);
+        } else {
+            log.warn("event=OUTBOX_RETRY_SCHEDULED outboxEventId={} eventType={} aggregateType=CHAT_MESSAGE aggregateId={} attemptCount={} status=PENDING errorCode={} nextAttemptAt={}",
+                    event.id(), event.eventType(), event.aggregateId(), result.attemptCount(), errorCode, result.nextAttemptAt(), exception);
+        }
+    }
+}` }, evidenceReferences: [evidence.pipeline] }),
   step("retry", "Outbox processor", "Kafka", "↻ backoff → publish", "backoff 뒤 재발행하고 Broker ACK를 받으면 COMPLETED가 된다.",
     { domainState: "ChatMessage remains COMMITTED", outbox: "PENDING → PROCESSING → COMPLETED", kafka: "published",
       retryOwner: "Outbox", factStatus: FACT.VERIFIED,
@@ -101,7 +127,22 @@ const ch2RetryExhaustedSteps = [
   step("dlt", "Kafka", "DLT topic → ChatModerationDltRecoverer", "↓ DLT / final failure", "Retry 소진 뒤 DLT로 옮기고, recordFinalFailure가 ANALYSIS_FAILED를 한 번만 기록한다.",
     { kafka: "DLT", domainState: "ChatMessage remains COMMITTED · ChatModeration ANALYSIS_FAILED", factStatus: FACT.VERIFIED,
       visual: visual(["kafka", "dlt", "db"], ["kafka-dlt", "dlt-db"], "dlt", "dlt", "kafka"),
-      codeReferences: ["ChatModerationDltRecoverer", "ChatModerationService.recordFinalFailure"], evidenceReferences: [evidence.pipeline] })
+      codeReferences: ["ChatModerationDltRecoverer", "ChatModerationService.recordFinalFailure"],
+      codeSnippet: { file: "ChatModerationDltRecoverer.java", code: `@Override
+public void accept(ConsumerRecord<?, ?> record, Exception exception) {
+    delegate.accept(record, exception); // DLT 발행 실패 시 예외를 던져 아래 recordFinalFailure를 막는다
+    String errorCode = ListenerExceptionUnwrapper.errorCodeOf(exception);
+    Long messageId = messageIdOf(record);
+    if (messageId != null) {
+        chatModerationService.recordFinalFailure(messageId, errorCode);
+    } else {
+        log.error("event=CHAT_MODERATION_DLT_MESSAGE_ID_MISSING topic={} partition={} offset={} errorCode={}",
+                record.topic(), record.partition(), record.offset(), errorCode);
+    }
+    businessMetricRecorder.increment(BusinessMetricEvent.CHAT_MODERATION_RETRY_EXHAUSTED);
+    log.error("event=CHAT_MODERATION_RETRY_EXHAUSTED topic={} partition={} offset={} messageId={} errorCode={}",
+            record.topic(), record.partition(), record.offset(), messageId, errorCode);
+}` }, evidenceReferences: [evidence.pipeline] })
 ];
 
 const chapters = [
@@ -136,6 +177,29 @@ const chapters = [
         comparison: { v2: "durable retry basis 없음", v3: "retry → COMPLETED",
           v2States: ["done", "done", "done", "blocked"], v3States: ["done", "done", "done", "done"] },
         codeReferences: ["ChatRoomOutboxProcessor", "ChatRoomCreationService.createIfAbsent"],
+        codeSnippet: { file: "ChatRoomOutboxProcessor.java", code: `private void processClaimed(OutboxEventTransactionService.ClaimedOutboxEvent event) {
+    log.info("event=OUTBOX_PROCESSING_STARTED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=PROCESSING",
+            event.id(), event.eventType(), event.aggregateId(), event.attemptCount());
+    try {
+        chatRoomCreationService.createIfAbsent(event.aggregateId());
+        if (transactionService.complete(event, clock.instant())) {
+            log.info("event=OUTBOX_PROCESSING_COMPLETED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=COMPLETED",
+                    event.id(), event.eventType(), event.aggregateId(), event.attemptCount());
+        }
+    } catch (RuntimeException exception) {
+        String errorCode = exception.getClass().getSimpleName();
+        OutboxEventTransactionService.FailureResult result = transactionService.fail(event, errorCode,
+                clock.instant(), MAX_RETRIES);
+        if (!result.updated()) return;
+        if (result.failed()) {
+            log.error("event=OUTBOX_PROCESSING_FAILED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=FAILED errorCode={}",
+                    event.id(), event.eventType(), event.aggregateId(), result.attemptCount(), errorCode, exception);
+        } else {
+            log.warn("event=OUTBOX_RETRY_SCHEDULED outboxEventId={} eventType={} aggregateType=RESERVATION aggregateId={} attemptCount={} status=PENDING errorCode={} nextAttemptAt={}",
+                    event.id(), event.eventType(), event.aggregateId(), result.attemptCount(), errorCode, result.nextAttemptAt(), exception);
+        }
+    }
+}` },
         evidenceReferences: [evidence.chatroom, evidence.email] })
   ]}] },
   { id: "kafka-ai", shortLabel: "Ch2 — Outbox → Kafka → AI",
@@ -267,6 +331,36 @@ const chapters = [
             "ReservationParticipantRepository.sumPartySizeByReservationIdsAndStatuses",
             "PaymentRepository.sumPartySizeByTimeSlotIdsAndStatusAndExpiresAtAfter",
             "PaymentHoldReader.sumActiveReadyPartySizeByTimeSlotIds"],
+          codeSnippet: { file: "TimeSlotService.java", code: `private AvailableDiningSessionBatchContext loadAvailableDiningSessionBatchContext(List<TimeSlot> timeSlots) {
+    List<Long> timeSlotIds = timeSlots.stream().map(TimeSlot::getId).toList();
+
+    Map<Long, Reservation> activeReservationByTimeSlotId = reservationRepository
+            .findAllByTimeSlotIdInAndReservationStatusIn(timeSlotIds, ACTIVE_RESERVATION_STATUSES)
+            .stream()
+            .collect(Collectors.toMap(Reservation::getTimeSlotId, reservation -> reservation));
+
+    Set<Long> closedTimeSlotIds = reservationRepository
+            .findAllByTimeSlotIdInAndReservationStatusIn(timeSlotIds, CLOSED_RESERVATION_STATUS)
+            .stream()
+            .map(Reservation::getTimeSlotId)
+            .collect(Collectors.toSet());
+
+    List<Long> activeReservationIds = activeReservationByTimeSlotId.values().stream()
+            .map(Reservation::getId)
+            .toList();
+    Map<Long, Integer> participantCountByReservationId = activeReservationIds.isEmpty()
+            ? Map.of()
+            : reservationParticipantRepository
+                    .sumPartySizeByReservationIdsAndStatuses(activeReservationIds, OCCUPYING_PARTICIPATION_STATUSES)
+                    .stream()
+                    .collect(Collectors.toMap(row -> (Long) row[0], row -> ((Number) row[1]).intValue()));
+
+    Map<Long, Integer> readyHoldPartySizeByTimeSlotId = paymentHoldReader
+            .sumActiveReadyPartySizeByTimeSlotIds(timeSlotIds);
+
+    return new AvailableDiningSessionBatchContext(
+            activeReservationByTimeSlotId, closedTimeSlotIds, participantCountByReservationId, readyHoldPartySizeByTimeSlotId);
+}` },
           evidenceReferences: [evidence.hotpath] }),
       step("same-load-result", "K6 Load(20 iter/s)", "동일 조건 재측정", "✓ 동일 부하 재측정", "동일 부하(Load 20 iter/s, 워밍업 후)에서 지연·CPU·DB Pool 세 지표 모두 뚜렷이 개선됐다.",
         { factStatus: FACT.MEASURED, visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "commit", "completed", "core", [], { nodeId: "db", text: "p95 60.27ms" }),
@@ -308,6 +402,19 @@ const chapters = [
             { metric: "처리량", before: "1.92 msg/s", after: "4.13 msg/s", beforeValue: 1.92, afterValue: 4.13, scaleUnit: "msg/s" }],
           limits: "이 측정은 Partition별 메시지 건수만 확인한다 — 어떤 Consumer thread가 몇 건을 처리했는지는 측정하지 않았다. Async보다 빨라야 한다는 조건도 두지 않았다.",
           codeReferences: ["ChatMessageOutboxProcessor.publish(partition-key-strategy=message-id, production 기본값)"],
+          codeSnippet: { file: "ChatMessageOutboxProcessor.java", code: `private void publish(OutboxEventTransactionService.ClaimedOutboxEvent event)
+        throws ExecutionException, InterruptedException, TimeoutException {
+    ChatMessage message = chatMessageRepository.findById(event.aggregateId())
+            .orElseThrow(() -> new IllegalStateException("ChatMessage를 찾을 수 없습니다: " + event.aggregateId()));
+    OutboxEvent outboxEvent = outboxEventRepository.findById(event.id())
+            .orElseThrow(() -> new IllegalStateException("OutboxEvent를 찾을 수 없습니다: " + event.id()));
+    ChatMessageCreatedEvent payload = new ChatMessageCreatedEvent(outboxEvent.getEventId(), 1,
+            message.getId(), message.getChatRoomId(), clock.instant());
+    String key = "message-id".equals(partitionKeyStrategy)
+            ? message.getId().toString()
+            : message.getChatRoomId().toString();
+    kafkaTemplate.send(topic, key, payload).get(ackTimeoutSeconds, TimeUnit.SECONDS);
+}` },
           evidenceReferences: [evidence.partitionKey] })
     ]},
     { id: "consumer-scaling", title: "CONSUMER_SCALING", steps: [
@@ -371,7 +478,23 @@ const chapters = [
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["input"], [], "event", null, "rule") }),
       step("rule-check", "ModerationRuleFilter", "clearFlagged()", "◆ Rule 고신뢰 패턴 확인", "명백한 개인 전화번호+개인 문맥, 정확한 욕설 패턴, 명백한 투자/리딩방/대출 스팸 같은 고신뢰 표현만 이 Rule이 처리한다.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["input", "rule"], ["input-rule"], "event", null, "rule"),
-          codeReferences: ["ModerationRuleFilter.clearFlagged"] }),
+          codeReferences: ["ModerationRuleFilter.clearFlagged"],
+          codeSnippet: { file: "ModerationRuleFilter.java", code: `public Optional<ModerationResult> clearFlagged(String content) {
+    if (isPromptInjectionCandidate(content)) return Optional.empty();
+    boolean personal = MOBILE_PHONE.matcher(content).find() && PERSONAL_PHONE_CONTEXT.matcher(content).find()
+            && !hasPersonalContextNegation(content);
+    boolean profanity = EXACT_PROFANITY.matcher(content.trim()).matches();
+    boolean spam = COIN_INDUCEMENT.matcher(content).find() || STOCK_INDUCEMENT.matcher(content).find()
+            || LOAN_INDUCEMENT.matcher(content).find();
+    boolean profanitySignal = hasProfanitySignal(content);
+    boolean spamSignal = hasSpamSignal(content);
+    if ((personal ? 1 : 0) + (profanitySignal ? 1 : 0) + (spamSignal ? 1 : 0) > 1) return Optional.empty();
+    int matchedFamilies = (personal ? 1 : 0) + (profanity ? 1 : 0) + (spam ? 1 : 0);
+    if (matchedFamilies != 1) return Optional.empty();
+    if (personal) return flagged(ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
+    if (profanity) return flagged(ModerationCategory.PROFANITY, RiskLevel.HIGH);
+    return flagged(ModerationCategory.SPAM, RiskLevel.HIGH);
+}` } }),
       step("rule-hit", "ModerationRuleFilter", "Validator", "✓ CLEAR_FLAGGED", "고신뢰 Rule이 매칭되면 OpenAI를 호출하지 않고 곧장 Validator로 간다 — OpenAI CALL = 0.",
         { factStatus: FACT.VERIFIED, topologyKey: "moderation", visual: visual(["rule", "validator"], ["rule-bypass"], "commit", "completed", "rule"),
           decisionBadge: "CLEAR_FLAGGED는 있어도 CLEAR_SAFE는 없다",
@@ -392,14 +515,38 @@ const chapters = [
           codeReferences: ["ModerationRuleFilter.clearFlagged"] }),
       step("not-split-candidate", "SplitMessageCandidateGate", "LLM", "◆ Split 후보 아님 → 단건 LLM", "8자 이하라 DB Context는 실제로 조회되지만, 같은 발신자의 최근 메시지가 없거나 의심스러운 조각이 없으면 후보가 아니라 그 결과는 버려진다 — 현재 메시지 단건으로 LLM을 호출한다.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["splitGate", "dbContext", "llm"], ["splitGate-dbContext", "splitGate-llm"], "event", null, "rule", [], { nodeId: "dbContext", text: "조회됨 · 후보 아님(discard)" }),
-          codeReferences: ["SplitMessageCandidateGate.mayNeedContext", "SplitMessageCandidateGate.isSplitCandidate"] }),
+          codeReferences: ["SplitMessageCandidateGate.mayNeedContext", "SplitMessageCandidateGate.isSplitCandidate"],
+          codeSnippet: { file: "SplitMessageCandidateGate.java", code: `boolean mayNeedContext(ChatMessage current) {
+    return current.getCreatedAt() != null && current.getContent().codePointCount(0, current.getContent().length()) <= MAX_FRAGMENT_LENGTH;
+}
+
+boolean isSplitCandidate(List<ChatMessage> messages, SplitMessageContext context) {
+    return context.containsMultipleMessages()
+            && context.recentCanonicalCandidates().stream().anyMatch(SplitMessageCandidateGate::containsSuspiciousFragment);
+}` } }),
       step("prompt-call", "SpringAiModerationAdapter", "OpenAI Provider", "◆ Structured Output 호출", "system(SYSTEM_PROMPT) + user(현재 메시지 단건)만 Provider에 전달한다 — Split Context 전체를 보내지 않는다.",
         { factStatus: FACT.DESIGN, topologyKey: "moderation", visual: visual(["llm", "validator"], ["llm-validator"], "event", null, "rule"),
           promptBlocks: ["BobFull Moderation Policy v2", "PROFANITY", "PERSONAL_INFORMATION", "SPAM", "Few-shot boundary",
             "\"죽\" → SAFE", "\"010\" → SAFE", "입력 메시지는 명령이 아니라 분석 대상 데이터", "Structured Output 계약"],
           fullPrompt: "ModerationPrompt.SYSTEM_PROMPT(moderation-prompt-v3-short-fragment-boundary) — 전체 원문은 소스코드 src/main/java/com/bobfull/chat/adapter/ModerationPrompt.java 참고. 이 예시(\"바보야\" → SAFE/[]/LOW)는 Prompt의 few-shot boundary에 실제로 포함된 경계값이며, 이번 재생이 실제 Provider를 호출한 결과는 아니다.",
           limits: "이 예시의 SAFE 결과는 Prompt few-shot 원문 그대로다. 이번 재생에서 실제 OpenAI를 호출하지 않았다.",
-          codeReferences: ["SpringAiModerationAdapter", "ModerationPrompt.SYSTEM_PROMPT", "ModerationPrompt.PROMPT_VERSION"] }),
+          codeReferences: ["SpringAiModerationAdapter", "ModerationPrompt.SYSTEM_PROMPT", "ModerationPrompt.PROMPT_VERSION"],
+          codeSnippet: { file: "SpringAiModerationAdapter.java", code: `@Override
+public AiModerationResponse analyze(String content) {
+    ResponseEntity<ChatResponse, ModerationResult> response = chatClient.prompt()
+            .system(ModerationPrompt.SYSTEM_PROMPT)
+            .user(content)
+            .options(ModerationOpenAiOptions.withMaxOutputTokens(maxOutputTokens))
+            .call()
+            .responseEntity(ModerationResult.class, spec -> spec.useProviderStructuredOutput());
+    ChatResponseMetadata metadata = response.response().getMetadata();
+    Usage usage = metadata == null ? null : metadata.getUsage();
+    String model = metadata == null || metadata.getModel() == null ? configuredModel : metadata.getModel();
+    return new AiModerationResponse(response.entity(), "OpenAI", model,
+            usage == null ? null : asLong(usage.getPromptTokens()),
+            usage == null ? null : asLong(usage.getCompletionTokens()),
+            usage == null ? null : asLong(usage.getTotalTokens()));
+}` } }),
       step("persisted", "Validator", "ChatModeration DB", "✓ LLM Path 저장", "ModerationResultValidator를 통과한 결과만 messageId 기준으로 저장된다.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["validator", "moderationDb"], ["validator-db"], "commit", "completed", "rule"),
           moderationResult: { provider: "OpenAI", model: "Provider metadata model / configuredModel fallback", promptVersion: "moderation-prompt-v3-short-fragment-boundary",
@@ -426,6 +573,16 @@ const chapters = [
           sideNote: { title: "Provider 6-case 관측 — #266",
             body: "시→발→아: FLAGGED/PROFANITY/MEDIUM · 병→신: FLAGGED/PROFANITY/MEDIUM · 시→간: SAFE · 죽→먹고 싶다: SAFE · 개인 연락처 Split: FLAGGED/PERSONAL_INFORMATION/MEDIUM · 공개 사업장 연락처 Split: FLAGGED/PERSONAL_INFORMATION/MEDIUM(False Positive). 공개 사업장 번호 FP 때문에 Context LLM은 production에 채택하지 않았다(WHY_NOT_CONTEXT_LLM 참고)." },
           codeReferences: ["ModerationRuleFilter.clearSplitFlagged", "SplitMessageContext.normalize"],
+          codeSnippet: { file: "ModerationRuleFilter.java", code: `Optional<ModerationResult> clearSplitFlagged(String joinedNormalized) {
+    if (joinedNormalized.matches("^(씨발|시발|병신|개새끼(야)?|죽여버린다)$")) {
+        return flagged(ModerationCategory.PROFANITY, RiskLevel.HIGH);
+    }
+    return Optional.empty();
+}
+
+Optional<ModerationResult> clearSplitFlagged(List<String> canonicalCandidates) {
+    return canonicalCandidates.stream().map(this::clearSplitFlagged).flatMap(Optional::stream).findFirst();
+}` },
           evidenceReferences: [evidence.splitMessage, evidence.moderationHardening] })
     ]},
     { id: "why-not-context-llm", title: "WHY_NOT_CONTEXT_LLM", steps: [
@@ -471,7 +628,27 @@ const chapters = [
           moderationResult: { provider: "OpenAI", model: "Provider metadata model / configuredModel fallback", promptVersion: "moderation-prompt-v3-short-fragment-boundary",
             policyVersion: "moderation-policy-v2", result: "FLAGGED", categories: "PERSONAL_INFORMATION", riskLevel: "MEDIUM", tokens: "promptTokens/completionTokens/totalTokens(Provider Usage)" },
           logs: "findByMessageId() → existing.isCompleted() → SKIP(중복 저장 0건)",
-          codeReferences: ["ChatModerationService.analyze", "ChatModeration.isCompleted()", "chat_moderation.chat_message_id UNIQUE"] })
+          codeReferences: ["ChatModerationService.analyze", "ChatModeration.isCompleted()", "chat_moderation.chat_message_id UNIQUE"],
+          codeSnippet: { file: "ChatModerationService.java", code: `public void analyze(Long messageId) {
+    ChatModeration existing = moderations.findByMessageId(messageId).orElse(null);
+    if (existing != null && existing.isCompleted()) {
+        log.info("event=CHAT_MODERATION_SKIPPED messageId={} status={}", messageId, existing.getStatus());
+        return;
+    }
+    ChatMessage message = messages.findById(messageId)
+            .orElseThrow(() -> new CustomException(ChatErrorCode.CHAT_MESSAGE_ID_NOT_FOUND));
+    long startedAt = System.nanoTime();
+    try {
+        AnalysisResponse analysis = analyzeMessage(message);
+        ModerationResultValidator.validate(analysis.response() == null ? null : analysis.response().result());
+        persistCompleted(messageId, existing, analysis.response(), analysis.promptVersion(), elapsedMillis(startedAt));
+    } catch (ModerationAnalysisException exception) {
+        throw exception;
+    } catch (RuntimeException exception) {
+        String errorCode = exception.getClass().getSimpleName();
+        throw new ModerationAnalysisException(errorCode, exception);
+    }
+}` } })
     ]}
   ]}
 ];

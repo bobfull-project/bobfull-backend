@@ -9,7 +9,6 @@
 <body>
   <header class="topbar">
     <div class="brand">BobFull Flow Lab<nav><a href="../../v1/index.html">V1</a><a href="../../v2/index.html">V2</a><a href="./index.html" aria-current="page">V3</a></nav></div>
-    <div class="mode" role="group" aria-label="표시 모드"><button data-mode="presentation" class="active">발표 모드</button><button data-mode="learning">학습 모드</button><button data-mode="ops">운영자 시점</button></div>
   </header>
   <main>
     <section class="scenario-select" aria-label="시나리오 제어">
@@ -33,30 +32,39 @@
 
     <section class="stage" aria-label="시스템 흐름">
       <div class="stage-heading"><h2>시스템 흐름</h2><span>좌 → 우 고정 흐름 · 현재 Scenario에 관계없는 노드는 흐리게 표시</span></div>
-      <div id="canvas" class="canvas" aria-label="시스템 흐름 Canvas"></div>
-      <div class="legend"><span>● request</span><span>◆ event</span><span>✓ committed</span><span>↻ retry</span><span>↓ DLT</span><span>↠ Redis broadcast</span><span>× failure</span></div>
-
-      <section id="comparison" class="comparison" hidden></section>
-      <section id="performance" class="performance" hidden></section>
-      <section id="kafkaPartitions" class="performance" hidden></section>
-
-      <div class="stage-caption">
-        <span class="kicker">현재 단계</span>
-        <h3 id="stepTitle"></h3>
-        <p id="narration"></p>
-        <div id="stepFact" class="fact"></div>
+      <div class="stage-body">
+        <div class="stage-main">
+          <div id="canvas" class="canvas" aria-label="시스템 흐름 Canvas"></div>
+          <div class="legend"><span>● request</span><span>◆ event</span><span>✓ committed</span><span>↻ retry</span><span>↓ DLT</span><span>↠ Redis broadcast</span><span>× failure</span></div>
+          <section id="comparison" class="comparison" hidden></section>
+          <section id="performance" class="performance" hidden></section>
+          <section id="kafkaPartitions" class="performance" hidden></section>
+        </div>
+        <aside class="stage-notes" aria-label="현재 단계 설명">
+          <span class="kicker">현재 단계</span>
+          <h3 id="stepTitle"></h3>
+          <p id="narration" class="narration"></p>
+          <div id="stepFact" class="fact"></div>
+          <div id="detailGrid" class="detail-list"></div>
+        </aside>
       </div>
     </section>
 
-    <div class="evidence-link"><button id="viewEvidence">근거 보기 ↗</button></div>
-
     <section class="state-section"><h2>핵심 상태</h2><div id="stateGrid" class="state-grid"></div></section>
 
-    <section id="learningPanel" class="learning" hidden>
-      <h2>학습 상세</h2>
-      <div id="detailGrid" class="detail-grid"></div>
+    <section class="code-view" aria-label="실제 코드">
+      <h2>코드로 보기</h2>
+      <div id="codeCard" class="code-card"></div>
     </section>
-    <section id="opsPanel" class="ops" hidden><h2>운영자 시점</h2><p>현재 Step에서 Evidence로 확인된 구조화 로그·메트릭만 표시합니다. 수치·그래프는 만들지 않습니다.</p><div id="opsGrid" class="detail-grid"></div></section>
+
+    <section class="outcomes" aria-label="핵심 성과 요약">
+      <h2>성능 개선</h2>
+      <p class="outcomes-hint">Ch4 Hot-path 개선(#235)과 Ch5 Partition Key 변경(#258)에서 실측된 수치다 — 재생 중인 현재 Step과 무관하게 항상 표시된다.</p>
+      <div id="performanceHighlights" class="performance"></div>
+      <h2>신뢰성 · 설계 개선</h2>
+      <p class="outcomes-hint">Outbox/Kafka 재시도 구조와 Ch5·Ch6의 실제 결정(채택/기각)을 모아 보여준다.</p>
+      <div id="reliabilityHighlights" class="detail-list outcome-list"></div>
+    </section>
 
     <section id="evidenceGate" class="evidence-gate">
       <span class="gate-status">#191만 future improvement · not yet final</span>
