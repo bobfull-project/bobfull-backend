@@ -146,78 +146,79 @@ const paymentFollowupSteps = [
       evidenceReferences: [evidence.chatroom, evidence.email] })
 ];
 
-/* 서비스 흐름 탭(BobFull은 어떤 서비스인가) — 일반 사용자/사장님/자동 관리 3개 여정을 같은 가로 chain
-   레이아웃으로 그린다. 기술 세부(코드/Evidence)가 아니라 사용자에게 보이는 서비스 경험이므로
-   factStatus는 design interpretation으로 통일한다. */
-function journeyTopology(nodeList) {
-  const gap = 150, y = 40, boxW = 100, boxH = 70;
-  const nodePositions = {}; const edges = {}; const labels = {};
-  nodeList.forEach(([id], i) => { nodePositions[id] = [20 + i * gap, y]; });
-  for (let i = 0; i < nodeList.length - 1; i++) {
-    const edgeId = `${nodeList[i][0]}-${nodeList[i + 1][0]}`;
-    const fromX = 20 + i * gap + boxW, toX = 20 + (i + 1) * gap;
-    edges[edgeId] = `M${fromX} ${y + boxH / 2} H${toX}`;
-    labels[edgeId] = [Math.round((fromX + toX) / 2 - 20), y - 12];
-  }
-  const viewBoxWidth = 20 + (nodeList.length - 1) * gap + boxW + 20;
-  return { viewBox: `0 0 ${viewBoxWidth} ${y + boxH + 40}`, nodes: nodeList, nodePositions, edges, labels };
-}
-const serviceUserTopology = journeyTopology([
-  ["explore", "탐색"], ["round", "회차 선택"], ["pay", "인원/결제"], ["status", "예약 확인"],
-  ["chat", "참여자 채팅"], ["dine", "함께 식사"], ["done", "이용 완료"]
-]);
-const serviceUserSteps = [
-  step("explore", "일반 사용자", "탐색", "● 식당·합석을 탐색해요", "BobFull에서 함께 식사할 식당과 합석 자리를 둘러봅니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["explore"], [], "request", null, "core") }),
-  step("round", "일반 사용자", "회차 선택", "◆ 원하는 회차를 골라요", "식당별로 열려 있는 회차(시간대) 중 참여하고 싶은 회차를 선택합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["explore", "round"], ["explore-round"], "event", null, "core", ["explore"]) }),
-  step("pay", "일반 사용자", "인원/결제", "◆ 인원을 정하고 결제해요", "함께할 인원 수를 정하고 결제를 진행합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["round", "pay"], ["round-pay"], "event", null, "core", ["explore", "round"]) }),
-  step("status", "일반 사용자", "예약 확인", "◆ 예약 상태를 확인해요", "성사 기준 충족 여부 등 예약 상태를 확인할 수 있습니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["pay", "status"], ["pay-status"], "event", null, "core", ["explore", "round", "pay"]) }),
-  step("chat", "일반 사용자", "참여자 채팅", "◆ 참여자와 채팅해요", "예약이 확정되면 함께 식사할 참여자들과 채팅방에서 미리 대화할 수 있습니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["status", "chat"], ["status-chat"], "event", null, "core", ["explore", "round", "pay", "status"]) }),
-  step("dine", "일반 사용자", "함께 식사", "◆ 함께 식사해요", "약속된 시간에 만나 함께 식사합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["chat", "dine"], ["chat-dine"], "event", null, "core", ["explore", "round", "pay", "status", "chat"]) }),
-  step("done", "일반 사용자", "이용 완료", "✓ 이용이 완료돼요", "식사가 끝나면 이번 예약 이용이 완료됩니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["explore", "round", "pay", "status", "chat", "dine", "done"], ["explore-round", "round-pay", "pay-status", "status-chat", "chat-dine", "dine-done"], "commit", "completed", "core") })
-];
-const serviceOwnerTopology = journeyTopology([
-  ["register", "식당 등록"], ["setup", "테이블·회차 설정"], ["check", "예약 현황 확인"],
-  ["payout", "지급 예정 조회"], ["operate", "식사 운영"], ["noshow", "노쇼 관리"]
-]);
-const serviceOwnerSteps = [
-  step("register", "사장님", "식당 등록", "● 식당을 등록해요", "사장님이 BobFull에 식당 정보를 등록합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["register"], [], "request", null, "core") }),
-  step("setup", "사장님", "테이블·회차 설정", "◆ 테이블과 회차를 설정해요", "합석 가능한 테이블과 예약을 받을 회차(시간대)를 설정합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["register", "setup"], ["register-setup"], "event", null, "core", ["register"]) }),
-  step("check", "사장님", "예약 현황 확인", "◆ 예약 현황을 확인해요", "회차별로 얼마나 예약이 찼는지 현황을 확인합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["setup", "check"], ["setup-check"], "event", null, "core", ["register", "setup"]) }),
-  step("payout", "사장님", "지급 예정 조회", "◆ 지급 예정 금액을 조회해요", "확정된 예약에 대한 정산·지급 예정 금액을 조회합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["check", "payout"], ["check-payout"], "event", null, "core", ["register", "setup", "check"]) }),
-  step("operate", "사장님", "식사 운영", "◆ 식사를 운영해요", "예약된 시간에 맞춰 식사 자리를 운영합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["payout", "operate"], ["payout-operate"], "event", null, "core", ["register", "setup", "check", "payout"]) }),
-  step("noshow", "사장님", "노쇼 관리", "✓ 노쇼를 관리해요", "나타나지 않은 참여자(노쇼)를 확인하고 관리합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["register", "setup", "check", "payout", "operate", "noshow"], ["register-setup", "setup-check", "check-payout", "payout-operate", "operate-noshow"], "commit", "completed", "core") })
-];
-const serviceAutoTopology = journeyTopology([
-  ["paid", "결제 완료"], ["accumulate", "참여 인원 누적"], ["confirm", "예약 확정"],
-  ["close", "모집 마감"], ["dine-end", "식사 종료"], ["complete", "예약 완료"]
-]);
-const serviceAutoSteps = [
-  step("paid", "BobFull 자동 관리", "결제 완료", "● 결제가 완료돼요", "참여자가 결제를 완료하면 자동 관리가 시작됩니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["paid"], [], "request", null, "core") }),
-  step("accumulate", "BobFull 자동 관리", "참여 인원 누적", "◆ 참여 인원이 누적돼요", "결제할 때마다 참여 인원 수가 누적됩니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["paid", "accumulate"], ["paid-accumulate"], "event", null, "core", ["paid"]) }),
-  step("confirm", "BobFull 자동 관리", "예약 확정", "◆ 성사 기준 충족 시 예약이 확정돼요", "성사에 필요한 인원 기준을 채우면 예약이 자동으로 확정됩니다. 기준 미달 시에는 취소·환불로 이어집니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["accumulate", "confirm"], ["accumulate-confirm"], "event", null, "core", ["paid", "accumulate"]),
+/* 서비스 흐름 탭(BobFull은 어떤 서비스인가) — 일반 사용자/사장님/BobFull 자동 관리를 3개의 독립 탭으로
+   따로 보여주던 이전 구조를 걷어내고, 한 Canvas 안에 3개 Swimlane(사용자/사장님/자동 관리)을 동시에
+   그린다. 하나의 예약 시나리오가 Lane 사이를 오가며 진행되는 것이 핵심이라, 각 Lane 내부 순서(backbone
+   edge)뿐 아니라 Lane을 건너뛰는 연결(cross edge: 회차 노출/결제 신호/예약 반영/성사 판정→확정/식사
+   종료 신호)을 명시적인 edge로 그린다. 기술 세부(코드/Evidence)가 아니라 사용자에게 보이는 서비스
+   경험이므로 factStatus는 design interpretation으로 통일한다. 지급 예정 조회·노쇼 관리(사장님 Lane)는
+   Lane 구조상 항상 표시하지만, 이번 13-Step 애니메이션 범위 밖이라 dim 상태로만 남는다. */
+const serviceUnifiedTopology = {
+  viewBox: "0 0 1200 450",
+  nodes: [
+    ["o-register", "식당 등록"], ["o-setup", "테이블·회차 설정"], ["o-reservation", "예약 현황 확인"],
+    ["o-payout", "지급 예정 조회"], ["o-noshow", "노쇼 관리"],
+    ["u-explore", "탐색"], ["u-select", "회차 선택"], ["u-pay", "인원 선택/결제"], ["u-confirm", "예약 확정"],
+    ["u-chat", "참여자 채팅"], ["u-meal", "함께 식사"], ["u-done", "이용 완료"],
+    ["a-paid", "결제 완료"], ["a-accumulate", "참여 인원 누적"], ["a-judge", "성사 기준 판단"],
+    ["a-close", "모집 마감"], ["a-mealend", "식사 종료 처리"]
+  ],
+  nodePositions: {
+    "o-register": [160, 190], "o-setup": [310, 190], "o-reservation": [460, 190], "o-payout": [610, 190], "o-noshow": [760, 190],
+    "u-explore": [160, 40], "u-select": [310, 40], "u-pay": [460, 40], "u-confirm": [610, 40], "u-chat": [760, 40], "u-meal": [910, 40], "u-done": [1060, 40],
+    "a-paid": [160, 340], "a-accumulate": [310, 340], "a-judge": [460, 340], "a-close": [610, 340], "a-mealend": [760, 340]
+  },
+  edges: {
+    "o-register-setup": "M260 225 H310", "o-setup-reservation": "M410 225 H460", "o-reservation-payout": "M560 225 H610", "o-payout-noshow": "M710 225 H760",
+    "u-explore-select": "M260 75 H310", "u-select-pay": "M410 75 H460", "u-pay-confirm": "M560 75 H610",
+    "u-confirm-chat": "M710 75 H760", "u-chat-meal": "M860 75 H910", "u-meal-done": "M1010 75 H1060",
+    "a-paid-accumulate": "M260 375 H310", "a-accumulate-judge": "M410 375 H460", "a-judge-close": "M560 375 H610", "a-close-mealend": "M710 375 H760",
+    /* Lane 간 연결(cross edge) — 세로로 지나가는 구간은 상대 Lane의 node box를 피해 옆 gap column으로
+       한 번 피해갔다가 다시 목표 x로 들어간다(기존 topology의 outbox-async와 같은 방식). */
+    "cross-setup-explore": "M360 190 V150 H210 V110",
+    "cross-pay-paid": "M510 110 V150 H435 V295 H210 V340",
+    "cross-accumulate-reservation": "M360 340 V300 H510 V260",
+    "cross-judge-confirm": "M510 340 V300 H735 V150 H660 V110",
+    "cross-meal-mealend": "M960 110 V150 H900 V295 H810 V340"
+  },
+  labels: {
+    "cross-setup-explore": [200, 145], "cross-pay-paid": [365, 152], "cross-accumulate-reservation": [430, 305],
+    "cross-judge-confirm": [590, 152], "cross-meal-mealend": [845, 152]
+  },
+  regions: [
+    { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100 },
+    { label: "사장님", x: 10, y: 175, w: 1180, h: 100 },
+    { label: "BobFull 자동 관리", x: 10, y: 325, w: 1180, h: 100 }
+  ]
+};
+const serviceUnifiedSteps = [
+  step("register", "사장님", "식당 등록", "● 식당 등록", "사장님이 BobFull에 식당 정보를 등록합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-register"], [], "request", null, "core") }),
+  step("setup", "사장님", "테이블·회차 설정", "◆ 회차 생성", "합석 가능한 테이블과 예약을 받을 회차(시간대)를 설정합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-register", "o-setup"], ["o-register-setup"], "event", null, "core", ["o-register"]) }),
+  step("expose", "사장님 → 일반 사용자", "탐색 노출", "◆ 사용자 탐색에 노출", "사장님이 만든 회차가 일반 사용자의 탐색 화면에 나타납니다 — 두 Lane이 처음 연결되는 지점입니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-setup", "u-explore"], ["cross-setup-explore"], "event", null, "core", ["o-register", "o-setup"], null, { "cross-setup-explore": "탐색에 노출" }) }),
+  step("select", "일반 사용자", "회차 선택", "◆ 사용자 회차 선택", "노출된 회차 중 참여하고 싶은 회차를 선택합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-explore", "u-select"], ["u-explore-select"], "event", null, "core", ["o-register", "o-setup", "u-explore"]) }),
+  step("pay", "일반 사용자", "인원 선택/결제", "◆ 사용자 결제", "함께할 인원 수를 정하고 결제를 진행합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-select", "u-pay"], ["u-select-pay"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select"]) }),
+  step("accumulate", "일반 사용자 → BobFull 자동 관리", "참여 인원 누적", "◆ 참여 인원 누적", "사용자의 결제가 완료되면 BobFull 자동 관리가 이를 받아 참여 인원 수에 반영합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-pay", "a-paid", "a-accumulate"], ["cross-pay-paid", "a-paid-accumulate"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay"], null, { "cross-pay-paid": "결제 신호" }) }),
+  step("reservation", "BobFull 자동 관리 → 사장님", "예약 현황 반영", "◆ 사장님 예약 현황 반영", "자동 관리가 누적한 참여 인원 현황이 사장님의 예약 현황 확인 화면에 그대로 반영됩니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-accumulate", "o-reservation"], ["cross-accumulate-reservation"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate"], null, { "cross-accumulate-reservation": "예약 현황 반영" }) }),
+  step("judge", "BobFull 자동 관리", "성사 기준 판단 · 모집 마감", "◆ 성사 판정", "성사에 필요한 인원 기준을 채웠는지 자동으로 판단하고, 회차 시작 시각이 되면 모집을 마감합니다. 기준 미달 시에는 취소·환불로 이어집니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-accumulate", "a-judge", "a-close"], ["a-accumulate-judge", "a-judge-close"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation"]),
       nextAction: "기준 미달 시 취소·환불" }),
-  step("close", "BobFull 자동 관리", "모집 마감", "◆ 모집이 마감돼요", "회차 시작 시각이 되면 모집이 마감됩니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["confirm", "close"], ["confirm-close"], "event", null, "core", ["paid", "accumulate", "confirm"]) }),
-  step("dine-end", "BobFull 자동 관리", "식사 종료", "◆ 식사가 종료돼요", "예약된 식사 시간이 끝나면 식사 종료로 처리됩니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["close", "dine-end"], ["close-dine-end"], "event", null, "core", ["paid", "accumulate", "confirm", "close"]) }),
-  step("complete", "BobFull 자동 관리", "예약 완료", "✓ 예약이 완료돼요", "식사 종료 뒤 예약 전체가 완료 상태로 정리됩니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["paid", "accumulate", "confirm", "close", "dine-end", "complete"], ["paid-accumulate", "accumulate-confirm", "confirm-close", "close-dine-end", "dine-end-complete"], "commit", "completed", "core") })
+  step("confirm", "BobFull 자동 관리 → 일반 사용자", "예약 확정", "◆ 예약 확정", "성사 판정 결과가 사용자의 예약 확정으로 이어집니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-judge", "u-confirm"], ["cross-judge-confirm"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close"], null, { "cross-judge-confirm": "예약 확정" }) }),
+  step("chat", "일반 사용자", "참여자 채팅", "◆ 참여자 채팅", "예약이 확정되면 함께 식사할 참여자들과 채팅방에서 미리 대화할 수 있습니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-confirm", "u-chat"], ["u-confirm-chat"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm"]) }),
+  step("meal", "일반 사용자", "함께 식사", "◆ 함께 식사", "약속된 시간에 만나 함께 식사합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-chat", "u-meal"], ["u-chat-meal"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "u-chat"]) }),
+  step("mealend", "일반 사용자 → BobFull 자동 관리", "식사 종료 처리", "◆ 식사 종료 처리", "식사가 끝나면 BobFull 자동 관리가 이를 식사 종료로 처리합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-meal", "a-mealend"], ["cross-meal-mealend"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "u-chat", "u-meal"], null, { "cross-meal-mealend": "종료 처리" }) }),
+  step("done", "일반 사용자", "이용 완료", "✓ 이용 완료", "식사 종료 처리 후 이번 예약 이용이 완료됩니다. 나타나지 않은 참여자가 있었다면 사장님이 노쇼 관리에서 확인합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-mealend", "u-meal", "u-done"], ["u-meal-done"], "commit", "completed", "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "u-chat", "u-meal"]) })
 ];
 
 /* 인프라 흐름 탭(실제 요청은 어떤 인프라를 지나가는가) — #169/#206 Evidence와 GitHub Actions/scripts/aws

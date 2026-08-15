@@ -9,7 +9,7 @@ const currentStep = () => currentScenario().steps[state.step];
    별도 renderer를 새로 만들지 않는다. */
 const TOPOLOGY_BY_KEY = {
   moderation: moderationTopology, "payment-followup": paymentFollowupTopology,
-  "service-user": serviceUserTopology, "service-owner": serviceOwnerTopology, "service-auto": serviceAutoTopology,
+  "service-unified": serviceUnifiedTopology,
   infra: infraTopology
 };
 const topologyFor = (data) => TOPOLOGY_BY_KEY[data.topologyKey] || topology;
@@ -388,18 +388,10 @@ const SHOWCASE_TABS = [
 ];
 const SHOWCASE_SCENARIOS_BY_TAB = {
   service: [
-    { id: "service-user", title: "일반 사용자",
-      problem: "일반 사용자에게 BobFull은 어떤 서비스인가?",
-      solution: "식당·합석 탐색부터 결제, 참여자 채팅, 식사까지 한 흐름으로 이용합니다.",
-      outcomes: ["예약부터 식사까지 한 서비스", "참여자와 미리 채팅으로 조율"], steps: serviceUserSteps },
-    { id: "service-owner", title: "사장님",
-      problem: "사장님에게 BobFull은 어떤 서비스인가?",
-      solution: "식당·테이블·회차를 등록하고, 예약 현황과 지급 예정을 확인하며 운영합니다.",
-      outcomes: ["예약 현황 실시간 확인", "정산 예정 금액 조회"], steps: serviceOwnerSteps },
-    { id: "service-auto", title: "BobFull 자동 관리",
-      problem: "합석 인원이 다 안 차면 예약은 어떻게 될까?",
-      solution: "결제·참여 인원을 자동으로 누적하고, 성사 기준 충족 여부에 따라 확정하거나 취소·환불합니다.",
-      outcomes: ["성사 기준 자동 판단", "기준 미달 시 자동 취소·환불"], steps: serviceAutoSteps }
+    { id: "service-unified", title: "BobFull 서비스 흐름",
+      problem: "일반 사용자·사장님·BobFull 자동 관리는 각자 따로 움직일까?",
+      solution: "하나의 예약 시나리오가 세 Lane(일반 사용자/사장님/BobFull 자동 관리) 사이를 오가며 진행됩니다 — 사장님의 회차 생성이 사용자 탐색 노출로, 사용자 결제가 자동 관리의 인원 누적으로, 자동 판정이 사용자 예약 확정과 사장님 화면 반영으로 다시 이어집니다.",
+      outcomes: ["세 Lane이 한 시나리오로 연결", "결제 → 인원 누적 → 성사 판정 자동 처리", "회차 생성 → 탐색 노출 → 예약 확정까지 한 번에"], steps: serviceUnifiedSteps }
   ],
   core: [
     { id: "payment-followup", title: "결제 확정 후속 처리",
@@ -473,9 +465,14 @@ function renderShowcaseMainTabs() {
     `<button type="button" class="${tab.id === state.showcaseTab ? "active" : ""}" data-tab="${tab.id}">${tab.label}</button>`).join("");
   $("showcaseTabQuestion").textContent = SHOWCASE_TABS.find((tab) => tab.id === state.showcaseTab).question;
 }
+/* Scenario가 1개뿐인 탭(서비스 흐름처럼 여러 주체를 한 Canvas로 통합한 경우)은 고를 게 없으므로
+   2차 탭 자체를 감춘다 — Scenario가 2개 이상인 탭(핵심 시스템 흐름/인프라 흐름)은 그대로 보여준다. */
 function renderShowcaseScenarioPicker() {
-  $("showcaseTabs").innerHTML = currentShowcaseTabScenarios().map((scenario, i) =>
-    `<button type="button" class="${i === state.showcaseScenario ? "active" : ""}" data-idx="${i}">${scenario.title}</button>`).join("");
+  const scenarios = currentShowcaseTabScenarios();
+  const showPicker = scenarios.length > 1;
+  $("showcaseTabs").hidden = !showPicker;
+  $("showcaseTabs").innerHTML = showPicker ? scenarios.map((scenario, i) =>
+    `<button type="button" class="${i === state.showcaseScenario ? "active" : ""}" data-idx="${i}">${scenario.title}</button>`).join("") : "";
 }
 /* renderCanvas(data)를 그대로 재사용한다 — 실제 step 객체를 넘기므로 active/dim 강조, token 이동,
    region 배경까지 일반 Chapter와 완전히 같은 렌더러로 그려진다. */
