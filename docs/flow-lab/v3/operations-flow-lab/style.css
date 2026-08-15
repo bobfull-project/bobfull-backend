@@ -3,7 +3,7 @@
   --text:#f3ece1;--muted:#a89b89;
   --accent:#ff7d3d;--accent-strong:#ffa06a;
   --success:#7cc98a;--failure:#e2685f;
-  --code-bg:#12100c;--annot:#ffb066
+  --code-bg:#12100c;--annot:#b98552
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
@@ -194,7 +194,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .tok-type{color:#6fd0e0}
 .tok-method{color:#ffd479}
 /* 핵심 구간만 테두리로 묶고 "이 코드가 무슨 일을 하는가"를 한 줄로 붙인다. */
-.code-annotated{display:block;position:relative;margin:10px 0;padding:8px 12px 8px 14px;border:1px solid var(--annot);border-left-width:3px;border-radius:6px;background:rgba(255,125,61,.05)}
+.code-annotated{display:block;position:relative;margin:10px 0;padding:8px 12px 8px 14px;border:1px solid var(--annot);border-left-width:3px;border-radius:6px;background:rgba(185,133,82,.08)}
 .code-annotation{display:block;margin-bottom:6px;color:var(--annot);font:600 12.5px/1.5 system-ui,"Malgun Gothic",sans-serif;white-space:normal}
 .code-annotation .num{display:inline-block;min-width:19px;height:19px;margin-right:6px;border-radius:50%;background:var(--annot);color:var(--code-bg);font:700 11px/19px system-ui;text-align:center}
 

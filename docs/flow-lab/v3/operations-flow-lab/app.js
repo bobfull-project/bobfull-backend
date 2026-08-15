@@ -119,10 +119,11 @@ function renderDetails(data) {
   el.innerHTML = entries.map(([title, value]) => `<article><h3>${title}</h3><p>${value}</p></article>`).join("");
 }
 function escapeHtml(text) { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
-/* 디버거처럼 현재 Scenario의 전체 Step 제목을 번호와 함께 보여주고 현재 Step만 강조한다. */
+/* 디버거처럼 현재 Scenario의 전체 Step 제목을 번호와 함께 보여주고 현재 Step만 강조한다.
+   action 앞의 상태 기호(✓ × ◆ ● 등)는 여기서는 번호가 이미 그 역할을 하므로 떼어낸다. */
 function renderCodeStepper() {
   $("codeStepper").innerHTML = currentScenario().steps.map((item, i) =>
-    `<span class="${i === state.step ? "active" : ""}">${i + 1}. ${item.action}</span>`).join("");
+    `<span class="${i === state.step ? "active" : ""}">${i + 1}. ${item.action.replace(/^[✓×◆●↻↓↠▲?]\s*/, "")}</span>`).join("");
 }
 /* Java 최소 하이라이터. 주석/문자열을 먼저 통째로 잡아 그 안의 키워드가 다시 매칭되지 않게 한다. */
 const JAVA_KEYWORDS = /\b(public|private|protected|static|final|class|interface|enum|record|new|return|if|else|for|while|try|catch|throw|throws|import|package|extends|implements|void|boolean|int|long|double|char|byte|short|this|null|true|false|instanceof|switch|case|break|continue|default)\b/;
