@@ -282,10 +282,12 @@ class ReservationCancellationTransactionServiceTest {
     @Test
     void recalculateAfterCompletion은_기준_미달이면_RECRUITING으로_되돌린다() {
         // given: capacity 4, threshold 3. 환불 완료 후 남은 인원 2명으로 기준 미달.
+        // Issue #264: 잠금 없는 SUM 집계 대신 잠금 조회 목록을 합산하므로 목록으로 준비한다.
         Reservation reservation = reservation(10L, 1L);
         reservation.confirm();
         given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(2);
+        given(reservationParticipantRepository.findAllWithLockByReservationIdAndParticipationStatusIn(10L, OCCUPYING_STATUSES))
+                .willReturn(List.of(participant(22L, 10L, 3L), participant(23L, 10L, 4L)));
 
         // when
         service().recalculateAfterCompletion(reservation);
@@ -297,10 +299,12 @@ class ReservationCancellationTransactionServiceTest {
     @Test
     void recalculateAfterCompletion은_기준_이상이면_CONFIRMED를_유지한다() {
         // given: capacity 4, threshold 3. 환불 완료 후 남은 인원 3명으로 기준 충족.
+        // Issue #264: 잠금 없는 SUM 집계 대신 잠금 조회 목록을 합산하므로 목록으로 준비한다.
         Reservation reservation = reservation(10L, 1L);
         reservation.confirm();
         given(reservationCapacityReader.readTableCapacity(TIME_SLOT_ID)).willReturn(4);
-        given(reservationParticipantRepository.sumPartySizeByStatuses(10L, OCCUPYING_STATUSES)).willReturn(3);
+        given(reservationParticipantRepository.findAllWithLockByReservationIdAndParticipationStatusIn(10L, OCCUPYING_STATUSES))
+                .willReturn(List.of(participant(22L, 10L, 3L), participant(23L, 10L, 4L), participant(24L, 10L, 5L)));
 
         // when
         service().recalculateAfterCompletion(reservation);
