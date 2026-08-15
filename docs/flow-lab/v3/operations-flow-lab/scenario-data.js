@@ -432,11 +432,12 @@ const fullArchitectureTopology = {
     "alb-tgGreen": "M140 275 H190 V80 H650 V90",
     "tgBlue-blue1": "M350 160 V190 H290 V220", "tgBlue-blue2": "M350 160 V190 H440 V220",
     "tgGreen-green1": "M650 160 V190 H590 V220", "tgGreen-green2": "M650 160 V190 H740 V220",
-    /* Application Pool(가상 합류점, 460·360) — 실제 node가 아니라 "Blue/Green 4대 EC2 전부가
-       Shared 인프라 5종 전부와 항상 이어져 있다"를 표현하기 위한 경로 좌표일 뿐이다. */
+    /* `pool`은 실제 인프라가 아니라, Blue/Green EC2가 공통 자원을 사용한다는 것을 보여 주는
+       구성도상의 합류 좌표(460·360)다. Node나 배포 리소스로 표시하지 않는다. */
     "blue1-pool": "M290 290 V360 H460", "blue2-pool": "M440 290 V360 H460",
     "green1-pool": "M590 290 V360 H460", "green2-pool": "M740 290 V360 H460",
     "pool-rds": "M460 360 H310 V430", "pool-redis": "M460 360 V430", "pool-kafka": "M460 360 H610 V430",
+    "kafka-pool": "M610 430 V360 H460", "pool-green1": "M460 360 H590 V290",
     "pool-s3": "M460 360 H850 V455 H890", "s3-lambda": "M940 490 V510",
     "pool-openai": "M460 360 H850 V75 H890", "pool-portone": "M460 360 H850 V185 H890", "pool-smtp": "M460 360 H850 V280 H890",
     "pool-prometheus": "M460 360 H850 V610 H310 V630", "pool-cloudwatch": "M460 360 H850 V610 H820 V630",
@@ -509,37 +510,30 @@ const archPathClientToApp = [
   { edge: "alb-tgGreen", node: "tgGreen" },
   { edge: "tgGreen-green1", node: "green1" }
 ];
+/* 전체 구성도는 App에서 여러 외부 자원으로 fan-out하는 구조다. 이를 한 줄 path로 연결하면
+   RDS→Redis나 Slack→CloudWatch처럼 실제로 없는 관계를 만들어 버린다. 각 버튼은 실제 실행
+   단위별 sequence를 차례로 재생하며, 매 sequence는 독립적으로 App 또는 Kafka에서 시작한다. */
 const archFlowGroups = [
-  { id: "restaurant", label: "① 사장님 식당 등록", path: [
-    ...archPathClientToApp,
-    { edge: "green1-pool" },
-    { edge: "pool-s3", node: "s3" },
-    { edge: "s3-lambda", node: "lambda" }
+  { id: "restaurant", label: "① 사장님 식당 등록", sequences: [
+    { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, { edge: "green1-pool" }, { edge: "pool-s3", node: "s3" }, { edge: "s3-lambda", node: "lambda" }] }
   ] },
-  { id: "reservation", label: "② 예약·결제·채팅방·이메일", path: [
-    ...archPathClientToApp,
-    { edge: "green1-pool" },
-    { edge: "pool-rds", node: "rds" },
-    { edge: "pool-redis", node: "redis" },
-    { edge: "pool-smtp", node: "smtp" },
-    { edge: "pool-portone", node: "portone" }
+  { id: "reservation", label: "② 예약·결제·채팅방·이메일", sequences: [
+    { label: "결제 승인", path: [...archPathClientToApp, { edge: "green1-pool" }, { edge: "pool-portone", node: "portone" }] },
+    { label: "예약 상태 저장", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-rds", node: "rds" }] },
+    { label: "채팅방 실시간 준비", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-redis", node: "redis" }] },
+    { label: "확정 이메일 발송", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-smtp", node: "smtp" }] }
   ] },
-  { id: "chat-ai", label: "③ 채팅 AI 분석", path: [
-    ...archPathClientToApp,
-    { edge: "green1-pool" },
-    { edge: "pool-kafka", node: "kafka" },
-    { edge: "pool-openai", node: "openai" }
+  { id: "chat-ai", label: "③ 채팅 AI 분석", sequences: [
+    { label: "Kafka 발행", path: [...archPathClientToApp, { edge: "green1-pool" }, { edge: "pool-kafka", node: "kafka" }] },
+    { label: "AI Consumer가 소비 후 LLM 호출", path: [{ node: "kafka" }, { edge: "kafka-pool" }, { edge: "pool-green1", node: "green1" }, { edge: "green1-pool" }, { edge: "pool-openai", node: "openai" }] },
+    { label: "검수 결과 저장", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-rds", node: "rds" }] }
   ] },
-  { id: "monitoring", label: "④ 모니터링·알람", path: [
-    { node: "green1" },
-    { edge: "green1-pool" },
-    { edge: "pool-prometheus", node: "prometheus" },
-    { edge: "prometheus-grafana", node: "grafana" },
-    { edge: "grafana-slack", node: "slack" },
-    { edge: "pool-cloudwatch", node: "cloudwatch" }
+  { id: "monitoring", label: "④ 모니터링·알람", sequences: [
+    { label: "메트릭 수집·알림", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-prometheus", node: "prometheus" }, { edge: "prometheus-grafana", node: "grafana" }, { edge: "grafana-slack", node: "slack" }] },
+    { label: "애플리케이션 로그 기록", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-cloudwatch", node: "cloudwatch" }] }
   ] }
 ];
-archFlowGroups.forEach((group) => { group.nodes = [...new Set(group.path.map((step) => step.node).filter(Boolean))]; });
+archFlowGroups.forEach((group) => { group.nodes = [...new Set(group.sequences.flatMap((sequence) => sequence.path.map((step) => step.node).filter(Boolean)))]; });
 
 /* 핵심 시스템 흐름 탭 > "AI 채팅 검수" 전용 topology/step.
    기존에는 {chapter,scenario,step} 참조로 실제 Ch2(kafka-ai)·Ch6(ai-moderation) Step을 그대로

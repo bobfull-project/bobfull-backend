@@ -150,6 +150,12 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .token.failure{fill:var(--failure);color:var(--failure)}
 .token.dlt{fill:var(--failure);color:var(--failure)}
 .token.broadcast{fill:var(--success);color:var(--success)}
+.service-topology .canvas-node.committed{opacity:.38}
+.service-topology .canvas-node.committed rect{stroke-opacity:.62}
+/* Ch0 주체 간 전달은 선이 길고 꺾여서, token만으로는 방향을 놓치기 쉽다. 라벨을 조금 크게 하고
+   배경 대비를 높여 현재 전달의 출발·도착 관계를 먼저 읽게 한다. */
+.service-topology .edge-label rect{fill:#20170f;stroke:var(--accent);stroke-opacity:.7}
+.service-topology .edge-label text{font-size:11px;font-weight:700}
 .flow-outcome{min-height:22px;color:var(--muted);font:12px ui-monospace,monospace}
 .flow-outcome.failure{color:var(--failure)}
 .flow-outcome.dlt{color:var(--failure)}
@@ -354,9 +360,10 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 /* 도표를 옆이 아니라 위아래로 쌓는다 — 옆에 260px짜리 패널이 있으면 도표 폭이 그만큼 줄어들어
    작아 보였다. 세로로 쌓으면 도표가 전체 폭을 다 쓸 수 있다. */
 .arch-view-body{display:flex;flex-direction:column;gap:14px}
-.arch-canvas{width:100%;min-height:480px;max-height:760px;display:flex;align-items:center;justify-content:center;overflow:auto;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px;box-sizing:border-box}
+.arch-canvas{width:100%;min-height:480px;max-height:760px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:auto;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px;box-sizing:border-box}
 .arch-canvas .topology{cursor:default}
 .arch-canvas .canvas-node{cursor:pointer}
+.arch-progress{flex:none;margin:8px 0 0;padding:7px 12px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 5px 5px 0;background:var(--panel);color:var(--text);font-size:12px;font-weight:700}
 .arch-detail-panel{width:100%;box-sizing:border-box;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:16px;overflow-y:auto;max-height:220px}
 .arch-detail-panel h3{margin:0 0 10px;font-size:15px;color:var(--text)}
 .arch-detail-hint{margin:0;color:var(--muted);font-size:12.5px}

@@ -1,6 +1,6 @@
 /* Playback and rendering only. Every visual decision comes from step.visual. */
 const $ = (id) => document.getElementById(id);
-const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseTab: "service", showcaseScenario: 0, showcaseStep: 0, archSelected: null, archFlowIndex: 0, archPathStep: 0, archHolding: false, archHoldTicks: 0, archFlowTimer: null, archResumeTimeout: null };
+const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseTab: "service", showcaseScenario: 0, showcaseStep: 0, archSelected: null, archFlowIndex: 0, archSequenceIndex: 0, archPathStep: 0, archHolding: false, archFlowTimer: null, archResumeTimeout: null };
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
@@ -110,7 +110,15 @@ function renderCanvas(data) {
     const dashedCls = t.dashedEdges && t.dashedEdges.includes(id) ? " retry-dashed" : "";
     return `<path id="edge-${id}" class="connector ${v.activeEdges.includes(id) ? "active" : "dim"}${dashedCls}" d="${path}"/>`;
   }).join("");
-  const tokenSvg = v.activeEdges.map((id) => tokenSvgFor(t, id, v.token)).join("");
+  /* 서비스 흐름은 한 Step 안에서도 주체 간 전달이 연속으로 이어진다. 모든 token을 같은 순간에
+     반복 재생하면 어느 선을 먼저 따라가야 하는지 알기 어려워서, Ch0에서만 edge 하나씩 1회 이동한다. */
+  const isServiceShowcase = state.mode === "showcase" && t === serviceUnifiedTopology;
+  const tokenSvg = v.activeEdges.map((id, index) => tokenSvgFor(
+    t, id, v.token,
+    isServiceShowcase ? 1.8 : 1.25,
+    isServiceShowcase ? index * 2.2 : 0,
+    !isServiceShowcase
+  )).join("");
   const labelSvg = v.activeEdges.map((id) => edgeLabelSvg(t, id, v.token, v.edgeLabels && v.edgeLabels[id])).join("");
   const nodesSvg = t.nodes.map(([id, label]) => {
     const [x, y] = t.nodePositions[id];
@@ -144,8 +152,8 @@ function renderCanvas(data) {
   const badgeSvg = badgeSvgFor(t, v.badge);
   /* animateNodes(AI 채팅 검수 unified topology만 씀) — 활성화되는 순간 살짝 커졌다 제자리로
      돌아오는 pop-in을 준다. 이 topology 안에서만 켜지므로 다른 Chapter 렌더링은 그대로다. */
-  const zoomCls = t.animateNodes ? " zoom-topology" : "";
-  $("canvas").innerHTML = `<svg class="topology${zoomCls}" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
+  const topologyClass = `${t.animateNodes ? " zoom-topology" : ""}${isServiceShowcase ? " service-topology" : ""}`;
+  $("canvas").innerHTML = `<svg class="topology${topologyClass}" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
   $("flowCaption").textContent = data.action.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
 }
 function badgeSvgFor(t, badge) {
@@ -154,9 +162,10 @@ function badgeSvgFor(t, badge) {
   const width = badge.text.length * 6.5 + 16;
   return `<g class="node-badge" transform="translate(${x + 50} ${y - 14})"><rect x="${-width / 2}" y="-11" width="${width}" height="20" rx="4"/><text x="0" y="4">${badge.text}</text></g>`;
 }
-function tokenSvgFor(t, edgeId, kind) {
+function tokenSvgFor(t, edgeId, kind, duration = 1.25, delay = 0, repeat = true) {
   const shape = kind === "event" ? "<rect x=\"-5\" y=\"-5\" width=\"10\" height=\"10\" transform=\"rotate(45)\"/>" : kind === "broadcast" ? "<path d=\"M-6 -5 L6 0 L-6 5 Z\"/>" : kind === "retry" ? "<text y=\"5\">↻</text>" : kind === "failure" ? "<text y=\"5\">×</text>" : kind === "dlt" ? "<text y=\"5\">↓</text>" : "<circle r=\"5\"/>";
-  return `<g class="token ${kind || "event"}">${shape}<animateMotion dur="1.25s" repeatCount="indefinite" path="${t.edges[edgeId]}"/></g>`;
+  const repeatCount = repeat ? "indefinite" : "1";
+  return `<g class="token ${kind || "event"}">${shape}<animateMotion begin="${delay}s" dur="${duration}s" repeatCount="${repeatCount}" fill="remove" path="${t.edges[edgeId]}"/></g>`;
 }
 function edgeLabelSvg(t, edgeId, kind, override) {
   const position = t.labels[edgeId]; if (!position) return "";
@@ -529,12 +538,12 @@ function renderShowcaseMainTabs() {
 /* CH0 인프라 흐름 전용 "전체 인프라 구성도 보기" — 기존 Scenario 재생 화면(요약 Map, Runtime Flow)과
    완전히 분리된 별도 정적 Topology 화면이다. 같은 renderCanvas()를 재사용하지 않는다 — renderCanvas는
    Scenario Step의 active/dim(Orange/Gray) 강조가 핵심인데, 여기는 "클릭한 node만 선택 강조"(Edge
-   강조 없음)와 "가만히 있을 때 화살표가 실제 edge를 따라 순서대로 흐르는" 애니메이션이라는 별개의
+   강조 없음)와 "가만히 있을 때 현재 요청 구간의 선만 주황색으로 켜지는" 애니메이션이라는 별개의
    상호작용이 필요하기 때문이다. Node를 클릭하면 그 순환이 멈추고 클릭한 Node만(Edge 강조 없이) 테두리
-   강조되며, 일정 시간 조작이 없으면 다시 순환으로 돌아간다. 순환 중에는 archFlowGroups[i].path를
-   한 항목씩 재생한다 — edge가 있으면 화살표 token이 그 edge를 타고 이동하고, node가 있으면 도착한
-   순간 그 Node가 active(orange)로 켜지며 이전에 지나온 Node/Edge는 committed(초록, 기존 Scenario
-   Map과 같은 관례)로 남는다. 아직 도달하지 못한 edge는 dim으로 흐리게 둔다. */
+   강조되며, 일정 시간 조작이 없으면 다시 순환으로 돌아간다. 순환 중에는 각 그룹의 독립 sequence를
+   차례로 재생한다. 가상 합류점(Application Pool)처럼 실제 Node가 아닌 중간점은 한 장면으로
+   건너뛰어, 한 서비스에서 다음 서비스까지 이어진 선이 함께 켜진다. 이전 Node/Edge는
+   committed(초록, 기존 Scenario Map과 같은 관례)로 남고, 아직 도달하지 못한 edge는 dim으로 둔다. */
 function archNodeSvg(t, id, label, cls) {
   const [x, y] = t.nodePositions[id];
   const sublabel = t.nodeSublabels && t.nodeSublabels[id];
@@ -552,23 +561,48 @@ function renderArchCanvas() {
     tokenSvg = "";
     nodesSvg = t.nodes.map(([id, label]) => archNodeSvg(t, id, label, id === state.archSelected ? "active" : "")).join("");
   } else {
-    const path = archFlowGroups[state.archFlowIndex].path;
+    const path = archFlowGroups[state.archFlowIndex].sequences[state.archSequenceIndex].path;
     const step = Math.min(state.archPathStep, path.length - 1);
     const visitedNodes = [];
-    for (let i = 0; i <= step; i++) if (path[i].node) visitedNodes.push(path[i].node);
+    const visitedThrough = Math.min(step + 1, path.length);
+    for (let i = 0; i < visitedThrough; i++) if (path[i].node) visitedNodes.push(path[i].node);
     const activeNode = visitedNodes[visitedNodes.length - 1];
     const committedNodes = visitedNodes.slice(0, -1);
-    edgeSvg = Object.entries(t.edges).map(([id, edgePath]) => {
-      const idxInPath = path.findIndex((s) => s.edge === id);
-      const cls = idxInPath === -1 || idxInPath > step ? "dim" : idxInPath === step ? "active" : "committed";
-      return `<path id="arch-edge-${id}" class="connector ${cls}" d="${edgePath}"/>`;
-    }).join("");
-    const currentEdge = path[step].edge;
-    tokenSvg = currentEdge ? tokenSvgFor(t, currentEdge, "broadcast") : "";
+    /* 이번 Sequence의 시작(Green EC2 등)부터 지금까지 지나온 edge 전부를 하나의 덩어리로 켠다 —
+       "마지막 한 칸만" 켜면 Green EC2→중앙 합류 구간→목적지 중 방금 지난 한 칸만 주황으로 보이고
+       나머지는 흐려져 "중간에서 시작한 선"처럼 보였다. 지나온 edge를 전부 active로 유지하면
+       Green EC2에서 출발한 선이 중앙 구간을 거쳐 목적지까지 끊기지 않는 하나의 주황 경로로 이어진다.
+       Sequence가 바뀌면(archFlowTick) step이 0으로 리셋되므로 이전 목적지의 주황은 자동으로
+       사라진다 — 초록(committed)으로 남기지 않는다(Edge는 active 아니면 항상 dim). */
+    const activeEdgeIds = path.slice(0, step + 1).map((item) => item.edge).filter(Boolean);
+    /* SVG는 나중에 그린 선이 위에 올라온다. 중앙 Application Pool 구간은 여러 edge가 같은 좌표를
+       공유하므로(pool-s3/pool-openai/pool-portone/pool-smtp/pool-prometheus/pool-cloudwatch가
+       전부 "M460 360 H850"으로 시작), 회색 edge가 나중에 그려지면 주황 위를 덮어 중간이 끊겨
+       보였다 — 현재 주황 경로를 반드시 마지막에 그려 항상 위에 보이게 한다. */
+    edgeSvg = Object.entries(t.edges).sort(([a], [b]) =>
+      Number(activeEdgeIds.includes(a)) - Number(activeEdgeIds.includes(b))
+    ).map(([id, edgePath]) => `<path id="arch-edge-${id}" class="connector ${activeEdgeIds.includes(id) ? "active" : "dim"}" d="${edgePath}"/>`).join("");
+    /* 이 화면은 구조와 연결 관계를 보여 주므로 이동 점을 두지 않는다. 현재 요청 구간의 주황색 선만
+       남겨서, 노드 바깥의 가상 합류점으로 점이 흘러가는 듯한 오해를 없앤다. */
+    tokenSvg = "";
     nodesSvg = t.nodes.map(([id, label]) =>
       archNodeSvg(t, id, label, id === activeNode ? "active" : committedNodes.includes(id) ? "committed" : "")).join("");
   }
-  $("archCanvas").innerHTML = `<svg class="topology arch-topology" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g></svg>`;
+  const flow = archFlowGroups[state.archFlowIndex];
+  const sequence = flow.sequences[state.archSequenceIndex];
+  const path = sequence.path;
+  const step = Math.min(state.archPathStep, path.length - 1);
+  const fromId = [...path.slice(0, step).map((item) => item.node).filter(Boolean)].at(-1);
+  const toId = path[step].node;
+  const nodeLabel = (id) => id && t.nodes.find(([nodeId]) => nodeId === id)?.[1];
+  const progress = state.archSelected
+    ? "선택한 구성 요소의 역할과 연결 정보를 확인하고 있습니다."
+    : state.archHolding
+      ? `${flow.label} · ${sequence.label} 확인 완료`
+      : toId && fromId && fromId !== toId
+        ? `현재 연결: ${nodeLabel(fromId)} → ${nodeLabel(toId)}`
+        : `시작 지점: ${nodeLabel(toId) || flow.label}`;
+  $("archCanvas").innerHTML = `<svg class="topology arch-topology" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g></svg><p class="arch-progress">${progress}</p>`;
   renderArchFlowButtons();
 }
 function renderArchFlowButtons() {
@@ -580,7 +614,7 @@ function renderArchDetail(nodeId) {
   if (!nodeId) {
     const group = archFlowGroups[state.archFlowIndex];
     const names = group.nodes.map((id) => fullArchitectureTopology.nodes.find(([nid]) => nid === id)[1]).join(" · ");
-    panel.innerHTML = `<h3>${group.label}</h3><p class="arch-detail-hint">${names}<br>Node를 클릭하면 이 Node만 자세히 볼 수 있습니다.</p>`;
+    panel.innerHTML = `<h3>${group.label}</h3><p class="arch-detail-hint">${group.sequences.map((sequence, index) => `${index + 1}. ${sequence.label}`).join("<br>")}<br><br>${names}<br>Node를 클릭하면 이 Node만 자세히 볼 수 있습니다.</p>`;
     return;
   }
   const label = fullArchitectureTopology.nodes.find(([id]) => id === nodeId)[1];
@@ -594,20 +628,23 @@ function renderArchDetail(nodeId) {
   </dl>`;
 }
 function stopArchFlowCycle() { clearInterval(state.archFlowTimer); state.archFlowTimer = null; clearTimeout(state.archResumeTimeout); state.archResumeTimeout = null; }
-/* 매 tick마다 path를 한 칸씩 전진한다. 끝에 도달하면 완성된 그림을 잠깐(약 1.4초) 더 보여준 뒤
-   다음 그룹으로 넘어간다 — 별도 setTimeout을 안 쓰고 같은 setInterval 안에서 "hold tick 카운트"로
-   처리해 타이머 정리가 항상 하나로 단순하게 유지된다. */
+/* 가상 합류점만 있는 path 항목은 건너뛰고, 실제 Node에 도달하는 장면만 보여 준다. */
 function archFlowTick() {
-  const path = archFlowGroups[state.archFlowIndex].path;
+  const group = archFlowGroups[state.archFlowIndex];
+  const path = group.sequences[state.archSequenceIndex].path;
   if (state.archPathStep < path.length - 1) {
-    state.archPathStep++;
+    let nextStep = state.archPathStep + 1;
+    while (nextStep < path.length - 1 && !path[nextStep].node) nextStep++;
+    state.archPathStep = nextStep;
   } else if (!state.archHolding) {
     state.archHolding = true;
-    state.archHoldTicks = 0;
-  } else if (state.archHoldTicks < 2) {
-    state.archHoldTicks++;
   } else {
-    state.archFlowIndex = (state.archFlowIndex + 1) % archFlowGroups.length;
+    if (state.archSequenceIndex < group.sequences.length - 1) {
+      state.archSequenceIndex++;
+    } else {
+      state.archFlowIndex = (state.archFlowIndex + 1) % archFlowGroups.length;
+      state.archSequenceIndex = 0;
+    }
     state.archPathStep = 0;
     state.archHolding = false;
   }
@@ -616,12 +653,12 @@ function archFlowTick() {
 function startArchFlowCycle() {
   stopArchFlowCycle();
   state.archSelected = null;
+  state.archSequenceIndex = 0;
   state.archPathStep = 0;
   state.archHolding = false;
-  state.archHoldTicks = 0;
   renderArchCanvas();
   renderArchDetail(null);
-  state.archFlowTimer = setInterval(archFlowTick, 700);
+  state.archFlowTimer = setInterval(archFlowTick, 1350);
 }
 /* Node를 클릭해 살펴보는 동안은 순환을 멈추고, 일정 시간(4초) 조작이 없으면 다시 순환으로 되돌아간다. */
 function scheduleArchResume() {
@@ -679,25 +716,32 @@ function renderShowcaseStep() {
   $("showcaseBackToDocs").hidden = !scenario.steps[0].chapter;
 }
 let showcaseTimer = null, showcaseHoldTimeout = null, showcaseStartTimeout = null, showcasePlaying = true;
-function stopShowcaseTimers() { clearInterval(showcaseTimer); showcaseTimer = null; clearTimeout(showcaseHoldTimeout); clearTimeout(showcaseStartTimeout); }
+function stopShowcaseTimers() { clearTimeout(showcaseTimer); showcaseTimer = null; clearTimeout(showcaseHoldTimeout); clearTimeout(showcaseStartTimeout); }
+function showcaseStepDelay() {
+  const data = resolveShowcaseSteps(currentShowcase())[state.showcaseStep];
+  /* 서비스 흐름의 multi-edge Step은 token이 앞선 선을 지난 뒤 다음 선으로 갈 시간을 확보한다. */
+  if (currentShowcase().id === "service-unified") return Math.max(2200, data.visual.activeEdges.length * 2200);
+  return 1600;
+}
+function scheduleShowcaseTick() { showcaseTimer = setTimeout(showcaseTick, showcaseStepDelay()); }
 function showcaseTick() {
   const scenario = currentShowcase();
   if (state.showcaseStep >= scenario.steps.length - 1) {
-    clearInterval(showcaseTimer); showcaseTimer = null;
+    clearTimeout(showcaseTimer); showcaseTimer = null;
     showcaseHoldTimeout = setTimeout(() => {
       if (!showcasePlaying) return;
       state.showcaseStep = 0; renderShowcaseStep();
-      showcaseTimer = setInterval(showcaseTick, 1600);
+      scheduleShowcaseTick();
     }, 1800);
     return;
   }
-  state.showcaseStep++; renderShowcaseStep();
+  state.showcaseStep++; renderShowcaseStep(); scheduleShowcaseTick();
 }
 function playShowcaseAuto() {
   showcasePlaying = true; $("showcaseAutoPlay").textContent = "⏸ Pause";
   clearTimeout(showcaseHoldTimeout);
-  clearInterval(showcaseTimer);
-  showcaseTimer = setInterval(showcaseTick, 1600);
+  clearTimeout(showcaseTimer);
+  scheduleShowcaseTick();
 }
 function pauseShowcaseAuto() { showcasePlaying = false; $("showcaseAutoPlay").textContent = "▶ Auto Play"; stopShowcaseTimers(); }
 /* Prev/Next — 수동으로 Step을 옮길 때는 자동 재생을 멈춘다(일반 Chapter의 Prev/Next와 같은 동작). */
