@@ -146,7 +146,7 @@ const paymentFollowupSteps = [
       evidenceReferences: [evidence.chatroom, evidence.email] })
 ];
 
-/* 서비스 흐름 탭(BobFull은 어떤 서비스인가) — 일반 사용자/사장님/BobFull 자동 관리를 3개의 독립 탭으로
+/* 서비스 흐름 탭(BobFull은 어떤 서비스인가) — 일반 사용자/사장님/자동 관리를 3개의 독립 탭으로
    따로 보여주던 이전 구조를 걷어내고, 한 Canvas 안에 3개 Swimlane(사용자/사장님/자동 관리)을 동시에
    그린다. 하나의 예약 시나리오가 세 주체 사이를 오가며 진행되는 것이 핵심이라, 각 Lane 내부 순서
    (backbone edge)뿐 아니라 Lane을 건너뛰는 연결(cross edge: 회차 노출/결제 신호/예약 반영/성사
@@ -193,42 +193,42 @@ const serviceUnifiedTopology = {
   regions: [
     { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100, emphasis: true },
     { label: "사장님", x: 10, y: 175, w: 1180, h: 100, emphasis: true },
-    { label: "BobFull 자동 관리", x: 10, y: 325, w: 1180, h: 185, emphasis: true }
+    { label: "자동 관리", x: 10, y: 325, w: 1180, h: 185, emphasis: true }
   ]
 };
 const serviceUnifiedSteps = [
-  step("register", "사장님", "식당 등록", "① 식당 등록", "사장님이 BobFull에 식당 정보를 등록합니다.",
+  step("register", "사장님", "식당 등록", "1. 식당 등록", "사장님이 BobFull에 식당 정보를 등록합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-register"], [], "request", null, "core") }),
-  step("setup", "사장님", "테이블·회차 설정", "② 회차 생성", "합석 가능한 테이블과 예약을 받을 회차(시간대)를 설정합니다.",
+  step("setup", "사장님", "테이블·회차 설정", "2. 회차 생성", "합석 가능한 테이블과 예약을 받을 회차(시간대)를 설정합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-register", "o-setup"], ["o-register-setup"], "event", null, "core", ["o-register"]) }),
-  step("expose", "사장님 → 일반 사용자", "탐색 노출", "③ 사용자 탐색에 노출", "사장님이 만든 회차가 일반 사용자의 탐색 화면에 나타납니다 — 두 주체가 처음 연결되는 지점입니다.",
+  step("expose", "사장님 → 일반 사용자", "탐색 노출", "3. 사용자 탐색에 노출", "사장님이 만든 회차가 일반 사용자의 탐색 화면에 나타납니다 — 두 주체가 처음 연결되는 지점입니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-setup", "u-explore"], ["cross-setup-explore"], "event", null, "core", ["o-register", "o-setup"], null, { "cross-setup-explore": "탐색에 노출" }) }),
-  step("select", "일반 사용자", "회차 선택", "④ 사용자 회차 선택", "노출된 회차 중 참여하고 싶은 회차를 선택합니다.",
+  step("select", "일반 사용자", "회차 선택", "4. 사용자 회차 선택", "노출된 회차 중 참여하고 싶은 회차를 선택합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-explore", "u-select"], ["u-explore-select"], "event", null, "core", ["o-register", "o-setup", "u-explore"]) }),
-  step("pay", "일반 사용자", "인원 선택/결제", "⑤ 사용자 결제", "함께할 인원 수를 정하고 결제를 진행합니다.",
+  step("pay", "일반 사용자", "인원 선택/결제", "5. 사용자 결제", "함께할 인원 수를 정하고 결제를 진행합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-select", "u-pay"], ["u-select-pay"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select"]) }),
-  step("accumulate", "일반 사용자 → BobFull 자동 관리", "참여 인원 누적", "⑥ 참여 인원 누적", "사용자의 결제가 완료되면 BobFull 자동 관리가 이를 받아 참여 인원 수에 반영합니다.",
+  step("accumulate", "일반 사용자 → 자동 관리", "참여 인원 누적", "6. 참여 인원 누적", "사용자의 결제가 완료되면 자동 관리가 이를 받아 참여 인원 수에 반영합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-pay", "a-paid", "a-accumulate"], ["cross-pay-paid", "a-paid-accumulate"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay"], null, { "cross-pay-paid": "결제 신호" }) }),
-  step("reservation", "BobFull 자동 관리 → 사장님", "예약 현황 반영", "⑦ 사장님 예약 현황 반영", "자동 관리가 누적한 참여 인원 현황이 사장님의 예약 현황 확인 화면에 그대로 반영됩니다.",
+  step("reservation", "자동 관리 → 사장님", "예약 현황 반영", "7. 사장님 예약 현황 반영", "자동 관리가 누적한 참여 인원 현황이 사장님의 예약 현황 확인 화면에 그대로 반영됩니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-accumulate", "o-reservation"], ["cross-accumulate-reservation"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate"], null, { "cross-accumulate-reservation": "예약 현황 반영" }) }),
-  step("judge", "BobFull 자동 관리", "성사 기준 판단 · 모집 마감", "⑧ 성사 판정", "성사에 필요한 인원 기준을 채웠는지 자동으로 판단하고, 회차 시작 시각이 되면 모집을 마감합니다. 기준 미달 시에는 취소·환불로 이어집니다.",
+  step("judge", "자동 관리", "성사 기준 판단 · 모집 마감", "8. 성사 판정", "성사에 필요한 인원 기준을 채웠는지 자동으로 판단하고, 회차 시작 시각이 되면 모집을 마감합니다. 기준 미달 시에는 취소·환불로 이어집니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-accumulate", "a-judge", "a-close"], ["a-accumulate-judge", "a-judge-close"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation"]),
       nextAction: "기준 미달 시 취소·환불" }),
-  step("confirm", "BobFull 자동 관리 → 일반 사용자", "예약 확정", "⑨ 예약 확정", "성사 판정 결과가 사용자의 예약 확정으로 이어집니다.",
+  step("confirm", "자동 관리 → 일반 사용자", "예약 확정", "9. 예약 확정", "성사 판정 결과가 사용자의 예약 확정으로 이어집니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-judge", "u-confirm"], ["cross-judge-confirm"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close"], null, { "cross-judge-confirm": "예약 확정" }) }),
-  step("chatroom-email", "BobFull 자동 관리", "채팅방 생성 · 이메일 발송", "⑩ 채팅방 생성 · 이메일 발송", "예약이 확정되면 참여자 채팅방을 만들고 확정 안내 이메일을 보냅니다. 채팅방·이메일 생성이 실패해도 이미 끝난 결제·예약은 롤백되지 않습니다(ADR 0008).",
+  step("chatroom-email", "자동 관리", "채팅방 생성 · 이메일 발송", "10. 채팅방 생성 · 이메일 발송", "예약이 확정되면 참여자 채팅방을 만들고 확정 안내 이메일을 보냅니다. 채팅방·이메일 생성이 실패해도 이미 끝난 결제·예약은 롤백되지 않습니다(ADR 0008).",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-judge", "a-chatroom", "a-email"], ["a-judge-chatroom", "a-judge-email"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm"]) }),
-  step("chat", "일반 사용자", "참여자 채팅", "⑪ 참여자 채팅", "만들어진 채팅방에서 함께 식사할 참여자들과 미리 대화할 수 있습니다.",
+  step("chat", "일반 사용자", "참여자 채팅", "11. 참여자 채팅", "만들어진 채팅방에서 함께 식사할 참여자들과 미리 대화할 수 있습니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-confirm", "u-chat"], ["u-confirm-chat"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email"]) }),
-  step("meal", "일반 사용자", "함께 식사", "⑫ 함께 식사", "약속된 시간에 만나 함께 식사합니다.",
+  step("meal", "일반 사용자", "함께 식사", "12. 함께 식사", "약속된 시간에 만나 함께 식사합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-chat", "u-meal"], ["u-chat-meal"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat"]) }),
-  step("mealend", "일반 사용자 → BobFull 자동 관리", "식사 종료 처리", "⑬ 식사 종료 처리", "식사가 끝나면 BobFull 자동 관리가 이를 식사 종료로 처리합니다.",
+  step("mealend", "일반 사용자 → 자동 관리", "식사 종료 처리", "13. 식사 종료 처리", "식사가 끝나면 자동 관리가 이를 식사 종료로 처리합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-meal", "a-mealend"], ["cross-meal-mealend"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal"], null, { "cross-meal-mealend": "종료 처리" }) }),
-  step("done", "일반 사용자", "이용 완료", "⑭ 이용 완료", "식사 종료 처리 후 이번 예약 이용이 완료됩니다.",
+  step("done", "일반 사용자", "이용 완료", "14. 이용 완료", "식사 종료 처리 후 이번 예약 이용이 완료됩니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-mealend", "u-meal", "u-done"], ["u-meal-done"], "commit", "completed", "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal"]) }),
-  step("payout", "사장님", "지급 예정 조회", "⑮ 지급 예정 조회", "이용이 완료되면 사장님은 확정된 예약에 대한 정산·지급 예정 금액을 조회합니다.",
+  step("payout", "사장님", "지급 예정 조회", "15. 지급 예정 조회", "이용이 완료되면 사장님은 확정된 예약에 대한 정산·지급 예정 금액을 조회합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-reservation", "o-payout"], ["o-reservation-payout"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal", "a-mealend", "u-done"]) }),
-  step("noshow", "사장님", "노쇼 관리", "⑯ 노쇼 관리", "나타나지 않은 참여자(노쇼)가 있었다면 사장님이 이 단계에서 확인하고 관리합니다.",
+  step("noshow", "사장님", "노쇼 관리", "16. 노쇼 관리", "나타나지 않은 참여자(노쇼)가 있었다면 사장님이 이 단계에서 확인하고 관리합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-payout", "o-noshow"], ["o-payout-noshow"], "commit", "completed", "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal", "a-mealend", "u-done"]) })
 ];
 

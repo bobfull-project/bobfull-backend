@@ -396,7 +396,7 @@ const SHOWCASE_TABS = [
 const SHOWCASE_SCENARIOS_BY_TAB = {
   service: [
     { id: "service-unified", title: "BobFull 서비스 흐름",
-      problem: "일반 사용자·사장님·BobFull 자동 관리, 따로 움직일까?",
+      problem: "일반 사용자·사장님·자동 관리, 따로 움직일까?",
       solution: "하나의 예약이 세 주체를 오가며 진행됩니다 — 사장님의 회차 생성은 사용자 탐색 노출로, 사용자 결제는 자동 관리의 인원 누적으로, 자동 판정은 사용자 예약 확정과 사장님 화면 반영으로 이어집니다.",
       outcomes: ["세 주체가 한 시나리오로 연결", "예약 확정 후 채팅방·이메일 자동 처리", "결제부터 정산·노쇼 관리까지 한 번에"], steps: serviceUnifiedSteps }
   ],
@@ -521,6 +521,12 @@ function playShowcaseAuto() {
   showcaseTimer = setInterval(showcaseTick, 1600);
 }
 function pauseShowcaseAuto() { showcasePlaying = false; $("showcaseAutoPlay").textContent = "▶ Auto Play"; stopShowcaseTimers(); }
+/* Prev/Next — 수동으로 Step을 옮길 때는 자동 재생을 멈춘다(일반 Chapter의 Prev/Next와 같은 동작). */
+function showcaseStepTo(idx) {
+  const steps = resolveShowcaseSteps(currentShowcase());
+  state.showcaseStep = Math.max(0, Math.min(idx, steps.length - 1));
+  renderShowcaseStep();
+}
 /* 진입/Scenario 전환 직후 바로 재생하지 않고 0.5~1초 대기했다가 자동 재생을 시작한다. */
 function restartShowcaseAutoplay() { stopShowcaseTimers(); showcaseStartTimeout = setTimeout(playShowcaseAuto, 700); }
 function switchShowcaseScenario(idx) {
@@ -571,6 +577,8 @@ $("showcaseTabs").onclick = (event) => {
   switchShowcaseScenario(Number(button.dataset.idx));
 };
 $("showcaseAutoPlay").onclick = () => { showcasePlaying ? pauseShowcaseAuto() : playShowcaseAuto(); };
+$("showcasePrev").onclick = () => { pauseShowcaseAuto(); showcaseStepTo(state.showcaseStep - 1); };
+$("showcaseNext").onclick = () => { pauseShowcaseAuto(); showcaseStepTo(state.showcaseStep + 1); };
 $("showcaseReplay").onclick = () => { stopShowcaseTimers(); state.showcaseStep = 0; renderShowcaseStep(); playShowcaseAuto(); };
 $("showcaseCapture").onclick = () => setCaptureMode(!document.body.classList.contains("capture-mode"));
 $("showcaseBackToDocs").onclick = () => {
