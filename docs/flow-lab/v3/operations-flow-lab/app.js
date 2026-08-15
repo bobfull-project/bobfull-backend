@@ -396,9 +396,9 @@ const SHOWCASE_TABS = [
 const SHOWCASE_SCENARIOS_BY_TAB = {
   service: [
     { id: "service-unified", title: "BobFull 서비스 흐름",
-      problem: "일반 사용자·사장님·BobFull 자동 관리는 각자 따로 움직일까?",
-      solution: "하나의 예약 시나리오가 세 Lane(일반 사용자/사장님/BobFull 자동 관리) 사이를 오가며 진행됩니다 — 사장님의 회차 생성이 사용자 탐색 노출로, 사용자 결제가 자동 관리의 인원 누적으로, 자동 판정이 사용자 예약 확정과 사장님 화면 반영으로 다시 이어집니다.",
-      outcomes: ["세 Lane이 한 시나리오로 연결", "결제 → 인원 누적 → 성사 판정 자동 처리", "회차 생성 → 탐색 노출 → 예약 확정까지 한 번에"], steps: serviceUnifiedSteps }
+      problem: "일반 사용자·사장님·BobFull 자동 관리, 따로 움직일까?",
+      solution: "하나의 예약이 세 주체를 오가며 진행됩니다 — 사장님의 회차 생성은 사용자 탐색 노출로, 사용자 결제는 자동 관리의 인원 누적으로, 자동 판정은 사용자 예약 확정과 사장님 화면 반영으로 이어집니다.",
+      outcomes: ["세 주체가 한 시나리오로 연결", "예약 확정 후 채팅방·이메일 자동 처리", "결제부터 정산·노쇼 관리까지 한 번에"], steps: serviceUnifiedSteps }
   ],
   core: [
     { id: "payment-followup", title: "결제 확정 후속 처리",
