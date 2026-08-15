@@ -255,7 +255,11 @@ const serviceUnifiedSteps = [
    Step마다 활성 Node/Edge만 다르다(Topology="무엇이 연결돼 있나" vs Scenario="이번 요청이 어디를
    지나가나"). CloudFront는 이번에도 재확인했지만 실제 사용 근거가 없어 계속 제외한다. */
 const infraTopology = {
-  viewBox: "0 0 900 650",
+  /* viewBox 세로를 650→460으로 압축했다(가로는 그대로) — Showcase Stage는 Chapter 모드의
+     canvas-slot과 달리 높이 상한이 없어서, 세로로 긴 비율의 topology는 화면을 거의 다 채워
+     아래 설명이 스크롤 없이는 안 보였다. Region 5개(Entry/Application/Shared/AI/Deployment)
+     구조는 그대로 두고 행 간격만 좁혀 가로세로 비율을 다른 topology들과 비슷하게 맞췄다. */
+  viewBox: "0 0 900 460",
   nodeSublabels: { ec2Blue1: "AI Consumer 포함", ec2Blue2: "AI Consumer 포함", ec2Green1: "AI Consumer 포함", ec2Green2: "AI Consumer 포함" },
   nodes: [
     ["client", "Client"], ["route53", "Route 53"], ["alb", "ALB (HTTPS)"],
@@ -267,37 +271,37 @@ const infraTopology = {
   ],
   nodePositions: {
     client: [20, 20], route53: [170, 20], alb: [340, 20],
-    tgBlue: [210, 140], tgGreen: [480, 140],
-    ec2Blue1: [140, 260], ec2Blue2: [280, 260], ec2Green1: [420, 260], ec2Green2: [560, 260],
-    rds: [140, 400], redis: [280, 400], kafka: [420, 400], s3: [560, 400],
-    llm: [420, 520],
-    gha: [740, 140], ecr: [740, 260], ssm: [740, 380]
+    tgBlue: [210, 125], tgGreen: [480, 125],
+    ec2Blue1: [140, 230], ec2Blue2: [280, 230], ec2Green1: [420, 230], ec2Green2: [560, 230],
+    rds: [130, 350], redis: [240, 350], kafka: [350, 350], s3: [460, 350],
+    llm: [570, 350],
+    gha: [740, 125], ecr: [740, 230], ssm: [740, 335]
   },
   edges: {
     "client-route53": "M120 55 H170", "route53-alb": "M270 55 H340",
-    "alb-tgBlue": "M390 90 V115 H260 V140", "alb-tgGreen": "M390 90 V115 H530 V140",
-    "tgBlue-ec2Blue1": "M260 210 V235 H190 V260", "tgBlue-ec2Blue2": "M260 210 V235 H330 V260",
-    "tgGreen-ec2Green1": "M530 210 V235 H470 V260", "tgGreen-ec2Green2": "M530 210 V235 H610 V260",
-    "ec2Green1-rds": "M470 330 V365 H190 V400", "ec2Green1-redis": "M470 330 V365 H330 V400",
-    "redis-ec2Green2": "M330 400 V365 H610 V330",
+    "alb-tgBlue": "M390 90 V107 H260 V125", "alb-tgGreen": "M390 90 V107 H530 V125",
+    "tgBlue-ec2Blue1": "M260 195 V212 H190 V230", "tgBlue-ec2Blue2": "M260 195 V212 H330 V230",
+    "tgGreen-ec2Green1": "M530 195 V212 H470 V230", "tgGreen-ec2Green2": "M530 195 V212 H610 V230",
+    "ec2Green1-rds": "M470 300 V325 H180 V350", "ec2Green1-redis": "M470 300 V325 H290 V350",
+    "redis-ec2Green2": "M290 350 V325 H610 V300",
     /* Kafka↔App EC2 왕복 — AI Consumer가 별도 서버가 아니라 같은 App EC2 프로세스라는 것을
        "Kafka로 나갔다가 같은 node로 다시 들어오는" 모양으로 표현한다. */
-    "ec2Green1-kafka": "M460 330 V400", "kafka-ec2Green1": "M480 400 V330",
-    "ec2Green1-llm": "M450 330 V345 H400 V520 H420",
-    "gha-ecr": "M790 210 V260", "ecr-ssm": "M790 330 V380",
-    "ssm-ec2Green1": "M790 380 V355 H470 V330", "ssm-ec2Green2": "M790 380 V340 H610 V330"
+    "ec2Green1-kafka": "M460 300 V325 H390 V350", "kafka-ec2Green1": "M410 350 V325 H480 V300",
+    "ec2Green1-llm": "M450 300 V325 H620 V350",
+    "gha-ecr": "M790 195 V230", "ecr-ssm": "M790 300 V335",
+    "ssm-ec2Green1": "M790 335 V312 H470 V300", "ssm-ec2Green2": "M790 335 V318 H610 V300"
   },
   labels: {
     "client-route53": [125, 45], "route53-alb": [275, 45],
-    "ec2Green1-kafka": [415, 350], "kafka-ec2Green1": [485, 380],
-    "gha-ecr": [795, 232], "ecr-ssm": [795, 352]
+    "ec2Green1-kafka": [400, 318], "kafka-ec2Green1": [460, 340],
+    "gha-ecr": [795, 217], "ecr-ssm": [795, 317]
   },
   regions: [
     { label: "Entry / Routing", x: 10, y: 5, w: 445, h: 100 },
-    { label: "Application (Blue/Green)", x: 130, y: 125, w: 540, h: 215 },
-    { label: "Shared Data / Messaging", x: 130, y: 390, w: 540, h: 90 },
-    { label: "AI", x: 410, y: 510, w: 120, h: 90 },
-    { label: "Deployment Control Plane", x: 730, y: 130, w: 120, h: 330 }
+    { label: "Application (Blue/Green)", x: 130, y: 115, w: 540, h: 195 },
+    { label: "Shared Data / Messaging", x: 120, y: 340, w: 445, h: 90 },
+    { label: "AI", x: 565, y: 340, w: 115, h: 90 },
+    { label: "Deployment Control Plane", x: 730, y: 115, w: 120, h: 300 }
   ]
 };
 const infraSteps = {
