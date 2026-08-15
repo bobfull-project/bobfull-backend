@@ -69,7 +69,10 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .canvas-slot{height:40vh;min-height:220px;max-height:400px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .canvas{width:100%;height:100%;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
 .topology{display:block;width:auto;height:auto;max-width:100%;max-height:100%}
-.stage-scroll{background:var(--stage);border:1px solid var(--line);border-radius:0 0 10px 10px;padding:14px 20px 22px}
+/* min-height 없이 내용이 짧은 Step(narrationPoints만 있고 metric card가 없는 경우 등)을 만나면,
+   .stage-scroll이 sticky된 .stage-sticky보다 먼저 다 스크롤돼 뒤쪽 내용이 sticky 뒤로 숨는다.
+   항상 sticky 최대 높이보다 넉넉하게 커서 그런 일이 없게 한다. */
+.stage-scroll{background:var(--stage);border:1px solid var(--line);border-radius:0 0 10px 10px;padding:14px 20px 22px;min-height:56vh;box-sizing:border-box}
 .stage-hint{margin:0 0 10px;color:var(--muted);font-size:11px}
 /* 크게 보기 — 같은 #canvas/#flowCaption 엘리먼트를 그대로 옮겨서 상태·강조를 다시 그리지 않는다. */
 .canvas-overlay{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:24px}
@@ -150,6 +153,8 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .detail-list article h3{margin:0 0 3px;color:var(--muted);font-size:11px;font-weight:600}
 .detail-list article p{margin:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere;color:var(--text)}
 .detail-list a{font-size:13px}
+/* merge 전이라 link가 없는 근거 — 클릭 가능한 것처럼 보이지 않게 muted로 표시한다. */
+.evidence-plain{color:var(--muted);font-size:13px}
 
 .comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0}
 .comparison[hidden]{display:none}

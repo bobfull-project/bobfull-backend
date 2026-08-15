@@ -1,6 +1,9 @@
 /* Evidence-backed data only. Every step must declare factStatus and visual state. */
 const FACT = { MERGED: "merged", VERIFIED: "verified", MEASURED: "measured", DESIGN: "design interpretation", REJECTED: "rejected alternative", FUTURE: "future improvement" };
 const ref = (label, href) => ({ label, href });
+/* href가 없는 근거 — 아직 develop에 merge되지 않아 저장소 상대 경로 link를 걸면 broken link가
+   되는 문서(#274/PR #275)를 위한 것이다. linked()가 href 유무로 <a> 대신 일반 텍스트로 그린다. */
+const refPlain = (label) => ({ label, href: null });
 const evidence = {
   chatroom: ref("#176 ChatRoom Outbox Evidence", "../../../evidence/v3/176-chatroom-outbox/README.md"),
   email: ref("#183 Email Outbox Evidence", "../../../evidence/v3/183-email-outbox/README.md"),
@@ -14,7 +17,10 @@ const evidence = {
   aiWorkerScaling: ref("#192 Kafka AI Worker Scaling 판단", "../../../evidence/v3/192-ai-worker-scaling/README.md"),
   partitionKey: ref("#258 Moderation Partition Key 판단", "../../../evidence/v3/258-moderation-partition-key/README.md"),
   moderationHardening: ref("#251 AI Moderation Rule Fast Path", "../../../evidence/v3/251-ai-moderation-hardening/README.md"),
-  splitMessage: ref("#266 Split Message Moderation", "../../../evidence/v3/266-split-message-moderation/README.md")
+  splitMessage: ref("#266 Split Message Moderation", "../../../evidence/v3/266-split-message-moderation/README.md"),
+  /* #274는 PR #275(docs-only)의 docs/274-kafka-evidence branch에서 확정됐지만 아직 develop에
+     merge되지 않아 이 저장소 경로에 파일이 없다 — merge 전까지는 link 없는 caption으로만 표시한다. */
+  outboxAsyncVsKafka: refPlain("#274 Outbox+Async vs Outbox+Kafka Controlled Comparison(PR #275, merge 대기)")
 };
 /* committedNodes: 현재 active path에 없어도 여전히 유효한(dim과 구별되는) 이미 커밋된 노드.
    badge: 특정 노드 옆에 짧은 텍스트 배지(성능 수치 등)를 표시한다. */
@@ -757,21 +763,21 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
     ]}
   ]},
   { id: "kafka-mechanics", shortLabel: "Ch5 — Kafka 도입 의사결정 Lab",
-    title: "Kafka는 왜 도입했을까? — 더 빠르기 위해서가 아니었다", subtitle: "가설 기각부터 Partition Key 개선까지",
-    summary: { problem: "AI 후속 작업을 Kafka로 넘기면 정말 더 빠를까?",
-      solution: "실측으로 비교한 결과 Kafka 채택 이유는 속도가 아니라 신뢰성·격리였다.",
-      why: "AI 후속 작업을 Kafka로 넘기면 정말 더 빠를까? — Async와 비교해 실제로 Kafka를 선택한 이유를 검증해야 했다.",
-      how: "같은 조건에서 Async와 Kafka를 실측 비교했고, 이후 발견한 Partition Hot-Key 문제도 도메인 계약을 재검토해 Key를 개선했다." }, scenarios: [
+    title: "Kafka는 왜 도입했을까? — 더 빠르기 위해서가 아니었다", subtitle: "가설 기각 → 비교 오류 발견 → 통제 실험(#274) → Partition Key 개선까지",
+    summary: { problem: "AI 후속 작업을 Kafka로 넘기면 정말 더 빠를까? 그리고 예전 신뢰성 비교는 정말 공정했을까?",
+      solution: "실측 결과 Kafka는 더 빠르지 않았고, 예전 신뢰성 비교에는 Outbox 효과가 섞여 있었다(#192). 같은 Outbox 조건으로 다시 통제 비교(#274)한 결과, Kafka를 유지하는 이유는 속도나 유일한 유실 방지가 아니라 운영 가능한 비동기 Worker 경계였다.",
+      why: "AI 후속 작업을 Kafka로 넘기면 정말 더 빠를까? — Async와 비교해 실제로 Kafka를 선택한 이유를 검증해야 했다. 처음 비교(#192)는 Outbox 없는 Memory Async와 Outbox+Kafka를 비교해, Outbox 효과와 Kafka 효과가 뒤섞여 있었다.",
+      how: "같은 Transactional Outbox 조건에서 Async와 Kafka를 다시 통제 비교(#274)했다 — 둘 다 crash 뒤 lost=0으로 복구됐고, 차이는 유실 여부가 아니라 DB stale scheduler vs Broker/Consumer Group이라는 복구 경계였다. 이후 발견한 Partition Hot-Key 문제도 도메인 계약을 재검토해 Key를 개선했다(#258)." }, scenarios: [
     { id: "kafka-adoption-decision", title: "Kafka 도입 의사결정", steps: [
       step("hypothesis", "Human 설계 질문", "Async vs Kafka", "▲ 가설: Kafka가 더 빠르지 않을까?", "AI 후속 작업을 Async 대신 Kafka로 넘기면 응답이나 처리 속도가 더 빠르지 않을까? — 같은 조건에서 실제로 비교해본다.",
         { factStatus: FACT.DESIGN, visual: visual(["app", "async", "outbox", "kafka"], [], null, null, "outbox") }),
       step("commit", "Application", "DB", "✓ 메시지 저장, 두 방식으로 비교 시작", "그냥 @Async로 보내면 더 간단하지 않은가? — 같은 저장 시점에서 두 경로를 비교한다.",
         { domainState: "ChatMessage 확정 저장됨(COMMITTED)", factStatus: FACT.MEASURED, visual: visual(["app", "db"], ["persist"], "commit", "committed", "core"),
           evidenceReferences: [evidence.aiWorkerScaling] }),
-      step("send-latency", "Application", "Async Queue / Outbox+Kafka", "◆ send() 응답성 비교", "AI 처리(500ms)를 커밋 후 비동기로 넘기는 건 둘 다 같다 — send() 응답성은 거의 같다. Async 쪽은 자체 스레드풀(Executor)에 그대로 작업을 제출하는 방식이다.",
+      step("send-latency", "Application", "Async Queue / Outbox+Kafka", "◆ send() 응답성 비교", "AI 처리(500ms)를 커밋 후 비동기로 넘기는 건 둘 다 같다 — send() 응답성은 거의 같다. 이 Step의 Async는 Outbox 없이 커밋 직후 바로 스레드풀(Executor)에 제출하는 Memory Async다 — 뒤에서 이 비교 방식 자체가 재검토된다.",
         { factStatus: FACT.MEASURED, visual: visual(["app", "db", "async", "outbox", "kafka"], ["commit-async", "outbox-write", "outbox-publish"], "event", null, "outbox", ["db"]),
           performance: [{ metric: "Async send() p95", before: "7ms" }, { metric: "Kafka(Outbox 경유) send() p95", before: "4~8ms" }],
-          logs: "Kafka가 Async보다 빠르다는 주장은 이 실측으로 기각됐다(#192 실험 0)",
+          logs: "Kafka가 Async보다 빠르다는 주장은 이 실측으로 기각됐다(#192 실험 0, 역사적 초기 비교)",
           codeReferences: ["ChatMessageAsyncModerationDispatcher.dispatch"],
           codeSnippet: { file: "ChatMessageAsyncModerationDispatcher.java", method: "ChatMessageAsyncModerationDispatcher.dispatch()", code: `public void dispatch(Long messageId) {
     executor.execute(() -> {
@@ -787,27 +793,62 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
       step("drain-compare", "Application", "완료 처리량(drain time)", "◆ 완료 처리량은 오히려 Async가 빨랐다 — 가설 기각", "Kafka의 Partition key가 chatRoomId라 같은 방 메시지가 한 Partition에 몰려, Consumer 3개 중 1개만 실제로 일했다.",
         { factStatus: FACT.MEASURED, visual: visual(["app", "async", "outbox", "kafka", "consumer"], ["commit-async", "outbox-write", "outbox-publish", "kafka-consume"], "event", null, "outbox", ["db"]),
           performance: [{ metric: "Async drain(30건)", before: "5.2~5.5s" }, { metric: "Kafka drain(같은 방 1개로 몰림)", before: "15.5s" }, { metric: "Kafka drain(3개 방으로 분산)", before: "10.7s" }],
-          limits: "\"Consumer 수만 늘리면 병렬 처리량이 그만큼 는다\"는 가정이 항상 맞지 않음을 보여주는 실측이다 — 채팅방(key) 분산도가 함께 필요하다(#192 실험 0).",
+          limits: "\"Consumer 수만 늘리면 병렬 처리량이 그만큼 는다\"는 가정이 항상 맞지 않음을 보여주는 실측이다 — 채팅방(key) 분산도가 함께 필요하다(#192 실험 0, 역사적 초기 비교). 이 Step까지의 Async는 Outbox 없는 Memory Async였다 — 다음 Step에서 이 비교 방식 자체를 재검토한다.",
           evidenceReferences: [evidence.aiWorkerScaling] }),
-      step("reliability", "프로세스 종료", "Async Queue vs Kafka Broker", "× Async 유실 vs ✓ Kafka 보존", "신뢰성 차이가 핵심이다 — Async 대기열은 프로세스가 죽으면 대기 중이던 작업이 재시도 없이 그대로 사라지지만, Kafka는 Consumer가 중단돼도 Broker가 이벤트를 보존해 재개 후 그대로 이어서 처리한다.",
-        { factStatus: FACT.MEASURED, visual: visual(["async"], ["commit-async"], "failure", "failure", "outbox", ["outbox", "kafka"]),
-          performance: [{ metric: "Kafka Consumer 중단 → 재개(적체 15건)", before: "재개 후 15/15 처리" },
-            { metric: "lost event", before: "0건" }, { metric: "recovery time", before: "7.8초" }],
-          logs: "Async Baseline: 큐 대기 중 2건이 강제 종료 시 analyze() 호출 자체가 한 번도 일어나지 않고 사라짐(#192 실험 0, 실측) · Kafka: Consumer 중단 중 적체 15건 → 재개 후 15/15 처리, lost 0, 복구 7.8초(#192 실험 B, 실측)",
-          decisionBadge: "Kafka 채택 근거 = 속도가 아닌 신뢰성 · 격리 · 확장",
-          limits: "Kafka를 채택한 이유: Broker 보존, 적체 처리, Retry, 실패 격리, Consumer 복구, 확장 가능한 처리 경계 — 단건 latency 개선이 아니다(#192 최종 판정).",
-          codeReferences: ["ChatMessageAsyncModerationDispatcher.discardAndLog"],
-          codeSnippet: { file: "ChatMessageAsyncModerationDispatcher.java", method: "ChatMessageAsyncModerationDispatcher.discardAndLog()", code: `/**
- * #192 "왜 Outbox+Kafka인가"를 실측으로 비교하기 위한 Baseline이다. Outbox/Kafka 없이
- * ChatMessage 커밋 직후 바로 스레드풀에 AI 분석을 제출한다. Kafka 처리 경계와 달리 이
- * Baseline은 재시도·DLT·브로커 적체가 없다 — 그 차이가 비교의 핵심이므로 일부러 단순하게
- * 유지하고, 큐가 포화되면 재시도 없이 그대로 버린다.
- */
-private static RejectedExecutionHandler discardAndLog() {
-    return (runnable, exec) -> log.warn(
-            "event=ASYNC_MODERATION_QUEUE_SATURATED reason=queue_capacity_exceeded action=dropped_task_no_retry_no_dlt");
-}` },
-          evidenceReferences: [evidence.aiWorkerScaling, evidence.pipeline] }),
+      step("confound-discovered", "Human 설계 검토", "비교 방법 재검토", "? 그런데 이 비교, 공정했을까?", "지금까지 비교한 \"Async\"는 Outbox 없이 커밋 직후 바로 스레드풀에 제출하는 Memory Async였다. 반대편 \"Kafka\"는 Outbox를 거친 Outbox+Kafka였다 — 즉 Outbox가 주는 내구성 효과와 Kafka가 주는 효과가 한 비교 안에 섞여 있었다.",
+        { factStatus: FACT.DESIGN, visual: visual(["app", "async", "outbox", "kafka"], [], null, null, "outbox"),
+          narrationPoints: [
+            "예전에는 이렇게 판단했었다: <b>\"Async는 프로세스 종료 시 유실되고, Kafka는 Broker에 보존된다 — 그래서 Kafka를 선택했다.\"</b>",
+            "하지만 이 결론은 <b>Memory Async(Outbox 없음) vs Outbox+Kafka(Outbox 있음)</b>를 비교한 것이다.",
+            "그래서 유실 여부의 차이가 정말 <b>Kafka 때문</b>인지, 아니면 단지 <b>Outbox가 있고 없고의 차이</b>였는지 이 비교만으로는 분리할 수 없다.",
+            "그래서 Outbox를 양쪽에 동일하게 두고 다시 실험했다(#274)."],
+          decisionBadge: "REJECTED: Memory Async vs Outbox+Kafka 비교(confounded) — 아래 Controlled Comparison(#274)으로 재검증",
+          limits: "\"Async는 유실되고 Kafka는 보존한다\"는 예전 해석은 이 confound 때문에 폐기한다. 실제로 유실/보존 여부를 가른 것이 Outbox인지 Kafka인지는 다음 Step의 통제 비교에서 확인한다.",
+          evidenceReferences: [evidence.aiWorkerScaling, evidence.outboxAsyncVsKafka] }),
+      step("controlled-setup", "Human 설계", "Outbox + Async vs Outbox + Kafka", "◆ 같은 조건으로 다시 비교했다", "ChatMessage와 OutboxEvent를 같은 트랜잭션에 저장하는 것은 두 경로 모두 동일하다. 그 다음 단계만 다르다 — 하나는 Outbox processor가 claim한 뒤 bounded local executor에서 처리하고(Outbox+Async), 다른 하나는 Kafka Broker ACK 뒤 Consumer Group이 소비한다(Outbox+Kafka).",
+        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["persist", "outbox-write"], "commit", "committed", "outbox"),
+          retryPolicy: [["공통 조건", "ChatMessage + OutboxEvent 같은 트랜잭션"], ["경로 A", "Outbox + Local Async(bounded executor)"],
+            ["경로 B", "Outbox + Kafka(messageId key, partition 3)"], ["Workload", "30건 · Fake AI 500ms · concurrency 3"]],
+          limits: "H2(MySQL mode) 기반 테스트 환경 실측이며, 실제 AWS 다중 EC2 운영 환경 수치는 아니다.",
+          evidenceReferences: [evidence.outboxAsyncVsKafka] }),
+      step("controlled-performance", "K6/Testcontainers", "Drain / Throughput", "◆ Kafka는 더 빠르지 않았다", "같은 Outbox 조건에서 다시 재보니, 이번에도 Kafka가 더 빠르지 않았다 — 오히려 Async 쪽 drain이 더 짧았다.",
+        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["outbox-write", "commit-async", "outbox-publish", "kafka-consume"], "event", null, "outbox", ["db"]),
+          performance: [{ metric: "Outbox + Async drain median(3 run)", before: "5.394s" }, { metric: "Outbox + Kafka drain median(3 run)", before: "7.210s" },
+            { metric: "Outbox + Async throughput median", before: "5.56 msg/s" }, { metric: "Outbox + Kafka throughput median", before: "4.16 msg/s" }],
+          metricGlossary: [["drain median", "30건 메시지가 전부 처리 완료될 때까지 걸린 시간의 3회 반복 median 값 — 짧을수록 빠르다."],
+            ["throughput median", "초당 처리 건수 median — 클수록 빠르다."]],
+          decisionBadge: "Kafka partition distribution: {0=14, 1=9, 2=7}(messageId key, 3 active)",
+          limits: "Outbox+Kafka drain median 7.210s는 3회 실행(7.210s/7.201s/7.309s) 중앙값이다. Kafka를 처리 속도 때문에 채택한다는 결론은 이 Evidence로 지지되지 않는다.",
+          evidenceReferences: [evidence.outboxAsyncVsKafka] }),
+      step("controlled-normal-reliability", "Application", "정상 실행 결과", "✓ 정상 실행에서는 둘 다 문제 없었다", "장애 없이 정상적으로 실행했을 때는 두 경로 모두 메시지 유실도 중복도 없었다.",
+        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["outbox-write", "commit-async", "outbox-publish", "kafka-consume"], "commit", "completed", "outbox"),
+          performance: [{ metric: "Outbox + Async — lost / duplicate(정상 실행)", before: "0 / 0" }, { metric: "Outbox + Kafka — lost / duplicate(정상 실행)", before: "0 / 0" }],
+          evidenceReferences: [evidence.outboxAsyncVsKafka] }),
+      step("controlled-crash-recovery", "실제 프로세스 강제 종료", "Actual Process Crash/Restart", "▲ 실제로 프로세스를 강제 종료했다", "이번엔 시뮬레이션이 아니라 실제로 child JVM을 destroyForcibly()로 강제 종료한 뒤 재시작해서 두 경로 모두 회복되는지 확인했다.",
+        { factStatus: FACT.MEASURED, visual: visual(["async", "kafka"], ["commit-async", "outbox-publish"], "retry", null, "outbox", ["app", "outbox", "db"]),
+          performance: [{ metric: "Async — restart → 처리 재개", before: "296.825s" }, { metric: "Kafka — restart → 처리 재개", before: "40.614s" },
+            { metric: "Async — crash lost / duplicate", before: "0 / 0" }, { metric: "Kafka — crash lost / duplicate", before: "0 / 0" }],
+          narrationPoints: [
+            "결과: <b>둘 다 복구됐다</b> — Async도 Kafka도 crash 뒤 lost=0, duplicate=0이었다.",
+            "40.614s와 296.825s는 <b>Kafka만의 \"복구 시간\"이 아니다</b> — Spring Boot 재기동, Consumer 초기화·assignment까지 포함한 재시작→첫 moderation 재개까지의 end-to-end 값이다.",
+            "\"Kafka가 40초 만에 복구된다\"거나 \"Async는 유실된다\"고 표현하지 않는다 — 둘 다 회복됐고, 회복까지 걸린 시간이 달랐을 뿐이다."],
+          limits: "30건 workload·Fake AI 500ms·H2 기반 테스트 환경 값이다. 실제 AWS 다중 EC2 운영 장애 복구를 측정한 값은 아니다. Retry/DLT failure injection은 이 실험에서 별도로 검증하지 않았다.",
+          evidenceReferences: [evidence.outboxAsyncVsKafka] }),
+      step("recovery-boundary", "Human 분석", "복구 경계의 차이", "◆ 차이는 유실 여부가 아니라 복구 경계였다", "두 경로 모두 살아남았다는 점은 같다. 다른 것은 \"누가, 어떤 방식으로 다시 찾아내는가\"였다.",
+        { factStatus: FACT.DESIGN, visual: visual(["outbox", "async", "kafka", "consumer"], ["commit-async", "kafka-consume"], "event", null, "outbox"),
+          narrationPoints: [
+            "<b>Outbox + Async</b>: claim된 행이 PROCESSING 상태로 DB에 남고, 약 5분 stale threshold가 지나면 scheduler가 reclaim해 local executor로 다시 넘긴다.",
+            "<b>Outbox + Kafka</b>: 커밋된 이벤트가 Broker에 backlog로 남고, 재시작한 Consumer Group이 그 backlog를 이어서 소비한다.",
+            "DB stale scheduler는 애플리케이션 내부 책임이고, Broker+Consumer Group은 그 책임을 애플리케이션 바깥의 별도 인프라 경계로 분리한다.",
+            "이 경계 차이가 40.614s와 296.825s라는 재개 시간 차이로 나타났다 — durability의 유무 차이가 아니다."],
+          evidenceReferences: [evidence.outboxAsyncVsKafka] }),
+      step("kafka-verdict", "Human 최종 판단", "KAFKA_JUSTIFIED_FOR_OPERABILITY", "✓ Kafka를 유지하는 진짜 이유", "Kafka는 더 빠르지 않았다. Kafka만 메시지를 보존하는 것도 아니었다 — 같은 Outbox 조건이면 Async도 crash 뒤 lost=0으로 복구됐다. 그럼에도 Kafka를 유지하는 이유는 Consumer 이후의 적체·복구·관측·확장을 애플리케이션 내부의 DB stale scheduler가 아니라 Broker/Consumer Group이라는 독립된 운영 경계로 분리해주기 때문이다.",
+        { factStatus: FACT.DESIGN, visual: visual(["outbox", "kafka", "consumer", "llm"], ["outbox-publish", "kafka-consume", "ai-call"], "commit", "completed", "outbox", ["app", "async", "db"]),
+          statusChecklist: [["속도 때문에 채택", "failed"], ["Kafka만 유실 방지", "failed"], ["운영 가능한 비동기 Worker 경계", "done"]],
+          decisionBadge: "B. KAFKA_JUSTIFIED_FOR_OPERABILITY",
+          nextAction: "Broker backlog · Consumer Group · Partition 병렬 처리 · 독립 Worker/scale-out · Retry/DLT 구조",
+          limits: "이번 crash 실험에서 Retry/DLT failure injection은 별도로 검증하지 않았다 — 그 효과까지 #274로 검증했다고 표현하지 않는다. 아래 이어지는 Hot-Key 발견·messageId Key 개선(#258)은 이 결론과 별개로 여전히 유효한 Evidence다.",
+          evidenceReferences: [evidence.outboxAsyncVsKafka, evidence.aiWorkerScaling] }),
       step("consumer-1", "Consumer concurrency = 1", "Partition 0/1/2", "▲ 처리 담당을 1명 뒀어요", "일꾼(Consumer)을 늘리면 늘리는 만큼 빨라질까? — 우선 1명이 세 Partition을 모두 처리하게 해봤다.",
         { factStatus: FACT.MEASURED, visual: visual(["kafka", "consumer"], ["kafka-consume"], "event", null, "kafka"),
           performance: [{ metric: "drain time(같은 채팅방 3개·30건)", before: "15.4s" }, { metric: "consume rate", before: "1.94건/초" }],
@@ -891,10 +932,10 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
     return errorHandler;
 }` , annotations: [{"from": 7, "to": 8, "text": "핵심: 최초 처리를 포함해 최대 3회까지만 시도하도록 재시도 횟수와 간격을 지정한다."}, {"from": 9, "to": 9, "text": "재시도해도 소용없는 예외(잘못된 메시지 형식 등)는 즉시 DLT로 보내 불필요한 반복 호출을 막는다."}]},
           evidenceReferences: [evidence.pipeline, evidence.aiWorkerScaling] }),
-      step("conclusion", "Human 판단", "Kafka 도입 최종 결론", "✓ 최종 결론: 속도가 아니라 신뢰성 때문에", "Kafka는 Async보다 빠른 Queue라서 선택한 것이 아니다. 느리고 실패할 수 있는 AI 후속 작업을 적체·Retry·실패 격리·복구·Consumer 확장이 가능한 처리 경계로 분리하기 위해 선택했다. 이후 실제 병목(chatRoomId Hot-Key)을 찾아 Moderation 도메인 계약에 맞는 Key로 개선한 것도 같은 원칙의 연장이다.",
-        { factStatus: FACT.DESIGN, visual: visual(["outbox", "kafka", "consumer", "llm"], ["outbox-publish", "kafka-consume", "ai-call"], "commit", "completed", "outbox", ["app", "db"]),
-          decisionBadge: "ADOPT: Outbox + Kafka(신뢰성 경계) · REJECTED: 속도 목적 채택",
-          evidenceReferences: [evidence.aiWorkerScaling, evidence.partitionKey] })
+      step("conclusion", "Human 판단", "Kafka 도입 최종 결론", "✓ 최종 결론: 속도도, 유일한 유실 방지 수단도 아니었다", "Kafka는 Async보다 빠른 Queue라서 선택한 것이 아니다. 같은 Outbox 조건이면 Async도 crash 뒤 살아남았다 — Kafka를 유지한 이유는 Consumer 이후의 적체·복구·관측·확장을 독립된 운영 경계로 분리해주기 때문이다. 이후 실제 병목(chatRoomId Hot-Key)을 찾아 Moderation 도메인 계약에 맞는 Key로 개선한 것(#258)은 이 결론과 별개로 여전히 유효하다.",
+        { factStatus: FACT.DESIGN, visual: visual(["outbox", "kafka", "consumer", "llm"], ["outbox-publish", "kafka-consume", "ai-call"], "commit", "completed", "outbox", ["app", "async", "db"]),
+          decisionBadge: "ADOPT: Outbox + Kafka(운영 가능한 비동기 Worker 경계) · REJECTED: 속도 목적 채택 · REJECTED: Kafka만 durability 제공",
+          evidenceReferences: [evidence.outboxAsyncVsKafka, evidence.aiWorkerScaling, evidence.partitionKey] })
     ]}
   ]},
   { id: "ai-moderation", shortLabel: "Ch6 — AI 모더레이션 판단 로직",
