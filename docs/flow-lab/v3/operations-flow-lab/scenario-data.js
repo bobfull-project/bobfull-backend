@@ -378,14 +378,15 @@ const aiModerationJourneyTopology = {
     "validator-modDb": "M1400 270 V360"
   },
   labels: {
-    "outbox-processor": [685, 165], "processor-kafka": [775, 82],
+    "outbox-processor": [685, 165], "processor-kafka": [750, 145],
     "rule-fast": [995, 192], "rule-context": [990, 318]
   },
   regions: [
     { label: "핵심 요청", x: 10, y: 175, w: 445, h: 100 },
-    /* emphasis 없이 기본(작은) 라벨로 — ChatMessage node 위쪽에 굵은 orange 텍스트가 겹쳐 보이던
-       문제라 크기만 줄였다(위치·node는 그대로). */
-    { label: "DB Transaction", x: 480, y: 175, w: 260, h: 100 },
+    /* emphasis 없이 기본(작은) 라벨로 줄였는데도 라벨 y가 node 상단(190)과 거의 붙어 있어 여전히
+       ChatMessage 글자와 겹쳐 보였다 — region을 위로 늘려(y:150,h:125, 바닥은 그대로 275) 라벨이
+       node 위 24px 여백에서 시작하게 했다. node/좌표는 그대로다. */
+    { label: "DB Transaction", x: 480, y: 150, w: 260, h: 125 },
     { label: "AI 검수 파이프라인", x: 655, y: 10, w: 825, h: 440, emphasis: true }
   ]
 };
@@ -427,7 +428,7 @@ const aiModerationJourneySteps = [
       evidenceReferences: [evidence.pipeline] }),
   step("processor-kafka", "Outbox Processor", "Kafka", "◆ Outbox Processor가 채팅 메시지 이벤트를 Kafka에 발행합니다", "Outbox Processor가 Kafka Broker에 발행했고, Broker가 잘 받았다는 응답(ACK)까지 확인해 Outbox 상태를 COMPLETED로 바꿉니다. 발행이 실패하면 이 이벤트는 다시 PENDING으로 돌아가 재시도 대상이 됩니다.",
     { domainState: "ChatMessage 확정 저장됨(COMMITTED)", outbox: "처리 중 → 완료", kafka: "발행됨", factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
-      visual: visual(["processor", "kafka"], ["processor-kafka"], "event", "acknowledged", "outbox", ["client", "web", "app", "db", "outbox"], null, { "processor-kafka": "Kafka 발행 · COMPLETED" }),
+      visual: visual(["processor", "kafka"], ["processor-kafka"], "event", "acknowledged", "outbox", ["client", "web", "app", "db", "outbox"], null, { "processor-kafka": "Kafka 발행" }),
       codeReferences: ["ChatMessageOutboxProcessor.processClaimed"],
       codeSnippet: { file: "ChatMessageOutboxProcessor.java", method: "ChatMessageOutboxProcessor.processClaimed()", code: `private void processClaimed(OutboxEventTransactionService.ClaimedOutboxEvent event) {
     log.info("event=OUTBOX_PROCESSING_STARTED outboxEventId={} eventType={} aggregateType=CHAT_MESSAGE aggregateId={} attemptCount={} status=PROCESSING",
