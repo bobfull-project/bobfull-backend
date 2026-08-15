@@ -439,7 +439,13 @@ const fullArchitectureTopology = {
     "pool-rds": "M460 360 H310 V430", "pool-redis": "M460 360 V430", "pool-kafka": "M460 360 H610 V430",
     "kafka-pool": "M610 430 V360 H460", "pool-green1": "M460 360 H590 V290",
     "pool-s3": "M460 360 H850 V455 H890", "s3-lambda": "M940 490 V510",
-    "pool-openai": "M460 360 H850 V75 H890", "pool-portone": "M460 360 H850 V185 H890", "pool-smtp": "M460 360 H850 V280 H890",
+    "pool-openai": "M460 360 H850 V75 H890", "pool-smtp": "M460 360 H850 V280 H890",
+    /* PortOne은 Green EC2(x590)보다 동쪽(x890)에 있는데, 공용 pool 좌표(x460)는 Green EC2보다
+       서쪽이다 — green1-pool(590→460)에 이어 pool-portone(460→850)을 그대로 쓰면 Green EC2에서
+       내려온 수직선이 왼쪽(460)으로 꺾였다가 다시 오른쪽(850)으로 꺾이는 불필요한 좌측 구간이
+       생긴다. PortOne 연결은 pool을 거치지 않고 Green EC2 바로 아래(x590)에서 곧장 오른쪽으로만
+       꺾이는 전용 edge로 둔다 — 이 조합은 "결제 승인" Sequence 외에는 쓰이지 않는다. */
+    "green1-portone": "M590 290 V360 H850 V185 H890",
     "pool-prometheus": "M460 360 H850 V610 H310 V630", "pool-cloudwatch": "M460 360 H850 V610 H820 V630",
     "prometheus-grafana": "M360 665 H430", "grafana-slack": "M530 665 H600",
     "developer-ghaction": "M1180 110 V150", "ghaction-ecr": "M1180 220 V260", "ecr-ssm": "M1180 330 V370",
@@ -518,7 +524,7 @@ const archFlowGroups = [
     { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, { edge: "green1-pool" }, { edge: "pool-s3", node: "s3" }, { edge: "s3-lambda", node: "lambda" }] }
   ] },
   { id: "reservation", label: "② 예약·결제·채팅방·이메일", sequences: [
-    { label: "결제 승인", path: [...archPathClientToApp, { edge: "green1-pool" }, { edge: "pool-portone", node: "portone" }] },
+    { label: "결제 승인", path: [...archPathClientToApp, { edge: "green1-portone", node: "portone" }] },
     { label: "예약 상태 저장", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-rds", node: "rds" }] },
     { label: "채팅방 실시간 준비", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-redis", node: "redis" }] },
     { label: "확정 이메일 발송", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-smtp", node: "smtp" }] }
