@@ -43,7 +43,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;padding:8px max(20px,4vw) 10px;background:var(--bg);border-top:1px solid var(--line)}
 .playback-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%}
 #secondaryControls{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.75;transform:scale(.96);transform-origin:left center}
-#counter{color:var(--muted);font:12px ui-monospace,monospace;margin-left:auto}
+#counter{margin-left:auto;padding:6px 14px;border:1px solid var(--accent);border-radius:20px;background:rgba(255,125,61,.12);color:var(--accent-strong);font:700 15px ui-monospace,monospace;letter-spacing:.02em;white-space:nowrap}
 
 .stage{background:var(--stage);border:1px solid var(--line);border-radius:10px;padding:24px;margin:4px 0 20px}
 .stage-heading{display:flex;justify-content:space-between;gap:16px;align-items:baseline;margin-bottom:14px}

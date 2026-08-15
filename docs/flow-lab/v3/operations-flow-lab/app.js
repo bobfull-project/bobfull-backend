@@ -332,4 +332,14 @@ $("scenarioButtons").onclick = (event) => {
 };
 window.addEventListener("resize", syncPlaybackPadding);
 $("play").onclick = () => { if (state.step === currentScenario().steps.length - 1) state.step = 0; stop(); render(); state.timer = setInterval(advance, Number($("speed").value)); }; $("pause").onclick = stop; $("next").onclick = advance; $("prev").onclick = () => { stop(); state.step = Math.max(0, state.step - 1); render(); }; $("reset").onclick = resetStep; $("speed").onchange = () => { if (state.timer) $("play").click(); };
+/* 재생바를 키보드와 연동한다 — ← 이전, → 다음, Space 재생/정지 토글.
+   select/input에 포커스가 있을 때는 그 컨트롤의 기본 키 동작(값 변경, 스크롤)을 막지 않는다. */
+function togglePlay() { (state.timer ? $("pause") : $("play")).click(); }
+document.addEventListener("keydown", (event) => {
+  const focusedTag = document.activeElement.tagName;
+  if (focusedTag === "SELECT" || focusedTag === "INPUT" || focusedTag === "TEXTAREA") return;
+  if (event.key === "ArrowLeft") { event.preventDefault(); $("prev").click(); }
+  else if (event.key === "ArrowRight") { event.preventDefault(); $("next").click(); }
+  else if (event.code === "Space" || event.key === " ") { event.preventDefault(); togglePlay(); }
+});
 render();
