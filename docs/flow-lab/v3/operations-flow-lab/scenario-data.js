@@ -264,7 +264,12 @@ const infraTopology = {
      Kafka/S3/LLM 5개 Shared 자원 전부와 항상 Gray로 이어져 있고, 현재 Scenario가 실제로 쓰는
      조각만 Orange로 활성화된다. */
   viewBox: "0 0 900 460",
-  nodeSublabels: { ec2Blue1: "AI Consumer 포함", ec2Blue2: "AI Consumer 포함", ec2Green1: "AI Consumer 포함", ec2Green2: "AI Consumer 포함" },
+  /* Blue/Green은 색 자체에 고정 역할이 없다 — ACTIVE(현재 ALB Traffic 100%)/STANDBY(다음 배포
+     대상)만 있다. 이 기본값(Green ACTIVE·Blue STANDBY)을 일반 API/채팅/AI 검수 3개 Scenario가
+     공유하는 시작 상태로 통일한다 — Scenario를 오갈 때마다 활성 색이 바뀌어 보이면 안 된다.
+     배포 Scenario만 진행하면서 deploy-5/6/7 Step에서 이 기본값을 override해 Blue ACTIVE로
+     전환한다(9번째 nodeSublabels 인자). */
+  nodeSublabels: { ec2Blue1: "AI Consumer 포함", ec2Blue2: "AI Consumer 포함", ec2Green1: "AI Consumer 포함", ec2Green2: "AI Consumer 포함", tgGreen: "ACTIVE · 100%", tgBlue: "STANDBY · 0%" },
   nodes: [
     ["client", "Client"], ["route53", "Route 53"], ["alb", "ALB (HTTPS)"],
     ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
@@ -298,7 +303,9 @@ const infraTopology = {
     "appPool-kafka": "M400 315 V350", "kafka-appPool": "M400 350 V315",
     "appPool-s3": "M400 315 H510 V350", "appPool-llm": "M400 315 H620 V350",
     "gha-ecr": "M790 195 V230", "ecr-ssm": "M790 300 V335",
-    "ssm-ec2Green1": "M790 335 V312 H470 V300", "ssm-ec2Green2": "M790 335 V318 H610 V300"
+    /* 기본 상태가 Green ACTIVE/Blue STANDBY로 통일됐으므로, 새 버전은 항상 비활성(Standby)인
+       Blue EC2에 배포된다 — SSM 연결선도 Blue를 향한다. */
+    "ssm-ec2Blue1": "M790 335 V312 H190 V300", "ssm-ec2Blue2": "M790 335 V318 H330 V300"
   },
   labels: {
     "client-route53": [125, 45], "route53-alb": [275, 45],
@@ -348,26 +355,143 @@ const infraSteps = {
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-appPool", "appPool-rds"], "commit", "completed", "core", ["kafka", "llm"]) })
   ],
   deploy: [
-    step("deploy-1", "Client", "Blue EC2", "● 사용자 요청은 계속 Blue Target Group이 정상 처리합니다", "배포 시작 전, ALB는 100% Blue로 요청을 보내고 있습니다 — 새 버전을 배포하는 동안에도 이 서비스는 멈추지 않습니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2"], ["client-route53", "route53-alb", "alb-tgBlue", "tgBlue-ec2Blue1", "tgBlue-ec2Blue2"], "request", null, "core") }),
+    step("deploy-1", "Client", "Green EC2", "● 사용자 요청은 계속 Green Target Group이 정상 처리합니다", "배포 시작 전, ALB는 100% Green으로 요청을 보내고 있습니다 — 새 버전을 배포하는 동안에도 이 서비스는 멈추지 않습니다. Blue/Green은 고정 역할이 아닙니다 — 지금 Traffic을 받는 쪽이 ACTIVE, 반대쪽이 다음 배포 대상(STANDBY)일 뿐입니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "request", null, "core") }),
     step("deploy-2", "GitHub Actions", "ECR", "◆ GitHub Actions가 새 버전을 빌드해 ECR에 올립니다", "main에 push되면 GitHub Actions가 빌드한 뒤 OIDC로 인증해 새 이미지를 ECR에 push합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["gha", "ecr"], ["gha-ecr"], "event", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2"]) }),
-    step("deploy-3", "SSM Run Command", "Green EC2 #1/#2", "◆ 비활성 Green EC2에 새 이미지를 배포합니다 — Traffic은 여전히 Blue입니다", "SSH 없이 SSM Run Command로 현재 비활성인 Green EC2 #1/#2에만 배포 스크립트를 실행합니다. 이 시점에도 ALB Traffic은 100% Blue입니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ecr", "ssm", "ec2Green1", "ec2Green2"], ["ecr-ssm", "ssm-ec2Green1", "ssm-ec2Green2"], "event", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2", "gha"]),
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["gha", "ecr"], ["gha-ecr"], "event", null, "core", ["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2"]) }),
+    step("deploy-3", "SSM Run Command", "Blue EC2 #1/#2", "◆ 비활성 Blue EC2에 새 이미지를 배포합니다 — Traffic은 여전히 Green입니다", "SSH 없이 SSM Run Command로 현재 비활성(STANDBY)인 Blue EC2 #1/#2에만 배포 스크립트를 실행합니다. 이 시점에도 ALB Traffic은 100% Green입니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ecr", "ssm", "ec2Blue1", "ec2Blue2"], ["ecr-ssm", "ssm-ec2Blue1", "ssm-ec2Blue2"], "event", null, "core", ["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2", "gha"]),
         codeReferences: ["scripts/aws/deploy-backend-blue-green-v1.sh", "scripts/aws/run-ssm-backend-deploy-v1.sh"] }),
-    step("deploy-4", "ALB Target Group", "Health Check", "◆ Green EC2 #1/#2가 Health Check를 통과합니다", "Target Group Health Check(/actuator/health/readiness)가 Green EC2 #1/#2 모두 healthy로 확인될 때까지 기다린 뒤에만 다음 단계로 넘어갑니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "ec2Green2"], [], "commit", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2", "gha", "ecr", "ssm"]) }),
-    step("deploy-5", "ALB Listener", "Weight 전환", "✓ ALB 리스너 가중치를 Blue 100/0에서 Green 0/100으로 전환합니다", "새 Target Group을 만들거나 바꿔치기하지 않습니다 — 같은 ALB 리스너 안에서 Blue/Green 두 Target Group의 가중치(weight)만 뒤집습니다. 실패 시 자동으로 이전 가중치(Blue 100/Green 0)로 rollback합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgBlue", "tgGreen"], ["alb-tgGreen"], "commit", "completed", "core", ["client", "route53", "ec2Blue1", "ec2Blue2", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"]),
+    step("deploy-4", "ALB Target Group", "Health Check", "◆ Blue EC2 #1/#2가 Health Check를 통과합니다", "Target Group Health Check(/actuator/health/readiness)가 Blue EC2 #1/#2 모두 healthy로 확인될 때까지 기다린 뒤에만 다음 단계로 넘어갑니다 — 이 시점에는 Traffic을 아직 받지 않아 READY 상태입니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Blue1", "ec2Blue2"], [], "commit", null, "core", ["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"], null, null, { tgBlue: "READY · 0%" }) }),
+    step("deploy-5", "ALB Listener", "Weight 전환", "✓ ALB 리스너 가중치를 Green 100/0에서 Blue 0/100으로 전환합니다", "새 Target Group을 만들거나 바꿔치기하지 않습니다 — 같은 ALB 리스너 안에서 Blue/Green 두 Target Group의 가중치(weight)만 뒤집습니다. 실패 시 자동으로 이전 가중치(Green 100/Blue 0)로 rollback합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgBlue", "tgGreen"], ["alb-tgBlue"], "commit", "completed", "core", ["client", "route53", "ec2Blue1", "ec2Blue2", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"], null, null, { tgGreen: "STANDBY · 0%", tgBlue: "ACTIVE · 100%" }),
         codeReferences: ["deploy-backend-blue-green-v1.sh:build_switch_actions", "deploy-backend-blue-green-v1.sh:rollback_listener"],
         evidenceReferences: [evidence.appHa] }),
-    step("deploy-6", "Client", "Green EC2", "✓ 새로운 요청은 이제 Green으로 라우팅됩니다", "가중치 전환 이후 새로 들어오는 요청은 ALB → TG Green → Green EC2 #1/#2로 처리됩니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "request", "completed", "core", ["tgBlue", "ec2Blue1", "ec2Blue2", "gha", "ecr", "ssm"]) }),
-    step("deploy-7", "Blue EC2 #1/#2", "Standby", "◆ 기존 Blue는 Standby로 남아 다음 배포를 기다립니다", "Blue EC2를 자동으로 종료하거나 Drain시키는 스크립트는 확인되지 않았습니다 — Blue는 그대로 남아 있다가, 다음 배포에서 다시 \"비활성 색\"으로 새 이미지를 받는 대상이 됩니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["tgBlue", "ec2Blue1", "ec2Blue2"], [], "commit", null, "core", ["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"]),
+    step("deploy-6", "Client", "Blue EC2", "✓ 새로운 요청은 이제 Blue로 라우팅됩니다", "가중치 전환 이후 새로 들어오는 요청은 ALB → TG Blue → Blue EC2 #1/#2로 처리됩니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2"], ["client-route53", "route53-alb", "alb-tgBlue", "tgBlue-ec2Blue1", "tgBlue-ec2Blue2"], "request", "completed", "core", ["tgGreen", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"], null, null, { tgGreen: "STANDBY · 0%", tgBlue: "ACTIVE · 100%" }) }),
+    step("deploy-7", "Green EC2 #1/#2", "Standby", "◆ 기존 Green은 Standby로 남아 다음 배포를 기다립니다", "Green EC2를 자동으로 종료하거나 Drain시키는 스크립트는 확인되지 않았습니다 — Green은 그대로 남아 있다가, 다음 배포에서 다시 STANDBY 그룹으로 새 이미지를 받는 대상이 됩니다(다음 배포는 반대로 Green Deploy가 됩니다).",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["tgGreen", "ec2Green1", "ec2Green2"], [], "commit", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2", "gha", "ecr", "ssm"], null, null, { tgGreen: "STANDBY · 0%", tgBlue: "ACTIVE · 100%" }),
         limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 아직 없다(#191). 이전 색을 자동 종료·Drain하는 로직은 이번 조사에서 확인되지 않았다.",
         evidenceReferences: [evidence.appHa] })
   ]
+};
+
+/* CH0 > 인프라 흐름 > "전체 인프라 구성도 보기" 전용 데이터.
+   위 infraTopology(요약 Map)와는 역할이 다르다 — 요약 Map은 "요청이 어떻게 흐르는가"(Runtime),
+   이 데이터는 "실제로 무엇이 어디에 배치되어 있는가"(Topology)를 보여준다. 그래서 Scenario/Step/
+   token 애니메이션이 없고, 모든 node·edge가 항상 중립(회색)이며 Orange는 쓰지 않는다 — 클릭한
+   node와 직접 연결된 edge만 선택 강조(active 재사용)로 표시한다.
+   Repository 재조사 결과를 기준으로만 포함했다(#274 이후 재검증, 2026-08-15 기준):
+   ACTIVE로 확인된 것만 포함 — Route53/ALB/Blue-Green EC2/RDS(Single-AZ)/Redis(ElastiCache)/
+   Kafka(자체 EC2 단일 KRaft)/S3/Lambda(restaurant-image-validator, 이번 조사에서 새로 확인)/
+   OpenAI/PortOne/SMTP/GitHub Actions(OIDC)/ECR/SSM Run Command/Parameter Store(실제 secret
+   원천)/Prometheus·Grafana(메트릭)/Slack(Grafana 알림 전용, 앱 코드 연동 아님)/CloudWatch Logs
+   (로그 전용, 메트릭 아님). CloudFront는 계획만 있고 구현 근거가 없어 제외했다
+   (docs/deployment/aws-v1-backend.md의 "제외 범위" 언급뿐). Auto Scaling/RDS Multi-AZ/MSK/
+   별도 AI Consumer EC2도 구현 근거가 없어 넣지 않았다. V2 인프라 이미지는 이번 대화에도 저장소에도
+   없어 비교를 생략하고 현재 Repository 증거만 기준으로 삼았다.
+   Node 100x70/edge M-H-V 관례, region 배경 재사용 등 기존 topology와 동일한 그리기 규칙을 그대로
+   따른다 — "AWS VPC" region은 Application·Shared를 감싸는 큰 배경이라 regions 배열 맨 앞에 둬서
+   가장 먼저(가장 뒤에) 그려지게 했다(이후 항목이 그 위에 그려짐). Application EC2 4대 → Shared
+   인프라 5종(RDS/Redis/Kafka/S3/LLM)로 가는 fan-out은 요약 Map과 같은 "Application Pool" 가상
+   합류점 방식을 그대로 재사용해 "Blue/Green이 각각 다른 자원을 쓴다"는 오해를 여기서도 막는다. */
+const fullArchitectureTopology = {
+  viewBox: "0 0 1400 830",
+  nodes: [
+    ["users", "Users / Browser"], ["route53", "Route 53"], ["alb", "ALB (HTTPS)"],
+    ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
+    ["blue1", "Blue EC2 #1"], ["blue2", "Blue EC2 #2"], ["green1", "Green EC2 #1"], ["green2", "Green EC2 #2"],
+    ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"],
+    ["s3", "S3(식당 이미지)"], ["lambda", "Image Validator Lambda"],
+    ["openai", "OpenAI(LLM)"], ["portone", "PortOne"], ["smtp", "SMTP/Mail"],
+    ["developer", "Developer / GitHub"], ["ghaction", "GitHub Actions"], ["ecr", "ECR"],
+    ["ssm", "SSM Run Command"], ["paramstore", "Parameter Store"],
+    ["prometheus", "Prometheus"], ["grafana", "Grafana"], ["slack", "Slack"], ["cloudwatch", "CloudWatch Logs"]
+  ],
+  nodePositions: {
+    users: [40, 40], route53: [40, 140], alb: [40, 240],
+    tgBlue: [300, 90], tgGreen: [600, 90],
+    blue1: [240, 220], blue2: [390, 220], green1: [540, 220], green2: [690, 220],
+    rds: [260, 430], redis: [410, 430], kafka: [560, 430],
+    s3: [890, 420], lambda: [890, 510],
+    openai: [890, 40], portone: [890, 150], smtp: [890, 245],
+    developer: [1130, 40], ghaction: [1130, 150], ecr: [1130, 260], ssm: [1130, 370], paramstore: [1130, 480],
+    prometheus: [260, 630], grafana: [430, 630], slack: [600, 630], cloudwatch: [770, 630]
+  },
+  nodeSublabels: {
+    blue1: "AI Consumer 포함", blue2: "AI Consumer 포함", green1: "AI Consumer 포함", green2: "AI Consumer 포함",
+    rds: "Single-AZ", redis: "Cache / Pub-Sub", kafka: "단일 KRaft Broker",
+    s3: "식당 이미지", lambda: "업로드 검증", slack: "Grafana Alert 전용", cloudwatch: "Logs(메트릭 아님)"
+  },
+  edges: {
+    "users-route53": "M140 75 V140", "route53-alb": "M140 210 V240",
+    "alb-tgBlue": "M140 275 H190 V125 H300",
+    /* tgBlue/tgGreen이 같은 y(90~160)에 나란히 있어서, alb-tgGreen이 그냥 직선으로 가면 tgBlue
+       박스를 관통한다 — tgBlue 위(y=80, 박스 top=90보다 위)로 넘어간 뒤 tgGreen으로 내려간다. */
+    "alb-tgGreen": "M140 275 H190 V80 H650 V90",
+    "tgBlue-blue1": "M350 160 V190 H290 V220", "tgBlue-blue2": "M350 160 V190 H440 V220",
+    "tgGreen-green1": "M650 160 V190 H590 V220", "tgGreen-green2": "M650 160 V190 H740 V220",
+    /* Application Pool(가상 합류점, 460·360) — 실제 node가 아니라 "Blue/Green 4대 EC2 전부가
+       Shared 인프라 5종 전부와 항상 이어져 있다"를 표현하기 위한 경로 좌표일 뿐이다. */
+    "blue1-pool": "M290 290 V360 H460", "blue2-pool": "M440 290 V360 H460",
+    "green1-pool": "M590 290 V360 H460", "green2-pool": "M740 290 V360 H460",
+    "pool-rds": "M460 360 H310 V430", "pool-redis": "M460 360 V430", "pool-kafka": "M460 360 H610 V430",
+    "pool-s3": "M460 360 H850 V455 H890", "s3-lambda": "M940 490 V510",
+    "pool-openai": "M460 360 H850 V75 H890", "pool-portone": "M460 360 H850 V185 H890", "pool-smtp": "M460 360 H850 V280 H890",
+    "pool-prometheus": "M460 360 H850 V610 H310 V630", "pool-cloudwatch": "M460 360 H850 V610 H820 V630",
+    "prometheus-grafana": "M360 665 H430", "grafana-slack": "M530 665 H600",
+    "developer-ghaction": "M1180 110 V150", "ghaction-ecr": "M1180 220 V260", "ecr-ssm": "M1180 330 V370",
+    "ssm-paramstore": "M1180 440 V480",
+    /* ssm→각 EC2: Deployment Control Plane 열(x1130) 안에서 바로 위로 빠지면 developer/ghaction/ecr
+       박스를 그대로 관통한다 — 먼저 열 밖(x=1080, 다른 region과 겹치지 않는 빈 통로)으로 나온 뒤,
+       모든 node의 y 시작(40)보다 위인 y=25(완전히 빈 상단 통로)로 올라가 가로로 이동하고, 각 EC2
+       바로 위(TG Blue/Green 박스와 겹치지 않는 x)에서 내려간다. */
+    "ssm-blue1": "M1130 405 H1080 V25 H290 V220", "ssm-blue2": "M1130 405 H1080 V25 H440 V220",
+    "ssm-green1": "M1130 405 H1080 V25 H590 V220", "ssm-green2": "M1130 405 H1080 V25 H740 V220"
+  },
+  regions: [
+    { label: "AWS VPC", x: 200, y: 20, w: 640, h: 560 },
+    { label: "Client / Entry", x: 20, y: 20, w: 160, h: 290 },
+    { label: "Application (Blue/Green)", x: 220, y: 60, w: 600, h: 280 },
+    { label: "Shared Data / Messaging", x: 220, y: 400, w: 600, h: 160 },
+    { label: "Image Pipeline", x: 860, y: 400, w: 200, h: 200 },
+    { label: "AI / External Services", x: 860, y: 20, w: 200, h: 310 },
+    { label: "Deployment Control Plane", x: 1100, y: 20, w: 260, h: 560 },
+    { label: "Monitoring / Observability", x: 220, y: 600, w: 900, h: 140 }
+  ]
+};
+/* Node 클릭 시 Detail Panel에 그대로 뿌리는 짧은 구조화 설명 — Role/Runtime/Connected To/Network/
+   Evidence 5개 필드로 고정한다(길게 쓰지 않는다, Diagram 안 설명은 sublabel 1~2단어로 충분).
+   전부 위 Repository 재조사 결과(증거 파일 경로 포함)에서만 가져왔다 — 확인 안 된 내용은 "확인 안 됨"
+   또는 생략한다. */
+const fullArchitectureNodeDetails = {
+  users: { role: "실제 사용자 브라우저/앱", runtime: "BobFull 프론트엔드 클라이언트", connectedTo: "Route 53", network: "Public Internet", evidence: "—" },
+  route53: { role: "DNS 라우팅", runtime: "api.bobfull.click → ALB Alias", connectedTo: "ALB(HTTPS)", network: "관리형 DNS(콘솔 관리)", evidence: "docs/evidence/v3/206-backend-ingress-https/README.md" },
+  alb: { role: "HTTPS 진입점 · Blue/Green Target Group 가중치 라우팅", runtime: "ACM 인증서 · Listener Weight 100/0 ↔ 0/100", connectedTo: "TG Blue, TG Green", network: "콘솔 관리(Public Subnet 추정, VPC/Subnet은 IaC 없이 콘솔 관리)", evidence: "scripts/aws/deploy-backend-blue-green-v1.sh" },
+  tgBlue: { role: "Blue Deployment Group Target Group", runtime: "Health Check: /actuator/health/readiness", connectedTo: "ALB, Blue EC2 #1/#2", network: "App Security Group", evidence: "deploy-backend-blue-green-v1.sh" },
+  tgGreen: { role: "Green Deployment Group Target Group", runtime: "Health Check: /actuator/health/readiness", connectedTo: "ALB, Green EC2 #1/#2", network: "App Security Group", evidence: "deploy-backend-blue-green-v1.sh" },
+  blue1: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  blue2: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  green1: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  green2: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  rds: { role: "핵심 관계형 데이터(예약·결제·회원 등 영속 데이터)", runtime: "MySQL, Single-AZ(Multi-AZ 아님)", connectedTo: "Application(Blue/Green) 전체 — Blue·Green 전용으로 나뉘어 있지 않다", network: "Private, App SG만 접근(추정)", evidence: "docs/evidence/v3/169-app-ha/README.md" },
+  redis: { role: "Cache + Pub/Sub(다중 서버 채팅 전파)", runtime: "ElastiCache, TLS(REDIS_SSL_ENABLED)", connectedTo: "Application(Blue/Green) 전체", network: "Private", evidence: "application-prod.yml, ADR-0011" },
+  kafka: { role: "비동기 AI 검수 메시지 전달", runtime: "자체 EC2, 단일 KRaft Broker(MSK 아님)", connectedTo: "Application(발행 + 소비, 같은 프로세스 내부 Consumer)", network: "Private", evidence: "docs/evidence/v3/169-app-ha/README.md" },
+  s3: { role: "식당 이미지 저장", runtime: "Presigned URL 업로드", connectedTo: "Application, Image Validator Lambda", network: "—", evidence: "RestaurantImageS3Config.java, ADR-0007" },
+  lambda: { role: "업로드 이미지 검증", runtime: "S3 ObjectCreated 트리거(temp/restaurants/** → 검증 후 최종 경로로 복사)", connectedTo: "S3", network: "—", evidence: "lambda/restaurant-image-validator, docs/adr/0007" },
+  openai: { role: "AI 채팅 검수 판정(LLM)", runtime: "gpt-4o-mini(기본값), Spring AI", connectedTo: "Application 내부 AI Consumer(ChatModerationConsumer) — Kafka가 직접 호출하지 않는다", network: "External HTTPS", evidence: "SpringAiModerationAdapter.java" },
+  portone: { role: "결제 · 환불 게이트웨이", runtime: "Webhook: /api/webhooks/portone", connectedTo: "Application", network: "External HTTPS", evidence: "PortOneConfig, docs/ARCHITECTURE.md" },
+  smtp: { role: "예약 알림 메일 발송", runtime: "—", connectedTo: "Application", network: "External SMTP", evidence: "SmtpReservationNotificationAdapter.java" },
+  developer: { role: "main 브랜치 merge → 배포 트리거", runtime: "GitHub 저장소", connectedTo: "GitHub Actions", network: "—", evidence: ".github/workflows/deploy-backend-v1.yml" },
+  ghaction: { role: "빌드 · 테스트 · 배포 오케스트레이션", runtime: "OIDC 인증(AWS_ROLE_TO_ASSUME), id-token: write", connectedTo: "ECR", network: "—", evidence: "deploy-backend-v1.yml" },
+  ecr: { role: "컨테이너 이미지 저장소", runtime: "—", connectedTo: "SSM Run Command", network: "—", evidence: "push-image-to-ecr-v1.sh" },
+  ssm: { role: "무중단 배포 실행 — 비활성(Standby) Blue/Green 그룹에만 배포", runtime: "AWS-RunShellScript 문서", connectedTo: "Blue/Green EC2, Parameter Store", network: "—", evidence: "run-ssm-backend-deploy-v1.sh" },
+  paramstore: { role: "애플리케이션 Secret 원천(DB/Redis/Kafka/OpenAI/PortOne/Mail 등)", runtime: "SSM Run Command가 배포 시점에 fetch_parameter()로 조회", connectedTo: "SSM Run Command", network: "—", evidence: "deploy-backend-v1.sh:fetch_parameter" },
+  prometheus: { role: "메트릭 수집", runtime: "Actuator Prometheus Export", connectedTo: "Application, Grafana", network: "—", evidence: "monitoring/docker-compose.yml" },
+  grafana: { role: "메트릭 대시보드 + 알림 규칙", runtime: "—", connectedTo: "Prometheus, Slack", network: "—", evidence: "monitoring/grafana/dashboards, provisioning/alerting" },
+  slack: { role: "Grafana 알림 수신 채널 — 앱 코드가 직접 연동하지 않는다", runtime: "Webhook(GRAFANA_SLACK_WEBHOOK_URL)", connectedTo: "Grafana", network: "External", evidence: "monitoring/grafana/provisioning/alerting/contact-points.yml" },
+  cloudwatch: { role: "애플리케이션 로그 저장 — 메트릭 도구가 아니다(메트릭은 Prometheus/Grafana)", runtime: "awslogs Docker log driver", connectedTo: "Application", network: "—", evidence: "deploy-backend-v1.sh(--log-driver=awslogs)" }
 };
 
 /* 핵심 시스템 흐름 탭 > "AI 채팅 검수" 전용 topology/step.

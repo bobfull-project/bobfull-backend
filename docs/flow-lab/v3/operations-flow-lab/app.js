@@ -1,6 +1,6 @@
 /* Playback and rendering only. Every visual decision comes from step.visual. */
 const $ = (id) => document.getElementById(id);
-const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseTab: "service", showcaseScenario: 0, showcaseStep: 0 };
+const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseTab: "service", showcaseScenario: 0, showcaseStep: 0, archSelected: null };
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
@@ -98,7 +98,12 @@ function renderCanvas(data) {
   const v = data.visual;
   const t = topologyFor(data);
   const regionSvg = regionBgSvg(t);
-  const edgeSvg = Object.entries(t.edges).map(([id, path]) => {
+  /* Application Pool 합류점처럼 여러 edge가 같은 좌표 구간을 지나가는 topology(infra)에서는,
+     그리는 순서가 insertion 순서 그대로라 dim edge가 active edge보다 나중에 그려지면 겹치는
+     구간에서 orange가 gray로 덮여 "선이 중간에 흐려진다"는 시각 버그가 있었다 — active edge를
+     항상 마지막에 그려서(SVG는 나중에 그린 것이 위) 겹치는 구간에서도 orange가 항상 보이게 한다. */
+  const edgeEntries = Object.entries(t.edges).sort(([a], [b]) => (v.activeEdges.includes(a) ? 1 : 0) - (v.activeEdges.includes(b) ? 1 : 0));
+  const edgeSvg = edgeEntries.map(([id, path]) => {
     /* dashedEdges(opt-in) — Scheduler 재시도처럼 "메인 흐름이 아닌 보조 경로"임을 항상 점선으로
        구분한다. 이 배열을 쓰는 topology에만 적용되고 다른 topology는 그대로다. */
     const dashedCls = t.dashedEdges && t.dashedEdges.includes(id) ? " retry-dashed" : "";
@@ -516,6 +521,63 @@ function renderShowcaseMainTabs() {
   $("showcaseMainTabs").innerHTML = SHOWCASE_TABS.map((tab) =>
     `<button type="button" class="${tab.id === state.showcaseTab ? "active" : ""}" data-tab="${tab.id}">${tab.label}</button>`).join("");
   $("showcaseTabQuestion").textContent = SHOWCASE_TABS.find((tab) => tab.id === state.showcaseTab).question;
+  /* "전체 인프라 구성도 보기"는 인프라 흐름 탭에서만 의미가 있다 — 서비스 흐름/핵심 시스템 흐름에는
+     이 버튼을 아예 보여주지 않는다. */
+  $("showFullArchitecture").hidden = state.showcaseTab !== "infra";
+}
+/* CH0 인프라 흐름 전용 "전체 인프라 구성도 보기" — 기존 Scenario 재생 화면(요약 Map, Runtime Flow)과
+   완전히 분리된 별도 정적 Topology 화면이다. 같은 renderCanvas()를 재사용하지 않는다 — renderCanvas는
+   Scenario Step의 active/dim(Orange/Gray) 강조가 핵심인데, 여기는 Orange Event 애니메이션을 다시
+   구현하지 않고 "클릭한 node만 선택 강조"라는 별개의 상호작용이 필요하기 때문이다(요구사항: Scenario
+   Map=Runtime Flow, 전체 구성도=Deployment/Infrastructure Topology, 두 화면의 역할을 섞지 않는다). */
+function archEdgeTouchesNode(edgeId, nodeId) { return edgeId.split("-").includes(nodeId); }
+function renderArchCanvas() {
+  const t = fullArchitectureTopology;
+  const regionSvg = regionBgSvg(t);
+  const edgeSvg = Object.entries(t.edges).map(([id, path]) => {
+    const selected = state.archSelected && archEdgeTouchesNode(id, state.archSelected);
+    return `<path id="arch-edge-${id}" class="connector${selected ? " active" : ""}" d="${path}"/>`;
+  }).join("");
+  const nodesSvg = t.nodes.map(([id, label]) => {
+    const [x, y] = t.nodePositions[id];
+    const selected = state.archSelected === id;
+    const sublabel = t.nodeSublabels && t.nodeSublabels[id];
+    const sublabelSvg = sublabel ? `<text x="50" y="58" class="node-sublabel">${sublabel}</text>` : "";
+    const mainY = sublabel ? 38 : 42;
+    const compress = label.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
+    return `<g class="canvas-node${selected ? " active" : ""}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
+  }).join("");
+  $("archCanvas").innerHTML = `<svg class="topology arch-topology" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="nodes">${nodesSvg}</g></svg>`;
+}
+function renderArchDetail(nodeId) {
+  const panel = $("archDetailPanel");
+  if (!nodeId) { panel.innerHTML = `<p class="arch-detail-hint">Node를 클릭해 보세요.</p>`; return; }
+  const label = fullArchitectureTopology.nodes.find(([id]) => id === nodeId)[1];
+  const d = fullArchitectureNodeDetails[nodeId];
+  panel.innerHTML = `<h3>${label}</h3><dl class="arch-detail-list">
+    <div><dt>Role</dt><dd>${d.role}</dd></div>
+    <div><dt>Runtime</dt><dd>${d.runtime}</dd></div>
+    <div><dt>Connected To</dt><dd>${d.connectedTo}</dd></div>
+    <div><dt>Network</dt><dd>${d.network}</dd></div>
+    <div><dt>Evidence</dt><dd>${d.evidence}</dd></div>
+  </dl>`;
+}
+function enterArchMode() {
+  pauseShowcaseAuto();
+  state.archSelected = null;
+  $("showcaseSubheader").hidden = true;
+  $("showcaseScenarioView").hidden = true;
+  $("showcaseArchView").hidden = false;
+  renderArchCanvas();
+  renderArchDetail(null);
+}
+function exitArchMode() {
+  $("showcaseArchView").hidden = true;
+  $("showcaseSubheader").hidden = false;
+  $("showcaseScenarioView").hidden = false;
+  renderShowcaseMainTabs();
+  renderShowcaseScenarioPicker();
+  restartShowcaseAutoplay();
 }
 /* Scenario가 1개뿐인 탭(서비스 흐름처럼 여러 주체를 한 Canvas로 통합한 경우)은 고를 게 없으므로
    2차 탭 자체를 감춘다 — Scenario가 2개 이상인 탭(핵심 시스템 흐름/인프라 흐름)은 그대로 보여준다. */
@@ -583,6 +645,7 @@ function switchShowcaseScenario(idx) {
   restartShowcaseAutoplay();
 }
 function switchShowcaseTab(tabId) {
+  if (!$("showcaseArchView").hidden) { $("showcaseArchView").hidden = true; $("showcaseSubheader").hidden = false; $("showcaseScenarioView").hidden = false; }
   state.showcaseTab = tabId; state.showcaseScenario = 0; state.showcaseStep = 0;
   renderShowcaseStep();
   restartShowcaseAutoplay();
@@ -600,6 +663,7 @@ function enterShowcaseMode() {
 }
 function exitShowcaseMode(chapterIdx, scenarioIdx) {
   pauseShowcaseAuto();
+  if (!$("showcaseArchView").hidden) { $("showcaseArchView").hidden = true; $("showcaseSubheader").hidden = false; $("showcaseScenarioView").hidden = false; }
   state.mode = "chapter";
   $("canvasSlot").appendChild($("canvas"));
   $("stageSticky").appendChild($("flowCaption"));
@@ -629,6 +693,15 @@ $("showcasePrev").onclick = () => { pauseShowcaseAuto(); showcaseStepTo(state.sh
 $("showcaseNext").onclick = () => { pauseShowcaseAuto(); showcaseStepTo(state.showcaseStep + 1); };
 $("showcaseReplay").onclick = () => { stopShowcaseTimers(); state.showcaseStep = 0; renderShowcaseStep(); playShowcaseAuto(); };
 $("showcaseCapture").onclick = () => setCaptureMode(!document.body.classList.contains("capture-mode"));
+$("showFullArchitecture").onclick = enterArchMode;
+$("archBack").onclick = exitArchMode;
+$("archCanvas").onclick = (event) => {
+  const nodeEl = event.target.closest("[data-node]"); if (!nodeEl) return;
+  const id = nodeEl.dataset.node;
+  state.archSelected = state.archSelected === id ? null : id;
+  renderArchCanvas();
+  renderArchDetail(state.archSelected);
+};
 $("showcaseBackToDocs").onclick = () => {
   const ref = currentShowcase().steps[0];
   if (!ref.chapter) return;

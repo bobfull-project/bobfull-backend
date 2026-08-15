@@ -126,26 +126,42 @@
         </div>
       </div>
       <p id="showcaseTabQuestion" class="showcase-tab-question"></p>
-      <div class="showcase-subheader">
+      <div class="showcase-subheader" id="showcaseSubheader">
         <h2 id="showcaseScenarioTitle" class="showcase-scenario-title"></h2>
         <div id="showcaseTabs" class="scenario-buttons showcase-tabs"></div>
+        <button id="showFullArchitecture" class="expand-btn" type="button" hidden>🗺 전체 인프라 구성도 보기</button>
       </div>
-      <div class="showcase-copy">
-        <p id="showcaseProblem" class="showcase-problem"></p>
-        <p id="showcaseSolution" class="showcase-solution"></p>
-      </div>
-      <div class="showcase-stage">
-        <div id="showcaseCanvasSlot"></div>
-      </div>
-      <div class="showcase-outcomes" id="showcaseOutcomes"></div>
-      <div class="showcase-controls">
-        <div class="showcase-controls-buttons">
-          <button id="showcasePrev" type="button">◀ Prev</button>
-          <button id="showcaseAutoPlay" class="primary" type="button">⏸ Pause</button>
-          <button id="showcaseNext" type="button">Next ▶</button>
-          <button id="showcaseReplay" type="button">↺ Replay</button>
+      <div id="showcaseScenarioView">
+        <div class="showcase-copy">
+          <p id="showcaseProblem" class="showcase-problem"></p>
+          <p id="showcaseSolution" class="showcase-solution"></p>
         </div>
-        <strong id="showcaseStepCounter" class="counter-pill"></strong>
+        <div class="showcase-stage">
+          <div id="showcaseCanvasSlot"></div>
+        </div>
+        <div class="showcase-outcomes" id="showcaseOutcomes"></div>
+        <div class="showcase-controls">
+          <div class="showcase-controls-buttons">
+            <button id="showcasePrev" type="button">◀ Prev</button>
+            <button id="showcaseAutoPlay" class="primary" type="button">⏸ Pause</button>
+            <button id="showcaseNext" type="button">Next ▶</button>
+            <button id="showcaseReplay" type="button">↺ Replay</button>
+          </div>
+          <strong id="showcaseStepCounter" class="counter-pill"></strong>
+        </div>
+      </div>
+      <div id="showcaseArchView" class="arch-view" hidden>
+        <div class="arch-view-head">
+          <button id="archBack" class="expand-btn" type="button">← 요약 인프라 흐름으로 돌아가기</button>
+          <h2>BobFull 전체 인프라 구성도</h2>
+          <p class="arch-view-hint">Node를 클릭하면 오른쪽에 상세 설명이 표시됩니다 — 이 화면은 실제 요청 흐름이 아니라 구조(Topology)를 보여줍니다.</p>
+        </div>
+        <div class="arch-view-body">
+          <div id="archCanvas" class="arch-canvas"></div>
+          <aside id="archDetailPanel" class="arch-detail-panel">
+            <p class="arch-detail-hint">Node를 클릭해 보세요.</p>
+          </aside>
+        </div>
       </div>
     </section>
   </main>

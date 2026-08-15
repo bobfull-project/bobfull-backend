@@ -318,6 +318,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .showcase-main-tabs button.active{background:var(--accent);border-color:var(--accent);color:#1c1006}
 .showcase-tab-question{margin:2px 0 0;color:var(--muted);font-size:12.5px}
 .showcase-subheader{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line)}
+.showcase-subheader[hidden]{display:none}
 .showcase-scenario-title{margin:0;font-size:clamp(19px,2.4vw,26px);font-weight:700}
 .showcase-tabs{overflow-x:visible;flex-wrap:wrap;padding-bottom:0}
 .showcase-actions{display:flex;gap:8px;align-self:center}
@@ -337,6 +338,26 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .showcase-controls{display:flex;align-items:center;justify-content:center;gap:16px}
 .showcase-controls-buttons{display:flex;gap:8px}
 .counter-pill{padding:6px 14px;border:1px solid var(--accent);border-radius:20px;background:rgba(255,125,61,.12);color:var(--accent-strong);font:700 14px ui-monospace,monospace}
+
+/* 전체 인프라 구성도 — 요약 Map(Runtime Flow)과 분리된 정적 Topology 화면. 요약 Map과 같은 Dark
+   Theme/Orange 강조/Node 스타일/Region Box를 그대로 재사용하되, Scenario Step 재생 UI는 전혀 없다. */
+.arch-view{display:flex;flex-direction:column;gap:10px}
+.arch-view-head{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line)}
+.arch-view-hint{margin:0;color:var(--muted);font-size:12px}
+.arch-view-body{display:flex;gap:14px;align-items:stretch}
+.arch-canvas{flex:1;min-width:0;min-height:420px;max-height:640px;display:flex;align-items:center;justify-content:center;overflow:auto;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px}
+.arch-canvas .topology{cursor:default}
+.arch-canvas .canvas-node{cursor:pointer}
+.arch-detail-panel{flex:none;width:260px;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:16px;overflow-y:auto;max-height:640px}
+.arch-detail-panel h3{margin:0 0 10px;font-size:15px;color:var(--text)}
+.arch-detail-hint{margin:0;color:var(--muted);font-size:12.5px}
+.arch-detail-list{margin:0;display:flex;flex-direction:column;gap:10px}
+.arch-detail-list dt{color:var(--accent-strong);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.arch-detail-list dd{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5}
+@media (max-width:760px){
+  .arch-view-body{flex-direction:column}
+  .arch-detail-panel{width:auto;max-height:220px}
+}
 
 /* Capture — README GIF/브로셔 촬영용. 같은 Showcase 컴포넌트에서 조작 UI만 감추고,
    Scenario 제목·문제/해결·도표·현재 상태·Step 진행·결과는 그대로 남긴다. */
