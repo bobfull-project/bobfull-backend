@@ -68,8 +68,12 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .stage-heading h2{margin:0;font-size:14px;font-weight:600;color:var(--muted)}
 .expand-btn{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);padding:5px 11px;font-size:11.5px;white-space:nowrap}
 .expand-btn:hover{border-color:var(--accent);color:var(--accent-strong)}
-/* 38~42vh로 예산을 고정한다 — 노트북처럼 세로 공간이 좁은 화면에서도 도표가 과하게 크지 않게 한다. */
-.canvas-slot{height:40vh;min-height:220px;max-height:400px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+/* 노트북 화면(짧은 세로)에서도 과하게 크지 않도록 상한은 유지하되, 예산 자체를 키웠다 — 이전 40vh/
+   max-height:400px 예산은 viewBox가 가로로 넓은 topology(1260x470 등)에서 세로 높이가 먼저
+   한계에 닿아 실제 가로 폭을 다 못 쓰고 도표가 작게 보였다(예: 720px 창에서 svg 260px 높이,
+   폭은 slot의 절반 정도만 사용). 48vh/max-height:480px로 올려 같은 창 높이에서도 도표가 더
+   크게 보이게 한다. */
+.canvas-slot{height:48vh;min-height:260px;max-height:480px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .canvas{width:100%;height:100%;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
 .topology{display:block;width:auto;height:auto;max-width:100%;max-height:100%}
 .stage-scroll{background:var(--stage);border:1px solid var(--line);border-radius:0 0 10px 10px;padding:14px 20px 22px;box-sizing:border-box}
@@ -385,6 +389,6 @@ body.capture-mode .showcase{min-height:100vh}
   main{padding:16px}
   .comparison{grid-template-columns:1fr}
   .metric-glossary div{grid-template-columns:1fr;gap:2px}
-  .canvas-slot{height:34vh;min-height:190px}
+  .canvas-slot{height:40vh;min-height:220px}
   .showcase-stage{min-height:220px}
 }
