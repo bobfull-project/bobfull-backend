@@ -11,8 +11,13 @@ const topologyFor = (data) => data.topologyKey === "moderation" ? moderationTopo
 function populateSelects() {
   $("chapterSelect").innerHTML = chapters.map((item, i) => `<option value="${i}">${item.shortLabel}</option>`).join("");
   $("chapterSelect").value = state.chapter;
-  $("scenarioSelect").innerHTML = currentChapter().scenarios.map((item, i) => `<option value="${i}">${item.title}</option>`).join("");
-  $("scenarioSelect").value = state.scenario;
+}
+function renderScenarioButtons() {
+  $("scenarioButtons").innerHTML = currentChapter().scenarios.map((item, i) =>
+    `<button type="button" class="${i === state.scenario ? "active" : ""}" data-scenario="${i}">${item.title}</button>`).join("");
+}
+function syncPlaybackPadding() {
+  document.querySelector("main").style.paddingBottom = `${$("play").closest(".playback").offsetHeight + 24}px`;
 }
 function renderCanvas(data) {
   const v = data.visual;
@@ -109,11 +114,18 @@ function renderDetails(data) {
   el.innerHTML = entries.map(([title, value]) => `<article><h3>${title}</h3><p>${value}</p></article>`).join("");
 }
 function escapeHtml(text) { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+/* 디버거처럼 현재 Scenario의 전체 Step 제목을 번호와 함께 보여주고 현재 Step만 강조한다. */
+function renderCodeStepper() {
+  $("codeStepper").innerHTML = currentScenario().steps.map((item, i) =>
+    `<span class="${i === state.step ? "active" : ""}">${i + 1}. ${item.action}</span>`).join("");
+}
 /* 현재 Step에 실제 코드 발췌(codeSnippet)가 있으면 그대로 보여준다 — 없으면 codeReferences만 안내한다. */
 function renderCodeView(data) {
   const el = $("codeCard");
   if (data.codeSnippet) {
-    el.innerHTML = `<div class="code-card-head"><span class="code-file">${data.codeSnippet.file}</span></div><pre class="code-block"><code>${escapeHtml(data.codeSnippet.code)}</code></pre>`;
+    const methodTag = data.codeSnippet.method
+      ? `<span class="code-method-tag">실제 코드</span><span class="code-method">${data.codeSnippet.method}</span><br>` : "";
+    el.innerHTML = `<div class="code-card-head">${methodTag}<span class="code-file">${data.codeSnippet.file}</span></div><pre class="code-block"><code>${escapeHtml(data.codeSnippet.code)}</code></pre>`;
     return;
   }
   el.innerHTML = `<p class="code-empty">이 Step에는 별도로 발췌한 코드가 없습니다.${data.codeReferences.length ? ` 참고: ${data.codeReferences.join(" · ")}` : ""}</p>`;
@@ -154,10 +166,11 @@ function renderStepNext(data) {
 function render() {
   const data = currentStep();
   populateSelects();
+  renderScenarioButtons();
   $("chapterQuestion").textContent = currentChapter().title;
   $("chapterSubtitle").textContent = currentChapter().subtitle;
   $("chapterOrigin").textContent = currentChapter().summary;
-  renderCanvas(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data); renderDetails(data); renderCodeView(data);
+  renderCanvas(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data); renderDetails(data); renderCodeStepper(); renderCodeView(data);
   $("stepTitle").textContent = data.action; $("narration").textContent = data.narration; $("counter").textContent = `Step ${state.step + 1} / ${currentScenario().steps.length}`;
   renderStepStatus(data); renderStepNext(data);
   $("stepFact").innerHTML = `<p class="fact-caption">${factCaption(data)}</p>${quickState(data)}${promptBlockText(data)}`;
@@ -167,6 +180,7 @@ function render() {
   $("stateGrid").innerHTML = cards.map(([title, value]) => `<article class="${value == null ? "na" : ""}"><h3>${title}</h3><p>${format(value)}</p></article>`).join("");
   renderPerformanceHighlights();
   renderDecisionHighlights();
+  syncPlaybackPadding();
 }
 function quickState(data) {
   const committed = data.domainState || data.transaction;
@@ -222,6 +236,11 @@ function renderDecisionHighlights() {
 function stop() { clearInterval(state.timer); state.timer = null; }
 function resetStep() { stop(); state.step = 0; render(); }
 function advance() { if (state.step >= currentScenario().steps.length - 1) { stop(); state.step = 0; render(); return; } state.step++; render(); }
-$("chapterSelect").onchange = (event) => { state.chapter = Number(event.target.value); state.scenario = 0; resetStep(); }; $("scenarioSelect").onchange = (event) => { state.scenario = Number(event.target.value); resetStep(); };
+$("chapterSelect").onchange = (event) => { state.chapter = Number(event.target.value); state.scenario = 0; resetStep(); };
+$("scenarioButtons").onclick = (event) => {
+  const button = event.target.closest("button[data-scenario]"); if (!button) return;
+  state.scenario = Number(button.dataset.scenario); resetStep();
+};
+window.addEventListener("resize", syncPlaybackPadding);
 $("play").onclick = () => { if (state.step === currentScenario().steps.length - 1) state.step = 0; stop(); render(); state.timer = setInterval(advance, Number($("speed").value)); }; $("pause").onclick = stop; $("next").onclick = advance; $("prev").onclick = () => { stop(); state.step = Math.max(0, state.step - 1); render(); }; $("reset").onclick = resetStep; $("speed").onchange = () => { if (state.timer) $("play").click(); };
 render();

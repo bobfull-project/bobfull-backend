@@ -11,24 +11,28 @@
     <div class="brand">BobFull Flow Lab<nav><a href="../../v1/index.html">V1</a><a href="../../v2/index.html">V2</a><a href="./index.html" aria-current="page">V3</a></nav></div>
   </header>
   <main>
-    <section class="scenario-select" aria-label="시나리오 제어">
+    <section class="scenario-select" aria-label="Chapter 선택">
       <label>Chapter <select id="chapterSelect"></select></label>
-      <label>Scenario <select id="scenarioSelect"></select></label>
       <p class="hint">코드·Evidence 기반 정적 인터랙티브 시뮬레이션 — 라이브 JVM/인프라 제어 화면이 아닙니다.</p>
     </section>
 
     <section class="chapter-intro" aria-label="Chapter 질문">
-      <h1 id="chapterQuestion"></h1><p id="chapterSubtitle"></p>
+      <div class="chapter-intro-main">
+        <h1 id="chapterQuestion"></h1><p id="chapterSubtitle"></p>
+      </div>
       <p id="chapterOrigin" class="chapter-origin"></p>
     </section>
 
     <section class="playback" aria-label="재생 제어">
-      <button id="play" class="primary">▶ 시나리오 실행</button>
-      <div id="secondaryControls">
-        <button id="pause">⏸ Pause</button><button id="prev">◀ Prev</button><button id="next">Next ▶</button><button id="reset">↺ Reset</button>
-        <label>Speed <select id="speed"><option value="1600">1×</option><option value="950">1.5×</option><option value="650">2×</option></select></label>
+      <div id="scenarioButtons" class="scenario-buttons" aria-label="Scenario 선택"></div>
+      <div class="playback-controls">
+        <button id="play" class="primary">▶ 시나리오 실행</button>
+        <div id="secondaryControls">
+          <button id="pause">⏸ Pause</button><button id="prev">◀ Prev</button><button id="next">Next ▶</button><button id="reset">↺ Reset</button>
+          <label>Speed <select id="speed"><option value="1600">1×</option><option value="950">1.5×</option><option value="650">2×</option></select></label>
+        </div>
+        <strong id="counter"></strong>
       </div>
-      <strong id="counter"></strong>
     </section>
 
     <section class="stage" aria-label="시스템 흐름">
@@ -58,6 +62,7 @@
 
     <section class="code-view" aria-label="실제 코드">
       <h2>코드로 보기</h2>
+      <div id="codeStepper" class="code-stepper"></div>
       <div id="codeCard" class="code-card"></div>
     </section>
 

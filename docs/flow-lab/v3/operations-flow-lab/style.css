@@ -8,7 +8,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
 a{color:var(--accent-strong)}
-main{max-width:1260px;margin:auto;padding:24px max(20px,4vw) 110px}
+main{max-width:1260px;margin:auto;padding:24px max(20px,4vw) 140px}
 
 .topbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:24px;padding:14px max(22px,5vw);background:var(--bg);border-bottom:1px solid var(--line)}
 .brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:14px}
@@ -26,12 +26,16 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .scenario-select label{color:var(--muted);font-size:12px}
 .scenario-select .hint{margin:0;color:var(--muted);font-size:12px;flex-basis:100%}
 
-.chapter-intro{padding:18px 0;border-bottom:1px solid var(--line)}
+.chapter-intro{display:flex;gap:28px;padding:18px 0;border-bottom:1px solid var(--line)}
+.chapter-intro-main{flex:1 1 340px;min-width:0}
 .chapter-intro h1{margin:0 0 6px;font-size:clamp(20px,2.6vw,30px);font-weight:700}
 .chapter-intro p{margin:0;color:var(--muted);font-size:13px}
-.chapter-origin{margin-top:10px !important;color:var(--text) !important;font-size:13.5px;line-height:1.6;max-width:68ch}
+.chapter-origin{flex:1 1 320px;min-width:0;margin:0 !important;padding-left:20px;border-left:1px solid var(--line);color:var(--text) !important;font-size:12.5px;line-height:1.6}
 
-.playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;align-items:center;gap:16px;padding:14px max(20px,4vw);flex-wrap:wrap;background:var(--bg);border-top:1px solid var(--line)}
+.playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;flex-direction:column;gap:8px;padding:10px max(20px,4vw) 12px;background:var(--bg);border-top:1px solid var(--line)}
+.scenario-buttons{display:flex;gap:6px;flex-wrap:wrap}
+.scenario-buttons button{padding:6px 10px;font-size:12px}
+.playback-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 #secondaryControls{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.75;transform:scale(.96);transform-origin:left center}
 #counter{color:var(--muted);font:12px ui-monospace,monospace;margin-left:auto}
 
@@ -140,9 +144,13 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 
 .code-view{margin-bottom:24px}
 .code-view h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:12px}
+.code-stepper{display:flex;flex-wrap:wrap;gap:5px 16px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.code-stepper span.active{color:var(--accent-strong);font-weight:700;text-decoration:underline;text-underline-offset:3px}
 .code-card{border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .code-card-head{background:var(--panel);border-bottom:1px solid var(--line);padding:8px 14px}
-.code-file{color:var(--muted);font:12px ui-monospace,monospace}
+.code-method-tag{color:var(--success);font-size:11px;font-weight:700;letter-spacing:.02em}
+.code-method{color:var(--text);font:600 13px ui-monospace,monospace;margin-left:6px}
+.code-file{color:var(--muted);font:11px ui-monospace,monospace;margin-top:3px}
 .code-block{margin:0;background:var(--code-bg);padding:14px;overflow-x:auto}
 .code-block code{color:var(--text);font:12.5px/1.6 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;white-space:pre}
 .code-empty{margin:0;padding:14px;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
@@ -176,10 +184,12 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
   .stage-body{grid-template-columns:1fr}
   .state-grid{grid-template-columns:1fr 1fr}
   .comparison{grid-template-columns:1fr}
-  main{padding-bottom:150px}
+  .chapter-intro{flex-direction:column;gap:10px}
+  .chapter-intro-main{flex:none}
+  .chapter-origin{flex:none;padding-left:0;border-left:none;padding-top:10px;border-top:1px solid var(--line)}
 }
 @media(max-width:520px){
-  main{padding:16px;padding-bottom:190px}
+  main{padding:16px}
   .state-grid{grid-template-columns:1fr}
   .comparison{grid-template-columns:1fr}
   .topology{min-width:760px}
