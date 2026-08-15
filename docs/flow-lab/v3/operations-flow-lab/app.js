@@ -18,6 +18,23 @@ function renderScenarioButtons() {
 function syncPlaybackPadding() {
   document.querySelector("main").style.paddingBottom = `${$("play").closest(".playback").offsetHeight + 24}px`;
 }
+/* sticky 도표가 topbar 바로 아래에 붙도록, topbar 실제 높이를 CSS 변수로 맞춘다(반응형 줄바꿈 대비). */
+function syncTopbarHeightVar() {
+  document.documentElement.style.setProperty("--topbar-h", `${document.querySelector(".topbar").offsetHeight}px`);
+}
+/* "크게 보기" — 같은 #canvas/#flowCaption 엘리먼트를 그대로 옮긴다. 다시 렌더링하지 않으므로
+   확장/축소 전후로 강조 상태·시나리오 진행이 그대로 유지된다. */
+function expandCanvasView() {
+  $("canvasOverlayBody").append($("canvas"), $("flowCaption"));
+  $("canvasOverlay").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+function collapseCanvasView() {
+  $("canvasSlot").appendChild($("canvas"));
+  $("stageSticky").appendChild($("flowCaption"));
+  $("canvasOverlay").hidden = true;
+  document.body.style.overflow = "";
+}
 function renderCanvas(data) {
   const v = data.visual;
   const t = topologyFor(data);
@@ -330,16 +347,21 @@ $("scenarioButtons").onclick = (event) => {
   const button = event.target.closest("button[data-scenario]"); if (!button) return;
   state.scenario = Number(button.dataset.scenario); resetStep();
 };
-window.addEventListener("resize", syncPlaybackPadding);
+window.addEventListener("resize", () => { syncPlaybackPadding(); syncTopbarHeightVar(); });
 $("play").onclick = () => { if (state.step === currentScenario().steps.length - 1) state.step = 0; stop(); render(); state.timer = setInterval(advance, Number($("speed").value)); }; $("pause").onclick = stop; $("next").onclick = advance; $("prev").onclick = () => { stop(); state.step = Math.max(0, state.step - 1); render(); }; $("reset").onclick = resetStep; $("speed").onchange = () => { if (state.timer) $("play").click(); };
-/* 재생바를 키보드와 연동한다 — ← 이전, → 다음, Space 재생/정지 토글.
+$("expandCanvas").onclick = expandCanvasView;
+$("collapseCanvas").onclick = collapseCanvasView;
+$("canvasOverlay").onclick = (event) => { if (event.target === $("canvasOverlay")) collapseCanvasView(); };
+/* 재생바를 키보드와 연동한다 — ← 이전, → 다음, Space 재생/정지 토글, Esc로 크게 보기 닫기.
    select/input에 포커스가 있을 때는 그 컨트롤의 기본 키 동작(값 변경, 스크롤)을 막지 않는다. */
 function togglePlay() { (state.timer ? $("pause") : $("play")).click(); }
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("canvasOverlay").hidden) { collapseCanvasView(); return; }
   const focusedTag = document.activeElement.tagName;
   if (focusedTag === "SELECT" || focusedTag === "INPUT" || focusedTag === "TEXTAREA") return;
   if (event.key === "ArrowLeft") { event.preventDefault(); $("prev").click(); }
   else if (event.key === "ArrowRight") { event.preventDefault(); $("next").click(); }
   else if (event.code === "Space" || event.key === " ") { event.preventDefault(); togglePlay(); }
 });
+syncTopbarHeightVar();
 render();
