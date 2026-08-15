@@ -258,7 +258,11 @@ const infraTopology = {
   /* viewBox 세로를 650→460으로 압축했다(가로는 그대로) — Showcase Stage는 Chapter 모드의
      canvas-slot과 달리 높이 상한이 없어서, 세로로 긴 비율의 topology는 화면을 거의 다 채워
      아래 설명이 스크롤 없이는 안 보였다. Region 5개(Entry/Application/Shared/AI/Deployment)
-     구조는 그대로 두고 행 간격만 좁혀 가로세로 비율을 다른 topology들과 비슷하게 맞췄다. */
+     구조는 그대로 두고 행 간격만 좁혀 가로세로 비율을 다른 topology들과 비슷하게 맞췄다.
+     이후 edges를 "Application Pool" 합류점 기반으로 다시 짰다(아래 edges 주석 참고) — 일반 API
+     Scenario에서도 RDS만 연결된 것처럼 보이던 문제를 고쳤다: Blue/Green EC2 4대 전부가 RDS/Redis/
+     Kafka/S3/LLM 5개 Shared 자원 전부와 항상 Gray로 이어져 있고, 현재 Scenario가 실제로 쓰는
+     조각만 Orange로 활성화된다. */
   viewBox: "0 0 900 460",
   nodeSublabels: { ec2Blue1: "AI Consumer 포함", ec2Blue2: "AI Consumer 포함", ec2Green1: "AI Consumer 포함", ec2Green2: "AI Consumer 포함" },
   nodes: [
@@ -282,18 +286,23 @@ const infraTopology = {
     "alb-tgBlue": "M390 90 V107 H260 V125", "alb-tgGreen": "M390 90 V107 H530 V125",
     "tgBlue-ec2Blue1": "M260 195 V212 H190 V230", "tgBlue-ec2Blue2": "M260 195 V212 H330 V230",
     "tgGreen-ec2Green1": "M530 195 V212 H470 V230", "tgGreen-ec2Green2": "M530 195 V212 H610 V230",
-    "ec2Green1-rds": "M470 300 V325 H180 V350", "ec2Green1-redis": "M470 300 V325 H290 V350",
-    "redis-ec2Green2": "M290 350 V325 H610 V300",
-    /* Kafka↔App EC2 왕복 — AI Consumer가 별도 서버가 아니라 같은 App EC2 프로세스라는 것을
-       "Kafka로 나갔다가 같은 node로 다시 들어오는" 모양으로 표현한다. */
-    "ec2Green1-kafka": "M460 300 V325 H390 V350", "kafka-ec2Green1": "M410 350 V325 H480 V300",
-    "ec2Green1-llm": "M450 300 V325 H620 V350",
+    /* Application(Blue/Green 4대 EC2 전부)이 Shared Infra 4종+LLM 전부와 구조적으로 연결된다는 것을
+       "Application Pool"이라는 가상 합류점(390~ x=400,y=315, 실제 node가 아니라 경로 좌표일 뿐)으로
+       표현한다 — App EC2 → Pool(4개), Pool → 각 Shared 자원(RDS/Redis/Kafka/S3/LLM, 6개, Kafka는
+       발행·소비 양방향)이 항상 Gray로 그려져 Scenario와 무관하게 "App이 이 5개 자원 전부와 연결된다"는
+       구조가 항상 보인다. Scenario별로 실제 쓰인 조각(App-Pool + Pool-자원)만 Orange로 활성화된다. */
+    "ec2Blue1-appPool": "M190 300 V315 H400", "ec2Blue2-appPool": "M330 300 V315 H400",
+    "ec2Green1-appPool": "M470 300 V315 H400", "ec2Green2-appPool": "M610 300 V315 H400",
+    "appPool-ec2Green1": "M400 315 H470 V300", "appPool-ec2Green2": "M400 315 H610 V300",
+    "appPool-rds": "M400 315 H180 V350", "appPool-redis": "M400 315 H290 V350",
+    "appPool-kafka": "M400 315 V350", "kafka-appPool": "M400 350 V315",
+    "appPool-s3": "M400 315 H510 V350", "appPool-llm": "M400 315 H620 V350",
     "gha-ecr": "M790 195 V230", "ecr-ssm": "M790 300 V335",
     "ssm-ec2Green1": "M790 335 V312 H470 V300", "ssm-ec2Green2": "M790 335 V318 H610 V300"
   },
   labels: {
     "client-route53": [125, 45], "route53-alb": [275, 45],
-    "ec2Green1-kafka": [400, 318], "kafka-ec2Green1": [460, 340],
+    "appPool-kafka": [408, 333], "kafka-appPool": [365, 333],
     "gha-ecr": [795, 217], "ecr-ssm": [795, 317]
   },
   regions: [
@@ -312,31 +321,31 @@ const infraSteps = {
     step("api-2", "ALB", "TG Green(활성 색)", "◆ ALB가 요청을 현재 활성 Target Group으로 전달합니다", "ALB는 현재 활성(Blue 또는 Green) Target Group으로만 요청을 전달합니다 — 지금은 Green이 활성이라고 가정합니다. Blue TG·Blue EC2는 대기(Standby) 상태로 흐리게 남아 있습니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgGreen", "ec2Green1", "ec2Green2"], ["alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "event", null, "core", ["client", "route53"]),
         evidenceReferences: [evidence.appHa] }),
-    step("api-3", "Green EC2", "RDS MySQL", "✓ 애플리케이션이 필요한 데이터를 RDS MySQL에서 조회하거나 저장합니다", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다 — RDS는 Blue·Green 어느 쪽이 활성이든 항상 같은 하나의 인스턴스입니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
+    step("api-3", "Green EC2", "RDS MySQL", "✓ 애플리케이션이 필요한 데이터를 RDS MySQL에서 조회하거나 저장합니다", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다 — RDS는 Blue·Green 어느 쪽이 활성이든 항상 같은 하나의 인스턴스입니다. Redis·Kafka·S3·LLM도 Application과 항상 연결된 구조지만(회색 선), 이번 요청에서는 쓰이지 않아 흐리게 남습니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-appPool", "appPool-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
         limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 아직 미구현(#191, future). 이 Scenario는 캐시를 쓰지 않는 일반 API 기준이다 — 캐시를 쓰는 요청(#62 검색)만 Redis가 강조된다.",
         evidenceReferences: [evidence.appHa] })
   ],
   chat: [
     step("chat-1", "User A", "Green EC2 #1", "● User A가 ALB를 거쳐 Green EC2 #1에 채팅 메시지를 보냅니다", "User A가 ALB를 거쳐 활성 Target Group(Green) 뒤의 EC2 #1에 접속해 메시지를 보냅니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgGreen", "ec2Green1"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1"], "request", null, "core") }),
-    step("chat-2", "Green EC2 #1", "ElastiCache Redis", "◆ 메시지를 받은 애플리케이션 서버가 Redis Pub/Sub 채널에 메시지를 발행합니다", "Green EC2 #1이 메시지를 저장한 뒤 공유 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다 — Redis는 Blue·Green 전용으로 나뉘어 있지 않은 하나의 공유 인프라입니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "redis"], ["ec2Green1-redis"], "broadcast", null, "core", ["client", "route53", "alb", "tgGreen"]),
+    step("chat-2", "Green EC2 #1", "ElastiCache Redis", "◆ 메시지를 받은 애플리케이션 서버가 Redis Pub/Sub 채널에 메시지를 발행합니다", "Green EC2 #1이 메시지를 저장한 뒤 공유 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다 — Redis는 Blue·Green 전용으로 나뉘어 있지 않은 하나의 공유 인프라입니다. Redis 역할은 Cache와 Pub/Sub 두 가지입니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "redis"], ["ec2Green1-appPool", "appPool-redis"], "broadcast", null, "core", ["client", "route53", "alb", "tgGreen"]),
         evidenceReferences: [evidence.appHa, evidence.redis] }),
     step("chat-3", "ElastiCache Redis", "Green EC2 #2", "✓ Redis Pub/Sub이 메시지를 구독 중인 다른 애플리케이션 서버에도 전달합니다", "다른 인스턴스(Green EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["redis", "ec2Green2"], ["redis-ec2Green2"], "broadcast", "delivered", "core", ["client", "route53", "alb", "tgGreen", "ec2Green1"]),
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["redis", "ec2Green2"], ["appPool-redis", "appPool-ec2Green2"], "broadcast", "delivered", "core", ["client", "route53", "alb", "tgGreen", "ec2Green1"]),
         decisionBadge: "#169 verified · 실제 다중 EC2 + 공용 ElastiCache 검증",
         evidenceReferences: [evidence.appHa] })
   ],
   moderation: [
     step("mod-1", "Green EC2", "Kafka EC2", "● 애플리케이션이 비동기 AI 검수 메시지를 Kafka에 전달합니다", "Green EC2가 저장된 메시지를 전용 Kafka EC2(단일 KRaft broker)로 발행합니다 — Kafka도 Blue·Green이 공유하는 인프라입니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "kafka"], ["ec2Green1-kafka"], "event", null, "core") }),
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "kafka"], ["ec2Green1-appPool", "appPool-kafka"], "event", null, "core") }),
     step("mod-2", "Kafka EC2", "Green EC2(AI Consumer)", "◆ 같은 App EC2 안의 AI Consumer가 Kafka 메시지를 가져와 LLM을 호출합니다", "AI Consumer(ChatModerationConsumer)는 별도 서버가 아니라 Web/API와 같은 프로세스·같은 EC2에서 도는 @KafkaListener입니다(#192 통합 모놀리스 유지 결정) — Kafka EC2와 별도 프로세스가 아닙니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["kafka", "ec2Green1", "llm"], ["kafka-ec2Green1", "ec2Green1-llm"], "event", null, "core"),
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["kafka", "ec2Green1", "llm"], ["kafka-appPool", "appPool-ec2Green1", "ec2Green1-appPool", "appPool-llm"], "event", null, "core"),
         limits: "AI Consumer가 Kafka EC2와 물리적으로 같은 서버인지는 확인되지 않았다 — 확인된 것은 \"AI Consumer가 Web/API App EC2와 같은 프로세스\"라는 점이다.",
         evidenceReferences: [evidence.aiWorkerScaling] }),
     step("mod-3", "Green EC2(AI Consumer)", "RDS MySQL", "✓ AI Consumer가 판정 결과를 검증한 뒤 RDS에 저장합니다", "판정 결과를 검증한 뒤 같은 공유 RDS에 저장합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-rds"], "commit", "completed", "core", ["kafka", "llm"]) })
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-appPool", "appPool-rds"], "commit", "completed", "core", ["kafka", "llm"]) })
   ],
   deploy: [
     step("deploy-1", "Client", "Blue EC2", "● 사용자 요청은 계속 Blue Target Group이 정상 처리합니다", "배포 시작 전, ALB는 100% Blue로 요청을 보내고 있습니다 — 새 버전을 배포하는 동안에도 이 서비스는 멈추지 않습니다.",
