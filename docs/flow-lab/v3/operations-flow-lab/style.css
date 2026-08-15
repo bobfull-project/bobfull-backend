@@ -3,7 +3,10 @@
   --text:#f3ece1;--muted:#a89b89;
   --accent:#ff7d3d;--accent-strong:#ffa06a;
   --success:#7cc98a;--failure:#e2685f;
-  --code-bg:#12100c;--annot:#b98552
+  --code-bg:#12100c;--annot:#b98552;
+  /* 서비스 흐름 Swimlane 전용 "역할 색" — 상태 색(주황=현재/초록=완료)과 절대 안 겹치도록
+     Blue/Gold/Violet만 쓴다. Node에는 안 쓰고 Lane 배경·제목·아이콘에만 쓴다. */
+  --role-user:#7fa8d9;--role-owner:#c9a25f;--role-auto:#a58ce0
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
@@ -117,6 +120,21 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
    크고 굵게, 브랜드 Orange로 강조한다. emphasis를 안 쓰는 기존 region은 위 기본 스타일 그대로다. */
 .region-bg.lane{opacity:.5;stroke-opacity:.7}
 .region-label.lane{fill:var(--accent-strong);font:800 16px system-ui,"Malgun Gothic",sans-serif;letter-spacing:.02em}
+/* region.role(opt-in, 서비스 흐름 3개 Lane만 씀) — Lane 배경에 아주 옅은 역할 색 tint, 제목은
+   역할 색으로. 3-class selector로 위 .region-bg.lane/.region-label.lane보다 우선하게 한다.
+   fill-opacity는 낮게 유지해 "칠했다"가 아니라 "구분된다" 정도로만 보이게 한다. */
+.region-bg.lane.role-user{fill:var(--role-user);opacity:.09;stroke:var(--role-user);stroke-opacity:.35}
+.region-bg.lane.role-owner{fill:var(--role-owner);opacity:.09;stroke:var(--role-owner);stroke-opacity:.35}
+.region-bg.lane.role-auto{fill:var(--role-auto);opacity:.09;stroke:var(--role-auto);stroke-opacity:.35}
+.region-label.lane.role-user{fill:var(--role-user)}
+.region-label.lane.role-owner{fill:var(--role-owner)}
+.region-label.lane.role-auto{fill:var(--role-auto)}
+/* Lane 제목 앞 작은 단색 아이콘 — 노드 상태 색과 절대 안 겹치는 역할 색만 쓴다. */
+.lane-icon.role-user{fill:var(--role-user)}
+.lane-icon.role-owner{fill:var(--role-owner)}
+.lane-icon.role-auto .ring{fill:none;stroke:var(--role-auto);stroke-width:1.6}
+.lane-icon.role-auto line{stroke:var(--role-auto);stroke-width:1.6}
+.lane-icon.role-auto .hub{fill:var(--role-auto)}
 .node-badge rect{fill:var(--panel);stroke:var(--accent)}
 .node-badge text{fill:var(--accent-strong);font:10px ui-monospace,monospace;text-anchor:middle}
 .edge-label rect{fill:var(--stage);stroke:var(--line)}

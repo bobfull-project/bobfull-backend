@@ -198,9 +198,12 @@ const serviceUnifiedTopology = {
     "cross-judge-confirm": [590, 152], "cross-meal-mealend": [845, 152]
   },
   regions: [
-    { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100, emphasis: true },
-    { label: "사장님", x: 10, y: 175, w: 1180, h: 100, emphasis: true },
-    { label: "자동 관리", x: 10, y: 325, w: 1180, h: 185, emphasis: true }
+    /* role: 상태 색(주황=현재/초록=완료)과 안 겹치는 Blue/Gold/Violet만 Lane 구분에 쓴다.
+       y/h는 node 위치는 그대로 두고 배경 폭만 살짝 줄여 Lane 사이 간격을 조금 넓혔다
+       (25~125→25~125 그대로, 175~275→185~275, 325~510→333~510 — node 좌표 변경 없음). */
+    { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100, emphasis: true, role: "user" },
+    { label: "사장님", x: 10, y: 185, w: 1180, h: 90, emphasis: true, role: "owner" },
+    { label: "자동 관리", x: 10, y: 333, w: 1180, h: 177, emphasis: true, role: "auto" }
   ]
 };
 const serviceUnifiedSteps = [

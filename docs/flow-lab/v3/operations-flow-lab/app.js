@@ -56,12 +56,42 @@ function collapseCanvasView() {
    region.emphasis(예: 서비스 흐름의 Swimlane 3개)만 더 크고 진한 "lane" 스타일을 추가로 쓴다 —
    emphasis를 안 쓰는 기존 region(Ch1~6 topology/infra topology)은 클래스·좌표가 그대로라
    렌더링 결과가 전혀 바뀌지 않는다. */
+/* region.role(opt-in, 서비스 흐름 3개 Lane만 씀) 전용 단색 아이콘 — 실제 이모지 대신 최소
+   기하 도형으로 사람/매장/톱니를 표현한다. Node 상태 색과 안 겹치는 역할 색만 쓰고, 이 함수
+   자체는 좌표만 계산해 그릴 뿐 색은 전부 CSS(.lane-icon.role-*)가 담당한다. */
+function laneIconSvg(role, cx, cy) {
+  if (role === "user") {
+    return `<circle cx="${cx}" cy="${cy - 3}" r="2.6"/><path d="M${cx - 4.5} ${cy + 5} C${cx - 4.5} ${cy + 1} ${cx + 4.5} ${cy + 1} ${cx + 4.5} ${cy + 5} Z"/>`;
+  }
+  if (role === "owner") {
+    return `<path d="M${cx - 5} ${cy - 1} L${cx} ${cy - 6} L${cx + 5} ${cy - 1} L${cx + 5} ${cy + 5} L${cx - 5} ${cy + 5} Z"/>`;
+  }
+  if (role === "auto") {
+    const teeth = Array.from({ length: 6 }, (_, i) => {
+      const a = (i * Math.PI) / 3;
+      const x1 = (cx + Math.cos(a) * 3.4).toFixed(1), y1 = (cy + Math.sin(a) * 3.4).toFixed(1);
+      const x2 = (cx + Math.cos(a) * 5.6).toFixed(1), y2 = (cy + Math.sin(a) * 5.6).toFixed(1);
+      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    }).join("");
+    return `<circle class="ring" cx="${cx}" cy="${cy}" r="3.2"/>${teeth}<circle class="hub" cx="${cx}" cy="${cy}" r="1"/>`;
+  }
+  return "";
+}
+/* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위해, 서로 다른 책임
+   영역을 아주 옅은 배경+작은 라벨로만 구분한다. active/dim 강조는 건드리지 않는다.
+   region.emphasis(예: 서비스 흐름의 Swimlane 3개)만 더 크고 진한 "lane" 스타일을 추가로 쓴다 —
+   emphasis를 안 쓰는 기존 region(Ch1~6 topology/infra topology)은 클래스·좌표가 그대로라
+   렌더링 결과가 전혀 바뀌지 않는다. region.role(opt-in)은 거기서 한 단계 더 나아가 Lane마다
+   다른 역할 색(Blue/Gold/Violet)과 작은 아이콘을 추가한다 — role을 안 쓰는 region은 영향 없다. */
 function regionBgSvg(t) {
   if (!t.regions) return "";
   return t.regions.map((region) => {
     const laneCls = region.emphasis ? " lane" : "";
+    const roleCls = region.role ? ` role-${region.role}` : "";
     const labelY = region.y + (region.emphasis ? 24 : 16);
-    return `<g class="region"><rect class="region-bg${laneCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/><text class="region-label${laneCls}" x="${region.x + 14}" y="${labelY}">${region.label}</text></g>`;
+    const textX = region.role ? region.x + 34 : region.x + 14;
+    const icon = region.role ? `<g class="lane-icon role-${region.role}">${laneIconSvg(region.role, region.x + 22, labelY - 4)}</g>` : "";
+    return `<g class="region"><rect class="region-bg${laneCls}${roleCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/>${icon}<text class="region-label${laneCls}${roleCls}" x="${textX}" y="${labelY}">${region.label}</text></g>`;
   }).join("");
 }
 function renderCanvas(data) {
