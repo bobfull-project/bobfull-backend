@@ -493,6 +493,14 @@ const fullArchitectureNodeDetails = {
   slack: { role: "Grafana 알림 수신 채널 — 앱 코드가 직접 연동하지 않는다", runtime: "Webhook(GRAFANA_SLACK_WEBHOOK_URL)", connectedTo: "Grafana", network: "External", evidence: "monitoring/grafana/provisioning/alerting/contact-points.yml" },
   cloudwatch: { role: "애플리케이션 로그 저장 — 메트릭 도구가 아니다(메트릭은 Prometheus/Grafana)", runtime: "awslogs Docker log driver", connectedTo: "Application", network: "—", evidence: "deploy-backend-v1.sh(--log-driver=awslogs)" }
 };
+/* 전체 인프라 구성도 — Node를 아무것도 클릭하지 않은 기본 상태에서 4개 그룹을 순서대로 계속
+   순환 강조한다("가만히 있으면 계속 흐름이 돈다"). Edge는 강조하지 않는다 — Node 테두리만 켠다. */
+const archFlowGroups = [
+  { id: "restaurant", label: "① 사장님 식당 등록", nodes: ["s3", "lambda"] },
+  { id: "reservation", label: "② 예약·결제·채팅방·이메일", nodes: ["rds", "redis", "smtp", "portone"] },
+  { id: "chat-ai", label: "③ 채팅 AI 분석", nodes: ["kafka", "openai"] },
+  { id: "monitoring", label: "④ 모니터링·알람", nodes: ["prometheus", "grafana", "slack", "cloudwatch"] }
+];
 
 /* 핵심 시스템 흐름 탭 > "AI 채팅 검수" 전용 topology/step.
    기존에는 {chapter,scenario,step} 참조로 실제 Ch2(kafka-ai)·Ch6(ai-moderation) Step을 그대로

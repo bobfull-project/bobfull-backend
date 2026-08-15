@@ -1,6 +1,6 @@
 /* Playback and rendering only. Every visual decision comes from step.visual. */
 const $ = (id) => document.getElementById(id);
-const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseTab: "service", showcaseScenario: 0, showcaseStep: 0, archSelected: null };
+const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseTab: "service", showcaseScenario: 0, showcaseStep: 0, archSelected: null, archFlowIndex: 0, archFlowTimer: null, archResumeTimeout: null };
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
@@ -529,18 +529,20 @@ function renderShowcaseMainTabs() {
    완전히 분리된 별도 정적 Topology 화면이다. 같은 renderCanvas()를 재사용하지 않는다 — renderCanvas는
    Scenario Step의 active/dim(Orange/Gray) 강조가 핵심인데, 여기는 Orange Event 애니메이션을 다시
    구현하지 않고 "클릭한 node만 선택 강조"라는 별개의 상호작용이 필요하기 때문이다(요구사항: Scenario
-   Map=Runtime Flow, 전체 구성도=Deployment/Infrastructure Topology, 두 화면의 역할을 섞지 않는다). */
-function archEdgeTouchesNode(edgeId, nodeId) { return edgeId.split("-").includes(nodeId); }
+   Map=Runtime Flow, 전체 구성도=Deployment/Infrastructure Topology, 두 화면의 역할을 섞지 않는다).
+   Edge는 절대 강조하지 않는다 — Node 클릭이든 아래 4개 흐름 그룹 순환이든, 항상 Node 테두리(active
+   class)만 켜고 Edge는 항상 중립(dim 대신 그냥 기본 connector) 상태로 둔다. Node를 아무것도
+   클릭하지 않은 기본 상태에서는 archFlowGroups 4개를 계속 순서대로 순환 강조해 "가만히 있어도
+   전체 그림이 계속 움직인다"는 느낌을 준다 — Node를 클릭하면 그 순환이 멈추고 클릭한 Node만
+   강조되며, 일정 시간 조작이 없으면 다시 순환으로 돌아간다. */
 function renderArchCanvas() {
   const t = fullArchitectureTopology;
   const regionSvg = regionBgSvg(t);
-  const edgeSvg = Object.entries(t.edges).map(([id, path]) => {
-    const selected = state.archSelected && archEdgeTouchesNode(id, state.archSelected);
-    return `<path id="arch-edge-${id}" class="connector${selected ? " active" : ""}" d="${path}"/>`;
-  }).join("");
+  const edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector" d="${path}"/>`).join("");
+  const highlighted = state.archSelected ? [state.archSelected] : archFlowGroups[state.archFlowIndex].nodes;
   const nodesSvg = t.nodes.map(([id, label]) => {
     const [x, y] = t.nodePositions[id];
-    const selected = state.archSelected === id;
+    const selected = highlighted.includes(id);
     const sublabel = t.nodeSublabels && t.nodeSublabels[id];
     const sublabelSvg = sublabel ? `<text x="50" y="58" class="node-sublabel">${sublabel}</text>` : "";
     const mainY = sublabel ? 38 : 42;
@@ -548,10 +550,20 @@ function renderArchCanvas() {
     return `<g class="canvas-node${selected ? " active" : ""}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
   }).join("");
   $("archCanvas").innerHTML = `<svg class="topology arch-topology" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="nodes">${nodesSvg}</g></svg>`;
+  renderArchFlowButtons();
+}
+function renderArchFlowButtons() {
+  $("archFlowButtons").innerHTML = archFlowGroups.map((group, i) =>
+    `<button type="button" class="${!state.archSelected && i === state.archFlowIndex ? "active" : ""}" data-flow="${i}">${group.label}</button>`).join("");
 }
 function renderArchDetail(nodeId) {
   const panel = $("archDetailPanel");
-  if (!nodeId) { panel.innerHTML = `<p class="arch-detail-hint">Node를 클릭해 보세요.</p>`; return; }
+  if (!nodeId) {
+    const group = archFlowGroups[state.archFlowIndex];
+    const names = group.nodes.map((id) => fullArchitectureTopology.nodes.find(([nid]) => nid === id)[1]).join(" · ");
+    panel.innerHTML = `<h3>${group.label}</h3><p class="arch-detail-hint">${names}<br>Node를 클릭하면 이 Node만 자세히 볼 수 있습니다.</p>`;
+    return;
+  }
   const label = fullArchitectureTopology.nodes.find(([id]) => id === nodeId)[1];
   const d = fullArchitectureNodeDetails[nodeId];
   panel.innerHTML = `<h3>${label}</h3><dl class="arch-detail-list">
@@ -562,16 +574,36 @@ function renderArchDetail(nodeId) {
     <div><dt>Evidence</dt><dd>${d.evidence}</dd></div>
   </dl>`;
 }
+function stopArchFlowCycle() { clearInterval(state.archFlowTimer); state.archFlowTimer = null; clearTimeout(state.archResumeTimeout); state.archResumeTimeout = null; }
+function startArchFlowCycle() {
+  stopArchFlowCycle();
+  state.archSelected = null;
+  renderArchCanvas();
+  renderArchDetail(null);
+  state.archFlowTimer = setInterval(() => {
+    state.archFlowIndex = (state.archFlowIndex + 1) % archFlowGroups.length;
+    renderArchCanvas();
+    renderArchDetail(null);
+  }, 2200);
+}
+/* Node를 클릭해 살펴보는 동안은 순환을 멈추고, 일정 시간(4초) 조작이 없으면 다시 순환으로 되돌아간다. */
+function scheduleArchResume() {
+  clearTimeout(state.archResumeTimeout);
+  state.archResumeTimeout = setTimeout(startArchFlowCycle, 4000);
+}
+function selectArchFlow(idx) {
+  state.archFlowIndex = idx;
+  startArchFlowCycle();
+}
 function enterArchMode() {
   pauseShowcaseAuto();
-  state.archSelected = null;
   $("showcaseSubheader").hidden = true;
   $("showcaseScenarioView").hidden = true;
   $("showcaseArchView").hidden = false;
-  renderArchCanvas();
-  renderArchDetail(null);
+  startArchFlowCycle();
 }
 function exitArchMode() {
+  stopArchFlowCycle();
   $("showcaseArchView").hidden = true;
   $("showcaseSubheader").hidden = false;
   $("showcaseScenarioView").hidden = false;
@@ -697,10 +729,16 @@ $("showFullArchitecture").onclick = enterArchMode;
 $("archBack").onclick = exitArchMode;
 $("archCanvas").onclick = (event) => {
   const nodeEl = event.target.closest("[data-node]"); if (!nodeEl) return;
+  clearInterval(state.archFlowTimer); state.archFlowTimer = null;
   const id = nodeEl.dataset.node;
   state.archSelected = state.archSelected === id ? null : id;
   renderArchCanvas();
   renderArchDetail(state.archSelected);
+  if (state.archSelected) scheduleArchResume(); else startArchFlowCycle();
+};
+$("archFlowButtons").onclick = (event) => {
+  const button = event.target.closest("button[data-flow]"); if (!button) return;
+  selectArchFlow(Number(button.dataset.flow));
 };
 $("showcaseBackToDocs").onclick = () => {
   const ref = currentShowcase().steps[0];
