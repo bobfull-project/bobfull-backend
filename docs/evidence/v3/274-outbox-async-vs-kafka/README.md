@@ -12,7 +12,7 @@ Transactional Outbox를 공통으로 둔 뒤, Outbox 이후의 Local Async와 Ka
 
 ### Outbox + Local Async
 
-ChatMessage와 OutboxEvent를 같은 transaction에 저장한다. commit 뒤 bounded local executor가 Outbox row를 claim하고 moderation 성공 뒤 `COMPLETED`로 전이한다. 프로세스 종료로 executor queue가 사라져도 DB의 `PROCESSING` row는 남으며, production stale threshold(약 5분) 뒤 scheduler가 reclaim한다.
+ChatMessage와 OutboxEvent를 같은 transaction에 저장한다. commit 뒤 Outbox processor가 row를 claim하고, bounded local executor에서 moderation을 수행한 뒤 성공 시 `COMPLETED`로 전이한다. 프로세스 종료로 executor queue가 사라져도 DB의 `PROCESSING` row는 남으며, production stale threshold(약 5분) 뒤 scheduler가 reclaim한다.
 
 ### Outbox + Kafka
 
