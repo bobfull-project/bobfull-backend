@@ -305,7 +305,7 @@ for item in "${optional_parameters[@]}"; do
 done
 
 if ! grep -q '^JPA_DDL_AUTO=' "${APP_ENV_FILE}"; then
-  append_env_value JPA_DDL_AUTO update
+  append_env_value JPA_DDL_AUTO validate
 fi
 
 if ! grep -q '^JWT_ACCESS_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then

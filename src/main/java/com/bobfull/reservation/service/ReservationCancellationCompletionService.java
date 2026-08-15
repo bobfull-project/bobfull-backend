@@ -61,9 +61,10 @@ public class ReservationCancellationCompletionService {
         }
 
         if (reservation.isCancelling()) {
-            boolean hasRemainingCancellation = reservationParticipantRepository
-                    .existsByReservationIdAndParticipationStatus(
-                            reservationId, ParticipationStatus.CANCEL_REQUESTED);
+            boolean hasRemainingCancellation = !reservationParticipantRepository
+                    .findAllWithLockByReservationIdAndParticipationStatus(
+                            reservationId, ParticipationStatus.CANCEL_REQUESTED)
+                    .isEmpty();
             if (!hasRemainingCancellation) {
                 reservation.cancel();
             }
