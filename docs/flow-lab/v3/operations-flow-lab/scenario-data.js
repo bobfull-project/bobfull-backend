@@ -185,10 +185,10 @@ const serviceUnifiedTopology = {
     "cross-meal-mealend": "M960 110 V150 H900 V295 H810 V340"
   },
   labels: {
-    "o-reservation-payout": [575, 216], "o-payout-noshow": [725, 216],
-    /* a-judge-chatroom/a-judge-email은 라벨을 일부러 안 둔다 — 두 edge가 같은 지점(a-judge 아래)에서
-       바로 갈라져 라벨 두 개를 붙일 공간이 없고, 각 node 자체 텍스트("채팅방 생성"/"이메일 발송")로
-       이미 충분히 설명된다. */
+    "o-payout-noshow": [725, 216],
+    /* o-reservation-payout, a-judge-chatroom, a-judge-email은 라벨을 일부러 안 둔다 — 두 box 이름
+       자체("예약 현황 확인"→"지급 예정 조회", "채팅방 생성"/"이메일 발송")로 이미 충분히 설명되고,
+       기본 token label("이벤트")은 정보 없이 화면만 복잡하게 만든다. */
     "cross-setup-explore": [200, 145], "cross-pay-paid": [365, 152], "cross-accumulate-reservation": [430, 305],
     "cross-judge-confirm": [590, 152], "cross-meal-mealend": [845, 152]
   },
@@ -227,11 +227,11 @@ const serviceUnifiedSteps = [
   step("mealend", "일반 사용자 → 자동 관리", "식사 종료 처리", "13. 식사가 끝나면 종료로 처리해요", "식사가 끝나면 자동 관리가 이를 식사 종료로 처리합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["u-meal", "a-mealend"], ["cross-meal-mealend"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal"], null, { "cross-meal-mealend": "종료 처리" }) }),
   step("done", "일반 사용자", "이용 완료", "14. 이번 예약 이용이 끝나요", "식사 종료 처리 후 이번 예약 이용이 완료됩니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-mealend", "u-meal", "u-done"], ["u-meal-done"], "commit", "completed", "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal"]) }),
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["a-mealend", "u-meal", "u-done"], ["u-meal-done"], "commit", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal"]) }),
   step("payout", "사장님", "지급 예정 조회", "15. 예약별 지급 예정 금액을 확인해요", "이용이 완료되면 사장님은 확정된 예약에 대한 정산·지급 예정 금액을 조회합니다.",
     { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-reservation", "o-payout"], ["o-reservation-payout"], "event", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal", "a-mealend", "u-done"]) }),
   step("noshow", "사장님", "노쇼 관리", "16. 식사 종료 후 참여 상태를 관리해요", "나타나지 않은 참여자(노쇼)가 있었다면 사장님이 이 단계에서 확인하고 관리합니다.",
-    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-payout", "o-noshow"], ["o-payout-noshow"], "commit", "completed", "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal", "a-mealend", "u-done"]) })
+    { factStatus: FACT.DESIGN, topologyKey: "service-unified", visual: visual(["o-payout", "o-noshow"], ["o-payout-noshow"], "commit", null, "core", ["o-register", "o-setup", "u-explore", "u-select", "u-pay", "a-paid", "a-accumulate", "o-reservation", "a-judge", "a-close", "u-confirm", "a-chatroom", "a-email", "u-chat", "u-meal", "a-mealend", "u-done"]) })
 ];
 
 /* 인프라 흐름 탭(실제 요청은 어떤 인프라를 지나가는가) — #169/#206 Evidence와 GitHub Actions/scripts/aws
