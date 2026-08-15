@@ -14,6 +14,7 @@ const evidence = {
   hotpath: ref("#235 Hot-path 병목 개선", "../../../evidence/v3/restaurant-view-hotpath/README.md"),
   searchCache: ref("#62 검색 Redis Cache 판단", "../../../evidence/v3/62-search-cache/README.md"),
   appHa: ref("#169 App HA / AWS Redis cross-instance", "../../../evidence/v3/169-app-ha/README.md"),
+  ingressHttps: ref("#206 Backend Ingress HTTPS(Route 53/ALB)", "../../../evidence/v3/206-backend-ingress-https/README.md"),
   aiWorkerScaling: ref("#192 Kafka AI Worker Scaling 판단", "../../../evidence/v3/192-ai-worker-scaling/README.md"),
   partitionKey: ref("#258 Moderation Partition Key 판단", "../../../evidence/v3/258-moderation-partition-key/README.md"),
   moderationHardening: ref("#251 AI Moderation Rule Fast Path", "../../../evidence/v3/251-ai-moderation-hardening/README.md"),
@@ -243,81 +244,115 @@ const serviceUnifiedSteps = [
 ];
 
 /* 인프라 흐름 탭(실제 요청은 어떤 인프라를 지나가는가) — #169/#206 Evidence와 GitHub Actions/scripts/aws
-   기준으로 검증된 실제 구성만 반영한다. CloudFront/S3 프론트엔드는 이 저장소에서 확인되지 않아 제외한다. */
+   기준으로 검증된 실제 구성만 반영한다. CloudFront/S3 프론트엔드는 이 저장소에서 확인되지 않아 제외한다.
+   재검증 결과 가장 중요한 수정: "AI Consumer"는 별도 node/서버가 아니다 — ChatModerationConsumer는
+   평범한 @KafkaListener @Component로, Web/API와 같은 프로세스·같은 JAR·같은 EC2에서 돈다
+   (#192 "통합 모놀리스 유지" 최종 결정). 그래서 이 topology에는 별도 consumer node를 두지 않고,
+   Kafka→App EC2로 다시 들어오는 edge로 "같은 프로세스가 소비한다"를 표현한다(node sublabel로도
+   명시). Blue/Green은 Target Group 뒤의 Application 배포 그룹일 뿐이고, RDS/Redis/Kafka/S3는
+   특정 색 전용이 아니라 공유 Infrastructure다 — 이 구분이 드러나도록 Region을 역할별 Layer로
+   나눴다. [ 일반 API / 채팅 / AI 검수 / 배포 ] 4개 Scenario는 이 하나의 고정 topology를 공유하고
+   Step마다 활성 Node/Edge만 다르다(Topology="무엇이 연결돼 있나" vs Scenario="이번 요청이 어디를
+   지나가나"). CloudFront는 이번에도 재확인했지만 실제 사용 근거가 없어 계속 제외한다. */
 const infraTopology = {
-  viewBox: "0 0 1180 520",
-  nodes: [["client", "Client"], ["route53", "Route 53"], ["alb", "ALB(HTTPS)"],
+  viewBox: "0 0 900 650",
+  nodeSublabels: { ec2Blue1: "AI Consumer 포함", ec2Blue2: "AI Consumer 포함", ec2Green1: "AI Consumer 포함", ec2Green2: "AI Consumer 포함" },
+  nodes: [
+    ["client", "Client"], ["route53", "Route 53"], ["alb", "ALB (HTTPS)"],
     ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
-    ["ec2Blue1", "EC2 Blue #1"], ["ec2Blue2", "EC2 Blue #2"], ["ec2Green1", "EC2 Green #1"], ["ec2Green2", "EC2 Green #2"],
-    ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"], ["consumer", "AI Consumer"], ["llm", "LLM(OpenAI)"], ["s3", "S3(이미지)"],
-    ["gha", "GitHub Actions"], ["ecr", "ECR"], ["ssm", "SSM Run Command"]],
+    ["ec2Blue1", "Blue EC2 #1"], ["ec2Blue2", "Blue EC2 #2"], ["ec2Green1", "Green EC2 #1"], ["ec2Green2", "Green EC2 #2"],
+    ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"], ["s3", "S3(식당 이미지)"],
+    ["llm", "LLM(OpenAI)"],
+    ["gha", "GitHub Actions"], ["ecr", "ECR"], ["ssm", "SSM Run Command"]
+  ],
   nodePositions: {
-    client: [20, 220], route53: [170, 220], alb: [320, 220],
-    tgBlue: [480, 130], tgGreen: [480, 310],
-    ec2Blue1: [640, 60], ec2Blue2: [640, 160], ec2Green1: [640, 260], ec2Green2: [640, 360],
-    rds: [860, 60], redis: [860, 160], kafka: [860, 260], consumer: [1020, 260], llm: [1020, 360], s3: [860, 360],
-    gha: [320, 420], ecr: [480, 420], ssm: [640, 420]
+    client: [20, 20], route53: [170, 20], alb: [340, 20],
+    tgBlue: [210, 140], tgGreen: [480, 140],
+    ec2Blue1: [140, 260], ec2Blue2: [280, 260], ec2Green1: [420, 260], ec2Green2: [560, 260],
+    rds: [140, 400], redis: [280, 400], kafka: [420, 400], s3: [560, 400],
+    llm: [420, 520],
+    gha: [740, 140], ecr: [740, 260], ssm: [740, 380]
   },
   edges: {
-    "client-route53": "M120 255 H170", "route53-alb": "M270 255 H320",
-    "alb-tgBlue": "M420 245 H460 V165 H480", "alb-tgGreen": "M420 265 H460 V345 H480",
-    "tgBlue-ec2Blue1": "M580 155 H600 V95 H640", "tgBlue-ec2Blue2": "M580 165 H640",
-    "tgGreen-ec2Green1": "M580 335 H600 V295 H640", "tgGreen-ec2Green2": "M580 345 H640",
-    "ec2Blue1-rds": "M740 95 H800 V95 H860", "ec2Blue2-redis": "M740 195 H800 V195 H860", "ec2Green1-kafka": "M740 295 H800 V295 H860", "ec2Blue1-s3": "M740 110 H800 V395 H860",
-    "kafka-consumer": "M960 295 H1020", "consumer-llm": "M1070 330 V360",
-    "gha-ecr": "M420 455 H480", "ecr-ssm": "M580 455 H640", "ssm-ec2Green1": "M690 455 V295 H690"
+    "client-route53": "M120 55 H170", "route53-alb": "M270 55 H340",
+    "alb-tgBlue": "M390 90 V115 H260 V140", "alb-tgGreen": "M390 90 V115 H530 V140",
+    "tgBlue-ec2Blue1": "M260 210 V235 H190 V260", "tgBlue-ec2Blue2": "M260 210 V235 H330 V260",
+    "tgGreen-ec2Green1": "M530 210 V235 H470 V260", "tgGreen-ec2Green2": "M530 210 V235 H610 V260",
+    "ec2Green1-rds": "M470 330 V365 H190 V400", "ec2Green1-redis": "M470 330 V365 H330 V400",
+    "redis-ec2Green2": "M330 400 V365 H610 V330",
+    /* Kafka↔App EC2 왕복 — AI Consumer가 별도 서버가 아니라 같은 App EC2 프로세스라는 것을
+       "Kafka로 나갔다가 같은 node로 다시 들어오는" 모양으로 표현한다. */
+    "ec2Green1-kafka": "M460 330 V400", "kafka-ec2Green1": "M480 400 V330",
+    "ec2Green1-llm": "M450 330 V345 H400 V520 H420",
+    "gha-ecr": "M790 210 V260", "ecr-ssm": "M790 330 V380",
+    "ssm-ec2Green1": "M790 380 V355 H470 V330", "ssm-ec2Green2": "M790 380 V340 H610 V330"
   },
   labels: {
-    "client-route53": [125, 245], "route53-alb": [275, 245],
-    "alb-tgBlue": [430, 190], "alb-tgGreen": [430, 300],
-    "kafka-consumer": [965, 285], "consumer-llm": [1030, 345],
-    "gha-ecr": [425, 445], "ecr-ssm": [585, 445]
+    "client-route53": [125, 45], "route53-alb": [275, 45],
+    "ec2Green1-kafka": [415, 350], "kafka-ec2Green1": [485, 380],
+    "gha-ecr": [795, 232], "ecr-ssm": [795, 352]
   },
   regions: [
-    { label: "요청 경로", x: 10, y: 195, w: 440, h: 100 },
-    { label: "App(Blue/Green)", x: 460, y: 10, w: 200, h: 400 },
-    { label: "데이터/AI", x: 840, y: 10, w: 320, h: 400 },
-    { label: "배포 경로", x: 300, y: 395, w: 400, h: 90 }
+    { label: "Entry / Routing", x: 10, y: 5, w: 445, h: 100 },
+    { label: "Application (Blue/Green)", x: 130, y: 125, w: 540, h: 215 },
+    { label: "Shared Data / Messaging", x: 130, y: 390, w: 540, h: 90 },
+    { label: "AI", x: 410, y: 510, w: 120, h: 90 },
+    { label: "Deployment Control Plane", x: 730, y: 130, w: 120, h: 330 }
   ]
 };
 const infraSteps = {
   api: [
     step("api-1", "Client", "Route 53 / ALB", "● Route 53이 서비스 도메인 요청을 ALB로 연결합니다", "일반 API 요청이 Route 53(api.bobfull.click)을 거쳐 ALB(HTTPS)로 들어옵니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb"], ["client-route53", "route53-alb"], "request", null, "core") }),
-    step("api-2", "ALB", "Target Group(활성 색)", "◆ ALB가 요청을 현재 활성 Target Group으로 전달합니다", "ALB는 현재 활성(Blue 또는 Green) Target Group으로만 요청을 전달합니다 — 지금은 Green이 활성이라고 가정합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgGreen", "ec2Green1", "ec2Green2"], ["alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "event", null, "core", ["client", "route53"]) }),
-    step("api-3", "App EC2", "RDS", "✓ 애플리케이션이 필요한 데이터를 RDS MySQL에서 조회하거나 저장합니다", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Blue1-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
-        limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 아직 미구현(#191, future).",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb"], ["client-route53", "route53-alb"], "request", null, "core"),
+        evidenceReferences: [evidence.ingressHttps] }),
+    step("api-2", "ALB", "TG Green(활성 색)", "◆ ALB가 요청을 현재 활성 Target Group으로 전달합니다", "ALB는 현재 활성(Blue 또는 Green) Target Group으로만 요청을 전달합니다 — 지금은 Green이 활성이라고 가정합니다. Blue TG·Blue EC2는 대기(Standby) 상태로 흐리게 남아 있습니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgGreen", "ec2Green1", "ec2Green2"], ["alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "event", null, "core", ["client", "route53"]),
+        evidenceReferences: [evidence.appHa] }),
+    step("api-3", "Green EC2", "RDS MySQL", "✓ 애플리케이션이 필요한 데이터를 RDS MySQL에서 조회하거나 저장합니다", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다 — RDS는 Blue·Green 어느 쪽이 활성이든 항상 같은 하나의 인스턴스입니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
+        limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 아직 미구현(#191, future). 이 Scenario는 캐시를 쓰지 않는 일반 API 기준이다 — 캐시를 쓰는 요청(#62 검색)만 Redis가 강조된다.",
         evidenceReferences: [evidence.appHa] })
   ],
   chat: [
-    step("chat-1", "User A", "App EC2 #1", "● User A가 ALB를 거쳐 App EC2 #1에 채팅 메시지를 보냅니다", "User A가 ALB를 거쳐 App EC2 #1에 접속해 메시지를 보냅니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "alb", "tgGreen", "ec2Green1"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1"], "request", null, "core") }),
-    step("chat-2", "App EC2 #1", "ElastiCache Redis", "◆ 메시지를 받은 애플리케이션 서버가 Redis Pub/Sub 채널에 메시지를 발행합니다", "App EC2 #1이 메시지를 저장한 뒤 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "redis"], ["ec2Blue2-redis"], "broadcast", null, "core", ["client", "alb", "tgGreen"]),
+    step("chat-1", "User A", "Green EC2 #1", "● User A가 ALB를 거쳐 Green EC2 #1에 채팅 메시지를 보냅니다", "User A가 ALB를 거쳐 활성 Target Group(Green) 뒤의 EC2 #1에 접속해 메시지를 보냅니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgGreen", "ec2Green1"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1"], "request", null, "core") }),
+    step("chat-2", "Green EC2 #1", "ElastiCache Redis", "◆ 메시지를 받은 애플리케이션 서버가 Redis Pub/Sub 채널에 메시지를 발행합니다", "Green EC2 #1이 메시지를 저장한 뒤 공유 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다 — Redis는 Blue·Green 전용으로 나뉘어 있지 않은 하나의 공유 인프라입니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "redis"], ["ec2Green1-redis"], "broadcast", null, "core", ["client", "route53", "alb", "tgGreen"]),
         evidenceReferences: [evidence.appHa, evidence.redis] }),
-    step("chat-3", "ElastiCache Redis", "App EC2 #2", "✓ Redis Pub/Sub이 메시지를 구독 중인 다른 애플리케이션 서버에도 전달합니다", "다른 인스턴스(App EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["redis", "ec2Green2"], ["tgGreen-ec2Green2"], "broadcast", "delivered", "core", ["client", "alb", "tgGreen", "ec2Green1"]),
+    step("chat-3", "ElastiCache Redis", "Green EC2 #2", "✓ Redis Pub/Sub이 메시지를 구독 중인 다른 애플리케이션 서버에도 전달합니다", "다른 인스턴스(Green EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["redis", "ec2Green2"], ["redis-ec2Green2"], "broadcast", "delivered", "core", ["client", "route53", "alb", "tgGreen", "ec2Green1"]),
         decisionBadge: "#169 verified · 실제 다중 EC2 + 공용 ElastiCache 검증",
         evidenceReferences: [evidence.appHa] })
   ],
   moderation: [
-    step("mod-1", "App EC2", "Kafka EC2", "● 애플리케이션이 비동기 AI 검수 메시지를 Kafka에 전달합니다", "App EC2가 저장된 메시지를 전용 Kafka EC2(단일 KRaft broker)로 발행합니다.",
+    step("mod-1", "Green EC2", "Kafka EC2", "● 애플리케이션이 비동기 AI 검수 메시지를 Kafka에 전달합니다", "Green EC2가 저장된 메시지를 전용 Kafka EC2(단일 KRaft broker)로 발행합니다 — Kafka도 Blue·Green이 공유하는 인프라입니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "kafka"], ["ec2Green1-kafka"], "event", null, "core") }),
-    step("mod-2", "Kafka EC2", "AI Consumer", "◆ AI Consumer가 Kafka에서 메시지를 가져와 외부 LLM을 호출합니다", "AI Consumer가 Kafka에서 메시지를 가져와 외부 LLM(OpenAI)을 호출합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["kafka", "consumer", "llm"], ["kafka-consumer", "consumer-llm"], "event", null, "core", ["ec2Green1"]) }),
-    step("mod-3", "AI Consumer", "RDS", "✓ AI Consumer가 판정 결과를 검증한 뒤 RDS에 저장합니다", "판정 결과를 검증한 뒤 RDS에 저장합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["consumer", "rds"], [], "commit", "completed", "core", ["ec2Green1", "kafka", "llm"]) })
+    step("mod-2", "Kafka EC2", "Green EC2(AI Consumer)", "◆ 같은 App EC2 안의 AI Consumer가 Kafka 메시지를 가져와 LLM을 호출합니다", "AI Consumer(ChatModerationConsumer)는 별도 서버가 아니라 Web/API와 같은 프로세스·같은 EC2에서 도는 @KafkaListener입니다(#192 통합 모놀리스 유지 결정) — Kafka EC2와 별도 프로세스가 아닙니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["kafka", "ec2Green1", "llm"], ["kafka-ec2Green1", "ec2Green1-llm"], "event", null, "core"),
+        limits: "AI Consumer가 Kafka EC2와 물리적으로 같은 서버인지는 확인되지 않았다 — 확인된 것은 \"AI Consumer가 Web/API App EC2와 같은 프로세스\"라는 점이다.",
+        evidenceReferences: [evidence.aiWorkerScaling] }),
+    step("mod-3", "Green EC2(AI Consumer)", "RDS MySQL", "✓ AI Consumer가 판정 결과를 검증한 뒤 RDS에 저장합니다", "판정 결과를 검증한 뒤 같은 공유 RDS에 저장합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-rds"], "commit", "completed", "core", ["kafka", "llm"]) })
   ],
   deploy: [
-    step("deploy-1", "GitHub Actions", "ECR", "● GitHub Actions가 빌드한 이미지를 ECR에 업로드합니다", "main에 push되면 GitHub Actions가 빌드한 뒤 OIDC로 인증해 ECR에 이미지를 push합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["gha", "ecr"], ["gha-ecr"], "event", null, "core") }),
-    step("deploy-2", "ECR", "SSM Run Command", "◆ SSM Run Command가 비활성 색 EC2에 배포 스크립트를 실행합니다", "현재 비활성(예: Green) Target Group의 EC2에 SSH 없이 SSM Run Command로 배포 스크립트를 실행합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ecr", "ssm", "ec2Green1"], ["ecr-ssm", "ssm-ec2Green1"], "event", null, "core", ["gha"]) }),
-    step("deploy-3", "ALB", "Target Group 가중치", "✓ ALB가 헬스체크를 통과한 Target Group으로 트래픽 가중치를 전환합니다", "비활성 Target Group이 모두 healthy해지면 ALB 리스너 가중치를 0/100 → 100/0으로 전환합니다 — 실패 시 자동으로 이전 가중치로 rollback합니다.",
-      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "ec2Green2", "tgGreen", "alb"], ["tgGreen-ec2Green1", "tgGreen-ec2Green2", "alb-tgGreen"], "commit", "completed", "core", ["gha", "ecr", "ssm"]),
-        limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 아직 없다(#191).",
+    step("deploy-1", "Client", "Blue EC2", "● 사용자 요청은 계속 Blue Target Group이 정상 처리합니다", "배포 시작 전, ALB는 100% Blue로 요청을 보내고 있습니다 — 새 버전을 배포하는 동안에도 이 서비스는 멈추지 않습니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2"], ["client-route53", "route53-alb", "alb-tgBlue", "tgBlue-ec2Blue1", "tgBlue-ec2Blue2"], "request", null, "core") }),
+    step("deploy-2", "GitHub Actions", "ECR", "◆ GitHub Actions가 새 버전을 빌드해 ECR에 올립니다", "main에 push되면 GitHub Actions가 빌드한 뒤 OIDC로 인증해 새 이미지를 ECR에 push합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["gha", "ecr"], ["gha-ecr"], "event", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2"]) }),
+    step("deploy-3", "SSM Run Command", "Green EC2 #1/#2", "◆ 비활성 Green EC2에 새 이미지를 배포합니다 — Traffic은 여전히 Blue입니다", "SSH 없이 SSM Run Command로 현재 비활성인 Green EC2 #1/#2에만 배포 스크립트를 실행합니다. 이 시점에도 ALB Traffic은 100% Blue입니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ecr", "ssm", "ec2Green1", "ec2Green2"], ["ecr-ssm", "ssm-ec2Green1", "ssm-ec2Green2"], "event", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2", "gha"]),
+        codeReferences: ["scripts/aws/deploy-backend-blue-green-v1.sh", "scripts/aws/run-ssm-backend-deploy-v1.sh"] }),
+    step("deploy-4", "ALB Target Group", "Health Check", "◆ Green EC2 #1/#2가 Health Check를 통과합니다", "Target Group Health Check(/actuator/health/readiness)가 Green EC2 #1/#2 모두 healthy로 확인될 때까지 기다린 뒤에만 다음 단계로 넘어갑니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "ec2Green2"], [], "commit", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2", "gha", "ecr", "ssm"]) }),
+    step("deploy-5", "ALB Listener", "Weight 전환", "✓ ALB 리스너 가중치를 Blue 100/0에서 Green 0/100으로 전환합니다", "새 Target Group을 만들거나 바꿔치기하지 않습니다 — 같은 ALB 리스너 안에서 Blue/Green 두 Target Group의 가중치(weight)만 뒤집습니다. 실패 시 자동으로 이전 가중치(Blue 100/Green 0)로 rollback합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgBlue", "tgGreen"], ["alb-tgGreen"], "commit", "completed", "core", ["client", "route53", "ec2Blue1", "ec2Blue2", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"]),
+        codeReferences: ["deploy-backend-blue-green-v1.sh:build_switch_actions", "deploy-backend-blue-green-v1.sh:rollback_listener"],
+        evidenceReferences: [evidence.appHa] }),
+    step("deploy-6", "Client", "Green EC2", "✓ 새로운 요청은 이제 Green으로 라우팅됩니다", "가중치 전환 이후 새로 들어오는 요청은 ALB → TG Green → Green EC2 #1/#2로 처리됩니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "request", "completed", "core", ["tgBlue", "ec2Blue1", "ec2Blue2", "gha", "ecr", "ssm"]) }),
+    step("deploy-7", "Blue EC2 #1/#2", "Standby", "◆ 기존 Blue는 Standby로 남아 다음 배포를 기다립니다", "Blue EC2를 자동으로 종료하거나 Drain시키는 스크립트는 확인되지 않았습니다 — Blue는 그대로 남아 있다가, 다음 배포에서 다시 \"비활성 색\"으로 새 이미지를 받는 대상이 됩니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["tgBlue", "ec2Blue1", "ec2Blue2"], [], "commit", null, "core", ["client", "route53", "alb", "tgGreen", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"]),
+        limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 아직 없다(#191). 이전 색을 자동 종료·Drain하는 로직은 이번 조사에서 확인되지 않았다.",
         evidenceReferences: [evidence.appHa] })
   ]
 };
