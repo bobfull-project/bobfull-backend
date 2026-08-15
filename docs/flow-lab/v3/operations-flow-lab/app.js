@@ -1,12 +1,18 @@
 /* Playback and rendering only. Every visual decision comes from step.visual. */
 const $ = (id) => document.getElementById(id);
-const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseScenario: 0, showcaseStep: 0 };
+const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseTab: "service", showcaseScenario: 0, showcaseStep: 0 };
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
-/* Ch6는 서버 topology 대신 moderationTopology(판정 경로)를 쓴다. 두 topology 모두 같은
-   canvas-node/connector/token 렌더링을 그대로 재사용한다 — 별도 renderer를 새로 만들지 않는다. */
-const topologyFor = (data) => data.topologyKey === "moderation" ? moderationTopology : topology;
+/* Ch6는 서버 topology 대신 moderationTopology(판정 경로)를 쓴다. Ch0 Showcase의 서비스/인프라 흐름도
+   같은 원리로 자기 topologyKey를 쓴다. 전부 같은 canvas-node/connector/token 렌더러를 재사용한다 —
+   별도 renderer를 새로 만들지 않는다. */
+const TOPOLOGY_BY_KEY = {
+  moderation: moderationTopology, "payment-followup": paymentFollowupTopology,
+  "service-user": serviceUserTopology, "service-owner": serviceOwnerTopology, "service-auto": serviceAutoTopology,
+  infra: infraTopology
+};
+const topologyFor = (data) => TOPOLOGY_BY_KEY[data.topologyKey] || topology;
 function populateSelects() {
   const showcaseOption = `<option value="showcase">Ch0 · BobFull System Showcase</option>`;
   $("chapterSelect").innerHTML = showcaseOption + chapters.map((item, i) => `<option value="${i}">${item.shortLabel}</option>`).join("");
@@ -368,62 +374,126 @@ function renderDecisionHighlights() {
   }).join("");
   $("outcomes").hidden = $("performanceOutcome").hidden && $("reliabilityOutcome").hidden;
 }
-/* Ch0 · BobFull System Showcase — 새 Scenario/Step 데이터를 따로 만들지 않고, 이미 검증된
-   실제 Chapter/Scenario/Step을 {chapter, scenario, step} 참조로만 모아 재생한다. 렌더링도
-   findStep()으로 찾은 실제 step 객체를 그대로 renderCanvas()에 넘겨 재사용한다 — Showcase 전용
-   시각화 로직을 새로 만들지 않는다. problem/solution/outcomes 문구는 각 Chapter의 summary와
-   Evidence 기준 factStatus를 벗어나지 않게 작성했다(과장 금지). */
-const SHOWCASE_SCENARIOS = [
-  { id: "full-flow", title: "전체 흐름",
-    problem: "BobFull 채팅은 단순 CRUD가 아니라 비동기 처리 구조로 되어 있습니다.",
-    solution: "메시지 저장과 AI 검수를 분리해, AI 처리 지연이 사용자 요청에 전파되지 않도록 했습니다.",
-    outcomes: ["메시지 저장 완료", "AI 검수는 비동기로 분리", "사용자 요청과 무관하게 처리"],
-    steps: [
-      { chapter: "kafka-ai", scenario: "normal", step: "send" },
-      { chapter: "kafka-ai", scenario: "normal", step: "commit" },
-      { chapter: "kafka-ai", scenario: "normal", step: "publish" },
-      { chapter: "kafka-ai", scenario: "normal", step: "analyze" }
-    ] },
-  { id: "ai-failure", title: "AI 장애 대응",
-    problem: "AI 검수가 실패하면 채팅 저장까지 함께 실패해야 할까?",
-    solution: "핵심 거래(메시지 저장)와 AI 후속 검수를 분리해, AI 장애가 메시지 저장에 영향을 주지 않게 격리했습니다.",
-    outcomes: ["채팅 저장 완료", "AI 장애가 다른 메시지 처리를 막지 않음"],
-    steps: [
-      { chapter: "kafka-ai", scenario: "normal", step: "commit" },
-      { chapter: "kafka-ai", scenario: "normal", step: "publish" },
-      { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "retries" },
-      { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "dlt" }
-    ] },
-  { id: "multi-instance", title: "다중 서버 전달",
-    problem: "사용자가 서로 다른 서버 인스턴스에 연결되어 있다면 메시지가 전달될까?",
-    solution: "Redis Pub/Sub으로 서버 간 신호를 전파해, 접속한 인스턴스와 무관하게 메시지를 전달합니다.",
-    outcomes: ["다중 인스턴스 메시지 전달 확인", "STOMP 세션 경계 극복"],
-    steps: [
-      { chapter: "redis", scenario: "local-two-instance-normal", step: "save" },
-      { chapter: "redis", scenario: "local-two-instance-normal", step: "broadcast" },
-      { chapter: "redis", scenario: "local-two-instance-normal", step: "fanout" }
-    ] }
+/* Ch0 · BobFull System Showcase — 서비스/핵심 시스템/인프라 3개 관점(탭)으로 BobFull 전체를 보여준다.
+   각 탭 안의 Scenario는 steps로 실제 데이터를 넘긴다: 이미 검증된 Chapter/Scenario/Step을
+   {chapter, scenario, step} 참조로 재사용하거나(핵심 시스템 흐름의 AI 채팅 검수/AI 장애 대응/다중 서버
+   채팅), Ch0 전용으로 새로 만든 실제 step() 객체 배열을 그대로 쓴다(결제 확정 후속 처리, 서비스 흐름,
+   인프라 흐름 — scenario-data.js). 렌더링은 어느 경우든 findStep()/renderCanvas()를 그대로 재사용한다 —
+   Showcase 전용 시각화 로직을 새로 만들지 않는다. problem/solution/outcomes 문구는 각 Step의
+   factStatus/Evidence 범위를 벗어나지 않게 작성했다(과장 금지). */
+const SHOWCASE_TABS = [
+  { id: "service", label: "서비스 흐름", question: "BobFull은 어떻게 사용하는 서비스인가?" },
+  { id: "core", label: "핵심 시스템 흐름", question: "복잡한 기능을 백엔드에서 어떻게 안전하게 처리했는가?" },
+  { id: "infra", label: "인프라 흐름", question: "실제 요청은 어떤 인프라를 지나가는가?" }
 ];
-function currentShowcase() { return SHOWCASE_SCENARIOS[state.showcaseScenario]; }
+const SHOWCASE_SCENARIOS_BY_TAB = {
+  service: [
+    { id: "service-user", title: "일반 사용자",
+      problem: "일반 사용자에게 BobFull은 어떤 서비스인가?",
+      solution: "식당·합석 탐색부터 결제, 참여자 채팅, 식사까지 한 흐름으로 이용합니다.",
+      outcomes: ["예약부터 식사까지 한 서비스", "참여자와 미리 채팅으로 조율"], steps: serviceUserSteps },
+    { id: "service-owner", title: "사장님",
+      problem: "사장님에게 BobFull은 어떤 서비스인가?",
+      solution: "식당·테이블·회차를 등록하고, 예약 현황과 지급 예정을 확인하며 운영합니다.",
+      outcomes: ["예약 현황 실시간 확인", "정산 예정 금액 조회"], steps: serviceOwnerSteps },
+    { id: "service-auto", title: "BobFull 자동 관리",
+      problem: "합석 인원이 다 안 차면 예약은 어떻게 될까?",
+      solution: "결제·참여 인원을 자동으로 누적하고, 성사 기준 충족 여부에 따라 확정하거나 취소·환불합니다.",
+      outcomes: ["성사 기준 자동 판단", "기준 미달 시 자동 취소·환불"], steps: serviceAutoSteps }
+  ],
+  core: [
+    { id: "payment-followup", title: "결제 확정 후속 처리",
+      problem: "채팅방 생성이 실패하면 이미 끝난 결제·예약까지 함께 실패해야 할까?",
+      solution: "핵심 거래(결제·예약·참여자)와 후속 기능(채팅방·이메일)의 실패 범위를 분리했습니다.",
+      outcomes: ["핵심 거래 즉시 확정", "후속 기능은 각자 안전하게 재시도"], steps: paymentFollowupSteps },
+    { id: "ai-moderation", title: "AI 채팅 검수",
+      problem: "모든 메시지를 똑같이 LLM으로 보내야 할까?",
+      solution: "명백한 위반은 Rule Filter가 즉시 판정하고, 애매한 경우만 LLM에 맡긴 뒤 결과를 검증해 저장합니다.",
+      outcomes: ["확실한 것은 규칙으로 빠르게", "애매한 것만 LLM으로", "LLM 결과도 검증 후 저장"],
+      steps: [
+        { chapter: "kafka-ai", scenario: "normal", step: "send" },
+        { chapter: "kafka-ai", scenario: "normal", step: "commit" },
+        { chapter: "kafka-ai", scenario: "normal", step: "publish" },
+        { chapter: "ai-moderation", scenario: "clear-flagged-fast-path", step: "rule-check" },
+        { chapter: "ai-moderation", scenario: "clear-flagged-fast-path", step: "rule-hit" },
+        { chapter: "ai-moderation", scenario: "llm-required", step: "rule-miss" },
+        { chapter: "ai-moderation", scenario: "llm-required", step: "prompt-call" },
+        { chapter: "ai-moderation", scenario: "llm-required", step: "persisted" }
+      ] },
+    { id: "ai-failure", title: "AI 장애 대응",
+      problem: "AI 검수가 실패하면 채팅 저장까지 함께 실패해야 할까?",
+      solution: "핵심 거래(메시지 저장)와 AI 후속 검수를 분리해, AI 장애가 메시지 저장에 영향을 주지 않게 격리했습니다.",
+      outcomes: ["채팅 저장 완료", "AI 장애가 다른 메시지 처리를 막지 않음"],
+      steps: [
+        { chapter: "kafka-ai", scenario: "normal", step: "commit" },
+        { chapter: "kafka-ai", scenario: "normal", step: "publish" },
+        { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "retries" },
+        { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "dlt" }
+      ] },
+    { id: "multi-instance", title: "다중 서버 채팅",
+      problem: "사용자가 서로 다른 서버 인스턴스에 연결되어 있다면 메시지가 전달될까?",
+      solution: "Redis Pub/Sub으로 서버 간 신호를 전파해, 접속한 인스턴스와 무관하게 메시지를 전달합니다.",
+      outcomes: ["다중 인스턴스 메시지 전달 확인", "STOMP 세션 경계 극복"],
+      steps: [
+        { chapter: "redis", scenario: "local-two-instance-normal", step: "save" },
+        { chapter: "redis", scenario: "local-two-instance-normal", step: "broadcast" },
+        { chapter: "redis", scenario: "local-two-instance-normal", step: "fanout" }
+      ] }
+  ],
+  infra: [
+    { id: "infra-api", title: "일반 API",
+      problem: "일반 API 요청은 실제로 어떤 인프라를 지나갈까?",
+      solution: "Route 53 → ALB → 활성 Target Group → App EC2 → RDS 순서로 지나갑니다.",
+      outcomes: ["실제 AWS Blue-Green 구성", "Auto Scaling은 아직 없음(#191)"], steps: infraSteps.api },
+    { id: "infra-chat", title: "채팅",
+      problem: "채팅 메시지는 서버가 달라도 전달될까?",
+      solution: "Redis Pub/Sub으로 App EC2 간 신호를 전파해, 다른 서버에 접속한 사용자에게도 전달됩니다.",
+      outcomes: ["다중 인스턴스 전달 확인(#169)", "STOMP 세션 경계 극복"], steps: infraSteps.chat },
+    { id: "infra-moderation", title: "AI 검수",
+      problem: "AI 검수 요청은 어떤 인프라를 지나갈까?",
+      solution: "App EC2가 전용 Kafka EC2로 발행하면, AI Consumer가 소비해 외부 LLM을 호출합니다.",
+      outcomes: ["Kafka 전용 EC2(단일 KRaft broker)", "외부 LLM(OpenAI) 호출"], steps: infraSteps.moderation },
+    { id: "infra-deploy", title: "배포",
+      problem: "새 버전은 어떻게 배포될까?",
+      solution: "GitHub Actions가 ECR에 이미지를 올리고, SSM Run Command로 비활성 색 EC2에 배포한 뒤 헬스체크 통과 시 ALB 가중치를 전환합니다.",
+      outcomes: ["무중단 Blue-Green 배포", "SSH 없이 SSM으로 배포"], steps: infraSteps.deploy }
+  ]
+};
+function currentShowcaseTabScenarios() { return SHOWCASE_SCENARIOS_BY_TAB[state.showcaseTab]; }
+function currentShowcase() { return currentShowcaseTabScenarios()[state.showcaseScenario]; }
+/* steps 배열의 각 항목은 {chapter,scenario,step} 참조이거나(기존 Chapter 재사용), 이미 완성된 step()
+   객체 그 자체다(Ch0 전용 신규 데이터) — 둘 다 findStep() 호출 없이도 같은 모양이 되도록 통일한다. */
+function resolveShowcaseSteps(scenario) {
+  return scenario.steps.map((item) => item.chapter ? findStep(item.chapter, item.scenario, item.step) : item);
+}
 function chapterIndexById(id) { return chapters.findIndex((item) => item.id === id); }
 function scenarioIndexById(chapterIdx, scenarioId) { return chapters[chapterIdx].scenarios.findIndex((item) => item.id === scenarioId); }
-function renderShowcaseTabs() {
-  $("showcaseTabs").innerHTML = SHOWCASE_SCENARIOS.map((scenario, i) =>
+function renderShowcaseMainTabs() {
+  $("showcaseMainTabs").innerHTML = SHOWCASE_TABS.map((tab) =>
+    `<button type="button" class="${tab.id === state.showcaseTab ? "active" : ""}" data-tab="${tab.id}">${tab.label}</button>`).join("");
+  $("showcaseTabQuestion").textContent = SHOWCASE_TABS.find((tab) => tab.id === state.showcaseTab).question;
+}
+function renderShowcaseScenarioPicker() {
+  $("showcaseTabs").innerHTML = currentShowcaseTabScenarios().map((scenario, i) =>
     `<button type="button" class="${i === state.showcaseScenario ? "active" : ""}" data-idx="${i}">${scenario.title}</button>`).join("");
 }
 /* renderCanvas(data)를 그대로 재사용한다 — 실제 step 객체를 넘기므로 active/dim 강조, token 이동,
    region 배경까지 일반 Chapter와 완전히 같은 렌더러로 그려진다. */
 function renderShowcaseStep() {
   const scenario = currentShowcase();
-  const ref = scenario.steps[state.showcaseStep];
-  const data = findStep(ref.chapter, ref.scenario, ref.step);
-  renderShowcaseTabs();
+  const steps = resolveShowcaseSteps(scenario);
+  const data = steps[state.showcaseStep];
+  renderShowcaseMainTabs();
+  renderShowcaseScenarioPicker();
   $("showcaseScenarioTitle").textContent = scenario.title;
   $("showcaseProblem").textContent = scenario.problem;
   $("showcaseSolution").textContent = scenario.solution;
   renderCanvas(data);
-  $("showcaseStepCounter").textContent = `Step ${state.showcaseStep + 1} / ${scenario.steps.length}`;
+  $("showcaseStepCounter").textContent = `Step ${state.showcaseStep + 1} / ${steps.length}`;
   $("showcaseOutcomes").innerHTML = scenario.outcomes.map((text) => `<span class="showcase-outcome">${text} ✓</span>`).join("");
+  /* 서비스 흐름/인프라 흐름과 결제 후속 처리는 Ch0 전용 신규 데이터라 연결할 기존 상세 Chapter가 없다 —
+     그 경우에만 "상세 문서로" 링크를 감춘다. */
+  $("showcaseBackToDocs").hidden = !scenario.steps[0].chapter;
 }
 let showcaseTimer = null, showcaseHoldTimeout = null, showcaseStartTimeout = null, showcasePlaying = true;
 function stopShowcaseTimers() { clearInterval(showcaseTimer); showcaseTimer = null; clearTimeout(showcaseHoldTimeout); clearTimeout(showcaseStartTimeout); }
@@ -451,6 +521,11 @@ function pauseShowcaseAuto() { showcasePlaying = false; $("showcaseAutoPlay").te
 function restartShowcaseAutoplay() { stopShowcaseTimers(); showcaseStartTimeout = setTimeout(playShowcaseAuto, 700); }
 function switchShowcaseScenario(idx) {
   state.showcaseScenario = idx; state.showcaseStep = 0;
+  renderShowcaseStep();
+  restartShowcaseAutoplay();
+}
+function switchShowcaseTab(tabId) {
+  state.showcaseTab = tabId; state.showcaseScenario = 0; state.showcaseStep = 0;
   renderShowcaseStep();
   restartShowcaseAutoplay();
 }
@@ -483,6 +558,10 @@ function setCaptureMode(on) {
   if (on) url.searchParams.set("capture", "true"); else url.searchParams.delete("capture");
   history.replaceState(null, "", url);
 }
+$("showcaseMainTabs").onclick = (event) => {
+  const button = event.target.closest("button[data-tab]"); if (!button) return;
+  switchShowcaseTab(button.dataset.tab);
+};
 $("showcaseTabs").onclick = (event) => {
   const button = event.target.closest("button[data-idx]"); if (!button) return;
   switchShowcaseScenario(Number(button.dataset.idx));
@@ -492,6 +571,7 @@ $("showcaseReplay").onclick = () => { stopShowcaseTimers(); state.showcaseStep =
 $("showcaseCapture").onclick = () => setCaptureMode(!document.body.classList.contains("capture-mode"));
 $("showcaseBackToDocs").onclick = () => {
   const ref = currentShowcase().steps[0];
+  if (!ref.chapter) return;
   const chapterIdx = chapterIndexById(ref.chapter);
   exitShowcaseMode(chapterIdx, scenarioIndexById(chapterIdx, ref.scenario));
 };
@@ -527,11 +607,19 @@ document.addEventListener("keydown", (event) => {
   else if (event.code === "Space" || event.key === " ") { event.preventDefault(); togglePlay(); }
 });
 syncTopbarHeightVar();
-/* README GIF 재촬영·발표 직전 특정 Scenario 바로 열기용 — /flow-lab/...?chapter=showcase&scenario=ai-failure&capture=true */
+/* README GIF 재촬영·발표 직전 특정 Scenario 바로 열기용 — /flow-lab/...?chapter=showcase&scenario=ai-failure&capture=true
+   scenario id는 3개 탭에 걸쳐 찾는다(탭까지 함께 지정할 필요 없이 scenario id만으로 진입). */
+function findShowcaseLocation(scenarioId) {
+  for (const tab of SHOWCASE_TABS) {
+    const idx = SHOWCASE_SCENARIOS_BY_TAB[tab.id].findIndex((item) => item.id === scenarioId);
+    if (idx >= 0) return { tab: tab.id, idx };
+  }
+  return null;
+}
 const startupParams = new URLSearchParams(location.search);
 if (startupParams.get("chapter") === "showcase") {
-  const scenarioIdx = SHOWCASE_SCENARIOS.findIndex((item) => item.id === startupParams.get("scenario"));
-  if (scenarioIdx >= 0) state.showcaseScenario = scenarioIdx;
+  const found = findShowcaseLocation(startupParams.get("scenario"));
+  if (found) { state.showcaseTab = found.tab; state.showcaseScenario = found.idx; }
   enterShowcaseMode();
   if (startupParams.get("capture") === "true") setCaptureMode(true);
 } else {

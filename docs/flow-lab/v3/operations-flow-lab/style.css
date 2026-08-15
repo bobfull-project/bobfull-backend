@@ -275,8 +275,15 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
    Step 데이터는 renderCanvas()/findStep()을 그대로 재사용하고, 여기서는 배치만 새로 짠다. */
 .showcase{display:flex;flex-direction:column;gap:10px;min-height:calc(100vh - var(--topbar-h, 56px) - 24px);padding:14px 0 10px;box-sizing:border-box}
 .showcase[hidden]{display:none}
-.showcase-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.showcase-brand{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.showcase-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.showcase-brand{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+/* 최상위 3개 관점(서비스/핵심 시스템/인프라) 탭 — 그 안의 Scenario 선택(.showcase-tabs)보다 한 단계
+   위 위계이므로 accent를 더 진하게 줘서 구분한다. */
+.showcase-main-tabs{overflow-x:visible;flex-wrap:wrap;padding-bottom:0}
+.showcase-main-tabs button{font-weight:700}
+.showcase-main-tabs button.active{background:var(--accent);border-color:var(--accent);color:#1c1006}
+.showcase-tab-question{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.showcase-subheader{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line)}
 .showcase-scenario-title{margin:0;font-size:clamp(19px,2.4vw,26px);font-weight:700}
 .showcase-tabs{overflow-x:visible;flex-wrap:wrap;padding-bottom:0}
 .showcase-actions{display:flex;gap:8px;align-self:center}
@@ -298,6 +305,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
    Scenario 제목·문제/해결·도표·현재 상태·Step 진행·결과는 그대로 남긴다. */
 body.capture-mode .topbar{display:none}
 body.capture-mode .scenario-select{display:none}
+body.capture-mode .showcase-main-tabs{display:none}
 body.capture-mode .showcase-tabs{display:none}
 body.capture-mode .showcase-actions{display:none}
 body.capture-mode .showcase-controls-buttons{display:none}
@@ -313,6 +321,7 @@ body.capture-mode .showcase{min-height:100vh}
   .chapter-origin-wrap{flex:none;padding-left:0;border-left:none;padding-top:10px;border-top:1px solid var(--line)}
   .showcase-topbar{flex-direction:column;align-items:stretch}
   .showcase-actions{align-self:flex-start}
+  .showcase-subheader{flex-direction:column;align-items:stretch}
 }
 @media(max-width:520px){
   main{padding:16px}

@@ -89,6 +89,212 @@ const moderationTopology = {
     "splitRule-bypass": [820, 305], "splitRule-llm": [610, 395], "dbcontext-llm-experimental": [610, 335],
     "llm-validator": [500, 450], "validator-db": [500, 540] }
 };
+/* ===== Ch0 Showcase 전용 topology/step — 기존 Ch1~6 chapters[]는 건드리지 않는다. ===== */
+/* 결제 확정 후속 처리(핵심 시스템 흐름 탭). PaymentCompletionTransactionService.complete →
+   ReservationConfirmationService.confirm(MANDATORY, 같은 트랜잭션) → ChatRoom/Email은 Outbox로 분리.
+   실제 코드 기준(ADR 0008): ChatRoom 저장 실패가 이미 끝난 결제·예약을 롤백시키지 않기 위해서다. */
+const paymentFollowupTopology = {
+  viewBox: "0 0 860 370",
+  nodes: [["payment", "Payment"], ["reservation", "Reservation"], ["participant", "Participant"], ["commit", "COMMIT"],
+    ["chatroom", "ChatRoom"], ["email", "Email"]],
+  nodePositions: { payment: [20, 150], reservation: [180, 150], participant: [340, 150], commit: [500, 150],
+    chatroom: [700, 40], email: [700, 260] },
+  edges: {
+    "payment-reservation": "M120 185 H180", "reservation-participant": "M280 185 H340", "participant-commit": "M440 185 H500",
+    "commit-chatroom": "M600 175 H650 V75 H700", "commit-email": "M600 195 H650 V295 H700"
+  },
+  labels: { "payment-reservation": [125, 175], "reservation-participant": [285, 175], "participant-commit": [445, 175],
+    "commit-chatroom": [610, 110], "commit-email": [610, 260] },
+  regions: [
+    { label: "핵심 거래 — 같은 트랜잭션", x: 5, y: 135, w: 610, h: 100 },
+    { label: "후속 기능 — Outbox, 별도 트랜잭션", x: 685, y: 25, w: 130, h: 320 }
+  ]
+};
+const paymentFollowupSteps = [
+  step("payment-success", "PortOne", "Payment", "● 결제가 성공했어요", "사용자가 결제를 마쳤고, PortOne 외부 결제 검증까지 확인됐습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment"], [], "request", null, "core"),
+      nextAction: "예약 확정하기", evidenceReferences: [evidence.chatroom] }),
+  step("reservation-confirm", "ReservationConfirmationService", "Reservation", "◆ 예약이 확정돼요", "새로 만드는 예약이면 Reservation을 새로 만들고, 참여(JOIN)라면 이미 있는 예약을 그대로 잠그고 사용합니다 — 같은 트랜잭션 안에서 처리됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation"], ["payment-reservation"], "event", null, "core", ["payment"]),
+      nextAction: "참여자 확정하기", evidenceReferences: [evidence.chatroom] }),
+  step("participant-confirm", "ReservationConfirmationService", "Participant", "◆ 참여자가 확정돼요", "결제한 사람의 참여 정보(인원수 포함)가 새로 저장됩니다 — CREATE든 JOIN이든 항상 새로 만들어집니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant"], ["payment-reservation", "reservation-participant"], "event", null, "core", ["payment", "reservation"]),
+      nextAction: "핵심 거래 확정하기", evidenceReferences: [evidence.chatroom] }),
+  step("core-commit", "Application", "COMMIT", "✓ 핵심 거래 완료", "결제·예약·참여자 정보가 하나의 트랜잭션으로 확정됩니다. 채팅방과 이메일은 아직 만들지 않았습니다 — 여기서 실패해도 결제·예약은 그대로 유지됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant", "commit"], ["payment-reservation", "reservation-participant", "participant-commit"], "commit", "committed", "core"),
+      statusChecklist: [["결제", "done"], ["예약", "done"], ["참여자", "done"]],
+      decisionBadge: "핵심 거래와 후속 기능의 실패 범위를 분리",
+      evidenceReferences: [evidence.chatroom] }),
+  step("chatroom-followup", "Outbox Processor", "ChatRoom", "◆ 채팅방은 후속 처리로 넘어가요", "핵심 거래가 끝난 뒤, 별도 트랜잭션의 Outbox Processor가 채팅방을 만듭니다. 채팅방 생성이 실패해도 이미 끝난 결제·예약은 되돌아가지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["commit", "chatroom"], ["commit-chatroom"], "event", null, "core", ["payment", "reservation", "participant"]),
+      codeReferences: ["ReservationConfirmationService.confirm", "OutboxEventType.CHAT_ROOM_CREATION_REQUESTED", "ChatRoomOutboxProcessor.signal"],
+      limits: "ADR 0008: \"ChatRoom 저장 실패가 Payment·Reservation을 롤백시킨다\"는 이유로 핵심 트랜잭션 안에서의 처리를 명시적으로 제외했다. Kafka/RabbitMQ도 \"단일 후속 처리에는 과도하다\"고 기각됐다.",
+      evidenceReferences: [evidence.chatroom] }),
+  step("email-followup", "Email Outbox Processor", "Email", "◆ 이메일도 같은 방식으로 처리돼요", "이메일도 같은 트랜잭션에 발송 의도를 남긴 뒤, 전용 Executor가 비동기로 발송을 처리합니다 — 채팅방과 같은 Transactional Outbox 패턴입니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["commit", "email"], ["commit-email"], "event", null, "core", ["payment", "reservation", "participant", "chatroom"]),
+      codeReferences: ["EmailOutboxEventService.enqueue", "EmailOutboxSignalDispatcher.dispatch"],
+      limits: "ChatRoom과 유일하게 다른 점: 커밋 스레드가 직접 신호를 처리하지 않고 전용 Executor로 넘긴다는 것뿐이다 — 5초 주기 Scheduler가 안전망인 것은 동일하다.",
+      evidenceReferences: [evidence.email] }),
+  step("all-complete", "Human 판단", "전체 완료", "✓ 핵심 거래는 그대로, 후속 기능은 각자 안전하게", "결제·예약·참여자는 즉시 확정되고, 채팅방·이메일은 실패해도 핵심 거래에 영향을 주지 않으면서 각자 안전하게 다시 시도할 수 있습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant", "commit", "chatroom", "email"], ["payment-reservation", "reservation-participant", "participant-commit", "commit-chatroom", "commit-email"], "commit", "completed", "core"),
+      decisionBadge: "핵심 거래 ✓ · 채팅방 ✓ · 이메일 ✓",
+      evidenceReferences: [evidence.chatroom, evidence.email] })
+];
+
+/* 서비스 흐름 탭(BobFull은 어떤 서비스인가) — 일반 사용자/사장님/자동 관리 3개 여정을 같은 가로 chain
+   레이아웃으로 그린다. 기술 세부(코드/Evidence)가 아니라 사용자에게 보이는 서비스 경험이므로
+   factStatus는 design interpretation으로 통일한다. */
+function journeyTopology(nodeList) {
+  const gap = 150, y = 40, boxW = 100, boxH = 70;
+  const nodePositions = {}; const edges = {}; const labels = {};
+  nodeList.forEach(([id], i) => { nodePositions[id] = [20 + i * gap, y]; });
+  for (let i = 0; i < nodeList.length - 1; i++) {
+    const edgeId = `${nodeList[i][0]}-${nodeList[i + 1][0]}`;
+    const fromX = 20 + i * gap + boxW, toX = 20 + (i + 1) * gap;
+    edges[edgeId] = `M${fromX} ${y + boxH / 2} H${toX}`;
+    labels[edgeId] = [Math.round((fromX + toX) / 2 - 20), y - 12];
+  }
+  const viewBoxWidth = 20 + (nodeList.length - 1) * gap + boxW + 20;
+  return { viewBox: `0 0 ${viewBoxWidth} ${y + boxH + 40}`, nodes: nodeList, nodePositions, edges, labels };
+}
+const serviceUserTopology = journeyTopology([
+  ["explore", "탐색"], ["round", "회차 선택"], ["pay", "인원/결제"], ["status", "예약 확인"],
+  ["chat", "참여자 채팅"], ["dine", "함께 식사"], ["done", "이용 완료"]
+]);
+const serviceUserSteps = [
+  step("explore", "일반 사용자", "탐색", "● 식당·합석을 탐색해요", "BobFull에서 함께 식사할 식당과 합석 자리를 둘러봅니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["explore"], [], "request", null, "core") }),
+  step("round", "일반 사용자", "회차 선택", "◆ 원하는 회차를 골라요", "식당별로 열려 있는 회차(시간대) 중 참여하고 싶은 회차를 선택합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["explore", "round"], ["explore-round"], "event", null, "core", ["explore"]) }),
+  step("pay", "일반 사용자", "인원/결제", "◆ 인원을 정하고 결제해요", "함께할 인원 수를 정하고 결제를 진행합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["round", "pay"], ["round-pay"], "event", null, "core", ["explore", "round"]) }),
+  step("status", "일반 사용자", "예약 확인", "◆ 예약 상태를 확인해요", "성사 기준 충족 여부 등 예약 상태를 확인할 수 있습니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["pay", "status"], ["pay-status"], "event", null, "core", ["explore", "round", "pay"]) }),
+  step("chat", "일반 사용자", "참여자 채팅", "◆ 참여자와 채팅해요", "예약이 확정되면 함께 식사할 참여자들과 채팅방에서 미리 대화할 수 있습니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["status", "chat"], ["status-chat"], "event", null, "core", ["explore", "round", "pay", "status"]) }),
+  step("dine", "일반 사용자", "함께 식사", "◆ 함께 식사해요", "약속된 시간에 만나 함께 식사합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["chat", "dine"], ["chat-dine"], "event", null, "core", ["explore", "round", "pay", "status", "chat"]) }),
+  step("done", "일반 사용자", "이용 완료", "✓ 이용이 완료돼요", "식사가 끝나면 이번 예약 이용이 완료됩니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-user", visual: visual(["explore", "round", "pay", "status", "chat", "dine", "done"], ["explore-round", "round-pay", "pay-status", "status-chat", "chat-dine", "dine-done"], "commit", "completed", "core") })
+];
+const serviceOwnerTopology = journeyTopology([
+  ["register", "식당 등록"], ["setup", "테이블·회차 설정"], ["check", "예약 현황 확인"],
+  ["payout", "지급 예정 조회"], ["operate", "식사 운영"], ["noshow", "노쇼 관리"]
+]);
+const serviceOwnerSteps = [
+  step("register", "사장님", "식당 등록", "● 식당을 등록해요", "사장님이 BobFull에 식당 정보를 등록합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["register"], [], "request", null, "core") }),
+  step("setup", "사장님", "테이블·회차 설정", "◆ 테이블과 회차를 설정해요", "합석 가능한 테이블과 예약을 받을 회차(시간대)를 설정합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["register", "setup"], ["register-setup"], "event", null, "core", ["register"]) }),
+  step("check", "사장님", "예약 현황 확인", "◆ 예약 현황을 확인해요", "회차별로 얼마나 예약이 찼는지 현황을 확인합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["setup", "check"], ["setup-check"], "event", null, "core", ["register", "setup"]) }),
+  step("payout", "사장님", "지급 예정 조회", "◆ 지급 예정 금액을 조회해요", "확정된 예약에 대한 정산·지급 예정 금액을 조회합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["check", "payout"], ["check-payout"], "event", null, "core", ["register", "setup", "check"]) }),
+  step("operate", "사장님", "식사 운영", "◆ 식사를 운영해요", "예약된 시간에 맞춰 식사 자리를 운영합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["payout", "operate"], ["payout-operate"], "event", null, "core", ["register", "setup", "check", "payout"]) }),
+  step("noshow", "사장님", "노쇼 관리", "✓ 노쇼를 관리해요", "나타나지 않은 참여자(노쇼)를 확인하고 관리합니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-owner", visual: visual(["register", "setup", "check", "payout", "operate", "noshow"], ["register-setup", "setup-check", "check-payout", "payout-operate", "operate-noshow"], "commit", "completed", "core") })
+];
+const serviceAutoTopology = journeyTopology([
+  ["paid", "결제 완료"], ["accumulate", "참여 인원 누적"], ["confirm", "예약 확정"],
+  ["close", "모집 마감"], ["dine-end", "식사 종료"], ["complete", "예약 완료"]
+]);
+const serviceAutoSteps = [
+  step("paid", "BobFull 자동 관리", "결제 완료", "● 결제가 완료돼요", "참여자가 결제를 완료하면 자동 관리가 시작됩니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["paid"], [], "request", null, "core") }),
+  step("accumulate", "BobFull 자동 관리", "참여 인원 누적", "◆ 참여 인원이 누적돼요", "결제할 때마다 참여 인원 수가 누적됩니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["paid", "accumulate"], ["paid-accumulate"], "event", null, "core", ["paid"]) }),
+  step("confirm", "BobFull 자동 관리", "예약 확정", "◆ 성사 기준 충족 시 예약이 확정돼요", "성사에 필요한 인원 기준을 채우면 예약이 자동으로 확정됩니다. 기준 미달 시에는 취소·환불로 이어집니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["accumulate", "confirm"], ["accumulate-confirm"], "event", null, "core", ["paid", "accumulate"]),
+      nextAction: "기준 미달 시 취소·환불" }),
+  step("close", "BobFull 자동 관리", "모집 마감", "◆ 모집이 마감돼요", "회차 시작 시각이 되면 모집이 마감됩니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["confirm", "close"], ["confirm-close"], "event", null, "core", ["paid", "accumulate", "confirm"]) }),
+  step("dine-end", "BobFull 자동 관리", "식사 종료", "◆ 식사가 종료돼요", "예약된 식사 시간이 끝나면 식사 종료로 처리됩니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["close", "dine-end"], ["close-dine-end"], "event", null, "core", ["paid", "accumulate", "confirm", "close"]) }),
+  step("complete", "BobFull 자동 관리", "예약 완료", "✓ 예약이 완료돼요", "식사 종료 뒤 예약 전체가 완료 상태로 정리됩니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "service-auto", visual: visual(["paid", "accumulate", "confirm", "close", "dine-end", "complete"], ["paid-accumulate", "accumulate-confirm", "confirm-close", "close-dine-end", "dine-end-complete"], "commit", "completed", "core") })
+];
+
+/* 인프라 흐름 탭(실제 요청은 어떤 인프라를 지나가는가) — #169/#206 Evidence와 GitHub Actions/scripts/aws
+   기준으로 검증된 실제 구성만 반영한다. CloudFront/S3 프론트엔드는 이 저장소에서 확인되지 않아 제외한다. */
+const infraTopology = {
+  viewBox: "0 0 1180 520",
+  nodes: [["client", "Client"], ["route53", "Route 53"], ["alb", "ALB(HTTPS)"],
+    ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
+    ["ec2Blue1", "EC2 Blue #1"], ["ec2Blue2", "EC2 Blue #2"], ["ec2Green1", "EC2 Green #1"], ["ec2Green2", "EC2 Green #2"],
+    ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"], ["consumer", "AI Consumer"], ["llm", "LLM(OpenAI)"], ["s3", "S3(이미지)"],
+    ["gha", "GitHub Actions"], ["ecr", "ECR"], ["ssm", "SSM Run Command"]],
+  nodePositions: {
+    client: [20, 220], route53: [170, 220], alb: [320, 220],
+    tgBlue: [480, 130], tgGreen: [480, 310],
+    ec2Blue1: [640, 60], ec2Blue2: [640, 160], ec2Green1: [640, 260], ec2Green2: [640, 360],
+    rds: [860, 60], redis: [860, 160], kafka: [860, 260], consumer: [1020, 260], llm: [1020, 360], s3: [860, 360],
+    gha: [320, 420], ecr: [480, 420], ssm: [640, 420]
+  },
+  edges: {
+    "client-route53": "M120 255 H170", "route53-alb": "M270 255 H320",
+    "alb-tgBlue": "M420 245 H460 V165 H480", "alb-tgGreen": "M420 265 H460 V345 H480",
+    "tgBlue-ec2Blue1": "M580 155 H600 V95 H640", "tgBlue-ec2Blue2": "M580 165 H640",
+    "tgGreen-ec2Green1": "M580 335 H600 V295 H640", "tgGreen-ec2Green2": "M580 345 H640",
+    "ec2Blue1-rds": "M740 95 H800 V95 H860", "ec2Blue2-redis": "M740 195 H800 V195 H860", "ec2Green1-kafka": "M740 295 H800 V295 H860", "ec2Blue1-s3": "M740 110 H800 V395 H860",
+    "kafka-consumer": "M960 295 H1020", "consumer-llm": "M1070 330 V360",
+    "gha-ecr": "M420 455 H480", "ecr-ssm": "M580 455 H640", "ssm-ec2Green1": "M690 455 V295 H690"
+  },
+  labels: {
+    "client-route53": [125, 245], "route53-alb": [275, 245],
+    "alb-tgBlue": [430, 190], "alb-tgGreen": [430, 300],
+    "kafka-consumer": [965, 285], "consumer-llm": [1030, 345],
+    "gha-ecr": [425, 445], "ecr-ssm": [585, 445]
+  },
+  regions: [
+    { label: "요청 경로", x: 10, y: 195, w: 440, h: 100 },
+    { label: "App(Blue/Green)", x: 460, y: 10, w: 200, h: 400 },
+    { label: "데이터/AI", x: 840, y: 10, w: 320, h: 400 },
+    { label: "배포 경로", x: 300, y: 395, w: 400, h: 90 }
+  ]
+};
+const infraSteps = {
+  api: [
+    step("api-1", "Client", "Route 53 / ALB", "● 사용자 요청이 들어와요", "일반 API 요청이 Route 53(api.bobfull.click)을 거쳐 ALB(HTTPS)로 들어옵니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb"], ["client-route53", "route53-alb"], "request", null, "core") }),
+    step("api-2", "ALB", "Target Group(활성 색)", "◆ 활성 Target Group으로 전달돼요", "ALB는 현재 활성(Blue 또는 Green) Target Group으로만 요청을 전달합니다 — 지금은 Green이 활성이라고 가정합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgGreen", "ec2Green1", "ec2Green2"], ["alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "event", null, "core", ["client", "route53"]) }),
+    step("api-3", "App EC2", "RDS", "✓ App이 처리하고 DB에 접근해요", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Blue1-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
+        limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 아직 미구현(#191, future).",
+        evidenceReferences: [evidence.appHa] })
+  ],
+  chat: [
+    step("chat-1", "User A", "App EC2 #1", "● 사용자 A가 메시지를 보내요", "User A가 ALB를 거쳐 App EC2 #1에 접속해 메시지를 보냅니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "alb", "tgGreen", "ec2Green1"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1"], "request", null, "core") }),
+    step("chat-2", "App EC2 #1", "ElastiCache Redis", "◆ Redis Pub/Sub으로 신호를 전파해요", "App EC2 #1이 메시지를 저장한 뒤 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "redis"], ["ec2Blue2-redis"], "broadcast", null, "core", ["client", "alb", "tgGreen"]),
+        evidenceReferences: [evidence.appHa, evidence.redis] }),
+    step("chat-3", "ElastiCache Redis", "App EC2 #2", "✓ 다른 서버가 받아서 User B에게 전달해요", "다른 인스턴스(App EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["redis", "ec2Green2"], ["tgGreen-ec2Green2"], "broadcast", "delivered", "core", ["client", "alb", "tgGreen", "ec2Green1"]),
+        decisionBadge: "#169 verified · 실제 다중 EC2 + 공용 ElastiCache 검증",
+        evidenceReferences: [evidence.appHa] })
+  ],
+  moderation: [
+    step("mod-1", "App EC2", "Kafka EC2", "● App이 Kafka로 검수 요청을 보내요", "App EC2가 저장된 메시지를 전용 Kafka EC2(단일 KRaft broker)로 발행합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "kafka"], ["ec2Green1-kafka"], "event", null, "core") }),
+    step("mod-2", "Kafka EC2", "AI Consumer", "◆ Consumer가 가져가 LLM을 호출해요", "AI Consumer가 Kafka에서 메시지를 가져와 외부 LLM(OpenAI)을 호출합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["kafka", "consumer", "llm"], ["kafka-consumer", "consumer-llm"], "event", null, "core", ["ec2Green1"]) }),
+    step("mod-3", "AI Consumer", "RDS", "✓ 판정 결과를 저장해요", "판정 결과를 검증한 뒤 RDS에 저장합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["consumer", "rds"], [], "commit", "completed", "core", ["ec2Green1", "kafka", "llm"]) })
+  ],
+  deploy: [
+    step("deploy-1", "GitHub Actions", "ECR", "● 빌드 후 ECR에 이미지를 올려요", "main에 push되면 GitHub Actions가 빌드한 뒤 OIDC로 인증해 ECR에 이미지를 push합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["gha", "ecr"], ["gha-ecr"], "event", null, "core") }),
+    step("deploy-2", "ECR", "SSM Run Command", "◆ 비활성 색 EC2에 SSM으로 배포해요", "현재 비활성(예: Green) Target Group의 EC2에 SSH 없이 SSM Run Command로 배포 스크립트를 실행합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ecr", "ssm", "ec2Green1"], ["ecr-ssm", "ssm-ec2Green1"], "event", null, "core", ["gha"]) }),
+    step("deploy-3", "ALB", "Target Group 가중치", "✓ 헬스체크 통과 후 트래픽을 전환해요", "비활성 Target Group이 모두 healthy해지면 ALB 리스너 가중치를 0/100 → 100/0으로 전환합니다 — 실패 시 자동으로 이전 가중치로 rollback합니다.",
+      { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "ec2Green2", "tgGreen", "alb"], ["tgGreen-ec2Green1", "tgGreen-ec2Green2", "alb-tgGreen"], "commit", "completed", "core", ["gha", "ecr", "ssm"]),
+        limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 아직 없다(#191).",
+        evidenceReferences: [evidence.appHa] })
+  ]
+};
+
 const stageLabels1 = ["결제·예약 확정", "채팅방 생성 시도", "실패 발생", "최종 결과"];
 
 /* Ch2 PUBLISH_FAILURE / RETRY_EXHAUSTED_DLT step 데이터. */
