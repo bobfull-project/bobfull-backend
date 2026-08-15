@@ -494,17 +494,52 @@ const fullArchitectureNodeDetails = {
   cloudwatch: { role: "애플리케이션 로그 저장 — 메트릭 도구가 아니다(메트릭은 Prometheus/Grafana)", runtime: "awslogs Docker log driver", connectedTo: "Application", network: "—", evidence: "deploy-backend-v1.sh(--log-driver=awslogs)" }
 };
 /* 전체 인프라 구성도 — Node를 아무것도 클릭하지 않은 기본 상태에서 4개 그룹을 순서대로 계속
-   순환 강조한다("가만히 있으면 계속 흐름이 돈다"). Edge는 강조하지 않는다 — Node 테두리만 켠다.
-   목적지 Node만 따로 빛나면 "어디서 왔는지"가 안 보인다는 피드백으로, 사용자가 실제로 거치는
-   Client→Route53→ALB→Application(Blue/Green 4대) 구간도 항상 같이 강조한다 — 모니터링만 예외로
-   Client에서 시작하지 않는다(사용자 요청이 아니라 Application이 스스로 내보내는 지표/로그이므로). */
-const archEntryToApp = ["users", "route53", "alb", "tgBlue", "tgGreen", "blue1", "blue2", "green1", "green2"];
-const archFlowGroups = [
-  { id: "restaurant", label: "① 사장님 식당 등록", nodes: [...archEntryToApp, "s3", "lambda"] },
-  { id: "reservation", label: "② 예약·결제·채팅방·이메일", nodes: [...archEntryToApp, "rds", "redis", "smtp", "portone"] },
-  { id: "chat-ai", label: "③ 채팅 AI 분석", nodes: [...archEntryToApp, "kafka", "openai"] },
-  { id: "monitoring", label: "④ 모니터링·알람", nodes: ["blue1", "blue2", "green1", "green2", "prometheus", "grafana", "slack", "cloudwatch"] }
+   순환 재생한다("가만히 있으면 계속 흐름이 돈다"). 처음엔 그룹의 Node 전부를 한 번에 켰는데,
+   "화살표가 순서대로 흘러야 한다"는 피드백으로 각 그룹을 실제 topology edge를 따라 이동하는
+   순차 애니메이션으로 바꿨다 — `path` 배열의 각 항목이 [edge id 또는 null, node id 또는 null]이며
+   렌더러가 한 항목씩 순서대로 재생한다(edge가 있으면 화살표 토큰이 그 edge를 타고 이동, node가
+   있으면 도착한 순간 그 Node가 켜진다). 이미 지나간 edge/node는 committed(초록, 기존 Scenario Map과
+   같은 관례)로 남고, 아직 도달 못한 edge는 dim으로 흐리게 둔다 — Node 클릭 시 단일 Node만 테두리
+   켜는 기존 동작과는 별개다(그건 여전히 Edge 강조 없음). 모니터링만 예외로 Client에서 시작하지
+   않는다(사용자 요청이 아니라 Application이 스스로 내보내는 지표/로그이므로). */
+const archPathClientToApp = [
+  { node: "users" },
+  { edge: "users-route53", node: "route53" },
+  { edge: "route53-alb", node: "alb" },
+  { edge: "alb-tgGreen", node: "tgGreen" },
+  { edge: "tgGreen-green1", node: "green1" }
 ];
+const archFlowGroups = [
+  { id: "restaurant", label: "① 사장님 식당 등록", path: [
+    ...archPathClientToApp,
+    { edge: "green1-pool" },
+    { edge: "pool-s3", node: "s3" },
+    { edge: "s3-lambda", node: "lambda" }
+  ] },
+  { id: "reservation", label: "② 예약·결제·채팅방·이메일", path: [
+    ...archPathClientToApp,
+    { edge: "green1-pool" },
+    { edge: "pool-rds", node: "rds" },
+    { edge: "pool-redis", node: "redis" },
+    { edge: "pool-smtp", node: "smtp" },
+    { edge: "pool-portone", node: "portone" }
+  ] },
+  { id: "chat-ai", label: "③ 채팅 AI 분석", path: [
+    ...archPathClientToApp,
+    { edge: "green1-pool" },
+    { edge: "pool-kafka", node: "kafka" },
+    { edge: "pool-openai", node: "openai" }
+  ] },
+  { id: "monitoring", label: "④ 모니터링·알람", path: [
+    { node: "green1" },
+    { edge: "green1-pool" },
+    { edge: "pool-prometheus", node: "prometheus" },
+    { edge: "prometheus-grafana", node: "grafana" },
+    { edge: "grafana-slack", node: "slack" },
+    { edge: "pool-cloudwatch", node: "cloudwatch" }
+  ] }
+];
+archFlowGroups.forEach((group) => { group.nodes = [...new Set(group.path.map((step) => step.node).filter(Boolean))]; });
 
 /* 핵심 시스템 흐름 탭 > "AI 채팅 검수" 전용 topology/step.
    기존에는 {chapter,scenario,step} 참조로 실제 Ch2(kafka-ai)·Ch6(ai-moderation) Step을 그대로

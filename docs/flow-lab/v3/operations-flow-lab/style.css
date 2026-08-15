@@ -89,6 +89,9 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .connector{fill:none;stroke:var(--line);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .connector.dim{opacity:.4}
 .connector.active{stroke:var(--accent);opacity:1}
+/* 전체 인프라 구성도의 순차 흐름 애니메이션 전용 — 화살표가 이미 지나간 edge는 Node의 committed
+   상태(초록)와 같은 색으로 남겨 "여기까지 왔다"를 보여준다. */
+.connector.committed{stroke:var(--success);opacity:.7}
 /* dashedEdges(opt-in) — Scheduler 재시도 같은 보조 경로는 active여도 점선으로, 메인 흐름과 구분한다. */
 .connector.retry-dashed{stroke-dasharray:5 4}
 .canvas-node rect{fill:var(--panel);stroke:var(--line);stroke-width:2}
