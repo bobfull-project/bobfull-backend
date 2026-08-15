@@ -121,31 +121,31 @@ const paymentFollowupTopology = {
     "commit-chatroom": [610, 110], "commit-emailExecutor": [610, 260] }
 };
 const paymentFollowupSteps = [
-  step("payment-success", "PortOne", "Payment", "● 결제가 성공했어요", "사용자가 결제를 마쳤고, PortOne 외부 결제 검증까지 확인됐습니다.",
+  step("payment-success", "PortOne", "Payment", "● PortOne 외부 결제 검증을 통과해 결제가 완료됩니다", "사용자가 결제를 마쳤고, PortOne 외부 결제 검증까지 확인됐습니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment"], [], "request", null, "core"),
       nextAction: "예약 확정하기", evidenceReferences: [evidence.chatroom] }),
-  step("reservation-confirm", "ReservationConfirmationService", "Reservation", "◆ 예약이 확정돼요", "새로 만드는 예약이면 Reservation을 새로 만들고, 참여(JOIN)라면 이미 있는 예약을 그대로 잠그고 사용합니다 — 같은 트랜잭션 안에서 처리됩니다.",
+  step("reservation-confirm", "ReservationConfirmationService", "Reservation", "◆ ReservationConfirmationService가 예약을 새로 만들거나 참여자로 등록합니다", "새로 만드는 예약이면 Reservation을 새로 만들고, 참여(JOIN)라면 이미 있는 예약을 그대로 잠그고 사용합니다 — 같은 트랜잭션 안에서 처리됩니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation"], ["payment-reservation"], "event", null, "core", ["payment"]),
       nextAction: "참여자 확정하기", evidenceReferences: [evidence.chatroom] }),
-  step("participant-confirm", "ReservationConfirmationService", "Participant", "◆ 참여자가 확정돼요", "결제한 사람의 참여 정보(인원수 포함)가 새로 저장됩니다 — CREATE든 JOIN이든 항상 새로 만들어집니다.",
+  step("participant-confirm", "ReservationConfirmationService", "Participant", "◆ 결제한 사용자의 참여자 정보를 새로 저장합니다", "결제한 사람의 참여 정보(인원수 포함)가 새로 저장됩니다 — CREATE든 JOIN이든 항상 새로 만들어집니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant"], ["payment-reservation", "reservation-participant"], "event", null, "core", ["payment", "reservation"]),
       nextAction: "핵심 거래 확정하기", evidenceReferences: [evidence.chatroom] }),
-  step("core-commit", "Application", "COMMIT", "✓ 핵심 거래 완료", "결제·예약·참여자 정보가 하나의 트랜잭션으로 확정됩니다. 채팅방과 이메일은 아직 만들지 않았습니다 — 여기서 실패해도 결제·예약은 그대로 유지됩니다.",
+  step("core-commit", "Application", "COMMIT", "✓ 결제·예약·참여자 저장을 모두 확정한 뒤 핵심 Transaction을 Commit합니다", "결제·예약·참여자 정보가 하나의 트랜잭션으로 확정됩니다. 채팅방과 이메일은 아직 만들지 않았습니다 — 여기서 실패해도 결제·예약은 그대로 유지됩니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant", "commit"], ["payment-reservation", "reservation-participant", "participant-commit"], "commit", "committed", "core"),
       statusChecklist: [["결제", "done"], ["예약", "done"], ["참여자", "done"]],
       decisionBadge: "핵심 거래와 후속 기능의 실패 범위를 분리",
       evidenceReferences: [evidence.chatroom] }),
-  step("chatroom-followup", "Outbox Processor", "ChatRoom", "◆ 채팅방은 후속 처리로 넘어가요", "핵심 거래가 끝난 뒤, 별도 트랜잭션의 Outbox Processor가 채팅방을 만듭니다. 채팅방 생성이 실패해도 이미 끝난 결제·예약은 되돌아가지 않습니다.",
+  step("chatroom-followup", "Outbox Processor", "ChatRoom", "◆ 커밋 이후 별도 후속 처리에서 Outbox Processor가 ChatRoom 생성을 실행합니다", "핵심 거래가 끝난 뒤, 별도 트랜잭션의 Outbox Processor가 채팅방을 만듭니다. 채팅방 생성이 실패해도 이미 끝난 결제·예약은 되돌아가지 않습니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["commit", "chatroom"], ["commit-chatroom"], "event", null, "core", ["payment", "reservation", "participant"]),
       codeReferences: ["ReservationConfirmationService.confirm", "OutboxEventType.CHAT_ROOM_CREATION_REQUESTED", "ChatRoomOutboxProcessor.signal"],
       limits: "ADR 0008: \"ChatRoom 저장 실패가 Payment·Reservation을 롤백시킨다\"는 이유로 핵심 트랜잭션 안에서의 처리를 명시적으로 제외했다. Kafka/RabbitMQ도 \"단일 후속 처리에는 과도하다\"고 기각됐다.",
       evidenceReferences: [evidence.chatroom] }),
-  step("email-followup", "Email Outbox Processor", "Email", "◆ 이메일은 전용 Executor를 한 번 더 거쳐요", "이메일도 같은 트랜잭션에 발송 의도를 남기는 것은 채팅방과 같습니다 — 다른 점은 커밋 스레드가 직접 처리하지 않고 전용 Executor로 넘긴 뒤 거기서 발송을 처리한다는 것뿐입니다.",
+  step("email-followup", "Email Outbox Processor", "Email", "◆ 이메일 발송은 핵심 거래와 분리된 후속 작업으로 전용 Executor에서 실행합니다", "이메일도 같은 트랜잭션에 발송 의도를 남기는 것은 채팅방과 같습니다 — 다른 점은 커밋 스레드가 직접 처리하지 않고 전용 Executor로 넘긴 뒤 거기서 발송을 처리한다는 것뿐입니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["commit", "emailExecutor", "email"], ["commit-emailExecutor", "emailExecutor-email"], "event", null, "core", ["payment", "reservation", "participant", "chatroom"]),
       codeReferences: ["EmailOutboxEventService.enqueue", "EmailOutboxSignalDispatcher.dispatch"],
       limits: "ChatRoom과 유일하게 다른 점: 커밋 스레드가 직접 신호를 처리하지 않고 전용 Executor로 넘긴다는 것뿐이다 — 5초 주기 Scheduler가 안전망인 것은 동일하다. Outbox 없는 별도의 Async 경로가 아니다.",
       evidenceReferences: [evidence.email] }),
-  step("all-complete", "Human 판단", "전체 완료", "✓ 핵심 거래는 그대로, 후속 기능은 각자 안전하게", "결제·예약·참여자는 즉시 확정되고, 채팅방·이메일은 실패해도 핵심 거래에 영향을 주지 않으면서 각자 안전하게 다시 시도할 수 있습니다.",
+  step("all-complete", "Human 판단", "전체 완료", "✓ 결제·예약·참여자는 즉시 확정되며 채팅방·이메일은 각자 안전하게 재시도됩니다", "결제·예약·참여자는 즉시 확정되고, 채팅방·이메일은 실패해도 핵심 거래에 영향을 주지 않으면서 각자 안전하게 다시 시도할 수 있습니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant", "commit", "chatroom", "emailExecutor", "email"], ["payment-reservation", "reservation-participant", "participant-commit", "commit-chatroom", "commit-emailExecutor", "emailExecutor-email"], "commit", "completed", "core"),
       decisionBadge: "핵심 거래 ✓ · 채팅방 ✓ · 이메일 ✓",
       evidenceReferences: [evidence.chatroom, evidence.email] })
@@ -279,40 +279,40 @@ const infraTopology = {
 };
 const infraSteps = {
   api: [
-    step("api-1", "Client", "Route 53 / ALB", "● 사용자 요청이 들어와요", "일반 API 요청이 Route 53(api.bobfull.click)을 거쳐 ALB(HTTPS)로 들어옵니다.",
+    step("api-1", "Client", "Route 53 / ALB", "● Route 53이 서비스 도메인 요청을 ALB로 연결합니다", "일반 API 요청이 Route 53(api.bobfull.click)을 거쳐 ALB(HTTPS)로 들어옵니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb"], ["client-route53", "route53-alb"], "request", null, "core") }),
-    step("api-2", "ALB", "Target Group(활성 색)", "◆ 활성 Target Group으로 전달돼요", "ALB는 현재 활성(Blue 또는 Green) Target Group으로만 요청을 전달합니다 — 지금은 Green이 활성이라고 가정합니다.",
+    step("api-2", "ALB", "Target Group(활성 색)", "◆ ALB가 요청을 현재 활성 Target Group으로 전달합니다", "ALB는 현재 활성(Blue 또는 Green) Target Group으로만 요청을 전달합니다 — 지금은 Green이 활성이라고 가정합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["alb", "tgGreen", "ec2Green1", "ec2Green2"], ["alb-tgGreen", "tgGreen-ec2Green1", "tgGreen-ec2Green2"], "event", null, "core", ["client", "route53"]) }),
-    step("api-3", "App EC2", "RDS", "✓ App이 처리하고 DB에 접근해요", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다.",
+    step("api-3", "App EC2", "RDS", "✓ 애플리케이션이 필요한 데이터를 RDS MySQL에서 조회하거나 저장합니다", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Blue1-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
         limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 아직 미구현(#191, future).",
         evidenceReferences: [evidence.appHa] })
   ],
   chat: [
-    step("chat-1", "User A", "App EC2 #1", "● 사용자 A가 메시지를 보내요", "User A가 ALB를 거쳐 App EC2 #1에 접속해 메시지를 보냅니다.",
+    step("chat-1", "User A", "App EC2 #1", "● User A가 ALB를 거쳐 App EC2 #1에 채팅 메시지를 보냅니다", "User A가 ALB를 거쳐 App EC2 #1에 접속해 메시지를 보냅니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "alb", "tgGreen", "ec2Green1"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1"], "request", null, "core") }),
-    step("chat-2", "App EC2 #1", "ElastiCache Redis", "◆ Redis Pub/Sub으로 신호를 전파해요", "App EC2 #1이 메시지를 저장한 뒤 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다.",
+    step("chat-2", "App EC2 #1", "ElastiCache Redis", "◆ 메시지를 받은 애플리케이션 서버가 Redis Pub/Sub 채널에 메시지를 발행합니다", "App EC2 #1이 메시지를 저장한 뒤 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "redis"], ["ec2Blue2-redis"], "broadcast", null, "core", ["client", "alb", "tgGreen"]),
         evidenceReferences: [evidence.appHa, evidence.redis] }),
-    step("chat-3", "ElastiCache Redis", "App EC2 #2", "✓ 다른 서버가 받아서 User B에게 전달해요", "다른 인스턴스(App EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
+    step("chat-3", "ElastiCache Redis", "App EC2 #2", "✓ Redis Pub/Sub이 메시지를 구독 중인 다른 애플리케이션 서버에도 전달합니다", "다른 인스턴스(App EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["redis", "ec2Green2"], ["tgGreen-ec2Green2"], "broadcast", "delivered", "core", ["client", "alb", "tgGreen", "ec2Green1"]),
         decisionBadge: "#169 verified · 실제 다중 EC2 + 공용 ElastiCache 검증",
         evidenceReferences: [evidence.appHa] })
   ],
   moderation: [
-    step("mod-1", "App EC2", "Kafka EC2", "● App이 Kafka로 검수 요청을 보내요", "App EC2가 저장된 메시지를 전용 Kafka EC2(단일 KRaft broker)로 발행합니다.",
+    step("mod-1", "App EC2", "Kafka EC2", "● 애플리케이션이 비동기 AI 검수 메시지를 Kafka에 전달합니다", "App EC2가 저장된 메시지를 전용 Kafka EC2(단일 KRaft broker)로 발행합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "kafka"], ["ec2Green1-kafka"], "event", null, "core") }),
-    step("mod-2", "Kafka EC2", "AI Consumer", "◆ Consumer가 가져가 LLM을 호출해요", "AI Consumer가 Kafka에서 메시지를 가져와 외부 LLM(OpenAI)을 호출합니다.",
+    step("mod-2", "Kafka EC2", "AI Consumer", "◆ AI Consumer가 Kafka에서 메시지를 가져와 외부 LLM을 호출합니다", "AI Consumer가 Kafka에서 메시지를 가져와 외부 LLM(OpenAI)을 호출합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["kafka", "consumer", "llm"], ["kafka-consumer", "consumer-llm"], "event", null, "core", ["ec2Green1"]) }),
-    step("mod-3", "AI Consumer", "RDS", "✓ 판정 결과를 저장해요", "판정 결과를 검증한 뒤 RDS에 저장합니다.",
+    step("mod-3", "AI Consumer", "RDS", "✓ AI Consumer가 판정 결과를 검증한 뒤 RDS에 저장합니다", "판정 결과를 검증한 뒤 RDS에 저장합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["consumer", "rds"], [], "commit", "completed", "core", ["ec2Green1", "kafka", "llm"]) })
   ],
   deploy: [
-    step("deploy-1", "GitHub Actions", "ECR", "● 빌드 후 ECR에 이미지를 올려요", "main에 push되면 GitHub Actions가 빌드한 뒤 OIDC로 인증해 ECR에 이미지를 push합니다.",
+    step("deploy-1", "GitHub Actions", "ECR", "● GitHub Actions가 빌드한 이미지를 ECR에 업로드합니다", "main에 push되면 GitHub Actions가 빌드한 뒤 OIDC로 인증해 ECR에 이미지를 push합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["gha", "ecr"], ["gha-ecr"], "event", null, "core") }),
-    step("deploy-2", "ECR", "SSM Run Command", "◆ 비활성 색 EC2에 SSM으로 배포해요", "현재 비활성(예: Green) Target Group의 EC2에 SSH 없이 SSM Run Command로 배포 스크립트를 실행합니다.",
+    step("deploy-2", "ECR", "SSM Run Command", "◆ SSM Run Command가 비활성 색 EC2에 배포 스크립트를 실행합니다", "현재 비활성(예: Green) Target Group의 EC2에 SSH 없이 SSM Run Command로 배포 스크립트를 실행합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ecr", "ssm", "ec2Green1"], ["ecr-ssm", "ssm-ec2Green1"], "event", null, "core", ["gha"]) }),
-    step("deploy-3", "ALB", "Target Group 가중치", "✓ 헬스체크 통과 후 트래픽을 전환해요", "비활성 Target Group이 모두 healthy해지면 ALB 리스너 가중치를 0/100 → 100/0으로 전환합니다 — 실패 시 자동으로 이전 가중치로 rollback합니다.",
+    step("deploy-3", "ALB", "Target Group 가중치", "✓ ALB가 헬스체크를 통과한 Target Group으로 트래픽 가중치를 전환합니다", "비활성 Target Group이 모두 healthy해지면 ALB 리스너 가중치를 0/100 → 100/0으로 전환합니다 — 실패 시 자동으로 이전 가중치로 rollback합니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "ec2Green2", "tgGreen", "alb"], ["tgGreen-ec2Green1", "tgGreen-ec2Green2", "alb-tgGreen"], "commit", "completed", "core", ["gha", "ecr", "ssm"]),
         limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 아직 없다(#191).",
         evidenceReferences: [evidence.appHa] })
@@ -353,7 +353,7 @@ const aiModerationJourneyTopology = {
     ["client", "Client"], ["web", "Web / STOMP"], ["app", "Application"], ["db", "ChatMessage"],
     ["outbox", "Outbox Event"], ["processor", "Outbox Processor"], ["scheduler", "Scheduler"],
     ["kafka", "Kafka"], ["consumer", "AI Consumer"],
-    ["ai-rule", "Rule Filter"], ["ai-fast", "Fast Path"], ["ai-context", "DB Context"],
+    ["ai-rule", "Rule Filter"], ["ai-fast", "Fast Path"], ["ai-context", "최근 메시지 문맥"],
     ["ai-llm", "LLM"], ["ai-validator", "Validator"], ["ai-modDb", "Moderation DB"]
   ],
   nodePositions: {
@@ -363,7 +363,7 @@ const aiModerationJourneyTopology = {
     "ai-rule": [900, 200], "ai-fast": [1050, 130], "ai-context": [1050, 280],
     "ai-llm": [1200, 280], "ai-validator": [1350, 200], "ai-modDb": [1350, 360]
   },
-  nodeSublabels: { outbox: "PENDING" },
+  nodeSublabels: { outbox: "PENDING", "ai-context": "쪼개 보내기 우회 탐지" },
   secondaryNodes: ["scheduler"],
   dashedEdges: ["scheduler-outbox"],
   edges: {
@@ -383,12 +383,14 @@ const aiModerationJourneyTopology = {
   },
   regions: [
     { label: "핵심 요청", x: 10, y: 175, w: 445, h: 100 },
-    { label: "DB Transaction", x: 480, y: 175, w: 260, h: 100, emphasis: true },
+    /* emphasis 없이 기본(작은) 라벨로 — ChatMessage node 위쪽에 굵은 orange 텍스트가 겹쳐 보이던
+       문제라 크기만 줄였다(위치·node는 그대로). */
+    { label: "DB Transaction", x: 480, y: 175, w: 260, h: 100 },
     { label: "AI 검수 파이프라인", x: 655, y: 10, w: 825, h: 440, emphasis: true }
   ]
 };
 const aiModerationJourneySteps = [
-  step("send", "Client", "ChatMessageCommandService", "● 메시지를 보냈어요", "사용자가 채팅 메시지를 보내면 서버가 저장할 준비를 시작합니다 — 메시지 저장과 Outbox 이벤트 기록을 같은 트랜잭션으로 묶습니다.",
+  step("send", "Client", "ChatMessageCommandService", "● 사용자가 채팅 메시지를 전송합니다", "사용자가 채팅 메시지를 보내면 서버가 저장할 준비를 시작합니다 — 메시지 저장과 Outbox 이벤트 기록을 같은 트랜잭션으로 묶습니다.",
     { transaction: "ChatMessage 저장 + 메시지 생성 이벤트(Outbox)를 한 트랜잭션으로 묶음", factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
       visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "request", null, "core"),
       nextAction: "메시지 저장하기",
@@ -412,18 +414,18 @@ const aiModerationJourneySteps = [
     return response;
 }` , annotations: [{"from": 9, "to": 10, "text": "핵심: 메시지 저장과 'AI 검토 요청' Outbox 기록이 같은 트랜잭션으로 묶인다."}, {"from": 13, "to": 17, "text": "커밋이 끝난 뒤에만 Kafka 발행 신호와 실시간 전파를 실행한다."}]},
       evidenceReferences: [evidence.pipeline] }),
-  step("commit", "Application", "DB Transaction", "✓ 메시지와 Outbox 이벤트를 함께 저장했어요", "ChatMessage 저장과 \"AI 검토해야 함\" Outbox 이벤트 기록이 같은 트랜잭션 안에서 함께 COMMIT됩니다 — Outbox는 DB 밖의 별도 인프라가 아니라 같은 DB 안의 이벤트 행입니다.",
+  step("commit", "Application", "DB Transaction", "✓ ChatMessage와 Outbox 이벤트를 같은 트랜잭션으로 Commit합니다", "ChatMessage 저장과 \"AI 검토해야 함\" Outbox 이벤트 기록이 같은 트랜잭션 안에서 함께 COMMIT됩니다 — Outbox는 DB 밖의 별도 인프라가 아니라 같은 DB 안의 이벤트 행입니다.",
     { domainState: "ChatMessage 확정 저장됨(COMMITTED)", transaction: "확정됨(COMMITTED)", outbox: "대기 중(PENDING)", factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
       nextAction: "Outbox Processor가 가져가기",
       visual: visual(["app", "db", "outbox"], ["persist"], "commit", "committed", "outbox"),
       codeReferences: ["ChatMessageCommandService.send"],
       evidenceReferences: [evidence.pipeline] }),
-  step("processor-claim", "ChatMessageOutboxProcessor", "Outbox Event", "◆ Outbox Processor가 PENDING 이벤트를 가져가요", "PENDING 상태인 Outbox 이벤트를 Outbox Processor가 claim합니다 — 이 순간부터 Kafka 발행을 시도합니다.",
+  step("processor-claim", "ChatMessageOutboxProcessor", "Outbox Event", "◆ Outbox Processor가 PENDING 상태인 이벤트를 claim합니다", "PENDING 상태인 Outbox 이벤트를 Outbox Processor가 claim합니다 — 이 순간부터 Kafka 발행을 시도합니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
       visual: visual(["outbox", "processor"], ["outbox-processor"], "event", null, "outbox", ["client", "web", "app", "db"], null, { "outbox-processor": "PENDING claim" }),
       codeReferences: ["ChatMessageOutboxProcessor.processDueEvents", "OutboxEventRepository.findDueEventIdsByTypes"],
       evidenceReferences: [evidence.pipeline] }),
-  step("processor-kafka", "Outbox Processor", "Kafka", "◆ Kafka에 발행하고 ACK를 받았어요", "Outbox Processor가 Kafka Broker에 발행했고, Broker가 잘 받았다는 응답(ACK)까지 확인해 Outbox 상태를 COMPLETED로 바꿉니다. 발행이 실패하면 이 이벤트는 다시 PENDING으로 돌아가 재시도 대상이 됩니다.",
+  step("processor-kafka", "Outbox Processor", "Kafka", "◆ Outbox Processor가 채팅 메시지 이벤트를 Kafka에 발행합니다", "Outbox Processor가 Kafka Broker에 발행했고, Broker가 잘 받았다는 응답(ACK)까지 확인해 Outbox 상태를 COMPLETED로 바꿉니다. 발행이 실패하면 이 이벤트는 다시 PENDING으로 돌아가 재시도 대상이 됩니다.",
     { domainState: "ChatMessage 확정 저장됨(COMMITTED)", outbox: "처리 중 → 완료", kafka: "발행됨", factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
       visual: visual(["processor", "kafka"], ["processor-kafka"], "event", "acknowledged", "outbox", ["client", "web", "app", "db", "outbox"], null, { "processor-kafka": "Kafka 발행 · COMPLETED" }),
       codeReferences: ["ChatMessageOutboxProcessor.processClaimed"],
@@ -454,13 +456,13 @@ const aiModerationJourneySteps = [
     }
 }` },
       evidenceReferences: [evidence.pipeline] }),
-  step("scheduler-retry", "ChatMessageOutboxScheduler", "Outbox Event", "◆ 실패하면 Scheduler가 다시 처리해요", "즉시 처리가 실패하거나 signal이 유실되면, 5초마다 도는 Scheduler가 PENDING 이벤트를 다시 찾아 처리합니다 — 5분 넘게 멈춰 있던 이벤트도 회수합니다. 이번 재생은 정상 처리 경로라 이 Scheduler는 실제로 개입하지 않았습니다.",
+  step("scheduler-retry", "ChatMessageOutboxScheduler", "Outbox Event", "◆ AI 처리에 실패한 메시지는 설정된 Retry 정책에 따라 다시 처리합니다", "즉시 처리가 실패하거나 signal이 유실되면, 5초마다 도는 Scheduler가 PENDING 이벤트를 다시 찾아 처리합니다 — 5분 넘게 멈춰 있던 이벤트도 회수합니다. 이번 재생은 정상 처리 경로라 이 Scheduler는 실제로 개입하지 않았습니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
       visual: visual(["scheduler", "outbox"], ["scheduler-outbox"], "retry", null, "outbox", ["client", "web", "app", "db", "processor", "kafka"]),
       codeReferences: ["ChatMessageOutboxScheduler.processPendingEvents", "ChatMessageOutboxProcessor.processDueEvents"],
       limits: "5초 주기(outbox.chat-message.fixed-delay, 기본값), 5분 stale threshold(STALE_PROCESSING_THRESHOLD), 최대 재시도 5회(MAX_RETRIES) — 전부 실제 코드 상수/설정값이다. 이번 재생에서 실제로 재시도가 발생하지는 않았다.",
       evidenceReferences: [evidence.pipeline] }),
-  step("consumer-arrival", "Kafka", "AI Consumer", "◆ Kafka → AI Consumer 도착", "Kafka에 발행된 메시지를 AI Consumer가 가져옵니다.",
+  step("consumer-arrival", "Kafka", "AI Consumer", "◆ AI Consumer가 Kafka Topic에서 채팅 메시지 이벤트를 가져옵니다", "Kafka에 발행된 메시지를 AI Consumer가 가져옵니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
       visual: visual(["kafka", "consumer"], ["kafka-consume"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor"]),
       codeReferences: ["ChatModerationConsumer.onChatMessageCreated"],
@@ -486,10 +488,10 @@ public class ChatModerationConsumer {
         }
     }` },
       evidenceReferences: [evidence.pipeline, evidence.moderation] }),
-  step("zoom-focus", "AI Consumer", "내부 판정 로직", "◆ AI Consumer 내부를 확대해서 봅니다", "AI Consumer가 메시지를 받으면 내부적으로 어떤 순서로 판단하는지 확대해서 봅니다 — 명백한 경우는 규칙만으로 즉시 걸러내고, 애매한 경우에만 AI에게 맡기는 구조입니다.",
+  step("zoom-focus", "AI Consumer", "내부 판정 로직", "◆ Kafka에서 메시지를 받은 AI Consumer가 실제 채팅 검수 절차를 시작합니다", "AI Consumer가 메시지를 받으면 내부적으로 어떤 순서로 판단하는지 확대해서 봅니다 — 명백한 경우는 규칙만으로 즉시 걸러내고, 애매한 경우에만 AI에게 맡기는 구조입니다.",
     { factStatus: FACT.DESIGN, topologyKey: "ai-moderation-journey",
       visual: visual(["ai-rule"], ["consumer-rule"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"]) }),
-  step("rule-check", "ModerationRuleFilter", "clearFlagged()", "◆ 규칙만으로 바로 알 수 있어요", "명백한 개인 전화번호+개인 문맥, 정확한 욕설 패턴, 명백한 투자/리딩방/대출 스팸 같은 고신뢰 표현만 이 규칙이 처리한다.",
+  step("rule-check", "ModerationRuleFilter", "clearFlagged()", "◆ Rule Filter가 먼저 욕설·스팸·개인정보의 명확한 패턴과 일치하는지 확인합니다", "명백한 개인 전화번호+개인 문맥, 정확한 욕설 패턴, 명백한 투자/리딩방/대출 스팸 같은 고신뢰 표현만 이 규칙이 처리한다.",
     { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey", visual: visual(["ai-rule"], [], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"]),
       codeReferences: ["ModerationRuleFilter.clearFlagged"],
       codeSnippet: { file: "ModerationRuleFilter.java", method: "ModerationRuleFilter.clearFlagged()", code: `public Optional<ModerationResult> clearFlagged(String content) {
@@ -508,16 +510,16 @@ public class ChatModerationConsumer {
     if (profanity) return flagged(ModerationCategory.PROFANITY, RiskLevel.HIGH);
     return flagged(ModerationCategory.SPAM, RiskLevel.HIGH);
 }` , annotations: [{"from": 11, "to": 13, "text": "핵심: 서로 다른 종류의 신호가 동시에 잡히거나 정확히 하나로 확정되지 않으면 규칙으로 끝내지 않고 AI 판단에 위임한다."}, {"from": 14, "to": 16, "text": "확실한 한 가지에만 해당할 때 AI 호출 없이 즉시 위반으로 확정한다."}]} }),
-  step("rule-hit", "ModerationRuleFilter", "Validator", "✓ AI한테 안 물어보고 바로 판단했어요", "너무 명확한 위반이라 AI(OpenAI)에게 물어보지 않고 바로 판정했다 — AI 호출 0회.",
+  step("rule-hit", "ModerationRuleFilter", "Validator", "✓ 명백한 욕설·스팸·개인정보는 Rule Filter가 즉시 판정해 LLM 호출을 생략합니다", "너무 명확한 위반이라 AI(OpenAI)에게 물어보지 않고 바로 판정했다 — AI 호출 0회.",
     { factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
       visual: visual(["ai-rule", "ai-fast", "ai-validator"], ["rule-fast", "fast-validator"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"], null, { "rule-fast": "확실한 위반" }),
       decisionBadge: "CLEAR_FLAGGED는 있어도 CLEAR_SAFE는 없다",
       codeReferences: ["ModerationRuleFilter.clearFlagged", "ChatModerationService.analyzeMessage"] }),
-  step("rule-miss", "ModerationRuleFilter", "clearFlagged()", "◆ 규칙만으로는 애매해요", "\"바보야\"는 개인정보·정확한 욕설·스팸 유도 고신뢰 패턴 어디에도 매칭되지 않는다 — 그래서 다음 확인 단계로 넘어간다.",
+  step("rule-miss", "ModerationRuleFilter", "clearFlagged()", "◆ 명확한 규칙으로 확정하기 어려운 메시지는 추가 분석 경로로 넘깁니다", "\"바보야\"는 개인정보·정확한 욕설·스팸 유도 고신뢰 패턴 어디에도 매칭되지 않는다 — 그래서 다음 확인 단계로 넘어간다.",
     { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey",
       visual: visual(["ai-rule", "ai-context"], ["rule-context"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"], null, { "rule-context": "애매함" }),
       codeReferences: ["ModerationRuleFilter.clearFlagged"] }),
-  step("prompt-call", "SpringAiModerationAdapter", "OpenAI Provider", "◆ AI에게 판단을 요청했어요", "판단 기준(정책)과 지금 메시지 하나만 AI에게 전달한다 — 이전 대화 전체를 보내지는 않는다.",
+  step("prompt-call", "SpringAiModerationAdapter", "OpenAI Provider", "◆ 규칙으로 확정하지 못한 메시지만 LLM이 의미와 의도를 추가 분석합니다", "판단 기준(정책)과 지금 메시지 하나만 AI에게 전달한다 — 이전 대화 전체를 보내지는 않는다.",
     { factStatus: FACT.DESIGN, topologyKey: "ai-moderation-journey",
       visual: visual(["ai-context", "ai-llm", "ai-validator"], ["context-llm", "llm-validator2"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "ai-rule"]),
       promptBlocks: ["BobFull Moderation Policy v2", "PROFANITY", "PERSONAL_INFORMATION", "SPAM", "Few-shot boundary",
@@ -541,7 +543,7 @@ public AiModerationResponse analyze(String content) {
             usage == null ? null : asLong(usage.getCompletionTokens()),
             usage == null ? null : asLong(usage.getTotalTokens()));
 }` } }),
-  step("persisted", "Validator", "ChatModeration DB", "✓ AI 판단 결과를 저장했어요", "검증을 통과한 결과만 이 메시지 하나에 대한 판정으로 저장된다.",
+  step("persisted", "Validator", "ChatModeration DB", "✓ Validator가 검증한 판정 결과를 카테고리·위험도와 함께 Moderation DB에 저장합니다", "검증을 통과한 결과만 이 메시지 하나에 대한 판정으로 저장된다.",
     { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey",
       visual: visual(["ai-validator", "ai-modDb"], ["validator-modDb"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "ai-rule", "ai-context", "ai-llm"]),
       moderationResult: { provider: "OpenAI", model: "Provider metadata model / configuredModel fallback", promptVersion: "moderation-prompt-v3-short-fragment-boundary",
@@ -562,7 +564,7 @@ public AiModerationResponse analyze(String content) {
         }
     }
 }` } }),
-  step("zoom-out", "AI Consumer", "전체 파이프라인", "✓ AI 검수 완료 — 전체 흐름으로 돌아갑니다", "AI 검수가 끝나면 전체 파이프라인 관점에서 이 메시지의 처리가 모두 끝난 상태로 보입니다.",
+  step("zoom-out", "AI Consumer", "전체 파이프라인", "✓ AI 검수가 끝나 전체 파이프라인 관점에서 처리 완료 상태로 돌아갑니다", "AI 검수가 끝나면 전체 파이프라인 관점에서 이 메시지의 처리가 모두 끝난 상태로 보입니다.",
     { factStatus: FACT.DESIGN, topologyKey: "ai-moderation-journey",
       visual: visual([], [], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "ai-rule", "ai-fast", "ai-context", "ai-llm", "ai-validator", "ai-modDb"]) })
 ];
@@ -841,7 +843,7 @@ const outboxAiSteps = [
     { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
       visual: visual(["outbox"], [], "commit", "completed", "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "kafka"], null, null, { outbox: "COMPLETED" }),
       evidenceReferences: [evidence.pipeline] }),
-  step("consumer-ai", "Kafka Consumer", "AI Moderation", "◆ Consumer가 AI 검수를 시작해요", "ChatModerationConsumer가 별도로 이 이벤트를 소비해 AI 검수를 시작합니다 — 상세 판정 로직(Rule Filter → Fast Path 또는 DB Context → LLM → Validator → Moderation DB)은 AI 채팅 검수(Ch0 Showcase)에서 다룹니다.",
+  step("consumer-ai", "Kafka Consumer", "AI Moderation", "◆ Kafka에서 메시지를 받은 AI Consumer가 채팅 검수를 시작합니다", "ChatModerationConsumer가 별도로 이 이벤트를 소비해 AI 검수를 시작합니다 — 상세 판정 로직(Rule Filter → Fast Path 또는 최근 메시지 문맥 → LLM → Validator → Moderation DB)은 AI 채팅 검수(Ch0 Showcase)에서 다룹니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
       visual: visual(["kafka", "consumer", "aiModeration"], ["kafka-consumer", "consumer-aiModeration"], "event", null, "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "outbox"], null, null, { outbox: "COMPLETED" }),
       codeReferences: ["ChatModerationConsumer.onChatMessageCreated"], evidenceReferences: [evidence.pipeline, evidence.moderation] }),
