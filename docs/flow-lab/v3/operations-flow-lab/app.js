@@ -10,7 +10,9 @@ const currentStep = () => currentScenario().steps[state.step];
 const TOPOLOGY_BY_KEY = {
   moderation: moderationTopology, "payment-followup": paymentFollowupTopology,
   "service-unified": serviceUnifiedTopology, "ai-moderation-journey": aiModerationJourneyTopology,
-  infra: infraTopology
+  infra: infraTopology,
+  "outbox-chatroom": outboxChatroomTopology, "outbox-email": outboxEmailTopology,
+  "outbox-ai": outboxAiTopology, "outbox-comparison": outboxComparisonTopology
 };
 const topologyFor = (data) => TOPOLOGY_BY_KEY[data.topologyKey] || topology;
 function populateSelects() {
@@ -91,8 +93,10 @@ function renderCanvas(data) {
     /* 박스(100 너비, 좌우 여백 감안 84)보다 긴 라벨은 textLength로 압축해 테두리 밖으로 넘치지 않게 한다. */
     const compress = text.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
     /* nodeSublabels(opt-in) — async 전용이던 보조 라벨(node-sublabel)을 임의 topology의 임의 node에서
-       쓸 수 있게 일반화한 것. 예: Outbox Event node 아래 "PENDING" 상태 표시. */
-    const sublabel = t.nodeSublabels && t.nodeSublabels[id];
+       쓸 수 있게 일반화한 것. 예: Outbox Event node 아래 "PENDING" 상태 표시. v.nodeSublabels가
+       있으면 그 Step에서만 topology 기본값을 덮어쓴다(PENDING→PROCESSING→COMPLETED처럼 Step마다
+       바뀌는 상태 표시용). */
+    const sublabel = (v.nodeSublabels && v.nodeSublabels[id]) || (t.nodeSublabels && t.nodeSublabels[id]);
     const sublabelSvg = sublabel ? `<text x="50" y="58" class="node-sublabel">${sublabel}</text>` : "";
     const mainY = sublabel ? 38 : 42;
     /* node-inner로 한 번 더 감싼다 — 바깥 <g>의 transform="translate(x y)"(SVG attribute, 위치 담당)와

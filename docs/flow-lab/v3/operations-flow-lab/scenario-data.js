@@ -26,8 +26,10 @@ const evidence = {
    badge: 특정 노드 옆에 짧은 텍스트 배지(성능 수치 등)를 표시한다. */
 /* edgeLabels: 특정 edge의 기본 token 라벨 대신 "누가 무엇을 하는지"를 직접 쓴다.
    Outbox는 테이블일 뿐이고 실제 실행 주체는 Processor라는 점을 화면에서 구분하기 위해 필요하다. */
-const visual = (activeNodes, activeEdges, token, outcome, branch, committedNodes, badge, edgeLabels) =>
-  ({ activeNodes, activeEdges, token, outcome, branch, committedNodes: committedNodes || [], badge: badge || null, edgeLabels: edgeLabels || null });
+/* nodeSublabels(9번째 인자): 그 Step에서만 topology.nodeSublabels 기본값을 덮어쓴다 —
+   Outbox Event node의 status(PENDING/PROCESSING/COMPLETED/FAILED)처럼 Step마다 바뀌는 값에 쓴다. */
+const visual = (activeNodes, activeEdges, token, outcome, branch, committedNodes, badge, edgeLabels, nodeSublabels) =>
+  ({ activeNodes, activeEdges, token, outcome, branch, committedNodes: committedNodes || [], badge: badge || null, edgeLabels: edgeLabels || null, nodeSublabels: nodeSublabels || null });
 const step = (id, actor, target, action, narration, details) => {
   if (!details.factStatus || !details.visual) throw new Error(`Step ${id} requires factStatus and visual`);
   return { id, actor, target, action, narration, domainState: null, transaction: null, lock: null, outbox: null,
@@ -650,6 +652,252 @@ public void accept(ConsumerRecord<?, ?> record, Exception exception) {
     log.error("event=CHAT_MODERATION_RETRY_EXHAUSTED topic={} partition={} offset={} messageId={} errorCode={}",
             record.topic(), record.partition(), record.offset(), messageId, errorCode);
 }` , annotations: [{"from": 3, "to": 3, "text": "먼저 DLT 토픽으로 보낸다. 이 발행이 실패하면 예외가 나서 아래 기록이 실행되지 않는다."}, {"from": 6, "to": 9, "text": "DLT로 격리한 뒤 해당 메시지를 분석 실패(ANALYSIS_FAILED)로 DB에 남긴다."}]}, evidenceReferences: [evidence.pipeline] })
+];
+
+/* ===== Ch7 — Transactional Outbox 전용 topology/step.
+   Ch1(outbox)은 ChatRoom 생성 하나만, V2/V3 Before/After 비교로 다룬다. 이 Chapter는 그와 별개로
+   "Outbox에 PENDING을 저장한 뒤 누가·언제·어떻게 실제 작업을 실행하는가"를 채팅방 생성/이메일 발송/
+   채팅 AI 분석 세 실제 사례로 나란히 비교하는 새 Chapter다. 세 topology 모두 왼쪽 공통 구간
+   (Business Transaction → DB{Business Data, Outbox Event} → COMMIT → AfterCommit)을 같은 좌표
+   관례로 반복해, "같은 Outbox·같은 Processor 개념을 쓴다"는 것이 세 사례를 오갈 때도 느껴지게
+   한다. 실제 코드는 이번에 직접 검색해 확인했다: ChatRoomOutboxProcessor.signal()은 Kafka도
+   Async Executor도 거치지 않고 AfterCommit 스레드에서 바로 ChatRoomCreationService.createIfAbsent()
+   를 호출한다(src/main/java/com/bobfull/reservation/service/ReservationConfirmationService.java:101,
+   service/ChatRoomOutboxProcessor.java:71). Email/AI 채팅은 AfterCommit → SignalDispatcher →
+   전용 Async Executor(EmailOutboxExecutorConfig / ChatMessageOutboxSignalDispatcher 내부
+   ThreadPoolExecutor) → Processor 순서다 — AfterCommit 자체가 비동기인 것이 아니라 Dispatcher가
+   Executor에 넘기는 지점에서만 스레드가 바뀐다. AI 채팅만 Processor가 Kafka에 발행·ACK를 받고,
+   Kafka Consumer(ChatModerationConsumer)가 별도로 그 이후 AI 검수를 시작한다 — Kafka는 Outbox와
+   같은 레벨의 저장소가 아니라 Consumer에게 이벤트를 전달하는 역할이다. 세 Processor/Scheduler
+   모두 공유 OutboxEventTransactionService.claim()/complete()/fail()과 OutboxEventStatus(PENDING/
+   PROCESSING/COMPLETED/FAILED)를 함께 쓴다(공통 인터페이스는 없고 협력 객체 공유). */
+function outboxCoreEdges() {
+  return {
+    "transaction-dbdata": "M120 225 H180", "dbdata-outbox": "M280 225 H340",
+    "outbox-commit": "M440 225 H480", "commit-aftercommit": "M580 225 H620"
+  };
+}
+const outboxChatroomTopology = {
+  viewBox: "0 0 1250 420",
+  nodeSublabels: { outbox: "PENDING" },
+  secondaryNodes: ["scheduler"],
+  dashedEdges: ["scheduler-outbox"],
+  nodes: [
+    ["transaction", "Business Transaction"], ["dbdata", "Reservation·Participant"], ["outbox", "Outbox Event"],
+    ["commit", "COMMIT"], ["aftercommit", "AfterCommit"], ["processor", "ChatRoomOutboxProcessor"],
+    ["chatroomService", "ChatRoomCreationService"], ["chatroom", "ChatRoom"], ["scheduler", "Scheduler"]
+  ],
+  nodePositions: {
+    transaction: [20, 190], dbdata: [180, 190], outbox: [340, 190], commit: [480, 190], aftercommit: [620, 190],
+    processor: [790, 190], chatroomService: [960, 190], chatroom: [1110, 190], scheduler: [340, 320]
+  },
+  edges: {
+    ...outboxCoreEdges(),
+    "aftercommit-processor": "M720 225 H790", "processor-chatroomService": "M890 225 H960",
+    "chatroomService-chatroom": "M1060 225 H1110", "scheduler-outbox": "M390 320 V260"
+  },
+  labels: { "aftercommit-processor": [730, 205] },
+  regions: [{ label: "DB Transaction", x: 165, y: 175, w: 290, h: 100, emphasis: true }]
+};
+const outboxChatroomSteps = [
+  step("commit", "ReservationConfirmationService", "DB Transaction", "● 핵심 거래와 Outbox를 함께 저장했어요", "예약·참여자 정보와 \"채팅방 만들기\" Outbox 이벤트가 같은 트랜잭션 안에서 함께 COMMIT됩니다 — Processor를 먼저 실행하고 실패하면 Outbox를 만드는 것이 아니라, Outbox PENDING을 먼저 커밋한 뒤 Processor를 실행합니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-chatroom",
+      visual: visual(["transaction", "dbdata", "outbox", "commit"], ["transaction-dbdata", "dbdata-outbox", "outbox-commit"], "commit", "committed", "core", [], null, null, { outbox: "PENDING" }),
+      codeReferences: ["ReservationConfirmationService.confirm", "OutboxEvent.chatRoomCreationRequested"],
+      evidenceReferences: [evidence.chatroom] }),
+  step("signal", "AfterCommit", "ChatRoomOutboxProcessor", "◆ AfterCommit 뒤 즉시 Signal → Processor가 claim해요", "커밋이 끝나자마자 AfterCommit 콜백이 Processor를 직접 호출합니다 — Kafka도 Async Executor도 거치지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-chatroom",
+      visual: visual(["aftercommit", "processor"], ["aftercommit-processor"], "event", null, "core", ["transaction", "dbdata", "commit"], null, { "aftercommit-processor": "Signal" }, { outbox: "PROCESSING" }),
+      codeReferences: ["AfterCommitExecutor.run", "ChatRoomOutboxProcessor.signal"],
+      evidenceReferences: [evidence.chatroom] }),
+  step("create", "ChatRoomOutboxProcessor", "ChatRoom", "◆ Processor가 내부 서비스를 직접 실행해요", "Processor가 같은 스레드에서 ChatRoomCreationService.createIfAbsent()를 바로 호출해 채팅방을 만듭니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-chatroom",
+      visual: visual(["processor", "chatroomService", "chatroom"], ["processor-chatroomService", "chatroomService-chatroom"], "event", null, "core", ["transaction", "dbdata", "commit", "aftercommit"], null, null, { outbox: "PROCESSING" }),
+      codeReferences: ["ChatRoomCreationService.createIfAbsent"],
+      limits: "Kafka도 Async Executor도 쓰지 않는다 — Processor가 같은 스레드에서 내부 서비스를 바로 호출한다는 점이 이메일·AI 채팅과 다르다.",
+      evidenceReferences: [evidence.chatroom] }),
+  step("completed", "ChatRoomOutboxProcessor", "Outbox Event", "✓ Outbox가 COMPLETED가 됐어요", "성공해도 Outbox 카드 자체는 사라지지 않습니다 — 상태만 PROCESSING에서 COMPLETED로 남습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-chatroom",
+      visual: visual(["outbox"], [], "commit", "completed", "core", ["transaction", "dbdata", "commit", "aftercommit", "processor", "chatroomService", "chatroom"], null, null, { outbox: "COMPLETED" }),
+      evidenceReferences: [evidence.chatroom] }),
+  step("signal-lost", "Human 시나리오", "즉시 Signal 유실", "▲ Signal이 유실되면 Outbox는 PENDING으로 남아요", "AfterCommit 콜백이 실행되지 못하거나 유실되면, Outbox 이벤트는 그대로 PENDING 상태로 DB에 남아 있습니다 — 메시지 자체가 사라지지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-chatroom",
+      visual: visual(["outbox", "scheduler"], ["scheduler-outbox"], "retry", null, "core", ["transaction", "dbdata", "commit", "aftercommit"], null, null, { outbox: "PENDING" }),
+      codeReferences: ["ChatRoomOutboxScheduler.processPendingEvents"],
+      limits: "5초 주기(outbox.chat-room.fixed-delay 기본값)로 due-PENDING을 재확인한다.",
+      evidenceReferences: [evidence.chatroom] }),
+  step("scheduler-recovers", "ChatRoomOutboxScheduler", "ChatRoomOutboxProcessor", "◆ Scheduler가 같은 Processor를 다시 호출해요", "Scheduler는 직접 채팅방을 만들지 않습니다 — PENDING 이벤트를 찾아 같은 ChatRoomOutboxProcessor를 다시 호출할 뿐입니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-chatroom",
+      visual: visual(["scheduler", "processor", "chatroomService", "chatroom"], ["scheduler-outbox", "processor-chatroomService", "chatroomService-chatroom"], "event", null, "core", ["transaction", "dbdata", "commit", "aftercommit"], null, null, { outbox: "PROCESSING" }),
+      evidenceReferences: [evidence.chatroom] }),
+  step("failure-then-recover", "ChatRoomOutboxProcessor", "Outbox Event", "✓ 생성이 실패해도 재시도 끝에 COMPLETED가 돼요", "ChatRoom 생성이 실패하면 Outbox는 PENDING+nextAttemptAt로 되돌아가 재시도 대상이 됩니다 — 최대 5회(MAX_RETRIES), 5분 넘게 멈춘 PROCESSING은 Scheduler가 회수합니다(STALE_PROCESSING_THRESHOLD).",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-chatroom",
+      visual: visual(["outbox"], [], "commit", "completed", "core", ["transaction", "dbdata", "commit", "aftercommit", "processor", "chatroomService", "chatroom", "scheduler"], null, null, { outbox: "COMPLETED" }),
+      decisionBadge: "실패해도 Outbox PENDING+nextAttemptAt로 남아 재시도된다",
+      limits: "MAX_RETRIES=5, STALE_PROCESSING_THRESHOLD=5분(ChatRoomOutboxProcessor 실제 상수).",
+      evidenceReferences: [evidence.chatroom] })
+];
+const outboxEmailTopology = {
+  viewBox: "0 0 1500 420",
+  nodeSublabels: { outbox: "PENDING" },
+  secondaryNodes: ["scheduler"],
+  dashedEdges: ["scheduler-outbox"],
+  nodes: [
+    ["transaction", "Business Transaction"], ["dbdata", "Reservation"], ["outbox", "Outbox Event"],
+    ["commit", "COMMIT"], ["aftercommit", "AfterCommit"], ["dispatcher", "Signal Dispatcher"],
+    ["executor", "Async Executor"], ["processor", "EmailOutboxProcessor"],
+    ["deliveryA", "Delivery A"], ["deliveryB", "Delivery B"], ["scheduler", "Scheduler"]
+  ],
+  nodePositions: {
+    transaction: [20, 190], dbdata: [180, 190], outbox: [340, 190], commit: [480, 190], aftercommit: [620, 190],
+    dispatcher: [790, 190], executor: [940, 190], processor: [1090, 190],
+    deliveryA: [1250, 110], deliveryB: [1250, 270], scheduler: [340, 320]
+  },
+  edges: {
+    ...outboxCoreEdges(),
+    "aftercommit-dispatcher": "M720 225 H790", "dispatcher-executor": "M890 225 H940", "executor-processor": "M1040 225 H1090",
+    "processor-deliveryA": "M1190 210 H1220 V145 H1250", "processor-deliveryB": "M1190 240 H1220 V305 H1250",
+    "scheduler-outbox": "M390 320 V260"
+  },
+  labels: { "dispatcher-executor": [865, 205] },
+  regions: [{ label: "DB Transaction", x: 165, y: 175, w: 290, h: 100, emphasis: true }]
+};
+const outboxEmailSteps = [
+  step("commit", "EmailOutboxEventService", "DB Transaction", "● 예약 정보와 Outbox·Delivery를 함께 저장했어요", "OutboxEvent 하나와 수신자별 EmailOutboxDelivery(PENDING) 행들이 같은 트랜잭션에 함께 저장됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-email",
+      visual: visual(["transaction", "dbdata", "outbox", "commit"], ["transaction-dbdata", "dbdata-outbox", "outbox-commit"], "commit", "committed", "core", [], null, null, { outbox: "PENDING" }),
+      codeReferences: ["EmailOutboxEventService.enqueue"], evidenceReferences: [evidence.email] }),
+  step("dispatch", "AfterCommit", "Signal Dispatcher", "◆ AfterCommit 뒤 Dispatcher를 불러요", "AfterCommit 콜백은 여기서는 Processor를 직접 부르지 않고, EmailOutboxSignalDispatcher를 부릅니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-email",
+      visual: visual(["aftercommit", "dispatcher"], ["aftercommit-dispatcher"], "event", null, "core", ["transaction", "dbdata", "commit"], null, null, { outbox: "PENDING" }),
+      codeReferences: ["EmailOutboxSignalDispatcher.dispatch"], evidenceReferences: [evidence.email] }),
+  step("executor-handoff", "Signal Dispatcher", "Async Executor", "◆ 전용 Async Executor로 넘겨요", "요청 스레드와 SMTP I/O를 분리하기 위해, 전용 스레드풀(emailOutboxExecutor)로 작업을 넘긴 뒤 그 스레드에서 Processor를 호출합니다 — AfterCommit 자체가 비동기인 게 아니라, 이 지점에서만 스레드가 바뀝니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-email",
+      visual: visual(["dispatcher", "executor"], ["dispatcher-executor"], "event", null, "core", ["transaction", "dbdata", "commit", "aftercommit"], null, { "dispatcher-executor": "요청 스레드와 SMTP I/O 분리" }, { outbox: "PENDING" }),
+      codeReferences: ["EmailOutboxExecutorConfig"], evidenceReferences: [evidence.email] }),
+  step("processor-send", "EmailOutboxProcessor", "Delivery A/B", "◆ Processor가 각 Delivery에 SMTP로 발송해요", "PENDING 상태인 Delivery마다 SMTP 발송을 시도합니다 — 이미 SENT인 Delivery는 건드리지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-email",
+      visual: visual(["executor", "processor", "deliveryA", "deliveryB"], ["executor-processor", "processor-deliveryA", "processor-deliveryB"], "event", null, "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher"], null, null, { outbox: "PROCESSING" }),
+      codeReferences: ["ReservationNotificationService.sendOutboxEmail", "SmtpReservationNotificationAdapter"],
+      evidenceReferences: [evidence.email] }),
+  step("partial-failure", "EmailOutboxProcessor", "Delivery B", "▲ Delivery B만 실패했어요", "Delivery A는 SENT로 남고, 실패한 Delivery B만 PENDING으로 남아 재시도 대상이 됩니다 — 성공한 수신자에게 메일이 중복 발송되지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-email",
+      visual: visual(["deliveryB"], [], "failure", "failure", "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "deliveryA"], null, null, { outbox: "PENDING" }),
+      decisionBadge: "Delivery A SENT · Delivery B만 재시도 대상",
+      codeReferences: ["EmailOutboxProcessor.processClaimed", "EmailOutboxDeliveryTransactionService.markSent"],
+      evidenceReferences: [evidence.email] }),
+  step("scheduler-retry", "EmailOutboxScheduler", "Outbox Event", "◆ Scheduler가 PENDING을 다시 찾아요", "Scheduler가 PENDING 이벤트를 발견해 같은 EmailOutboxProcessor를 다시 호출합니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-email",
+      visual: visual(["scheduler", "outbox"], ["scheduler-outbox"], "retry", null, "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "deliveryA"], null, null, { outbox: "PENDING" }),
+      codeReferences: ["EmailOutboxScheduler.processPendingEvents"], evidenceReferences: [evidence.email] }),
+  step("all-sent", "EmailOutboxProcessor", "Outbox Event", "✓ 모든 Delivery가 성공해 COMPLETED가 돼요", "Delivery B까지 SENT가 되면 그제서야 Outbox 전체가 COMPLETED로 바뀝니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-email",
+      visual: visual(["outbox", "deliveryB"], [], "commit", "completed", "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "deliveryA", "scheduler"], null, null, { outbox: "COMPLETED" }),
+      evidenceReferences: [evidence.email] })
+];
+const outboxAiTopology = {
+  viewBox: "0 0 1700 420",
+  nodeSublabels: { outbox: "PENDING" },
+  secondaryNodes: ["scheduler"],
+  dashedEdges: ["scheduler-outbox"],
+  nodes: [
+    ["transaction", "Business Transaction"], ["dbdata", "ChatMessage"], ["outbox", "Outbox Event"],
+    ["commit", "COMMIT"], ["aftercommit", "AfterCommit"], ["dispatcher", "Signal Dispatcher"],
+    ["executor", "Async Executor"], ["processor", "ChatMessageOutboxProcessor"], ["kafka", "Kafka"],
+    ["consumer", "Kafka Consumer"], ["aiModeration", "AI Moderation"], ["scheduler", "Scheduler"]
+  ],
+  nodePositions: {
+    transaction: [20, 190], dbdata: [180, 190], outbox: [340, 190], commit: [480, 190], aftercommit: [620, 190],
+    dispatcher: [790, 190], executor: [940, 190], processor: [1090, 190], kafka: [1250, 190],
+    consumer: [1400, 190], aiModeration: [1550, 190], scheduler: [340, 320]
+  },
+  edges: {
+    ...outboxCoreEdges(),
+    "aftercommit-dispatcher": "M720 225 H790", "dispatcher-executor": "M890 225 H940", "executor-processor": "M1040 225 H1090",
+    "processor-kafka": "M1190 225 H1250", "kafka-consumer": "M1350 225 H1400", "consumer-aiModeration": "M1500 225 H1550",
+    "scheduler-outbox": "M390 320 V260"
+  },
+  labels: { "dispatcher-executor": [865, 205] },
+  regions: [{ label: "DB Transaction", x: 165, y: 175, w: 290, h: 100, emphasis: true }]
+};
+const outboxAiSteps = [
+  step("commit", "ChatMessageCommandService", "DB Transaction", "● 메시지와 Outbox를 함께 저장했어요", "ChatMessage 저장과 CHAT_MESSAGE_CREATED Outbox 이벤트가 같은 트랜잭션 안에서 함께 COMMIT됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["transaction", "dbdata", "outbox", "commit"], ["transaction-dbdata", "dbdata-outbox", "outbox-commit"], "commit", "committed", "core", [], null, null, { outbox: "PENDING" }),
+      codeReferences: ["ChatMessageCommandService.send"], evidenceReferences: [evidence.pipeline] }),
+  step("dispatch", "AfterCommit", "Signal Dispatcher", "◆ AfterCommit 뒤 Dispatcher를 불러요", "ChatRoom 생성과 달리, 여기서도 AfterCommit은 Processor를 직접 부르지 않고 ChatMessageOutboxSignalDispatcher를 부릅니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["aftercommit", "dispatcher"], ["aftercommit-dispatcher"], "event", null, "core", ["transaction", "dbdata", "commit"], null, null, { outbox: "PENDING" }),
+      codeReferences: ["ChatMessageOutboxSignalDispatcher.dispatch"], evidenceReferences: [evidence.pipeline] }),
+  step("executor-handoff", "Signal Dispatcher", "Async Executor", "◆ 전용 Async Executor로 넘겨요", "Dispatcher 내부의 전용 ThreadPoolExecutor(2 스레드, bounded queue)로 넘긴 뒤 그 스레드에서 Processor를 호출합니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["dispatcher", "executor"], ["dispatcher-executor"], "event", null, "core", ["transaction", "dbdata", "commit", "aftercommit"], null, { "dispatcher-executor": "요청 스레드 분리" }, { outbox: "PENDING" }),
+      evidenceReferences: [evidence.pipeline] }),
+  step("kafka-publish", "ChatMessageOutboxProcessor", "Kafka", "◆ Kafka에 발행하고 ACK를 받으면 COMPLETED가 돼요", "Processor가 Kafka Broker에 발행하고 ACK까지 확인한 뒤에만 Outbox를 COMPLETED로 바꿉니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["executor", "processor", "kafka"], ["executor-processor", "processor-kafka"], "event", "acknowledged", "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher"], null, null, { outbox: "PROCESSING" }),
+      codeReferences: ["ChatMessageOutboxProcessor.processClaimed"], evidenceReferences: [evidence.pipeline] }),
+  step("completed", "ChatMessageOutboxProcessor", "Outbox Event", "✓ Producer 쪽 Outbox는 여기서 끝나요", "Kafka는 Outbox와 같은 레벨의 저장소가 아니라, Consumer에게 이벤트를 전달하는 역할입니다 — Outbox의 책임은 ACK를 받는 순간 끝납니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["outbox"], [], "commit", "completed", "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "kafka"], null, null, { outbox: "COMPLETED" }),
+      evidenceReferences: [evidence.pipeline] }),
+  step("consumer-ai", "Kafka Consumer", "AI Moderation", "◆ Consumer가 AI 검수를 시작해요", "ChatModerationConsumer가 별도로 이 이벤트를 소비해 AI 검수를 시작합니다 — 상세 판정 로직(Rule Filter → Fast Path 또는 DB Context → LLM → Validator → Moderation DB)은 AI 채팅 검수(Ch0 Showcase)에서 다룹니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["kafka", "consumer", "aiModeration"], ["kafka-consumer", "consumer-aiModeration"], "event", null, "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "outbox"], null, null, { outbox: "COMPLETED" }),
+      codeReferences: ["ChatModerationConsumer.onChatMessageCreated"], evidenceReferences: [evidence.pipeline, evidence.moderation] }),
+  step("signal-lost", "Human 시나리오", "즉시 Signal 유실", "▲ Signal이 유실되면 Outbox는 PENDING으로 남아요", "Dispatcher 호출이 실패하거나 유실돼도 메시지 자체(ChatMessage)는 이미 COMMIT돼 있고, Outbox만 PENDING으로 남습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["outbox", "scheduler"], ["scheduler-outbox"], "retry", null, "core", ["transaction", "dbdata", "commit", "aftercommit"], null, null, { outbox: "PENDING" }),
+      codeReferences: ["ChatMessageOutboxScheduler.processPendingEvents"],
+      limits: "5초 주기(outbox.chat-message.fixed-delay 기본값).", evidenceReferences: [evidence.pipeline] }),
+  step("failure-then-recover", "ChatMessageOutboxScheduler", "Outbox Event", "✓ 발행이 실패해도 재시도 끝에 COMPLETED가 돼요", "Kafka 발행이 실패하면 PENDING+nextAttemptAt로 되돌아가고, Scheduler가 같은 Processor를 다시 호출해 재발행합니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "outbox-ai",
+      visual: visual(["outbox"], [], "commit", "completed", "core", ["transaction", "dbdata", "commit", "aftercommit", "dispatcher", "executor", "processor", "kafka", "consumer", "aiModeration", "scheduler"], null, null, { outbox: "COMPLETED" }),
+      decisionBadge: "MAX_RETRIES=5 · STALE_PROCESSING_THRESHOLD=5분",
+      evidenceReferences: [evidence.pipeline] })
+];
+const outboxComparisonTopology = {
+  viewBox: "0 0 1100 420",
+  secondaryNodes: ["scheduler"],
+  dashedEdges: ["scheduler-common"],
+  nodes: [
+    ["common", "Business Data + Outbox"], ["commit", "COMMIT"], ["aftercommit", "AfterCommit"],
+    ["proc1", "Processor"], ["svc1", "내부 Service"], ["res1", "ChatRoom"],
+    ["proc2", "Dispatcher"], ["exec2", "Executor"], ["res2", "SMTP"],
+    ["proc3", "Dispatcher"], ["exec3", "Executor"], ["res3", "Kafka"], ["consumer3", "Consumer → AI"],
+    ["scheduler", "Scheduler"]
+  ],
+  nodePositions: {
+    common: [20, 190], commit: [190, 190], aftercommit: [360, 190],
+    proc1: [560, 60], svc1: [560, 160], res1: [560, 260],
+    proc2: [730, 60], exec2: [730, 160], res2: [730, 260],
+    proc3: [900, 60], exec3: [900, 160], res3: [900, 260], consumer3: [900, 360],
+    scheduler: [190, 320]
+  },
+  edges: {
+    "common-commit": "M120 225 H190", "commit-aftercommit": "M290 225 H360",
+    "aftercommit-proc1": "M460 205 V30 H610 V60", "aftercommit-proc2": "M460 225 V20 H780 V60",
+    "aftercommit-proc3": "M460 245 V10 H950 V60",
+    "proc1-svc1": "M610 130 V160", "svc1-res1": "M610 230 V260",
+    "proc2-exec2": "M780 130 V160", "exec2-res2": "M780 230 V260",
+    "proc3-exec3": "M950 130 V160", "exec3-res3": "M950 230 V260", "res3-consumer3": "M950 330 V360",
+    "scheduler-common": "M240 320 V290 H70 V260"
+  },
+  labels: {}
+};
+const outboxComparisonSteps = [
+  step("all-active", "세 사례 비교", "채팅방 · 이메일 · AI 채팅", "✓ 세 사례 모두 같은 Outbox·Processor 구조를 씁니다", "Processor 이후 실제 수행 방식만 사례마다 달라집니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "outbox-comparison",
+      visual: visual(["common", "commit", "aftercommit", "proc1", "svc1", "res1", "proc2", "exec2", "res2", "proc3", "exec3", "res3", "consumer3"],
+        ["common-commit", "commit-aftercommit", "aftercommit-proc1", "proc1-svc1", "svc1-res1", "aftercommit-proc2", "proc2-exec2", "exec2-res2", "aftercommit-proc3", "proc3-exec3", "exec3-res3", "res3-consumer3"],
+        "commit", "completed", "core"),
+      narrationPoints: [
+        "<b>채팅방 생성</b>: Processor가 내부 Service를 직접 실행",
+        "<b>이메일</b>: Async Executor에서 Processor가 외부 I/O(SMTP)를 실행",
+        "<b>AI 채팅</b>: Processor가 Kafka에 전달하고 Consumer가 AI 작업을 실행"] }),
+  step("reliability-recap", "공통 Reliability Lane", "Signal vs Scheduler", "✓ Signal은 빠른 경로, Scheduler는 복구 경로입니다", "Signal은 빠르게 실행하기 위한 경로이고, Scheduler는 놓친 작업을 복구하기 위한 경로입니다 — 세 사례 모두 이 두 경로를 함께 갖습니다.",
+    { factStatus: FACT.DESIGN, topologyKey: "outbox-comparison",
+      visual: visual(["scheduler", "common"], ["scheduler-common"], "retry", "completed", "core", ["commit", "aftercommit", "proc1", "svc1", "res1", "proc2", "exec2", "res2", "proc3", "exec3", "res3", "consumer3"]) })
 ];
 
 const chapters = [
@@ -1668,5 +1916,18 @@ public class ChatModeration extends BaseTimeEntity {
     }
 }` , annotations: [{"from": 2, "to": 6, "text": "핵심(멱등성): 이미 판정이 끝난 메시지면 AI를 다시 부르지 않고 그대로 종료한다 — 같은 메시지가 두 번 와도 안전한 이유."}, {"from": 13, "to": 14, "text": "AI 응답도 외부 입력이므로 저장 전에 조합 규칙을 다시 검증한다."}]} })
     ]}
-  ]}
+  ]},
+  { id: "outbox-mechanics", shortLabel: "Ch7 — Transactional Outbox 구조",
+    title: "Transactional Outbox — 저장한 이벤트는 누가 실행할까?",
+    subtitle: "먼저 DB에 해야 할 일을 남기고, Commit 이후 Processor가 실행한다. 실패하거나 실행 신호를 놓쳐도 Scheduler가 같은 Processor를 다시 호출한다.",
+    summary: { problem: "Outbox에 PENDING을 저장한 뒤 누가, 언제, 어떻게 실제 작업을 실행할까?",
+      solution: "채팅방 생성·이메일 발송·채팅 AI 분석 세 실제 사례 모두 같은 Outbox·Processor·Scheduler 구조를 쓰지만, Processor 이후 실제 수행 방식만 다르다.",
+      why: "Outbox에 PENDING을 저장하는 것까지는 익숙한데, 그다음 누가 언제 실제 작업을 실행하는지는 사례마다 헷갈리기 쉽다 — 채팅방은 Processor가 직접, 이메일·AI 채팅은 Async Executor를 거쳐 실행된다.",
+      how: "세 사례를 하나의 공통 구조(DB Transaction → COMMIT → AfterCommit → Signal → Processor)로 먼저 보여준 뒤, Processor 이후 갈라지는 지점(내부 서비스 직접 호출 / Async Executor+SMTP / Async Executor+Kafka)만 사례별로 비교한다. Scheduler는 메인 경로가 아니라 놓친 작업을 복구하는 별도 reliability lane으로 표현했다." },
+    scenarios: [
+      { id: "chatroom", title: "① 채팅방 생성", steps: outboxChatroomSteps },
+      { id: "email", title: "② 이메일 발송", steps: outboxEmailSteps },
+      { id: "ai-chat", title: "③ 채팅 AI 분석", steps: outboxAiSteps },
+      { id: "comparison", title: "세 사례 비교", steps: outboxComparisonSteps }
+    ] }
 ];
