@@ -186,9 +186,9 @@ const serviceUnifiedTopology = {
     "cross-judge-confirm": [590, 152], "cross-meal-mealend": [845, 152]
   },
   regions: [
-    { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100 },
-    { label: "사장님", x: 10, y: 175, w: 1180, h: 100 },
-    { label: "BobFull 자동 관리", x: 10, y: 325, w: 1180, h: 100 }
+    { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100, emphasis: true },
+    { label: "사장님", x: 10, y: 175, w: 1180, h: 100, emphasis: true },
+    { label: "BobFull 자동 관리", x: 10, y: 325, w: 1180, h: 100, emphasis: true }
   ]
 };
 const serviceUnifiedSteps = [

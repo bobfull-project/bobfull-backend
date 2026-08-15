@@ -50,10 +50,17 @@ function collapseCanvasView() {
   document.body.style.overflow = "";
 }
 /* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위해, 서로 다른 책임
-   영역을 아주 옅은 배경+작은 라벨로만 구분한다. active/dim 강조는 건드리지 않는다. */
+   영역을 아주 옅은 배경+작은 라벨로만 구분한다. active/dim 강조는 건드리지 않는다.
+   region.emphasis(예: 서비스 흐름의 Swimlane 3개)만 더 크고 진한 "lane" 스타일을 추가로 쓴다 —
+   emphasis를 안 쓰는 기존 region(Ch1~6 topology/infra topology)은 클래스·좌표가 그대로라
+   렌더링 결과가 전혀 바뀌지 않는다. */
 function regionBgSvg(t) {
   if (!t.regions) return "";
-  return t.regions.map((region) => `<g class="region"><rect class="region-bg" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/><text class="region-label" x="${region.x + 10}" y="${region.y + 16}">${region.label}</text></g>`).join("");
+  return t.regions.map((region) => {
+    const laneCls = region.emphasis ? " lane" : "";
+    const labelY = region.y + (region.emphasis ? 24 : 16);
+    return `<g class="region"><rect class="region-bg${laneCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/><text class="region-label${laneCls}" x="${region.x + 14}" y="${labelY}">${region.label}</text></g>`;
+  }).join("");
 }
 function renderCanvas(data) {
   const v = data.visual;
