@@ -66,14 +66,22 @@ function renderCanvas(data) {
   const v = data.visual;
   const t = topologyFor(data);
   const regionSvg = regionBgSvg(t);
-  const edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="edge-${id}" class="connector ${v.activeEdges.includes(id) ? "active" : "dim"}" d="${path}"/>`).join("");
+  const edgeSvg = Object.entries(t.edges).map(([id, path]) => {
+    /* dashedEdges(opt-in) — Scheduler 재시도처럼 "메인 흐름이 아닌 보조 경로"임을 항상 점선으로
+       구분한다. 이 배열을 쓰는 topology에만 적용되고 다른 topology는 그대로다. */
+    const dashedCls = t.dashedEdges && t.dashedEdges.includes(id) ? " retry-dashed" : "";
+    return `<path id="edge-${id}" class="connector ${v.activeEdges.includes(id) ? "active" : "dim"}${dashedCls}" d="${path}"/>`;
+  }).join("");
   const tokenSvg = v.activeEdges.map((id) => tokenSvgFor(t, id, v.token)).join("");
   const labelSvg = v.activeEdges.map((id) => edgeLabelSvg(t, id, v.token, v.edgeLabels && v.edgeLabels[id])).join("");
   const nodesSvg = t.nodes.map(([id, label]) => {
     const [x, y] = t.nodePositions[id];
     const active = v.activeNodes.includes(id);
     const committed = !active && v.committedNodes.includes(id);
-    const cls = active ? "active" : committed ? "committed" : "dim";
+    /* secondaryNodes(opt-in) — Scheduler처럼 "reliability 보조 장치"로만 표시할 node는 항상
+       점선 테두리를 준다(baseline과 같은 방식이지만 임의 topology에서 재사용 가능하게 일반화). */
+    const secondaryCls = t.secondaryNodes && t.secondaryNodes.includes(id) ? " secondary" : "";
+    const cls = (active ? "active" : committed ? "committed" : "dim") + secondaryCls;
     const text = committed ? `${label} ✓` : label;
     /* async(Async Queue)는 실제 운영 경로가 아니라 Ch5 실험 비교용 baseline이므로, 활성 상태여도
        점선 테두리와 보조 라벨로 "이건 비교 기준선이다"를 항상 구분해서 보여준다. */
@@ -82,11 +90,16 @@ function renderCanvas(data) {
     }
     /* 박스(100 너비, 좌우 여백 감안 84)보다 긴 라벨은 textLength로 압축해 테두리 밖으로 넘치지 않게 한다. */
     const compress = text.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
+    /* nodeSublabels(opt-in) — async 전용이던 보조 라벨(node-sublabel)을 임의 topology의 임의 node에서
+       쓸 수 있게 일반화한 것. 예: Outbox Event node 아래 "PENDING" 상태 표시. */
+    const sublabel = t.nodeSublabels && t.nodeSublabels[id];
+    const sublabelSvg = sublabel ? `<text x="50" y="58" class="node-sublabel">${sublabel}</text>` : "";
+    const mainY = sublabel ? 38 : 42;
     /* node-inner로 한 번 더 감싼다 — 바깥 <g>의 transform="translate(x y)"(SVG attribute, 위치 담당)와
        animateNodes pop-in의 CSS transform(scale, 애니메이션 담당)을 같은 요소에 같이 걸면 브라우저가
        두 transform을 잘못 합성해 node가 엉뚱한 좌표로 튀는 버그가 있었다 — 안쪽 <g>에만 CSS transform을
        적용해 바깥 위치 계산과 완전히 분리한다. */
-    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="42"${compress}>${text}</text></g></g>`;
+    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${text}</text>${sublabelSvg}</g></g>`;
   }).join("");
   const badgeSvg = badgeSvgFor(t, v.badge);
   /* animateNodes(AI 채팅 검수 unified topology만 씀) — 활성화되는 순간 살짝 커졌다 제자리로

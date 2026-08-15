@@ -82,6 +82,8 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .connector{fill:none;stroke:var(--line);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .connector.dim{opacity:.4}
 .connector.active{stroke:var(--accent);opacity:1}
+/* dashedEdges(opt-in) — Scheduler 재시도 같은 보조 경로는 active여도 점선으로, 메인 흐름과 구분한다. */
+.connector.retry-dashed{stroke-dasharray:5 4}
 .canvas-node rect{fill:var(--panel);stroke:var(--line);stroke-width:2}
 .canvas-node text{fill:var(--muted);font:600 13px system-ui;text-anchor:middle}
 .canvas-node.dim{opacity:.5}
@@ -94,6 +96,10 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .canvas-node.baseline rect{stroke-dasharray:4 3}
 .canvas-node .node-sublabel{fill:var(--muted);font:9px system-ui;text-anchor:middle}
 .canvas-node.active .node-sublabel{fill:var(--accent-strong)}
+/* secondaryNodes(opt-in) — Scheduler처럼 "메인 노드가 아니라 reliability 보조 장치"인 node는
+   항상 점선 테두리 + 살짝 작은 글자로, active여도 메인 흐름 node와 같은 무게로 안 보이게 한다. */
+.canvas-node.secondary rect{stroke-dasharray:4 3}
+.canvas-node.secondary text{font-size:11px}
 /* AI 채팅 검수 unified topology 전용(animateNodes) — "AI Consumer 안으로 들어갔다"는 느낌을 주기
    위해 그 Step에서 새로 active되는 node만 살짝 커졌다 제자리로 돌아오는 pop-in을 준다.
    .zoom-topology 클래스가 있을 때만 적용되므로 다른 topology의 active node는 전혀 바뀌지 않는다.
