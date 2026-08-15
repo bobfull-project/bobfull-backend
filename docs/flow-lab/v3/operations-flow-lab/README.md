@@ -6,6 +6,11 @@ Operations Flow Lab은 BobFull 내부 구현을 단순 문서로 읽는 대신, 
 
 이 Lab은 코드·Evidence를 재생하는 정적 인터랙티브 시뮬레이터다. 실제 JVM, Kafka, Redis, AWS를 제어하거나 실시간 runtime 상태를 표시하지 않는다.
 
+Lab의 역할은 두 가지로 분리된다.
+
+- **Ch0 · BobFull System Showcase**: README/발표/포트폴리오에서 몇 초만 보여줘도 시스템 설계를 이해시키기 위한 한 화면 프레젠테이션. Chapter 선택에서 `Ch0`을 고르면 진입하며, Auto Play로 자동 재생되고 Capture 모드(Esc로 해제)로 조작 UI를 감춰 GIF/스크린샷 촬영에 쓸 수 있다. `showcaseScenarios`(app.js)는 아래 Ch1~Ch6의 실제 Step을 `{chapter, scenario, step}` 참조로만 모아 재생한다 — Showcase 전용 데이터를 새로 만들거나 이중 관리하지 않는다. URL `?chapter=showcase&scenario=<id>&capture=true`로 특정 Scenario에 직접 진입할 수 있다(`id`: `full-flow` | `ai-failure` | `multi-instance`).
+- **Ch1~Ch6**: 왜 이렇게 만들었는지 실제 코드와 Evidence로 증명하는 상세 문서형 학습 공간(아래 내용 전부 여기 해당).
+
 - Chapter 1: V2 `AFTER_COMMIT`과 V3 Transactional Outbox의 동일 failure boundary를 동기화된 two-lane 진행 상태(4-stage lane strip)로 비교
 - Chapter 2: `ChatMessage → Outbox → Kafka → AI Moderation`과 `NORMAL`, `PUBLISH_FAILURE`, `DUPLICATE_DELIVERY`, `AI_TRANSIENT_FAILURE`, `RETRY_EXHAUSTED_DLT`, `ACK_THEN_CRASH`
 - Chapter 3: `LOCAL_TWO_INSTANCE_NORMAL`, `AWS_CROSS_INSTANCE_NORMAL`(다중 EC2 + 공용 ElastiCache Redis 실제 검증), `REDIS_DELIVERY_MISS`
@@ -56,5 +61,5 @@ LLM Path의 DB `model` 값은 Provider metadata가 있으면 그 값을 저장�
 
 ## 알려진 UX 한계
 
-- Canvas는 데스크톱 발표 화면을 우선한다. 작은 화면에서는 topology 라벨의 가독성이 낮아질 수 있다(모바일 폭에서는 `min-width:760px`로 가로 스크롤이 발생한다).
-- 발표 모드에서 Pause/Prev/Next/Speed는 시각적으로만 축소되고 기능은 모든 모드에서 동일하게 동작한다.
+- Canvas는 데스크톱 화면을 우선한다. 작은 화면에서는 topology가 컨테인먼트로 축소돼 전체가 보이지만, 노드 텍스트가 작아질 수 있다(일반 Chapter는 우측 상단 "크게 보기"로, Showcase는 큰 Canvas 영역 자체로 보완한다).
+- Ch1~Ch6는 Sticky Canvas(약 38~42vh)를 유지한 채 Step 상세 설명을 스크롤한다. Ch0 Showcase는 반대로 스크롤 없는 한 화면 레이아웃이다 — 둘을 같은 화면에서 동시에 만족시키려 하지 않는다.

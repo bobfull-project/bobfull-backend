@@ -1,6 +1,6 @@
 /* Playback and rendering only. Every visual decision comes from step.visual. */
 const $ = (id) => document.getElementById(id);
-const state = { chapter: 0, scenario: 0, step: 0, timer: null };
+const state = { chapter: 0, scenario: 0, step: 0, timer: null, mode: "chapter", showcaseScenario: 0, showcaseStep: 0 };
 const currentChapter = () => chapters[state.chapter];
 const currentScenario = () => currentChapter().scenarios[state.scenario];
 const currentStep = () => currentScenario().steps[state.step];
@@ -8,8 +8,16 @@ const currentStep = () => currentScenario().steps[state.step];
    canvas-node/connector/token 렌더링을 그대로 재사용한다 — 별도 renderer를 새로 만들지 않는다. */
 const topologyFor = (data) => data.topologyKey === "moderation" ? moderationTopology : topology;
 function populateSelects() {
-  $("chapterSelect").innerHTML = chapters.map((item, i) => `<option value="${i}">${item.shortLabel}</option>`).join("");
-  $("chapterSelect").value = state.chapter;
+  const showcaseOption = `<option value="showcase">Ch0 · BobFull System Showcase</option>`;
+  $("chapterSelect").innerHTML = showcaseOption + chapters.map((item, i) => `<option value="${i}">${item.shortLabel}</option>`).join("");
+  $("chapterSelect").value = state.mode === "showcase" ? "showcase" : String(state.chapter);
+}
+/* 일반 Chapter 전용 섹션을 한 번에 켜고 끈다 — Ch0 Showcase는 완전히 다른 한 화면 레이아웃이라
+   기존 stage/code-view/outcomes/evidence-gate 등을 그대로 감추고 별도 뷰를 보여준다. */
+function applyModeVisibility() {
+  const isShowcase = state.mode === "showcase";
+  document.querySelectorAll(".chapter-only").forEach((el) => { el.hidden = isShowcase; });
+  $("showcaseView").hidden = !isShowcase;
 }
 function renderScenarioButtons() {
   $("scenarioButtons").innerHTML = currentChapter().scenarios.map((item, i) =>
@@ -35,9 +43,16 @@ function collapseCanvasView() {
   $("canvasOverlay").hidden = true;
   document.body.style.overflow = "";
 }
+/* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위해, 서로 다른 책임
+   영역을 아주 옅은 배경+작은 라벨로만 구분한다. active/dim 강조는 건드리지 않는다. */
+function regionBgSvg(t) {
+  if (!t.regions) return "";
+  return t.regions.map((region) => `<g class="region"><rect class="region-bg" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/><text class="region-label" x="${region.x + 10}" y="${region.y + 16}">${region.label}</text></g>`).join("");
+}
 function renderCanvas(data) {
   const v = data.visual;
   const t = topologyFor(data);
+  const regionSvg = regionBgSvg(t);
   const edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="edge-${id}" class="connector ${v.activeEdges.includes(id) ? "active" : "dim"}" d="${path}"/>`).join("");
   const tokenSvg = v.activeEdges.map((id) => tokenSvgFor(t, id, v.token)).join("");
   const labelSvg = v.activeEdges.map((id) => edgeLabelSvg(t, id, v.token, v.edgeLabels && v.edgeLabels[id])).join("");
@@ -47,12 +62,17 @@ function renderCanvas(data) {
     const committed = !active && v.committedNodes.includes(id);
     const cls = active ? "active" : committed ? "committed" : "dim";
     const text = committed ? `${label} ✓` : label;
+    /* async(Async Queue)는 실제 운영 경로가 아니라 Ch5 실험 비교용 baseline이므로, 활성 상태여도
+       점선 테두리와 보조 라벨로 "이건 비교 기준선이다"를 항상 구분해서 보여준다. */
+    if (id === "async") {
+      return `<g class="canvas-node ${cls} baseline" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="34" font-weight="600">${text}</text><text x="50" y="50" class="node-sublabel">비교 기준</text></g>`;
+    }
     /* 박스(100 너비, 좌우 여백 감안 84)보다 긴 라벨은 textLength로 압축해 테두리 밖으로 넘치지 않게 한다. */
     const compress = text.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
     return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="42"${compress}>${text}</text></g>`;
   }).join("");
   const badgeSvg = badgeSvgFor(t, v.badge);
-  $("canvas").innerHTML = `<svg class="topology" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
+  $("canvas").innerHTML = `<svg class="topology" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
   $("flowCaption").textContent = data.action.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
 }
 function badgeSvgFor(t, badge) {
@@ -254,12 +274,15 @@ function renderNarration(data) {
   plain.textContent = data.narrationPoints ? "" : data.narration;
 }
 function render() {
-  const data = currentStep();
   populateSelects();
+  applyModeVisibility();
+  if (state.mode === "showcase") { renderShowcaseStep(); return; }
+  const data = currentStep();
   renderScenarioButtons();
   $("chapterQuestion").textContent = currentChapter().title;
   $("chapterSubtitle").textContent = currentChapter().subtitle;
   const origin = currentChapter().summary;
+  $("originShort").innerHTML = `<strong>문제</strong> ${origin.problem} <strong>해결</strong> ${origin.solution}`;
   $("chapterOrigin").innerHTML = `<dt>왜 생겼는가</dt><dd>${origin.why}</dd><dt>어떻게 해결했는가</dt><dd>${origin.how}</dd>`;
   renderCanvas(data); renderRetryPolicy(data); renderStoreCompare(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data);
   renderDetails(data); renderCodeStepper(); renderCodeView(data);
@@ -339,10 +362,142 @@ function renderDecisionHighlights() {
   }).join("");
   $("outcomes").hidden = $("performanceOutcome").hidden && $("reliabilityOutcome").hidden;
 }
+/* Ch0 · BobFull System Showcase — 새 Scenario/Step 데이터를 따로 만들지 않고, 이미 검증된
+   실제 Chapter/Scenario/Step을 {chapter, scenario, step} 참조로만 모아 재생한다. 렌더링도
+   findStep()으로 찾은 실제 step 객체를 그대로 renderCanvas()에 넘겨 재사용한다 — Showcase 전용
+   시각화 로직을 새로 만들지 않는다. problem/solution/outcomes 문구는 각 Chapter의 summary와
+   Evidence 기준 factStatus를 벗어나지 않게 작성했다(과장 금지). */
+const SHOWCASE_SCENARIOS = [
+  { id: "full-flow", title: "전체 흐름",
+    problem: "BobFull 채팅은 단순 CRUD가 아니라 비동기 처리 구조로 되어 있습니다.",
+    solution: "메시지 저장과 AI 검수를 분리해, AI 처리 지연이 사용자 요청에 전파되지 않도록 했습니다.",
+    outcomes: ["메시지 저장 완료", "AI 검수는 비동기로 분리", "사용자 요청과 무관하게 처리"],
+    steps: [
+      { chapter: "kafka-ai", scenario: "normal", step: "send" },
+      { chapter: "kafka-ai", scenario: "normal", step: "commit" },
+      { chapter: "kafka-ai", scenario: "normal", step: "publish" },
+      { chapter: "kafka-ai", scenario: "normal", step: "analyze" }
+    ] },
+  { id: "ai-failure", title: "AI 장애 대응",
+    problem: "AI 검수가 실패하면 채팅 저장까지 함께 실패해야 할까?",
+    solution: "핵심 거래(메시지 저장)와 AI 후속 검수를 분리해, AI 장애가 메시지 저장에 영향을 주지 않게 격리했습니다.",
+    outcomes: ["채팅 저장 완료", "AI 장애가 다른 메시지 처리를 막지 않음"],
+    steps: [
+      { chapter: "kafka-ai", scenario: "normal", step: "commit" },
+      { chapter: "kafka-ai", scenario: "normal", step: "publish" },
+      { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "retries" },
+      { chapter: "kafka-ai", scenario: "retry-exhausted-dlt", step: "dlt" }
+    ] },
+  { id: "multi-instance", title: "다중 서버 전달",
+    problem: "사용자가 서로 다른 서버 인스턴스에 연결되어 있다면 메시지가 전달될까?",
+    solution: "Redis Pub/Sub으로 서버 간 신호를 전파해, 접속한 인스턴스와 무관하게 메시지를 전달합니다.",
+    outcomes: ["다중 인스턴스 메시지 전달 확인", "STOMP 세션 경계 극복"],
+    steps: [
+      { chapter: "redis", scenario: "local-two-instance-normal", step: "save" },
+      { chapter: "redis", scenario: "local-two-instance-normal", step: "broadcast" },
+      { chapter: "redis", scenario: "local-two-instance-normal", step: "fanout" }
+    ] }
+];
+function currentShowcase() { return SHOWCASE_SCENARIOS[state.showcaseScenario]; }
+function chapterIndexById(id) { return chapters.findIndex((item) => item.id === id); }
+function scenarioIndexById(chapterIdx, scenarioId) { return chapters[chapterIdx].scenarios.findIndex((item) => item.id === scenarioId); }
+function renderShowcaseTabs() {
+  $("showcaseTabs").innerHTML = SHOWCASE_SCENARIOS.map((scenario, i) =>
+    `<button type="button" class="${i === state.showcaseScenario ? "active" : ""}" data-idx="${i}">${scenario.title}</button>`).join("");
+}
+/* renderCanvas(data)를 그대로 재사용한다 — 실제 step 객체를 넘기므로 active/dim 강조, token 이동,
+   region 배경까지 일반 Chapter와 완전히 같은 렌더러로 그려진다. */
+function renderShowcaseStep() {
+  const scenario = currentShowcase();
+  const ref = scenario.steps[state.showcaseStep];
+  const data = findStep(ref.chapter, ref.scenario, ref.step);
+  renderShowcaseTabs();
+  $("showcaseScenarioTitle").textContent = scenario.title;
+  $("showcaseProblem").textContent = scenario.problem;
+  $("showcaseSolution").textContent = scenario.solution;
+  renderCanvas(data);
+  $("showcaseStepCounter").textContent = `Step ${state.showcaseStep + 1} / ${scenario.steps.length}`;
+  $("showcaseOutcomes").innerHTML = scenario.outcomes.map((text) => `<span class="showcase-outcome">${text} ✓</span>`).join("");
+}
+let showcaseTimer = null, showcaseHoldTimeout = null, showcaseStartTimeout = null, showcasePlaying = true;
+function stopShowcaseTimers() { clearInterval(showcaseTimer); showcaseTimer = null; clearTimeout(showcaseHoldTimeout); clearTimeout(showcaseStartTimeout); }
+function showcaseTick() {
+  const scenario = currentShowcase();
+  if (state.showcaseStep >= scenario.steps.length - 1) {
+    clearInterval(showcaseTimer); showcaseTimer = null;
+    showcaseHoldTimeout = setTimeout(() => {
+      if (!showcasePlaying) return;
+      state.showcaseStep = 0; renderShowcaseStep();
+      showcaseTimer = setInterval(showcaseTick, 1600);
+    }, 1800);
+    return;
+  }
+  state.showcaseStep++; renderShowcaseStep();
+}
+function playShowcaseAuto() {
+  showcasePlaying = true; $("showcaseAutoPlay").textContent = "⏸ Pause";
+  clearTimeout(showcaseHoldTimeout);
+  clearInterval(showcaseTimer);
+  showcaseTimer = setInterval(showcaseTick, 1600);
+}
+function pauseShowcaseAuto() { showcasePlaying = false; $("showcaseAutoPlay").textContent = "▶ Auto Play"; stopShowcaseTimers(); }
+/* 진입/Scenario 전환 직후 바로 재생하지 않고 0.5~1초 대기했다가 자동 재생을 시작한다. */
+function restartShowcaseAutoplay() { stopShowcaseTimers(); showcaseStartTimeout = setTimeout(playShowcaseAuto, 700); }
+function switchShowcaseScenario(idx) {
+  state.showcaseScenario = idx; state.showcaseStep = 0;
+  renderShowcaseStep();
+  restartShowcaseAutoplay();
+}
+/* 같은 #canvas/#flowCaption 엘리먼트를 Showcase 슬롯으로 옮긴다 — 일반 Chapter의 크게 보기와
+   같은 원리로, 다시 렌더링하지 않으므로 강조 상태가 그대로 유지된다. */
+function enterShowcaseMode() {
+  stop();
+  if (!$("canvasOverlay").hidden) collapseCanvasView();
+  state.mode = "showcase";
+  $("showcaseCanvasSlot").appendChild($("canvas"));
+  $("showcaseCanvasSlot").appendChild($("flowCaption"));
+  render();
+  restartShowcaseAutoplay();
+}
+function exitShowcaseMode(chapterIdx, scenarioIdx) {
+  pauseShowcaseAuto();
+  state.mode = "chapter";
+  $("canvasSlot").appendChild($("canvas"));
+  $("stageSticky").appendChild($("flowCaption"));
+  state.chapter = chapterIdx != null && chapterIdx >= 0 ? chapterIdx : state.chapter;
+  state.scenario = scenarioIdx != null && scenarioIdx >= 0 ? scenarioIdx : 0;
+  state.step = 0;
+  render();
+}
+/* README GIF·발표·브로셔 촬영용 — Showcase 컴포넌트를 새로 만들지 않고, 같은 화면에서
+   조작 UI(Chapter/Scenario 선택, Replay/Pause, Capture 버튼 자체)만 감춘다. */
+function setCaptureMode(on) {
+  document.body.classList.toggle("capture-mode", on);
+  const url = new URL(location.href);
+  if (on) url.searchParams.set("capture", "true"); else url.searchParams.delete("capture");
+  history.replaceState(null, "", url);
+}
+$("showcaseTabs").onclick = (event) => {
+  const button = event.target.closest("button[data-idx]"); if (!button) return;
+  switchShowcaseScenario(Number(button.dataset.idx));
+};
+$("showcaseAutoPlay").onclick = () => { showcasePlaying ? pauseShowcaseAuto() : playShowcaseAuto(); };
+$("showcaseReplay").onclick = () => { stopShowcaseTimers(); state.showcaseStep = 0; renderShowcaseStep(); playShowcaseAuto(); };
+$("showcaseCapture").onclick = () => setCaptureMode(!document.body.classList.contains("capture-mode"));
+$("showcaseBackToDocs").onclick = () => {
+  const ref = currentShowcase().steps[0];
+  const chapterIdx = chapterIndexById(ref.chapter);
+  exitShowcaseMode(chapterIdx, scenarioIndexById(chapterIdx, ref.scenario));
+};
 function stop() { clearInterval(state.timer); state.timer = null; }
 function resetStep() { stop(); state.step = 0; render(); }
 function advance() { if (state.step >= currentScenario().steps.length - 1) { stop(); state.step = 0; render(); return; } state.step++; render(); }
-$("chapterSelect").onchange = (event) => { state.chapter = Number(event.target.value); state.scenario = 0; resetStep(); };
+$("chapterSelect").onchange = (event) => {
+  const value = event.target.value;
+  if (value === "showcase") { enterShowcaseMode(); return; }
+  if (state.mode === "showcase") { exitShowcaseMode(Number(value), 0); return; }
+  state.chapter = Number(value); state.scenario = 0; resetStep();
+};
 $("scenarioButtons").onclick = (event) => {
   const button = event.target.closest("button[data-scenario]"); if (!button) return;
   state.scenario = Number(button.dataset.scenario); resetStep();
@@ -356,7 +511,9 @@ $("canvasOverlay").onclick = (event) => { if (event.target === $("canvasOverlay"
    select/input에 포커스가 있을 때는 그 컨트롤의 기본 키 동작(값 변경, 스크롤)을 막지 않는다. */
 function togglePlay() { (state.timer ? $("pause") : $("play")).click(); }
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && document.body.classList.contains("capture-mode")) { setCaptureMode(false); return; }
   if (event.key === "Escape" && !$("canvasOverlay").hidden) { collapseCanvasView(); return; }
+  if (state.mode === "showcase") return; /* Showcase는 자체 Auto Play/Replay를 쓰고, 일반 재생 단축키와 섞이지 않게 한다. */
   const focusedTag = document.activeElement.tagName;
   if (focusedTag === "SELECT" || focusedTag === "INPUT" || focusedTag === "TEXTAREA") return;
   if (event.key === "ArrowLeft") { event.preventDefault(); $("prev").click(); }
@@ -364,4 +521,13 @@ document.addEventListener("keydown", (event) => {
   else if (event.code === "Space" || event.key === " ") { event.preventDefault(); togglePlay(); }
 });
 syncTopbarHeightVar();
-render();
+/* README GIF 재촬영·발표 직전 특정 Scenario 바로 열기용 — /flow-lab/...?chapter=showcase&scenario=ai-failure&capture=true */
+const startupParams = new URLSearchParams(location.search);
+if (startupParams.get("chapter") === "showcase") {
+  const scenarioIdx = SHOWCASE_SCENARIOS.findIndex((item) => item.id === startupParams.get("scenario"));
+  if (scenarioIdx >= 0) state.showcaseScenario = scenarioIdx;
+  enterShowcaseMode();
+  if (startupParams.get("capture") === "true") setCaptureMode(true);
+} else {
+  render();
+}

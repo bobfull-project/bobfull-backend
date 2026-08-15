@@ -27,10 +27,21 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .scenario-select .hint{margin:0;color:var(--muted);font-size:12px;flex-basis:100%}
 
 .chapter-intro{display:flex;gap:28px;padding:18px 0;border-bottom:1px solid var(--line)}
+.chapter-intro[hidden]{display:none}
 .chapter-intro-main{flex:1 1 340px;min-width:0}
 .chapter-intro h1{margin:0 0 6px;font-size:clamp(20px,2.6vw,30px);font-weight:700}
 .chapter-intro p{margin:0;color:var(--muted);font-size:13px}
-.chapter-origin{flex:1 1 320px;min-width:0;margin:0 !important;padding-left:20px;border-left:1px solid var(--line)}
+/* 도표까지 가는 거리를 줄이기 위해 기본은 문제/해결 한 줄 요약만 보여주고, 원래의 두 문단짜리
+   전체 설명은 <details>로 접어둔다 — 내용은 그대로 유지하고 기본 노출 분량만 줄인다. */
+.chapter-origin-wrap{flex:1 1 320px;min-width:0;padding-left:20px;border-left:1px solid var(--line)}
+.origin-short{margin:0;color:var(--text);font-size:13px;line-height:1.65}
+.origin-short strong{color:var(--accent-strong);font-weight:700;margin-right:5px}
+.origin-details{margin-top:8px}
+.origin-details summary{cursor:pointer;color:var(--muted);font-size:11.5px;list-style:none}
+.origin-details summary::-webkit-details-marker{display:none}
+.origin-details summary::before{content:"▸ ";color:var(--accent-strong)}
+.origin-details[open] summary::before{content:"▾ "}
+.chapter-origin{margin:10px 0 0 !important}
 /* Why(문제)/How(해결) 두 덩어리로 나눠 한 번에 읽히게 한다. 긴 한 문단 대신 요약 카드 2개. */
 .chapter-origin dt{margin:0 0 3px;color:var(--accent-strong);font:600 11px system-ui,"Malgun Gothic",sans-serif}
 .chapter-origin dd{margin:0 0 12px;color:var(--text);font-size:12.5px;line-height:1.6}
@@ -41,6 +52,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .scenario-buttons button{flex:0 0 auto;padding:7px 14px;font-size:12.5px;white-space:nowrap}
 
 .playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;padding:8px max(20px,4vw) 10px;background:var(--bg);border-top:1px solid var(--line)}
+.playback[hidden]{display:none}
 .playback-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%}
 #secondaryControls{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.75;transform:scale(.96);transform-origin:left center}
 #counter{margin-left:auto;padding:6px 14px;border:1px solid var(--accent);border-radius:20px;background:rgba(255,125,61,.12);color:var(--accent-strong);font:700 15px ui-monospace,monospace;letter-spacing:.02em;white-space:nowrap}
@@ -55,7 +67,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .expand-btn:hover{border-color:var(--accent);color:var(--accent-strong)}
 /* 38~42vh로 예산을 고정한다 — 노트북처럼 세로 공간이 좁은 화면에서도 아래 설명을 읽을 공간을 남긴다. */
 .canvas-slot{height:40vh;min-height:220px;max-height:400px;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.canvas{width:100%;height:100%;padding:0;display:flex;align-items:center;justify-content:center}
+.canvas{width:100%;height:100%;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
 .topology{display:block;width:auto;height:auto;max-width:100%;max-height:100%}
 .stage-scroll{background:var(--stage);border:1px solid var(--line);border-radius:0 0 10px 10px;padding:14px 20px 22px}
 .stage-hint{margin:0 0 10px;color:var(--muted);font-size:11px}
@@ -77,6 +89,15 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .canvas-node.active text{fill:var(--text)}
 .canvas-node.committed rect{stroke:var(--success);stroke-dasharray:3 3;fill:var(--panel)}
 .canvas-node.committed text{fill:var(--muted)}
+/* Async Queue는 실제 운영 경로가 아니라 Ch5 실험 비교용 baseline이다 — 활성화돼도 점선 테두리와
+   보조 라벨로 "지금 이건 비교 기준선"이라는 걸 항상 구분한다(진짜 흐름과 같은 위계로 보이지 않게). */
+.canvas-node.baseline rect{stroke-dasharray:4 3}
+.canvas-node .node-sublabel{fill:var(--muted);font:9px system-ui;text-anchor:middle}
+.canvas-node.active .node-sublabel{fill:var(--accent-strong)}
+/* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위한, 아주 옅은 영역 구분.
+   active/dim 강조 위계를 방해하지 않도록 배경만 다르고 테두리는 거의 보이지 않게 한다. */
+.region-bg{fill:var(--panel);opacity:.4;stroke:var(--line);stroke-opacity:.5}
+.region-label{fill:var(--muted);font:600 9.5px system-ui,"Malgun Gothic",sans-serif;letter-spacing:.04em}
 .node-badge rect{fill:var(--panel);stroke:var(--accent)}
 .node-badge text{fill:var(--accent-strong);font:10px ui-monospace,monospace;text-anchor:middle}
 .edge-label rect{fill:var(--stage);stroke:var(--line)}
@@ -234,11 +255,48 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .outcome-list .decision{color:var(--accent-strong);font-weight:600;font-size:12px}
 .outcome-list .side-note{color:var(--muted);font-size:12px}
 
+/* Evidence 자체는 그대로 두되, Chapter별 스토리의 핵심이 아니라 검증 범위 참고자료이므로 기본 접힘. */
 .evidence-gate{margin-top:8px;padding-top:20px;border-top:1px solid var(--line)}
+.evidence-gate summary{cursor:pointer;color:var(--accent-strong);font-size:13px;font-weight:600;list-style:none}
+.evidence-gate summary::-webkit-details-marker{display:none}
+.evidence-gate[open] summary{margin-bottom:12px}
 .gate-status{display:block;color:var(--accent-strong);font-size:11px;margin-bottom:6px}
 .evidence-gate h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:8px}
 .evidence-gate p,.evidence-gate li{color:var(--muted);font-size:13px}
 .evidence-gate ul{padding-left:18px}
+
+/* Ch0 · BobFull System Showcase — 스크롤 없이 한 화면 안에서 문제→흐름→결과가 끝나야 하므로,
+   기존 Chapter의 상세 문서형 레이아웃과는 완전히 분리된 프레젠테이션 전용 뷰다. Canvas 렌더링과
+   Step 데이터는 renderCanvas()/findStep()을 그대로 재사용하고, 여기서는 배치만 새로 짠다. */
+.showcase{display:flex;flex-direction:column;gap:10px;min-height:calc(100vh - var(--topbar-h, 56px) - 24px);padding:14px 0 10px;box-sizing:border-box}
+.showcase[hidden]{display:none}
+.showcase-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.showcase-brand{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.showcase-scenario-title{margin:0;font-size:clamp(19px,2.4vw,26px);font-weight:700}
+.showcase-tabs{overflow-x:visible;flex-wrap:wrap;padding-bottom:0}
+.showcase-actions{display:flex;gap:8px;align-self:center}
+.showcase-copy{display:flex;flex-direction:column;gap:3px}
+.showcase-problem{margin:0;color:var(--text);font-size:15px;font-weight:700;line-height:1.4}
+.showcase-solution{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+/* 시스템 도표가 항상 화면의 주인공 — 남는 세로 공간을 전부 차지하고, containment로 잘리지 않는다. */
+.showcase-stage{flex:1;min-height:280px;display:flex;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px}
+#showcaseCanvasSlot{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow:hidden}
+#showcaseCanvasSlot .canvas{width:100%;flex:1;min-height:0}
+#showcaseCanvasSlot .flow-caption{flex:none;width:100%;margin:0;text-align:center}
+.showcase-outcomes{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.showcase-outcome{border:1px solid var(--success);color:var(--success);background:rgba(124,201,138,.08);padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;white-space:nowrap}
+.showcase-controls{display:flex;align-items:center;justify-content:center;gap:16px}
+.showcase-controls-buttons{display:flex;gap:8px}
+.counter-pill{padding:6px 14px;border:1px solid var(--accent);border-radius:20px;background:rgba(255,125,61,.12);color:var(--accent-strong);font:700 14px ui-monospace,monospace}
+
+/* Capture — README GIF/브로셔 촬영용. 같은 Showcase 컴포넌트에서 조작 UI만 감추고,
+   Scenario 제목·문제/해결·도표·현재 상태·Step 진행·결과는 그대로 남긴다. */
+body.capture-mode .topbar{display:none}
+body.capture-mode .scenario-select{display:none}
+body.capture-mode .showcase-tabs{display:none}
+body.capture-mode .showcase-actions{display:none}
+body.capture-mode .showcase-controls-buttons{display:none}
+body.capture-mode .showcase{min-height:100vh}
 
 @media(max-width:860px){
   .topbar{display:block}
@@ -247,11 +305,14 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
   .store-compare{grid-template-columns:1fr}
   .chapter-intro{flex-direction:column;gap:10px}
   .chapter-intro-main{flex:none}
-  .chapter-origin{flex:none;padding-left:0;border-left:none;padding-top:10px;border-top:1px solid var(--line)}
+  .chapter-origin-wrap{flex:none;padding-left:0;border-left:none;padding-top:10px;border-top:1px solid var(--line)}
+  .showcase-topbar{flex-direction:column;align-items:stretch}
+  .showcase-actions{align-self:flex-start}
 }
 @media(max-width:520px){
   main{padding:16px}
   .comparison{grid-template-columns:1fr}
   .metric-glossary div{grid-template-columns:1fr;gap:2px}
   .canvas-slot{height:34vh;min-height:190px}
+  .showcase-stage{min-height:220px}
 }

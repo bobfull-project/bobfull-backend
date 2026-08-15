@@ -16,18 +16,24 @@
       <p class="hint">코드·Evidence 기반 정적 인터랙티브 시뮬레이션 — 라이브 JVM/인프라 제어 화면이 아닙니다.</p>
     </section>
 
-    <section class="chapter-intro" aria-label="Chapter 질문">
+    <section class="chapter-intro chapter-only" aria-label="Chapter 질문">
       <div class="chapter-intro-main">
         <h1 id="chapterQuestion"></h1><p id="chapterSubtitle"></p>
       </div>
-      <dl id="chapterOrigin" class="chapter-origin"></dl>
+      <div class="chapter-origin-wrap">
+        <p id="originShort" class="origin-short"></p>
+        <details id="originDetails" class="origin-details">
+          <summary>배경 자세히 보기</summary>
+          <dl id="chapterOrigin" class="chapter-origin"></dl>
+        </details>
+      </div>
     </section>
 
-    <section class="scenario-bar" aria-label="Scenario 선택">
+    <section class="scenario-bar chapter-only" aria-label="Scenario 선택">
       <div id="scenarioButtons" class="scenario-buttons"></div>
     </section>
 
-    <section class="playback" aria-label="재생 제어">
+    <section class="playback chapter-only" aria-label="재생 제어">
       <div class="playback-controls">
         <button id="play" class="primary">▶ 시나리오 실행</button>
         <div id="secondaryControls">
@@ -38,7 +44,7 @@
       </div>
     </section>
 
-    <section class="stage" aria-label="시스템 흐름">
+    <section class="stage chapter-only" aria-label="시스템 흐름">
       <div class="stage-sticky" id="stageSticky">
         <div class="stage-heading">
           <h2>시스템 흐름</h2>
@@ -78,13 +84,13 @@
       </div>
     </div>
 
-    <section class="code-view" aria-label="실제 코드">
+    <section class="code-view chapter-only" aria-label="실제 코드">
       <h2>코드로 보기</h2>
       <div id="codeStepper" class="code-stepper"></div>
       <div id="codeCard" class="code-card"></div>
     </section>
 
-    <section id="outcomes" class="outcomes" aria-label="핵심 성과 요약">
+    <section id="outcomes" class="outcomes chapter-only" aria-label="핵심 성과 요약">
       <div id="performanceOutcome" class="outcome-block">
         <h2>성능 개선</h2>
         <p class="outcomes-hint">현재 Chapter에서 실측된 성능 개선 수치다 — 재생 중인 Step과 무관하게 이 Chapter를 보는 동안 항상 표시된다.</p>
@@ -97,7 +103,8 @@
       </div>
     </section>
 
-    <section id="evidenceGate" class="evidence-gate">
+    <details id="evidenceGate" class="evidence-gate chapter-only">
+      <summary>검증 범위 · Evidence Gate ▸</summary>
       <span class="gate-status">#191만 future improvement · not yet final</span>
       <h2>검증 범위</h2>
       <p>#169(App HA + AWS Redis cross-instance), #192(Kafka Async 비교·Consumer scaling·통합 모놀리스 결정), #258(messageId Partition Key), #251(Rule Fast Path), #266(Split Message Rule Context)은 실제 검증이 끝나 Ch3·Ch5·Ch6에 반영됐습니다. #191(Auto Scaling)만 아직 재생 Chapter가 아닙니다.</p>
@@ -107,6 +114,35 @@
         <li>#251 — measured · Moderation Rule Fast Path → Ch6 CLEAR_FLAGGED_FAST_PATH 반영</li>
         <li>#266 — verified + Provider 6-case observation · Split Message Rule Context → Ch6 SPLIT_MESSAGE_EVASION 반영</li>
         <li>#191 — future improvement · Auto Scaling 도입 판단 필요(2→N 동일 조건 측정 필요)</li></ul>
+    </details>
+
+    <section id="showcaseView" class="showcase" hidden aria-label="BobFull System Showcase">
+      <div class="showcase-topbar">
+        <div>
+          <span class="showcase-brand">BobFull System Showcase</span>
+          <h2 id="showcaseScenarioTitle" class="showcase-scenario-title"></h2>
+        </div>
+        <div id="showcaseTabs" class="scenario-buttons showcase-tabs"></div>
+        <div class="showcase-actions">
+          <button id="showcaseCapture" class="expand-btn" type="button">⛶ Capture</button>
+          <button id="showcaseBackToDocs" class="expand-btn" type="button">📄 상세 문서로</button>
+        </div>
+      </div>
+      <div class="showcase-copy">
+        <p id="showcaseProblem" class="showcase-problem"></p>
+        <p id="showcaseSolution" class="showcase-solution"></p>
+      </div>
+      <div class="showcase-stage">
+        <div id="showcaseCanvasSlot"></div>
+      </div>
+      <div class="showcase-outcomes" id="showcaseOutcomes"></div>
+      <div class="showcase-controls">
+        <div class="showcase-controls-buttons">
+          <button id="showcaseAutoPlay" class="primary" type="button">⏸ Pause</button>
+          <button id="showcaseReplay" type="button">↺ Replay</button>
+        </div>
+        <strong id="showcaseStepCounter" class="counter-pill"></strong>
+      </div>
     </section>
   </main>
   <script src="scenario-data.js"></script>
