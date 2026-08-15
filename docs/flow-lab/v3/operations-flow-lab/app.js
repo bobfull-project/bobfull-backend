@@ -78,11 +78,15 @@ function renderCanvas(data) {
     /* async(Async Queue)는 실제 운영 경로가 아니라 Ch5 실험 비교용 baseline이므로, 활성 상태여도
        점선 테두리와 보조 라벨로 "이건 비교 기준선이다"를 항상 구분해서 보여준다. */
     if (id === "async") {
-      return `<g class="canvas-node ${cls} baseline" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="34" font-weight="600">${text}</text><text x="50" y="50" class="node-sublabel">비교 기준</text></g>`;
+      return `<g class="canvas-node ${cls} baseline" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="34" font-weight="600">${text}</text><text x="50" y="50" class="node-sublabel">비교 기준</text></g></g>`;
     }
     /* 박스(100 너비, 좌우 여백 감안 84)보다 긴 라벨은 textLength로 압축해 테두리 밖으로 넘치지 않게 한다. */
     const compress = text.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
-    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="42"${compress}>${text}</text></g>`;
+    /* node-inner로 한 번 더 감싼다 — 바깥 <g>의 transform="translate(x y)"(SVG attribute, 위치 담당)와
+       animateNodes pop-in의 CSS transform(scale, 애니메이션 담당)을 같은 요소에 같이 걸면 브라우저가
+       두 transform을 잘못 합성해 node가 엉뚱한 좌표로 튀는 버그가 있었다 — 안쪽 <g>에만 CSS transform을
+       적용해 바깥 위치 계산과 완전히 분리한다. */
+    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="42"${compress}>${text}</text></g></g>`;
   }).join("");
   const badgeSvg = badgeSvgFor(t, v.badge);
   /* animateNodes(AI 채팅 검수 unified topology만 씀) — 활성화되는 순간 살짝 커졌다 제자리로
