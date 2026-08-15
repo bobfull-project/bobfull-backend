@@ -30,10 +30,13 @@ function renderCanvas(data) {
     const committed = !active && v.committedNodes.includes(id);
     const cls = active ? "active" : committed ? "committed" : "dim";
     const text = committed ? `${label} ✓` : label;
-    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="42">${text}</text></g>`;
+    /* 박스(100 너비, 좌우 여백 감안 84)보다 긴 라벨은 textLength로 압축해 테두리 밖으로 넘치지 않게 한다. */
+    const compress = text.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
+    return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="42"${compress}>${text}</text></g>`;
   }).join("");
   const badgeSvg = badgeSvgFor(t, v.badge);
   $("canvas").innerHTML = `<svg class="topology" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
+  $("flowCaption").textContent = data.action.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
 }
 function badgeSvgFor(t, badge) {
   if (!badge) return "";
@@ -239,7 +242,8 @@ function render() {
   renderScenarioButtons();
   $("chapterQuestion").textContent = currentChapter().title;
   $("chapterSubtitle").textContent = currentChapter().subtitle;
-  $("chapterOrigin").textContent = currentChapter().summary;
+  const origin = currentChapter().summary;
+  $("chapterOrigin").innerHTML = `<dt>왜 생겼는가</dt><dd>${origin.why}</dd><dt>어떻게 해결했는가</dt><dd>${origin.how}</dd>`;
   renderCanvas(data); renderRetryPolicy(data); renderStoreCompare(data); renderComparison(data); renderPerformance(data); renderKafkaPartitions(data);
   renderDetails(data); renderCodeStepper(); renderCodeView(data);
   $("stepTitle").textContent = data.action; $("counter").textContent = `Step ${state.step + 1} / ${currentScenario().steps.length}`;

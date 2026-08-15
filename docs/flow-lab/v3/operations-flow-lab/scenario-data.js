@@ -165,7 +165,8 @@ public void accept(ConsumerRecord<?, ?> record, Exception exception) {
 const chapters = [
   { id: "outbox", shortLabel: "Ch1 — 채팅방 생성 안정성 (Outbox)",
     title: "핵심 작업은 끝났는데 후속 작업이 사라진다면?", subtitle: "결제 확정 후 채팅방 생성 안정성 — Transactional Outbox",
-    summary: "결제와 예약이 확정되면, 함께 식사할 사람들이 미리 대화하고 조율할 수 있도록 채팅방을 자동으로 만들어준다. 문제는 결제 확정이 PortOne 외부 결제 검증을 거쳐야 끝난다는 점이다 — 이미 끝난 외부 결제를 채팅방 생성이 실패했다고 되돌릴 수는 없다. 그래서 채팅방 생성 실패가 이미 확정된 결제·예약까지 함께 실패시키지 않도록, 실패한 채팅방 생성 작업만 따로 보관해뒀다가 안전하게 다시 시도하는 구조가 필요했다.",
+    summary: { why: "결제와 예약이 확정되면 함께 식사할 사람들이 대화할 채팅방을 자동으로 만들어야 한다. 그런데 결제 확정은 PortOne 외부 검증을 거쳐야 끝나므로, 이미 끝난 결제를 채팅방 생성 실패 때문에 되돌릴 수 없다.",
+      how: "채팅방 생성 실패가 이미 확정된 결제·예약까지 함께 실패시키지 않도록, 실패한 작업만 따로 보관해뒀다가 안전하게 다시 시도하는 구조(Outbox)를 도입했다." },
     stageLabels: stageLabels1,
     scenarios: [{ id: "chatroom-outbox", title: "ChatRoom 생성: Before / After", comparison: true, steps: [
     step("commit", "Payment completion", "Core transaction", "✓ 결제와 예약이 확정됐어요", "결제가 정상적으로 끝났고 예약과 참여자 정보도 저장됐습니다. 아직 채팅방은 만들기 전입니다 — Outbox에 '채팅방 만들기' 작업만 같은 트랜잭션으로 함께 기록해둡니다.",
@@ -305,7 +306,8 @@ public FailureResult fail(ClaimedOutboxEvent event, String errorCode, Instant no
   ]}] },
   { id: "kafka-ai", shortLabel: "Ch2 — AI 검수 파이프라인 장애 대응",
     title: "메시지는 저장됐는데 Kafka나 AI가 실패한다면?", subtitle: "채팅 메시지 → Kafka → AI 검수 파이프라인 장애 대응",
-    summary: "채팅 메시지는 욕설·스팸 등을 걸러내기 위해 AI 검토를 거치지만, 메시지를 보낼 때마다 AI 응답을 기다리게 하면 채팅이 느려진다. 그렇다고 AI 검토를 그냥 비동기로 던져두기만 하면, AI 호출이나 Kafka에 문제가 생겼을 때 메시지가 검토되지 않은 채 조용히 사라질 수 있다. 그래서 메시지 저장과 AI 검토를 분리하면서도, 검토 요청 자체는 안전하게 보존하고 실패하면 다시 시도하거나 따로 격리할 수 있는 구조가 필요했다.", scenarios: [
+    summary: { why: "채팅 메시지는 욕설·스팸을 걸러내려 AI 검토를 거쳐야 하지만, 메시지마다 AI 응답을 기다리면 채팅이 느려진다. 그렇다고 그냥 비동기로 던지기만 하면 AI 호출이나 Kafka에 문제가 생겼을 때 메시지가 조용히 사라질 수 있다.",
+      how: "메시지 저장과 AI 검토를 분리하되, 검토 요청 자체는 Outbox에 안전하게 보존하고 실패하면 재시도하거나 DLT로 격리하는 구조를 만들었다." }, scenarios: [
     { id: "normal", title: "정상 처리", steps: [
       step("send", "Client", "ChatMessageCommandService", "● 메시지를 보냈어요", "사용자가 채팅 메시지를 보내면 서버가 저장할 준비를 시작합니다 — 메시지 저장과 Outbox 이벤트 기록을 같은 트랜잭션으로 묶습니다.",
         { transaction: "ChatMessage 저장 + 메시지 생성 이벤트(Outbox)를 한 트랜잭션으로 묶음", factStatus: FACT.VERIFIED, visual: core,
@@ -485,7 +487,8 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
   ]},
   { id: "redis", shortLabel: "Ch3 — 다중 서버 실시간 채팅 전달",
     title: "서버가 달라도 같은 채팅방 메시지를 어떻게 받는가?", subtitle: "다중 서버 환경의 실시간 채팅 전달 — Redis Pub/Sub",
-    summary: "BobFull은 여러 대의 서버로 나눠 운영된다. 그런데 채팅방에 있는 두 사람이 서로 다른 서버에 접속해 있으면, 한 서버가 메시지를 저장해도 그 소식이 다른 서버에 접속한 상대방에게 저절로 전달되지 않는다. 그래서 서버가 달라도 실시간으로 서로에게 메시지를 알려줄 수 있는 방법이 필요했다.", scenarios: [
+    summary: { why: "BobFull은 여러 서버로 나눠 운영되는데, 채팅방의 두 사람이 서로 다른 서버에 접속해 있으면 한 서버가 저장한 메시지가 다른 서버 사용자에게 저절로 전달되지 않는다.",
+      how: "Redis Pub/Sub으로 서버 간에 '새 메시지가 왔다'는 신호만 전파하고, 각 서버가 자기 접속자에게 실시간으로 전달하는 구조를 만들었다." }, scenarios: [
     { id: "local-two-instance-normal", title: "로컬 2대 인스턴스 정상 동작", steps: [
       step("save", "Client A → App A", "DB", "● 메시지가 저장됐어요", "사용자가 채팅방에 메시지를 보냈고, 서버(App A)가 이 메시지를 데이터베이스에 안전하게 저장했습니다.",
         { domainState: "ChatMessage 확정 저장됨(COMMITTED)", transaction: "ChatMessage 저장 + AI 처리 예약(Outbox)을 한 트랜잭션으로 묶음", factStatus: FACT.VERIFIED,
@@ -617,7 +620,8 @@ public void onMessage(Message message, byte[] pattern) {
   ]},
   { id: "hotpath-performance", shortLabel: "Ch4 — 예약 조회 성능 개선",
     title: "조회가 몰리면 어디가 병목이고, 어떻게 줄였는가?", subtitle: "인기 예약 조회 성능 병목 분석과 배치 쿼리 개선",
-    summary: "맛집으로 알려진 식당은 회차(예약 가능한 시간대) 예약이 열리는 순간에 트래픽이 몰린다. 실제 사용자는 예약 버튼을 누르기 전에 '식당 상세 → 회차 목록'을 반복해서 새로고침하므로, 조회 경로가 먼저 포화된다. 이 Chapter는 그 순간을 K6 부하 시나리오로 재현해 어느 API가 병목인지 분리 측정하고, 원인을 찾아 최소 변경으로 개선한 뒤 동일 조건에서 재측정한 과정을 재생한다.", scenarios: [
+    summary: { why: "맛집은 회차(예약 가능한 시간대) 예약이 열리는 순간 조회 트래픽이 몰린다. 실제로 부하를 걸어보니 회차 조회 하나가 DB Connection Pool을 거의 다 써버렸다.",
+      how: "K6로 그 순간을 재현해 어느 API가 병목인지 분리 측정하고, 원인(회차마다 반복 쿼리)을 찾아 배치 쿼리로 최소 변경한 뒤 동일 조건에서 재측정했다." }, scenarios: [
     { id: "batch-optimization", title: "인기 회차 조회 병목 개선", steps: [
       step("saturation", "K6 Load/Stress", "bobfull-k6-test-app", "▲ 예약 오픈 순간처럼 몰리자 느려졌어요", "",
         { factStatus: FACT.MEASURED, visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "event", "failure", "core", [], { nodeId: "db", text: "CPU 88~98% · Pool 10/10" }),
@@ -737,7 +741,8 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
   ]},
   { id: "kafka-mechanics", shortLabel: "Ch5 — Kafka 도입 의사결정 Lab",
     title: "Kafka는 왜 도입했을까? — 더 빠르기 위해서가 아니었다", subtitle: "가설 기각부터 Partition Key 개선까지",
-    summary: "Async와 비교해 Kafka를 선택한 실제 이유를 실측으로 검증하고, Hot-Key 병목을 도메인 계약으로 재검토해 Partition Key를 개선하는 과정을 재생한다.", scenarios: [
+    summary: { why: "AI 후속 작업을 Kafka로 넘기면 정말 더 빠를까? — Async와 비교해 실제로 Kafka를 선택한 이유를 검증해야 했다.",
+      how: "같은 조건에서 Async와 Kafka를 실측 비교했고, 이후 발견한 Partition Hot-Key 문제도 도메인 계약을 재검토해 Key를 개선했다." }, scenarios: [
     { id: "kafka-adoption-decision", title: "Kafka 도입 의사결정", steps: [
       step("hypothesis", "Human 설계 질문", "Async vs Kafka", "▲ 가설: Kafka가 더 빠르지 않을까?", "AI 후속 작업을 Async 대신 Kafka로 넘기면 응답이나 처리 속도가 더 빠르지 않을까? — 같은 조건에서 실제로 비교해본다.",
         { factStatus: FACT.DESIGN, visual: visual(["app", "async", "outbox", "kafka"], [], null, null, "outbox") }),
@@ -875,7 +880,8 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
   ]},
   { id: "ai-moderation", shortLabel: "Ch6 — AI 모더레이션 판단 로직",
     title: "채팅 AI는 메시지를 어떻게 판단하는가?", subtitle: "AI 모더레이션 판단 로직 — Rule Filter부터 LLM까지",
-    summary: "채팅에 욕설·스팸·개인정보 유출 같은 문제가 있으면 안 되지만, 메시지마다 AI에게 판단을 맡기면 느리고 비용도 많이 든다. 그래서 명백한 경우는 규칙만으로 빠르게 걸러내고, 애매한 경우에만 AI에게 판단을 맡기는 구조가 필요했다 — 욕설을 여러 메시지로 나눠 보내 규칙을 피하려는 시도까지 고려해야 했다.", scenarios: [
+    summary: { why: "채팅에 욕설·스팸·개인정보 유출이 있으면 안 되지만, 메시지마다 AI에게 판단을 맡기면 느리고 비용도 많이 든다.",
+      how: "명백한 경우는 규칙만으로 즉시 걸러내고 애매한 경우에만 AI에게 맡기는 구조를 만들었다 — 욕설을 나눠 보내 규칙을 피하려는 시도까지 고려했다." }, scenarios: [
     { id: "clear-flagged-fast-path", title: "Rule만으로 즉시 판정 (LLM 생략)", steps: [
       step("input", "Client", "ChatModerationService", "● 이런 메시지가 왔어요: \"개새끼야\"", "모든 메시지를 매번 AI에게 보내야 할까? — 이렇게 명백한 욕설도 있다.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["input"], [], "event", null, "rule") }),

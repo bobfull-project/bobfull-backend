@@ -20,7 +20,7 @@
       <div class="chapter-intro-main">
         <h1 id="chapterQuestion"></h1><p id="chapterSubtitle"></p>
       </div>
-      <p id="chapterOrigin" class="chapter-origin"></p>
+      <dl id="chapterOrigin" class="chapter-origin"></dl>
     </section>
 
     <section class="scenario-bar" aria-label="Scenario 선택">
@@ -43,6 +43,7 @@
       <div class="stage-body">
         <div class="stage-main">
           <div id="canvas" class="canvas" aria-label="시스템 흐름 Canvas"></div>
+          <p id="flowCaption" class="flow-caption"></p>
           <div class="legend"><span>● 요청</span><span>◆ 이벤트</span><span>✓ 확정</span><span>↻ 재시도</span><span>↓ DLT</span><span>↠ Redis 전파</span><span>× 실패</span></div>
           <div id="retryPolicy" class="retry-policy" hidden></div>
           <section id="storeCompare" class="store-compare" hidden></section>
