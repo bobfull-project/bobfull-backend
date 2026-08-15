@@ -12,6 +12,7 @@
 - ECR push, EC2 bootstrap, EC2 deploy, 배포 verify 스크립트
 - GitHub Actions 기반 백엔드 CI workflow와 자동 배포 workflow 파일
 - ALB Target Group weight 기반 Blue-Green 배포 orchestration
+- 평상시 비활성 Blue/Green App EC2 STOP, 배포 시작 시 START, 배포 검증 후 기존 Active EC2 STOP 기준
 - 운영 환경변수 이름과 Parameter Store 이름 기준
 - 이미지 저장용 S3 버킷 이름 환경변수 기준
 - 식당 이미지 검증용 Java Lambda 수동 설정 기준
@@ -161,12 +162,18 @@ main push
 → ECR push
 → ALB Listener의 현재 Blue/Green weight 조회
 → weight 0인 비활성 Target Group의 EC2 target 2대 조회
+→ 비활성 EC2가 stopping이면 stopped까지 대기
+→ 비활성 EC2가 stopped이면 start-instances 실행
+→ 비활성 EC2 2대가 running이 될 때까지 대기
+→ 비활성 EC2 2대가 SSM managed Online이 될 때까지 대기
 → SSM Run Command로 비활성 EC2 2대에 같은 image 배포
 → 각 EC2에서 Parameter Store env-file 생성, 기존 컨테이너 교체, localhost readiness 확인
 → 비활성 Target Group의 모든 target healthy 확인
 → ALB Listener weight를 기존 활성 0, 신규 활성 100으로 전환
 → public readiness와 API 검증
 → 실패 시 기존 Listener default action으로 rollback
+→ public 검증 성공 후 기존 활성 EC2 2대를 rollback window 동안 running 유지
+→ rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 stop-instances 실행
 → ECR, Parameter Store, S3, CloudWatch 확인
 ```
 
@@ -196,7 +203,24 @@ BACKEND_PUBLIC_VERIFY_DELAY_SECONDS
 BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS
 BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS
 BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS
+BACKEND_EC2_STATE_TIMEOUT_SECONDS
+BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS
+BACKEND_SSM_ONLINE_TIMEOUT_SECONDS
+BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS
+BACKEND_PREVIOUS_ENV_KEEP_SECONDS
 ```
+
+기본값:
+
+| 변수 | 기본값 | 용도 |
+|---|---:|---|
+| `BACKEND_EC2_STATE_TIMEOUT_SECONDS` | `300` | EC2 `stopping -> stopped`, `stopped/pending -> running`, `stopping/running -> stopped` 대기 timeout |
+| `BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS` | `10` | EC2 상태 polling 간격 |
+| `BACKEND_SSM_ONLINE_TIMEOUT_SECONDS` | `300` | EC2 running 이후 SSM `PingStatus=Online` 대기 timeout |
+| `BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS` | `10` | SSM Online polling 간격 |
+| `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` | `600` | public 검증 성공 후 기존 active EC2를 rollback 가능 상태로 유지하는 시간 |
+
+현재 구현은 `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` 동안 GitHub Actions job 안에서 bounded `sleep`으로 대기한다. 구조가 단순하고 배포 직후 rollback window가 한 workflow 로그에 남는 장점이 있다. 다만 workflow 점유 시간이 운영상 부담되면 후속으로 EventBridge Scheduler 또는 별도 수동 cleanup workflow를 검토한다.
 
 필수 GitHub Secrets:
 
@@ -227,6 +251,9 @@ ssm:GetParametersByPath
 elasticloadbalancing:DescribeListeners
 elasticloadbalancing:ModifyListener
 elasticloadbalancing:DescribeTargetHealth
+ec2:DescribeInstances
+ec2:StartInstances
+ec2:StopInstances
 s3:ListBucket
 logs:DescribeLogStreams
 ```
@@ -256,16 +283,22 @@ CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 - Gradle `clean check bootJar` 성공
 - Docker image build와 ECR push 성공
 - ALB Listener의 Blue/Green weight가 정확히 `100/0` 또는 `0/100`
-- 비활성 Target Group의 EC2 target이 정확히 2대이며 둘 다 SSM managed `Online`
+- 비활성 Target Group의 EC2 target이 정확히 2대
+- 비활성 EC2가 `stopped`이면 start, `running`이면 그대로 진행, `pending`이면 running까지 대기, `stopping`이면 stopped까지 대기 후 start
+- 비활성 EC2가 기타 비정상 상태이면 명확한 오류로 배포 실패
+- 비활성 EC2 2대가 모두 `running`
+- 비활성 EC2 2대가 모두 SSM managed `Online`
 - 비활성 EC2 2대의 `aws ssm send-command` 명령 완료 상태가 모두 `Success`
 - 비활성 EC2 2대 내부 배포 스크립트의 컨테이너 `running` 확인 성공
 - 비활성 EC2 2대 내부 `localhost` 기준 readiness health check 성공
 - 비활성 Target Group의 target 2대가 모두 `healthy`
 - ALB Listener weight 전환 후 public readiness와 API 검증 성공
+- public 검증 성공 후 rollback window 동안 기존 활성 EC2 2대 running 유지
+- rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 `stopped`
 - Parameter Store 경로 조회, S3 이미지 버킷 접근, CloudWatch Log Group 접근 확인
 - 비활성 EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
 
-비활성 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다. Traffic 전환 후 public 검증이 실패하면 전환 직전에 저장한 Listener default action으로 rollback한다. EC2 배포 실패 원인은 EC2 Docker/CloudWatch Logs에서 확인한다.
+비활성 EC2 START, EC2 running 대기, SSM Online 대기, 비활성 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다. Traffic 전환 후 Listener 확인 또는 public 검증이 실패하면 전환 직전에 저장한 Listener default action으로 rollback한다. rollback이 발생했거나 rollback을 시도한 경우 기존 활성 EC2는 절대 stop하지 않는다. stop 대상은 ALB 전환 이후 다시 계산하지 않고 배포 시작 시점에 저장한 active Target Group의 EC2 instance id만 사용한다. EC2 배포 실패 원인은 EC2 Docker/CloudWatch Logs에서 확인한다.
 
 ## CORS와 S3 프론트엔드 Origin
 

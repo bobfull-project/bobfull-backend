@@ -26,6 +26,27 @@ require_commands() {
   fi
 }
 
+validate_non_negative_integer() {
+  local key="$1"
+  local value="$2"
+
+  if [[ ! "${value}" =~ ^[0-9]+$ ]]; then
+    echo "${key} must be a non-negative integer. actual=${value}" >&2
+    exit 1
+  fi
+}
+
+validate_positive_integer() {
+  local key="$1"
+  local value="$2"
+
+  validate_non_negative_integer "${key}" "${value}"
+  if [ "${value}" -eq 0 ]; then
+    echo "${key} must be greater than 0. actual=${value}" >&2
+    exit 1
+  fi
+}
+
 load_listener_actions() {
   local output_file="$1"
 
@@ -126,6 +147,235 @@ join_by_comma() {
   printf '%s' "$*"
 }
 
+describe_instance_states() {
+  aws ec2 describe-instances \
+    --region "${AWS_REGION}" \
+    --instance-ids "$@" \
+    --output json > "${ec2_instance_state_file}"
+}
+
+instance_state_summary_from_file() {
+  python3 - "${ec2_instance_state_file}" "$@" <<'PY'
+import json
+import sys
+
+states_path = sys.argv[1]
+expected_ids = sys.argv[2:]
+with open(states_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+states = {}
+for reservation in payload.get("Reservations", []):
+    for instance in reservation.get("Instances", []):
+        states[instance.get("InstanceId")] = instance.get("State", {}).get("Name", "unknown")
+
+summary = ", ".join(
+    f"{instance_id}:{states.get(instance_id, 'missing')}"
+    for instance_id in sorted(expected_ids)
+)
+print(summary)
+PY
+}
+
+instance_ids_by_state_from_file() {
+  local expected_state="$1"
+  shift
+
+  python3 - "${ec2_instance_state_file}" "${expected_state}" "$@" <<'PY'
+import json
+import sys
+
+states_path = sys.argv[1]
+expected_state = sys.argv[2]
+expected_ids = sys.argv[3:]
+with open(states_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+states = {}
+for reservation in payload.get("Reservations", []):
+    for instance in reservation.get("Instances", []):
+        states[instance.get("InstanceId")] = instance.get("State", {}).get("Name", "unknown")
+
+for instance_id in sorted(expected_ids):
+    if states.get(instance_id, "missing") == expected_state:
+        print(instance_id)
+PY
+}
+
+all_instance_states_match_from_file() {
+  local expected_state="$1"
+  shift
+
+  python3 - "${ec2_instance_state_file}" "${expected_state}" "$@" <<'PY'
+import json
+import sys
+
+states_path = sys.argv[1]
+expected_state = sys.argv[2]
+expected_ids = sys.argv[3:]
+with open(states_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+states = {}
+for reservation in payload.get("Reservations", []):
+    for instance in reservation.get("Instances", []):
+        states[instance.get("InstanceId")] = instance.get("State", {}).get("Name", "unknown")
+
+if any(states.get(instance_id, "missing") != expected_state for instance_id in expected_ids):
+    raise SystemExit(1)
+PY
+}
+
+unexpected_instance_states_from_file() {
+  local allowed_states_csv="$1"
+  shift
+
+  python3 - "${ec2_instance_state_file}" "${allowed_states_csv}" "$@" <<'PY'
+import json
+import sys
+
+states_path = sys.argv[1]
+allowed_states = set(sys.argv[2].split(","))
+expected_ids = sys.argv[3:]
+with open(states_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+states = {}
+for reservation in payload.get("Reservations", []):
+    for instance in reservation.get("Instances", []):
+        states[instance.get("InstanceId")] = instance.get("State", {}).get("Name", "unknown")
+
+unexpected = [
+    f"{instance_id}:{states.get(instance_id, 'missing')}"
+    for instance_id in expected_ids
+    if states.get(instance_id, "missing") not in allowed_states
+]
+
+if unexpected:
+    print(", ".join(unexpected))
+PY
+}
+
+wait_stopping_instances_stopped() {
+  local instance_ids=("$@")
+  local deadline=$((SECONDS + BACKEND_EC2_STATE_TIMEOUT_SECONDS))
+  local stopping_ids=()
+  local state_summary
+  local unexpected_states
+
+  while true; do
+    describe_instance_states "${instance_ids[@]}"
+    state_summary="$(instance_state_summary_from_file "${instance_ids[@]}")"
+    unexpected_states="$(unexpected_instance_states_from_file "stopped,running,pending,stopping" "${instance_ids[@]}")"
+    if [ -n "${unexpected_states}" ]; then
+      echo "Inactive EC2 instances include unsupported state: ${unexpected_states}" >&2
+      return 1
+    fi
+
+    mapfile -t stopping_ids < <(instance_ids_by_state_from_file stopping "${instance_ids[@]}")
+    if [ "${#stopping_ids[@]}" -eq 0 ]; then
+      echo "Inactive EC2 startable states confirmed: ${state_summary}"
+      return 0
+    fi
+
+    echo "Inactive EC2 instances are stopping: ${state_summary}"
+    if [ "${SECONDS}" -ge "${deadline}" ]; then
+      echo "Inactive EC2 instances did not leave stopping state before timeout." >&2
+      return 1
+    fi
+
+    sleep "${BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS}"
+  done
+}
+
+start_stopped_instances() {
+  local instance_ids=("$@")
+  local stopped_ids=()
+
+  describe_instance_states "${instance_ids[@]}"
+  mapfile -t stopped_ids < <(instance_ids_by_state_from_file stopped "${instance_ids[@]}")
+
+  if [ "${#stopped_ids[@]}" -eq 0 ]; then
+    echo "No inactive EC2 instances are stopped. Start command is not needed."
+    return 0
+  fi
+
+  printf 'Starting inactive EC2 instances: %s\n' "${stopped_ids[*]}"
+  aws ec2 start-instances \
+    --region "${AWS_REGION}" \
+    --instance-ids "${stopped_ids[@]}" >/dev/null
+}
+
+wait_instances_running() {
+  local label="$1"
+  shift
+  local instance_ids=("$@")
+  local deadline=$((SECONDS + BACKEND_EC2_STATE_TIMEOUT_SECONDS))
+  local state_summary
+  local unexpected_states
+
+  while true; do
+    describe_instance_states "${instance_ids[@]}"
+    state_summary="$(instance_state_summary_from_file "${instance_ids[@]}")"
+    if all_instance_states_match_from_file running "${instance_ids[@]}"; then
+      echo "${label} EC2 instances are running: ${state_summary}"
+      return 0
+    fi
+
+    unexpected_states="$(unexpected_instance_states_from_file "running,pending,stopped" "${instance_ids[@]}")"
+    if [ -n "${unexpected_states}" ]; then
+      echo "${label} EC2 instances include unexpected state while waiting for running: ${unexpected_states}" >&2
+      return 1
+    fi
+
+    echo "${label} EC2 running wait pending: ${state_summary}"
+    if [ "${SECONDS}" -ge "${deadline}" ]; then
+      echo "${label} EC2 instances did not become running before timeout." >&2
+      return 1
+    fi
+
+    sleep "${BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS}"
+  done
+}
+
+wait_instances_stopped() {
+  local label="$1"
+  shift
+  local instance_ids=("$@")
+  local deadline=$((SECONDS + BACKEND_EC2_STATE_TIMEOUT_SECONDS))
+  local state_summary
+  local unexpected_states
+
+  while true; do
+    describe_instance_states "${instance_ids[@]}"
+    state_summary="$(instance_state_summary_from_file "${instance_ids[@]}")"
+    if all_instance_states_match_from_file stopped "${instance_ids[@]}"; then
+      echo "${label} EC2 instances are stopped: ${state_summary}"
+      return 0
+    fi
+
+    unexpected_states="$(unexpected_instance_states_from_file "running,stopping,stopped" "${instance_ids[@]}")"
+    if [ -n "${unexpected_states}" ]; then
+      echo "${label} EC2 instances include unexpected state while waiting for stopped: ${unexpected_states}" >&2
+      return 1
+    fi
+
+    echo "${label} EC2 stop wait pending: ${state_summary}"
+    if [ "${SECONDS}" -ge "${deadline}" ]; then
+      echo "${label} EC2 instances did not become stopped before timeout." >&2
+      return 1
+    fi
+
+    sleep "${BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS}"
+  done
+}
+
+ensure_inactive_instances_running() {
+  wait_stopping_instances_stopped "$@"
+  start_stopped_instances "$@"
+  wait_instances_running inactive "$@"
+}
+
 validate_ssm_online() {
   local instance_ids_csv
 
@@ -154,6 +404,11 @@ offline = [
     for instance_id in expected_ids
     if instance_id in instances and instances.get(instance_id) != "Online"
 ]
+summary = ", ".join(
+    f"{instance_id}:{instances.get(instance_id, 'missing')}"
+    for instance_id in sorted(expected_ids)
+)
+print(summary)
 
 if missing or offline:
     if missing:
@@ -162,6 +417,26 @@ if missing or offline:
         print("SSM instances not Online: " + ", ".join(offline), file=sys.stderr)
     raise SystemExit(1)
 PY
+}
+
+wait_ssm_online() {
+  local deadline=$((SECONDS + BACKEND_SSM_ONLINE_TIMEOUT_SECONDS))
+  local ssm_summary
+
+  while true; do
+    if ssm_summary="$(validate_ssm_online "$@" 2>&1)"; then
+      echo "All target instances are SSM managed and Online: ${ssm_summary}"
+      return 0
+    fi
+
+    echo "SSM Online wait pending: ${ssm_summary}"
+    if [ "${SECONDS}" -ge "${deadline}" ]; then
+      echo "Target instances did not become SSM Online before timeout." >&2
+      return 1
+    fi
+
+    sleep "${BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS}"
+  done
 }
 
 target_group_health_is_healthy() {
@@ -350,6 +625,25 @@ verify_public_url() {
   return 1
 }
 
+keep_previous_active_environment() {
+  if [ "${BACKEND_PREVIOUS_ENV_KEEP_SECONDS}" -eq 0 ]; then
+    echo "Previous active EC2 keep time is 0 seconds. Stopping previous active instances immediately."
+    return 0
+  fi
+
+  echo "Keeping previous active EC2 instances running for rollback window: ${BACKEND_PREVIOUS_ENV_KEEP_SECONDS}s"
+  sleep "${BACKEND_PREVIOUS_ENV_KEEP_SECONDS}"
+}
+
+stop_previous_active_instances() {
+  printf 'Stopping previous active EC2 instances captured before switch: %s\n' "$*"
+  aws ec2 stop-instances \
+    --region "${AWS_REGION}" \
+    --instance-ids "$@" >/dev/null
+
+  wait_instances_stopped "previous active" "$@"
+}
+
 cleanup() {
   if [ -n "${tmp_dir:-}" ] && [ -d "${tmp_dir}" ]; then
     rm -rf "${tmp_dir}" || true
@@ -378,6 +672,24 @@ BACKEND_PUBLIC_VERIFY_DELAY_SECONDS="${BACKEND_PUBLIC_VERIFY_DELAY_SECONDS:-10}"
 BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS="${BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS:-10}"
 BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS="${BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS:-60}"
 BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS="${BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS:-3}"
+BACKEND_EC2_STATE_TIMEOUT_SECONDS="${BACKEND_EC2_STATE_TIMEOUT_SECONDS:-300}"
+BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS="${BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS:-10}"
+BACKEND_SSM_ONLINE_TIMEOUT_SECONDS="${BACKEND_SSM_ONLINE_TIMEOUT_SECONDS:-300}"
+BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS="${BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS:-10}"
+BACKEND_PREVIOUS_ENV_KEEP_SECONDS="${BACKEND_PREVIOUS_ENV_KEEP_SECONDS:-600}"
+
+validate_non_negative_integer BACKEND_TG_HEALTH_TIMEOUT_SECONDS "${BACKEND_TG_HEALTH_TIMEOUT_SECONDS}"
+validate_positive_integer BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS "${BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS}"
+validate_positive_integer BACKEND_PUBLIC_VERIFY_ATTEMPTS "${BACKEND_PUBLIC_VERIFY_ATTEMPTS}"
+validate_positive_integer BACKEND_PUBLIC_VERIFY_DELAY_SECONDS "${BACKEND_PUBLIC_VERIFY_DELAY_SECONDS}"
+validate_non_negative_integer BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS "${BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS}"
+validate_non_negative_integer BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS "${BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS}"
+validate_positive_integer BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS "${BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS}"
+validate_non_negative_integer BACKEND_EC2_STATE_TIMEOUT_SECONDS "${BACKEND_EC2_STATE_TIMEOUT_SECONDS}"
+validate_positive_integer BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS "${BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS}"
+validate_non_negative_integer BACKEND_SSM_ONLINE_TIMEOUT_SECONDS "${BACKEND_SSM_ONLINE_TIMEOUT_SECONDS}"
+validate_positive_integer BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS "${BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS}"
+validate_non_negative_integer BACKEND_PREVIOUS_ENV_KEEP_SECONDS "${BACKEND_PREVIOUS_ENV_KEEP_SECONDS}"
 
 tmp_dir="$(mktemp -d)"
 listener_actions_file="${tmp_dir}/listener-actions-before.json"
@@ -385,6 +697,7 @@ current_listener_actions_file="${tmp_dir}/listener-actions-current.json"
 switch_actions_file="${tmp_dir}/listener-actions-switch.json"
 target_health_file="${tmp_dir}/target-health.json"
 ssm_info_file="${tmp_dir}/ssm-info.json"
+ec2_instance_state_file="${tmp_dir}/ec2-instance-states.json"
 
 load_listener_actions "${listener_actions_file}"
 IFS='|' read -r active_color active_target_group_arn inactive_color inactive_target_group_arn blue_weight green_weight \
@@ -395,15 +708,22 @@ echo "Green target group weight: ${green_weight}"
 echo "Active target group: ${active_color} ${active_target_group_arn}"
 echo "Inactive target group: ${inactive_color} ${inactive_target_group_arn}"
 
+mapfile -t active_instance_ids < <(extract_target_instance_ids "${active_target_group_arn}")
+if [ "${#active_instance_ids[@]}" -ne "${EXPECTED_TARGET_COUNT}" ]; then
+  echo "Active target group must resolve to exactly ${EXPECTED_TARGET_COUNT} EC2 instance ids." >&2
+  exit 1
+fi
+
 mapfile -t inactive_instance_ids < <(extract_target_instance_ids "${inactive_target_group_arn}")
 if [ "${#inactive_instance_ids[@]}" -ne "${EXPECTED_TARGET_COUNT}" ]; then
   echo "Inactive target group must resolve to exactly ${EXPECTED_TARGET_COUNT} EC2 instance ids." >&2
   exit 1
 fi
 
+printf 'Active target instances captured before switch: %s\n' "${active_instance_ids[*]}"
 printf 'Inactive target instances: %s\n' "${inactive_instance_ids[*]}"
-validate_ssm_online "${inactive_instance_ids[@]}"
-echo "All inactive target instances are SSM managed and Online."
+ensure_inactive_instances_running "${inactive_instance_ids[@]}"
+wait_ssm_online "${inactive_instance_ids[@]}"
 
 BACKEND_EC2_INSTANCE_IDS="${inactive_instance_ids[*]}" \
   bash scripts/aws/run-ssm-backend-deploy-v1.sh
@@ -435,5 +755,8 @@ if ! verify_public_url api "${BACKEND_PUBLIC_API_VERIFY_URL}"; then
   rollback_listener
   exit 1
 fi
+
+keep_previous_active_environment
+stop_previous_active_instances "${active_instance_ids[@]}"
 
 echo "Blue-Green deployment completed. New active target group: ${inactive_color} ${inactive_target_group_arn}"
