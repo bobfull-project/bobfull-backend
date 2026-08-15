@@ -794,6 +794,59 @@ public AiModerationResponse analyze(String content) {
 
 const stageLabels1 = ["결제·예약 확정", "채팅방 생성 시도", "실패 발생", "최종 결과"];
 
+/* Ch1 전용 미니 topology 2개(Before/After) — 기존 큰 공용 topology(Kafka/AI Consumer/LLM/DLT/Redis
+   Pub-Sub/App A·B/Local STOMP 포함)를 그대로 쓰면 ChatRoom 생성과 무관한 노드가 계속 흐리게
+   남아 핵심 메시지를 가린다는 피드백으로, Ch1에만 쓰는 좁은 topology 2개로 분리했다. 다른
+   Chapter의 topology는 전혀 건드리지 않는다.
+   실제 구현 재조사 결과(ADR-0008, docs/evidence/v3/176-chatroom-outbox/README.md) 기준으로
+   그렸다 — 특히 BEFORE(V2)는 "같은 트랜잭션이라 ChatRoom 실패가 결제·예약까지 되돌린다"가 아니라
+   "@TransactionalEventListener(AFTER_COMMIT)가 커밋 직후 같은 JVM 메모리에서 채팅방 생성을
+   시도했고, 그 시도 자체가 어디에도 영속화되지 않아 실패해도 재시도할 근거가 사라진다"였다(ADR
+   0008 "대안과 제외" 문단 — "핵심 트랜잭션 안에서 ChatRoom 저장"은 검토 후 기각된 대안일 뿐 실제
+   V2 동작이 아니었다). 그래서 BEFORE topology에서도 Payment/Reservation/Participant는 committed
+   (초록)로 유지되고, AfterCommit 리스너와 ChatRoom만 별도로 실패한다 — 핵심 거래가 롤백되는 것처럼
+   그리지 않는다. */
+const chatroomBeforeTopology = {
+  viewBox: "0 0 830 220",
+  nodeSublabels: { afterCommit: "메모리, 영속 없음" },
+  secondaryNodes: ["afterCommit"],
+  dashedEdges: ["participant-afterCommit", "afterCommit-chatroom"],
+  nodes: [
+    ["payment", "Payment"], ["reservation", "Reservation"], ["participant", "Participant"],
+    ["afterCommit", "AfterCommit 리스너"], ["chatroom", "ChatRoom 생성 시도"]
+  ],
+  nodePositions: { payment: [30, 90], reservation: [180, 90], participant: [330, 90], afterCommit: [520, 90], chatroom: [680, 90] },
+  edges: {
+    "payment-reservation": "M130 125 H180", "reservation-participant": "M280 125 H330",
+    /* Participant 이후로는 같은 트랜잭션이 아니라 커밋 후 별도 메모리 실행이라는 것을 보여주기
+       위해 일부러 간격을 벌리고 점선으로 이었다(dashedEdges). */
+    "participant-afterCommit": "M430 125 H520", "afterCommit-chatroom": "M620 125 H680"
+  },
+  labels: {},
+  regions: [{ label: "핵심 거래 — 계속 COMMIT 유지", x: 15, y: 60, w: 445, h: 110, emphasis: true }]
+};
+const chatroomAfterTopology = {
+  viewBox: "0 0 970 310",
+  nodeSublabels: { outbox: "PENDING" },
+  secondaryNodes: ["scheduler"],
+  dashedEdges: ["scheduler-outbox"],
+  nodes: [
+    ["payment", "Payment"], ["reservation", "Reservation"], ["participant", "Participant"], ["outbox", "Outbox Event"],
+    ["processor", "Outbox Processor"], ["chatroom", "ChatRoom"], ["scheduler", "Scheduler"]
+  ],
+  nodePositions: {
+    payment: [30, 90], reservation: [180, 90], participant: [330, 90], outbox: [480, 90],
+    processor: [650, 90], chatroom: [820, 90], scheduler: [650, 200]
+  },
+  edges: {
+    "payment-reservation": "M130 125 H180", "reservation-participant": "M280 125 H330",
+    "participant-outbox": "M430 125 H480", "outbox-processor": "M580 125 H650", "processor-chatroom": "M750 125 H820",
+    "scheduler-outbox": "M650 235 H530 V160"
+  },
+  labels: { "outbox-processor": [585, 110] },
+  regions: [{ label: "핵심 거래 + Outbox — 함께 COMMIT", x: 15, y: 60, w: 590, h: 110, emphasis: true }]
+};
+
 /* Ch2 PUBLISH_FAILURE / RETRY_EXHAUSTED_DLT step 데이터. */
 const ch2PublishFailureSteps = [
   step("commit", "Application", "DB", "✓ 메시지가 저장됐어요", "채팅 메시지가 저장됐고, 이 메시지를 AI가 검토하도록 넘길 준비도 함께 끝났습니다.",
@@ -1134,12 +1187,30 @@ const chapters = [
       how: "채팅방 생성 실패가 이미 확정된 결제·예약까지 함께 실패시키지 않도록, 실패한 작업만 따로 보관해뒀다가 안전하게 다시 시도하는 구조(Outbox)를 도입했다." },
     stageLabels: stageLabels1,
     scenarios: [{ id: "chatroom-outbox", title: "ChatRoom 생성: Before / After", comparison: true, steps: [
-    step("commit", "Payment completion", "Core transaction", "✓ 결제와 예약이 확정됐어요", "결제가 정상적으로 끝났고 예약과 참여자 정보도 저장됐습니다. 아직 채팅방은 만들기 전입니다 — Outbox에 '채팅방 만들기' 작업만 같은 트랜잭션으로 함께 기록해둡니다.",
-      { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", transaction: "V2/V3 모두 핵심 DB 트랜잭션 확정(COMMIT)",
+    step("before-commit", "Payment completion", "핵심 거래 (V2 AFTER_COMMIT)", "● BEFORE — 결제·예약·참여자가 확정되고, 채팅방은 커밋 직후 메모리에서 시도돼요", "V2에서는 결제·예약·참여자 저장이 끝나면 @TransactionalEventListener(AFTER_COMMIT)가 같은 JVM 메모리에서 곧바로 채팅방 생성을 시도했습니다 — 이 시도는 DB 어디에도 저장되지 않습니다.",
+      { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", transaction: "핵심 거래 COMMIT — ChatRoom 실패와 무관하게 유지",
+        nextAction: "AfterCommit 리스너가 채팅방 생성 시도",
+        factStatus: FACT.VERIFIED, topologyKey: "chatroom-before",
+        visual: visual(["afterCommit"], ["participant-afterCommit"], "event", null, "core", ["payment", "reservation", "participant"]),
+        comparison: { v2: "확정(COMMIT) → 메모리에서 즉시 시도", v3: "확정(COMMIT)",
+          v2States: ["done", "active", "pending", "pending"], v3States: ["done", "pending", "pending", "pending"] },
+        limits: "V2는 실제로 Payment/Reservation/Participant를 롤백하지 않았다 — 이 셋은 그대로 COMMIT 상태를 유지하고, 채팅방 생성만 커밋 이후 별도로 메모리에서 시도됐다. \"같은 트랜잭션이라 ChatRoom 실패가 핵심 거래를 되돌린다\"는 실제 V2 동작이 아니라 검토 후 기각된 대안이다(ADR-0008).",
+        evidenceReferences: [evidence.chatroom] }),
+    step("before-failure", "AfterCommit 리스너", "ChatRoom 생성 시도", "× BEFORE — 채팅방 생성 실패, 재시도할 근거가 어디에도 남지 않아요", "리스너가 예외를 던지거나 프로세스가 바로 죽으면, 이 시도가 있었다는 사실 자체가 사라집니다 — 결제·예약·참여자는 그대로 확정 상태를 유지하지만, 채팅방만 영구히 만들어지지 않을 수 있습니다.",
+      { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨 — ChatRoom만 실패",
+        factStatus: FACT.VERIFIED, topologyKey: "chatroom-before",
+        visual: visual(["afterCommit", "chatroom"], ["afterCommit-chatroom"], "failure", "failure", "core", ["payment", "reservation", "participant"]),
+        comparison: { v2: "실패 → 재시도할 근거가 남아있지 않음", v3: "확정(COMMIT)",
+          v2States: ["done", "done", "active", "blocked"], v3States: ["done", "pending", "pending", "pending"] },
+        limits: "V2 BEFORE 비교는 #176 baseline Evidence의 AFTER_COMMIT 실패 검증 결과다(ADR-0008). 실제로 JVM을 강제 종료해 재현한 것은 아니다.",
+        evidenceReferences: [evidence.chatroom] }),
+    step("after-commit", "ReservationConfirmationService", "핵심 거래 + Outbox", "✓ AFTER — 핵심 거래와 Outbox 이벤트를 같은 트랜잭션으로 함께 COMMIT해요", "결제·예약·참여자 저장과 \"채팅방 만들기\" Outbox 이벤트 기록을 같은 트랜잭션 안에서 함께 커밋합니다 — 아직 채팅방을 직접 만들지는 않습니다.",
+      { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", transaction: "핵심 거래 + Outbox 함께 확정(COMMIT)",
         nextAction: "채팅방 만들기",
-        factStatus: FACT.VERIFIED, visual: core,
-        comparison: { v2: "확정(COMMIT)", v3: "핵심 업무 + Outbox 함께 확정",
-          v2States: ["active", "pending", "pending", "pending"], v3States: ["active", "pending", "pending", "pending"] },
+        factStatus: FACT.VERIFIED, topologyKey: "chatroom-after",
+        visual: visual(["payment", "reservation", "participant", "outbox"], ["payment-reservation", "reservation-participant", "participant-outbox"], "commit", "committed", "core"),
+        comparison: { v2: "실패 → 재시도할 근거가 남아있지 않음", v3: "핵심 업무 + Outbox 함께 확정",
+          v2States: ["done", "done", "active", "blocked"], v3States: ["done", "active", "pending", "pending"] },
         codeReferences: ["ReservationConfirmationService.confirm"],
         codeSnippet: { file: "ReservationConfirmationService.java", method: "ReservationConfirmationService.confirm()", code: `@Transactional(propagation = Propagation.MANDATORY)
 public ReservationConfirmationResult confirm(
@@ -1179,30 +1250,15 @@ public ReservationConfirmationResult confirm(
     return new ReservationConfirmationResult(reservation.getId(), participant.getId());
 }` , annotations: [{"from": 1, "to": 4, "text": "결제 완료 트랜잭션 안에서만 호출되도록 MANDATORY로 강제한다 — 별도 트랜잭션을 새로 열지 않는다."}, {"from": 16, "to": 23, "text": "핵심: 채팅방을 여기서 만들지 않고, '만들어야 한다'는 작업만 outbox_event 행으로 저장한다. 예약과 같은 트랜잭션이라 함께 커밋된다."}]},
         evidenceReferences: [evidence.chatroom] }),
-    step("after-commit", "ReservationConfirmationService", "ChatRoomOutboxProcessor.signal()", "◆ 커밋 직후 바로 실행을 요청해요", "",
-      { outbox: "V3 방식: 대기 중(PENDING) → 처리 중(PROCESSING)", factStatus: FACT.VERIFIED,
-        currentStatus: "채팅방 생성 대기",
-        narrationPoints: [
-          "Outbox(outbox_event 테이블)는 <b>저장만</b> 합니다 — 스스로 실행하지 않습니다.",
-          "실행 주체는 서로 다른 역할을 가진 <b>두 클래스</b>입니다: <b>ChatRoomOutboxScheduler</b>(언제 실행할지 — 주기적으로 깨우는 역할)와 <b>ChatRoomOutboxProcessor</b>(무엇을 어떻게 실행할지 — claim·채팅방 생성·완료 처리).",
-          "커밋 직후에는 Scheduler를 기다리지 않습니다 — <b>ReservationConfirmationService가 Processor.signal()을 즉시 호출</b>해 바로 실행을 요청합니다(이번 Step).",
-          "Scheduler는 5초마다 폴링하는 <b>안전망</b>입니다 — signal 호출이 유실되거나 서버가 재시작돼도 남은 PENDING 행을 놓치지 않습니다."],
-        retryPolicy: [["1차 실행 트리거", "signal() 즉시 호출(기본 경로)"], ["안전망", "ChatRoomOutboxScheduler · 5초 폴링"],
-          ["실제 처리", "ChatRoomOutboxProcessor"], ["최대 재시도", "5회"], ["backoff 간격", "5·10·20·40·80초"]],
-        visual: visual(["db", "outbox", "app"], ["outbox-claim"], "event", null, "outbox", ["db"],
-          null, { "outbox-claim": "signal() 즉시 호출" }),
-        comparison: { v2: "확정 후 메모리로 처리(AFTER_COMMIT)", v3: "대기 중 → 처리 중",
-          v2States: ["done", "active", "pending", "pending"], v3States: ["done", "active", "pending", "pending"] },
-        evidenceReferences: [evidence.chatroom] }),
-    step("failure", "ChatRoomOutboxProcessor", "OutboxEventTransactionService.fail()", "× 채팅방 생성에 실패했어요", "",
-      { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", outbox: "V3 방식: 재시도를 위해 대기 중", retryOwner: "Outbox",
+    step("after-failure", "ChatRoomOutboxProcessor", "OutboxEventTransactionService.fail()", "◆ AFTER — Processor가 채팅방 생성을 시도하지만 실패해도 재처리 가능한 상태로 남아요", "커밋 직후 ReservationConfirmationService가 Processor.signal()을 즉시 호출해 실행을 요청합니다. 이번 시도에서 채팅방 생성이 실패했지만, 핵심 거래는 이미 커밋됐으므로 되돌리지 않습니다.",
+      { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", outbox: "재시도를 위해 대기 중", retryOwner: "Outbox",
         statusChecklist: [["결제", "done"], ["예약", "done"], ["채팅방", "failed"]],
         nextAction: "5초 뒤 Scheduler가 폴링하다 같은 행을 다시 발견해 Processor에게 넘깁니다.",
         narrationPoints: [
-          "채팅방 생성이 실패했지만 결제·예약은 이미 커밋됐으므로 되돌리지 않습니다.",
-          "V3는 실패를 <b>outbox_event 행에 기록</b>합니다 — attempt_count를 올리고 다음 시도 시각을 예약합니다.",
-          "방금 signal()로 시도한 즉시 실행은 이미 실패했으므로, 이제부터는 <b>ChatRoomOutboxScheduler의 5초 폴링</b>이 이 행을 다시 찾아냅니다.",
-          "V2는 메모리에서 실행돼 <b>DB에 아무 흔적이 없어</b> 무엇을 다시 해야 하는지 알 수 없습니다."],
+          "Outbox(outbox_event 테이블)는 <b>저장만</b> 합니다 — 스스로 실행하지 않습니다.",
+          "실행 주체는 서로 다른 역할을 가진 <b>두 클래스</b>입니다: <b>ChatRoomOutboxScheduler</b>(언제 실행할지)와 <b>ChatRoomOutboxProcessor</b>(무엇을 어떻게 실행할지 — claim·채팅방 생성·완료 처리).",
+          "실패는 <b>outbox_event 행에 기록</b>됩니다 — attempt_count를 올리고 다음 시도 시각을 예약합니다.",
+          "V2는 메모리에서 실행돼 <b>DB에 아무 흔적이 없어</b> 무엇을 다시 해야 하는지 알 수 없었습니다."],
         retryPolicy: [["현재 attempt_count", "1 / 5"], ["다음 시도까지", "5초"], ["status", "PENDING(재시도 대기)"],
           ["5회 모두 실패 시", "FAILED로 종료·수동 재시도"]],
         storeCompare: {
@@ -1210,8 +1266,9 @@ public ReservationConfirmationResult confirm(
           row: ["1024", "CHAT_ROOM_CREATION_REQUESTED", "8801", "PENDING", "1", "2026-08-15 10:00:05"],
           v2Note: "@TransactionalEventListener(AFTER_COMMIT)는 커밋 직후 같은 JVM 메모리에서 실행된다. 실행 요청이 어디에도 영속화되지 않으므로 리스너 예외·인스턴스 종료 시 재시도 대상 자체가 소실된다.",
           v3Note: "같은 트랜잭션에서 커밋된 행이므로 실패해도 그대로 남는다. Processor가 이 행을 다시 claim해 재실행하며, attempt_count·next_attempt_at이 재시도 상태를 그대로 보존한다." },
-        factStatus: FACT.VERIFIED, visual: visual(["app", "outbox"], ["outbox-claim"], "failure", "failure", "outbox", ["db"],
-          null, { "outbox-claim": "실패 → 행에 기록" }),
+        factStatus: FACT.VERIFIED, topologyKey: "chatroom-after",
+        visual: visual(["processor", "chatroom"], ["outbox-processor", "processor-chatroom"], "failure", "failure", "core", ["payment", "reservation", "participant", "outbox"],
+          null, { "outbox-processor": "signal() 즉시 호출" }, { outbox: "PENDING(재시도 대기)" }),
         comparison: { v2: "실패 → 재시도할 근거가 남아있지 않음", v3: "실패해도 대기 상태로 보존됨",
           v2States: ["done", "done", "active", "blocked"], v3States: ["done", "done", "active", "pending"] },
         limits: "V2 BEFORE 비교는 #176 baseline Evidence의 AFTER_COMMIT 실패 검증 결과다. 실제로 JVM을 강제 종료해 재현한 것은 아니며, 위 표의 값은 실제 outbox_event 스키마를 따른 예시 행이다.",
@@ -1229,19 +1286,19 @@ public FailureResult fail(ClaimedOutboxEvent event, String errorCode, Instant no
     return new FailureResult(updated == 1, failed, attemptCount, nextAttemptAt);
 }` , annotations: [{"from": 6, "to": 10, "text": "핵심: 실패 횟수를 올리고 다음 시도 시각을 지수 backoff로 계산해 행에 기록한다. 한도를 넘으면 PENDING이 아니라 FAILED로 종료한다."}]},
         evidenceReferences: [evidence.chatroom] }),
-    step("retry", "ChatRoomOutboxScheduler", "ChatRoomOutboxProcessor", "✓ 다시 시도해서 채팅방을 만들었어요", "",
+    step("after-retry", "ChatRoomOutboxScheduler", "ChatRoomOutboxProcessor", "✓ AFTER — Scheduler가 재시도해서 채팅방 생성에 성공해요", "다음 폴링 주기가 되자 ChatRoomOutboxScheduler가 깨어나 PENDING 행을 다시 발견해 Processor에게 넘겼고, Processor가 조건부 UPDATE로 PROCESSING을 선점(claim)해 재실행했습니다.",
       { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", outbox: "대기 중 → 처리 중 → 완료",
         lock: "조건부로 대기 중 → 처리 중 상태를 선점(claim)", transaction: "짧게 선점(claim)하고 완료 처리하는 트랜잭션", retryOwner: "Outbox",
         statusChecklist: [["결제", "done"], ["예약", "done"], ["채팅방", "done"]],
         narrationPoints: [
-          "다음 폴링 주기가 되자 <b>ChatRoomOutboxScheduler</b>가 깨어나 PENDING 행을 다시 발견했습니다.",
-          "Scheduler는 그 행을 <b>ChatRoomOutboxProcessor</b>에게 넘기고, Processor가 조건부 UPDATE로 PROCESSING을 선점(claim)해 다른 인스턴스와 중복 실행되지 않게 합니다.",
+          "Scheduler는 5초마다 폴링하는 <b>안전망</b>입니다 — signal 호출이 유실되거나 서버가 재시작돼도 남은 PENDING 행을 놓치지 않습니다.",
           "채팅방 생성이 성공하면 같은 행을 COMPLETED로 바꿉니다.",
-          "V2에는 이 행 자체가 없으므로 이 재실행이 불가능합니다."],
+          "V2에는 이 행 자체가 없으므로 이 재실행이 불가능했습니다."],
         retryPolicy: [["재시도 트리거", "ChatRoomOutboxScheduler · 5초 폴링"], ["실제 처리", "ChatRoomOutboxProcessor"],
           ["시도 회차", "2 / 5"], ["결과", "성공"], ["status", "COMPLETED"]],
-        factStatus: FACT.VERIFIED, visual: visual(["outbox", "app", "db"], ["outbox-claim", "outbox-complete"], "retry", "completed", "outbox",
-          [], null, { "outbox-claim": "Scheduler 폴링 → Processor" }),
+        factStatus: FACT.VERIFIED, topologyKey: "chatroom-after",
+        visual: visual(["scheduler", "processor", "chatroom"], ["scheduler-outbox", "processor-chatroom"], "retry", "completed", "core",
+          ["payment", "reservation", "participant", "outbox"], null, { "scheduler-outbox": "Scheduler 폴링 → Processor" }, { outbox: "COMPLETED" }),
         comparison: { v2: "재시도할 근거가 남아있지 않음", v3: "재시도 후 완료",
           v2States: ["done", "done", "done", "blocked"], v3States: ["done", "done", "done", "done"] },
         codeReferences: ["ChatRoomOutboxProcessor", "ChatRoomCreationService.createIfAbsent"],

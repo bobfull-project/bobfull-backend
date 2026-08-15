@@ -12,7 +12,8 @@ const TOPOLOGY_BY_KEY = {
   "service-unified": serviceUnifiedTopology, "ai-moderation-journey": aiModerationJourneyTopology,
   infra: infraTopology,
   "outbox-chatroom": outboxChatroomTopology, "outbox-email": outboxEmailTopology,
-  "outbox-ai": outboxAiTopology, "outbox-comparison": outboxComparisonTopology
+  "outbox-ai": outboxAiTopology, "outbox-comparison": outboxComparisonTopology,
+  "chatroom-before": chatroomBeforeTopology, "chatroom-after": chatroomAfterTopology
 };
 const topologyFor = (data) => TOPOLOGY_BY_KEY[data.topologyKey] || topology;
 function populateSelects() {
@@ -409,7 +410,7 @@ function renderPerformanceHighlights() {
 /* Step 패널은 비개발자용 쉬운 설명이지만, 이 요약은 "무엇을 어떤 메커니즘으로 해결했는가"를
    실제 컴포넌트·정책 이름으로 기술한다 — title/body를 여기서 직접 쓰고 step narration을 재사용하지 않는다. */
 const DECISION_HIGHLIGHTS = [
-  { chapter: "outbox", scenario: "chatroom-outbox", step: "retry",
+  { chapter: "outbox", scenario: "chatroom-outbox", step: "after-retry",
     title: "메모리 기반 @TransactionalEventListener(AFTER_COMMIT) → Transactional Outbox 전환",
     body: "V2는 결제·예약 커밋 직후 Spring 이벤트 리스너가 같은 JVM 메모리 위에서 채팅방 생성을 수행했다. 이 실행 요청은 어디에도 영속화되지 않으므로 리스너가 예외로 종료되거나 인스턴스가 내려가면 '무엇을 다시 해야 하는지'를 복구할 근거 자체가 남지 않는다. V3는 같은 트랜잭션 안에서 outbox_event 행(status=PENDING)을 함께 커밋해 실행 요청을 DB에 영속화한다. 커밋 직후에는 ChatRoomOutboxProcessor.signal()이 즉시 호출돼 대부분 곧바로 처리되고, 별도 ChatRoomOutboxScheduler가 5초 주기로 폴링하며 signal 유실·인스턴스 재시작에 대비한 안전망 역할을 한다. 두 경로 모두 결국 Processor가 조건부 UPDATE로 claim(PENDING→PROCESSING)해 실행한다. 실패 시 attempt_count를 올리고 next_attempt_at을 5·10·20·40·80초 지수 backoff로 재예약하며, MAX_RETRIES(5) 초과 시 FAILED로 종료한다." },
   { chapter: "kafka-ai", scenario: "publish-failure", step: "retry",
