@@ -18,22 +18,25 @@ const evidence = {
 };
 /* committedNodes: 현재 active path에 없어도 여전히 유효한(dim과 구별되는) 이미 커밋된 노드.
    badge: 특정 노드 옆에 짧은 텍스트 배지(성능 수치 등)를 표시한다. */
-const visual = (activeNodes, activeEdges, token, outcome, branch, committedNodes, badge) =>
-  ({ activeNodes, activeEdges, token, outcome, branch, committedNodes: committedNodes || [], badge: badge || null });
+/* edgeLabels: 특정 edge의 기본 token 라벨 대신 "누가 무엇을 하는지"를 직접 쓴다.
+   Outbox는 테이블일 뿐이고 실제 실행 주체는 Processor라는 점을 화면에서 구분하기 위해 필요하다. */
+const visual = (activeNodes, activeEdges, token, outcome, branch, committedNodes, badge, edgeLabels) =>
+  ({ activeNodes, activeEdges, token, outcome, branch, committedNodes: committedNodes || [], badge: badge || null, edgeLabels: edgeLabels || null });
 const step = (id, actor, target, action, narration, details) => {
   if (!details.factStatus || !details.visual) throw new Error(`Step ${id} requires factStatus and visual`);
   return { id, actor, target, action, narration, domainState: null, transaction: null, lock: null, outbox: null,
     kafka: null, consumer: null, redis: null, logs: null, metrics: null, retryOwner: null, performance: null,
     sideNote: null, codeReferences: [], evidenceReferences: [], limits: null, topologyKey: null,
     kafkaPartitions: null, moderationResult: null, promptBlocks: null, fullPrompt: null, decisionBadge: null,
-    codeSnippet: null, statusChecklist: null, currentStatus: null, nextAction: null, ...details };
+    codeSnippet: null, statusChecklist: null, currentStatus: null, nextAction: null,
+    narrationPoints: null, retryPolicy: null, storeCompare: null, metricGlossary: null, ...details };
 };
 /* Client -> Web/STOMP -> Application -> DB 전체 경로. 세 edge 모두 포함해야 token이 중간에서
    순간이동하지 않는다(request-app 누락은 독립 리뷰에서 확인된 실제 버그였다). */
 const core = visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "request", null, "core");
 const topology = {
   viewBox: "0 0 1260 470",
-  nodes: [["client", "Client"], ["web", "Web / STOMP"], ["app", "Application"], ["db", "DB"], ["outbox", "Outbox"],
+  nodes: [["client", "Client"], ["web", "Web / STOMP"], ["app", "Application"], ["db", "DB"], ["outbox", "outbox_event 테이블"],
     ["kafka", "Kafka"], ["dlt", "DLT Topic"], ["consumer", "AI Consumer"], ["llm", "LLM"], ["redis", "Redis Pub/Sub"],
     ["app-a", "App A"], ["app-b", "App B"], ["stomp", "Local STOMP"], ["async", "Async Queue"]],
   nodePositions: { client: [25, 190], web: [180, 190], app: [335, 190], db: [500, 190], outbox: [670, 35],
@@ -72,7 +75,7 @@ const moderationTopology = {
     "splitRule-bypass": [820, 305], "splitRule-llm": [610, 395], "dbcontext-llm-experimental": [610, 335],
     "llm-validator": [500, 450], "validator-db": [500, 540] }
 };
-const stageLabels1 = ["CORE COMMIT", "FOLLOW-UP", "FAILURE", "OUTCOME"];
+const stageLabels1 = ["결제·예약 확정", "채팅방 생성 시도", "실패 발생", "최종 결과"];
 
 /* Ch2 PUBLISH_FAILURE / RETRY_EXHAUSTED_DLT step 데이터. */
 const ch2PublishFailureSteps = [
@@ -86,7 +89,7 @@ const ch2PublishFailureSteps = [
       retryOwner: "Outbox", logs: "event=OUTBOX_RETRY_SCHEDULED", factStatus: FACT.VERIFIED,
       nextAction: "잠시 후 다시 전달 시도",
       visual: visual(["outbox", "kafka"], ["outbox-publish"], "failure", "failure", "outbox", ["db"]),
-      limits: "verified — fault injection. actual broker outage / Kafka HA는 검증하지 않았다.",
+      limits: "이 실패는 코드로 강제 주입한 오류(fault injection)로 재현한 것이다. 실제 Kafka Broker가 다운된 상황이나 Broker 다중화(HA) 환경에서의 거동은 검증하지 않았다.",
       codeSnippet: { file: "ChatMessageOutboxProcessor.java", method: "ChatMessageOutboxProcessor.processClaimed()", code: `private void processClaimed(OutboxEventTransactionService.ClaimedOutboxEvent event) {
     log.info("event=OUTBOX_PROCESSING_STARTED outboxEventId={} eventType={} aggregateType=CHAT_MESSAGE aggregateId={} attemptCount={} status=PROCESSING",
             event.id(), event.eventType(), event.aggregateId(), event.attemptCount());
@@ -136,7 +139,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
             new FixedBackOff(retryBackoffMs, retriesAfterFirstAttempt));
     errorHandler.addNotRetryableExceptions(CustomException.class, InvalidChatMessageEventException.class);
     return errorHandler;
-}` },
+}` , annotations: [{"from": 7, "to": 8, "text": "핵심: 최초 처리를 포함해 최대 3회까지만 시도하도록 재시도 횟수와 간격을 지정한다."}, {"from": 9, "to": 9, "text": "재시도해도 소용없는 예외(잘못된 메시지 형식 등)는 즉시 DLT로 보내 불필요한 반복 호출을 막는다."}]},
       evidenceReferences: [evidence.pipeline] }),
   step("dlt", "Kafka", "DLT topic → ChatModerationDltRecoverer", "↓ 여러 번 실패해서 따로 보관했어요", "계속 실패한 이 메시지 하나만 DLT(Dead Letter Topic)로 옮겨서, 다른 메시지들이 밀리지 않고 Consumer가 계속 처리하도록 했습니다.",
     { kafka: "실패 메시지 격리함(DLT)으로 이동", domainState: "ChatMessage는 그대로 확정 유지 · ChatModeration은 분석 실패로 기록됨(ANALYSIS_FAILED)", factStatus: FACT.VERIFIED,
@@ -156,7 +159,7 @@ public void accept(ConsumerRecord<?, ?> record, Exception exception) {
     businessMetricRecorder.increment(BusinessMetricEvent.CHAT_MODERATION_RETRY_EXHAUSTED);
     log.error("event=CHAT_MODERATION_RETRY_EXHAUSTED topic={} partition={} offset={} messageId={} errorCode={}",
             record.topic(), record.partition(), record.offset(), messageId, errorCode);
-}` }, evidenceReferences: [evidence.pipeline] })
+}` , annotations: [{"from": 3, "to": 3, "text": "먼저 DLT 토픽으로 보낸다. 이 발행이 실패하면 예외가 나서 아래 기록이 실행되지 않는다."}, {"from": 6, "to": 9, "text": "DLT로 격리한 뒤 해당 메시지를 분석 실패(ANALYSIS_FAILED)로 DB에 남긴다."}]}, evidenceReferences: [evidence.pipeline] })
 ];
 
 const chapters = [
@@ -208,23 +211,44 @@ public ReservationConfirmationResult confirm(
         AfterCommitExecutor.run(() -> businessMetricRecorder.increment(BusinessMetricEvent.RESERVATION_CONFIRMED));
     }
     return new ReservationConfirmationResult(reservation.getId(), participant.getId());
-}` },
+}` , annotations: [{"from": 1, "to": 4, "text": "결제 완료 트랜잭션 안에서만 호출되도록 MANDATORY로 강제한다 — 별도 트랜잭션을 새로 열지 않는다."}, {"from": 16, "to": 23, "text": "핵심: 채팅방을 여기서 만들지 않고, '만들어야 한다'는 작업만 outbox_event 행으로 저장한다. 예약과 같은 트랜잭션이라 함께 커밋된다."}]},
         evidenceReferences: [evidence.chatroom] }),
-    step("after-commit", "V2 listener / V3 processor", "Follow-up work", "◆ 이제 채팅방을 만들어요", "결제와 예약은 이미 끝났습니다. 이제 같은 식사에 참여하는 사람들이 대화할 채팅방을 만드는 작업을 시작합니다 — 이 작업은 결제·예약과 따로 대기하고 있다가 지금 실행되는 것이라, 화면에서는 대기 중이던 Outbox가 Application에게 실행을 맡기는 화살표로 보입니다.",
-      { outbox: "V3 방식: 대기 중", factStatus: FACT.VERIFIED,
+    step("after-commit", "ChatRoomOutboxProcessor", "ChatRoom 생성 실행", "◆ 스케줄러가 대기 중인 작업을 꺼내 실행해요", "",
+      { outbox: "V3 방식: 대기 중(PENDING) → 처리 중(PROCESSING)", factStatus: FACT.VERIFIED,
         currentStatus: "채팅방 생성 대기",
-        visual: visual(["db", "outbox", "app"], ["outbox-claim"], "event", null, "outbox", ["db"]),
+        narrationPoints: [
+          "outbox_event 테이블은 <b>저장만</b> 합니다 — 스스로 실행하지 않습니다.",
+          "<b>ChatRoomOutboxProcessor</b>(스케줄러)가 5초 주기로 PENDING 행을 조회합니다.",
+          "가져온 행을 PROCESSING으로 선점(claim)한 뒤 채팅방 생성을 실행합니다.",
+          "그래서 화살표는 <b>테이블 → Processor가 읽어 실행</b>이라는 뜻입니다."],
+        retryPolicy: [["실행 주체", "ChatRoomOutboxProcessor"], ["실행 주기", "5초"], ["최대 재시도", "5회"],
+          ["backoff 간격", "5·10·20·40·80초"], ["소진 시", "status=FAILED"]],
+        visual: visual(["db", "outbox", "app"], ["outbox-claim"], "event", null, "outbox", ["db"],
+          null, { "outbox-claim": "Processor가 조회·선점" }),
         comparison: { v2: "확정 후 메모리로 처리(AFTER_COMMIT)", v3: "대기 중 → 처리 중",
           v2States: ["done", "active", "pending", "pending"], v3States: ["done", "active", "pending", "pending"] },
         evidenceReferences: [evidence.chatroom] }),
-    step("failure", "Follow-up work", "ChatRoom service", "× 채팅방 생성에 실패했어요", "채팅방을 만드는 도중 Outbox Processor에게 문제가 생겼습니다. 하지만 이미 끝난 결제와 예약까지 취소되지는 않고, Processor는 재시도 시각을 계산해 다음 시도를 예약합니다.",
+    step("failure", "ChatRoom 생성 실행", "실패 처리", "× 채팅방 생성에 실패했어요", "",
       { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", outbox: "V3 방식: 재시도를 위해 대기 중", retryOwner: "Outbox",
         statusChecklist: [["결제", "done"], ["예약", "done"], ["채팅방", "failed"]],
-        nextAction: "실패한 채팅방 생성 작업은 다시 시도할 수 있도록 남겨둡니다.",
-        factStatus: FACT.VERIFIED, visual: visual(["app", "outbox"], ["outbox-claim"], "failure", "failure", "outbox", ["db"]),
+        nextAction: "5초 뒤 Processor가 같은 행을 다시 가져갑니다.",
+        narrationPoints: [
+          "채팅방 생성이 실패했지만 결제·예약은 이미 커밋됐으므로 되돌리지 않습니다.",
+          "V3는 실패를 <b>outbox_event 행에 기록</b>합니다 — attempt_count를 올리고 다음 시도 시각을 예약합니다.",
+          "V2는 메모리에서 실행돼 <b>DB에 아무 흔적이 없어</b> 무엇을 다시 해야 하는지 알 수 없습니다.",
+          "아래 표에서 두 방식의 차이를 그대로 확인할 수 있습니다."],
+        retryPolicy: [["현재 attempt_count", "1 / 5"], ["다음 시도까지", "5초"], ["status", "PENDING(재시도 대기)"],
+          ["5회 모두 실패 시", "FAILED로 종료·수동 재시도"]],
+        storeCompare: {
+          columns: ["id", "event_type", "aggregate_id", "status", "attempt_count", "next_attempt_at"],
+          row: ["1024", "CHAT_ROOM_CREATION_REQUESTED", "8801", "PENDING", "1", "2026-08-15 10:00:05"],
+          v2Note: "@TransactionalEventListener(AFTER_COMMIT)는 커밋 직후 같은 JVM 메모리에서 실행된다. 실행 요청이 어디에도 영속화되지 않으므로 리스너 예외·인스턴스 종료 시 재시도 대상 자체가 소실된다.",
+          v3Note: "같은 트랜잭션에서 커밋된 행이므로 실패해도 그대로 남는다. Processor가 이 행을 다시 claim해 재실행하며, attempt_count·next_attempt_at이 재시도 상태를 그대로 보존한다." },
+        factStatus: FACT.VERIFIED, visual: visual(["app", "outbox"], ["outbox-claim"], "failure", "failure", "outbox", ["db"],
+          null, { "outbox-claim": "실패 → 행에 기록" }),
         comparison: { v2: "실패 → 재시도할 근거가 남아있지 않음", v3: "실패해도 대기 상태로 보존됨",
           v2States: ["done", "done", "active", "blocked"], v3States: ["done", "done", "active", "pending"] },
-        limits: "V2 BEFORE는 #176 baseline Evidence의 AFTER_COMMIT 실패 검증이다. 실제 JVM kill 재현은 아니다.",
+        limits: "V2 BEFORE 비교는 #176 baseline Evidence의 AFTER_COMMIT 실패 검증 결과다. 실제로 JVM을 강제 종료해 재현한 것은 아니며, 위 표의 값은 실제 outbox_event 스키마를 따른 예시 행이다.",
         codeReferences: ["OutboxEventTransactionService.fail"],
         codeSnippet: { file: "OutboxEventTransactionService.java", method: "OutboxEventTransactionService.fail()", code: `@Transactional(propagation = Propagation.REQUIRES_NEW)
 public FailureResult fail(ClaimedOutboxEvent event, String errorCode, Instant now, int maxRetries) {
@@ -237,13 +261,20 @@ public FailureResult fail(ClaimedOutboxEvent event, String errorCode, Instant no
             failed ? OutboxEventStatus.FAILED : OutboxEventStatus.PENDING, event.token(), attemptCount,
             nextAttemptAt, errorCode);
     return new FailureResult(updated == 1, failed, attemptCount, nextAttemptAt);
-}` },
+}` , annotations: [{"from": 6, "to": 10, "text": "핵심: 실패 횟수를 올리고 다음 시도 시각을 지수 backoff로 계산해 행에 기록한다. 한도를 넘으면 PENDING이 아니라 FAILED로 종료한다."}]},
         evidenceReferences: [evidence.chatroom] }),
-    step("retry", "Outbox processor", "ChatRoom service", "✓ 다시 시도해서 채팅방을 만들었어요", "아까 실패했던 '채팅방 만들기' 작업이 남아 있었기 때문에 다시 실행할 수 있었습니다.",
+    step("retry", "ChatRoomOutboxProcessor", "ChatRoom 생성 재실행", "✓ 다시 시도해서 채팅방을 만들었어요", "",
       { domainState: "결제(Payment)·예약(Reservation)·참여자(Participant) 정보 모두 확정 저장됨", outbox: "대기 중 → 처리 중 → 완료",
         lock: "조건부로 대기 중 → 처리 중 상태를 선점(claim)", transaction: "짧게 선점(claim)하고 완료 처리하는 트랜잭션", retryOwner: "Outbox",
         statusChecklist: [["결제", "done"], ["예약", "done"], ["채팅방", "done"]],
-        factStatus: FACT.VERIFIED, visual: visual(["outbox", "app", "db"], ["outbox-claim", "outbox-complete"], "retry", "completed", "outbox"),
+        narrationPoints: [
+          "다음 주기가 되자 Processor가 PENDING 행을 다시 조회했습니다.",
+          "조건부 UPDATE로 PROCESSING을 선점해 다른 인스턴스와 중복 실행되지 않게 합니다.",
+          "채팅방 생성이 성공하면 같은 행을 COMPLETED로 바꿉니다.",
+          "V2에는 이 행 자체가 없으므로 이 재실행이 불가능합니다."],
+        retryPolicy: [["실행 주체", "ChatRoomOutboxProcessor"], ["시도 회차", "2 / 5"], ["결과", "성공"], ["status", "COMPLETED"]],
+        factStatus: FACT.VERIFIED, visual: visual(["outbox", "app", "db"], ["outbox-claim", "outbox-complete"], "retry", "completed", "outbox",
+          [], null, { "outbox-claim": "Processor 재조회" }),
         comparison: { v2: "재시도할 근거가 남아있지 않음", v3: "재시도 후 완료",
           v2States: ["done", "done", "done", "blocked"], v3States: ["done", "done", "done", "done"] },
         codeReferences: ["ChatRoomOutboxProcessor", "ChatRoomCreationService.createIfAbsent"],
@@ -269,7 +300,7 @@ public FailureResult fail(ClaimedOutboxEvent event, String errorCode, Instant no
                     event.id(), event.eventType(), event.aggregateId(), result.attemptCount(), errorCode, result.nextAttemptAt(), exception);
         }
     }
-}` },
+}` , annotations: [{"from": 5, "to": 9, "text": "실제 채팅방 생성. 성공하면 같은 행을 COMPLETED로 바꾼다."}, {"from": 10, "to": 14, "text": "실패해도 예외를 밖으로 던지지 않고 fail()로 재시도를 예약한다 — 그래서 결제·예약은 영향을 받지 않는다."}]},
         evidenceReferences: [evidence.chatroom, evidence.email] })
   ]}] },
   { id: "kafka-ai", shortLabel: "Ch2 — AI 검수 파이프라인 장애 대응",
@@ -297,7 +328,7 @@ public FailureResult fail(ClaimedOutboxEvent event, String errorCode, Instant no
         AfterCommitExecutor.run(()->asyncModerationDispatcher.dispatch(saved.getId()));
     }
     return response;
-}` },
+}` , annotations: [{"from": 9, "to": 10, "text": "핵심: 메시지 저장과 'AI 검토 요청' Outbox 기록이 같은 트랜잭션으로 묶인다."}, {"from": 13, "to": 17, "text": "커밋이 끝난 뒤에만 Kafka 발행 신호와 실시간 전파를 실행한다."}]},
           evidenceReferences: [evidence.pipeline] }),
       step("commit", "Application", "DB", "✓ 메시지가 저장됐어요", "메시지가 안전하게 저장됐고, AI가 검토할 차례라는 표시도 함께 남겨졌습니다.",
         { domainState: "ChatMessage 확정 저장됨(COMMITTED)", transaction: "확정됨(COMMITTED)", outbox: "대기 중(PENDING)", factStatus: FACT.VERIFIED,
@@ -361,7 +392,7 @@ public class ChatModerationConsumer {
         }
         chatModerationService.analyze(event.messageId());
     }
-}` },
+}` , annotations: [{"from": 12, "to": 16, "text": "핵심: 토픽·컨슈머 그룹·동시 처리 수(concurrency)를 설정으로 주입받는다 — Consumer를 몇 개 띄울지가 여기서 결정된다."}, {"from": 17, "to": 22, "text": "Consumer는 판정 로직을 직접 갖지 않고 서비스에 위임하며, 실패는 그대로 던져 재시도·DLT 처리에 맡긴다."}]},
           evidenceReferences: [evidence.pipeline, evidence.moderation] })
     ]},
     { id: "publish-failure", title: "발행 실패", steps: ch2PublishFailureSteps },
@@ -392,7 +423,7 @@ public class ChatModerationConsumer {
         String errorCode = exception.getClass().getSimpleName();
         throw new ModerationAnalysisException(errorCode, exception);
     }
-}` },
+}` , annotations: [{"from": 2, "to": 6, "text": "핵심(멱등성): 이미 판정이 끝난 메시지면 AI를 다시 부르지 않고 그대로 종료한다 — 같은 메시지가 두 번 와도 안전한 이유."}, {"from": 13, "to": 14, "text": "AI 응답도 외부 입력이므로 저장 전에 조합 규칙을 다시 검증한다."}]},
           evidenceReferences: [evidence.pipeline] })
     ]},
     { id: "ai-transient-failure", title: "AI 일시 실패", steps: [
@@ -416,7 +447,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
             new FixedBackOff(retryBackoffMs, retriesAfterFirstAttempt));
     errorHandler.addNotRetryableExceptions(CustomException.class, InvalidChatMessageEventException.class);
     return errorHandler;
-}` },
+}` , annotations: [{"from": 7, "to": 8, "text": "핵심: 최초 처리를 포함해 최대 3회까지만 시도하도록 재시도 횟수와 간격을 지정한다."}, {"from": 9, "to": 9, "text": "재시도해도 소용없는 예외(잘못된 메시지 형식 등)는 즉시 DLT로 보내 불필요한 반복 호출을 막는다."}]},
           evidenceReferences: [evidence.pipeline, evidence.moderation] })
     ]},
     { id: "retry-exhausted-dlt", title: "재시도 소진 → DLT", steps: ch2RetryExhaustedSteps },
@@ -448,7 +479,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
         String errorCode = exception.getClass().getSimpleName();
         throw new ModerationAnalysisException(errorCode, exception);
     }
-}` },
+}` , annotations: [{"from": 2, "to": 6, "text": "핵심(멱등성): 이미 판정이 끝난 메시지면 AI를 다시 부르지 않고 그대로 종료한다 — 같은 메시지가 두 번 와도 안전한 이유."}, {"from": 13, "to": 14, "text": "AI 응답도 외부 입력이므로 저장 전에 조합 규칙을 다시 검증한다."}]},
           evidenceReferences: [evidence.pipeline] })
     ]}
   ]},
@@ -474,7 +505,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
                 response.messageId(), response.chatRoomId(), exception.getClass().getSimpleName());
         businessMetricRecorder.increment(BusinessMetricEvent.CHAT_REALTIME_PUBLISH_FAILED);
     }
-}` },
+}` , annotations: [{"from": 2, "to": 5, "text": "다른 인스턴스들이 구독 중인 채널로 한 번 전파한다."}, {"from": 6, "to": 10, "text": "핵심: 실패해도 로그와 지표만 남기고 재시도하지 않는다 — best-effort라는 계약이 코드에 그대로 드러난다."}]},
           evidenceReferences: [evidence.redis] }),
       step("fanout", "Redis subscribers", "App A / App B", "↠ 각 서버가 접속한 사용자에게 전달했어요", "Redis Subscriber가 신호를 받아 자기 서버(App)에 STOMP로 접속해 있는 사용자에게 메시지를 실시간으로 전달합니다. 메시지를 다시 저장하거나 신호를 또 publish하지는 않습니다.",
         { domainState: "DB에는 행이 하나만 유지됨(중복 저장 없음)", redis: "App A·App B 각자 내부로 전달(local fan-out)", factStatus: FACT.VERIFIED,
@@ -492,7 +523,7 @@ public void onMessage(Message message, byte[] pattern) {
         log.error("event=CHAT_REALTIME_SUBSCRIBE_FAILED reason={}", exception.getClass().getSimpleName());
         businessMetricRecorder.increment(BusinessMetricEvent.CHAT_REALTIME_SUBSCRIBE_FAILED);
     }
-}` },
+}` , annotations: [{"from": 5, "to": 7, "text": "핵심: 받은 메시지를 자기 인스턴스에 붙어 있는 STOMP 구독자에게만 전달한다. DB에 다시 저장하지 않는다."}]},
           evidenceReferences: [evidence.redis] })
     ]},
     { id: "aws-cross-instance-normal", title: "AWS 서버 간 정상 동작", steps: [
@@ -515,7 +546,7 @@ public void onMessage(Message message, byte[] pattern) {
                 response.messageId(), response.chatRoomId(), exception.getClass().getSimpleName());
         businessMetricRecorder.increment(BusinessMetricEvent.CHAT_REALTIME_PUBLISH_FAILED);
     }
-}` },
+}` , annotations: [{"from": 2, "to": 5, "text": "다른 인스턴스들이 구독 중인 채널로 한 번 전파한다."}, {"from": 6, "to": 10, "text": "핵심: 실패해도 로그와 지표만 남기고 재시도하지 않는다 — best-effort라는 계약이 코드에 그대로 드러난다."}]},
           evidenceReferences: [evidence.appHa] }),
       step("cross-instance", "ElastiCache Redis", "App EC2 #2 → Client B", "↠ 다른 서버가 받아서 상대방에게 전달했어요", "완전히 다른 서버(App EC2 #2)의 Redis Subscriber가 이 알림을 받아서, 자기한테 접속한 상대방(Client B)에게 실시간으로 메시지를 보여줬습니다.",
         { domainState: "서버 간(cross-instance) 전달 확인(messageId=29, 30)", redis: "bobfull-ec2-green-2 SUBSCRIBE 확인 · 사용자 화면 A↔B 양방향 PASS",
@@ -536,19 +567,26 @@ public void onMessage(Message message, byte[] pattern) {
         log.error("event=CHAT_REALTIME_SUBSCRIBE_FAILED reason={}", exception.getClass().getSimpleName());
         businessMetricRecorder.increment(BusinessMetricEvent.CHAT_REALTIME_SUBSCRIBE_FAILED);
     }
-}` },
+}` , annotations: [{"from": 5, "to": 7, "text": "핵심: 받은 메시지를 자기 인스턴스에 붙어 있는 STOMP 구독자에게만 전달한다. DB에 다시 저장하지 않는다."}]},
           evidenceReferences: [evidence.appHa] })
     ]},
     { id: "redis-delivery-miss", title: "Redis 전달 누락", steps: [
       step("commit", "Application", "DB", "✓ 메시지는 안전하게 저장됐어요", "메시지 저장 자체는 성공했습니다. 다만 실시간 알림이 실제로 상대방 화면까지 도착했는지는 별개의 문제입니다.",
         { domainState: "ChatMessage 확정 저장됨(COMMITTED)", factStatus: FACT.DESIGN, visual: visual(["app", "db"], ["persist"], "commit", "committed", "core"),
-          limits: "Redis 중단·복구와 cursor N/N 실제 복구는 NOT_RUN이다.", evidenceReferences: [evidence.redis] }),
-      step("miss", "Redis disconnect/failure", "Realtime fan-out", "× 실시간 알림이 전달되지 않을 수도 있어요", "네트워크 문제 등으로 Redis publish가 실패하면 실시간 알림이 상대방에게 도착하지 못할 수 있습니다. 이 알림은 자동으로 다시 보내주지 않습니다.",
-        { domainState: "ChatMessage는 그대로 확정 유지됨(COMMITTED)", redis: "재전송도 재시도도 없음", retryOwner: "없음(그때그때 최선만, 보장 안 함)",
+          limits: "Redis를 실제로 중단시켰다가 복구하는 실험과, 누락된 메시지 N건이 재조회로 정확히 N건 복구되는지의 확인은 아직 수행하지 않았다(미실행).", evidenceReferences: [evidence.redis] }),
+      step("miss", "Redis disconnect/failure", "Realtime fan-out", "× 실시간 알림이 전달되지 않을 수도 있어요", "",
+        { domainState: "ChatMessage는 그대로 확정 유지됨(COMMITTED)", redis: "재전송도 재시도도 없음", retryOwner: "없음(Redis는 재시도하지 않음)",
           logs: "CHAT_REALTIME_PUBLISH_FAILED", metrics: "bobfull_business_events{event=CHAT_REALTIME_PUBLISH_FAILED}",
           factStatus: FACT.DESIGN, visual: visual(["redis"], ["redis-publish"], "failure", "failure", "redis", ["db"]),
-          nextAction: "채팅방을 다시 열면 놓친 메시지까지 전부 보임",
-          limits: "설계 해석: Redis 중단·복구 실험은 NOT_RUN.",
+          nextAction: "복구는 Redis가 아니라 Client의 재조회가 담당합니다.",
+          narrationPoints: [
+            "Redis publish가 실패하면 그 순간의 실시간 알림은 그대로 사라집니다.",
+            "<b>Redis는 다시 시도하지 않습니다</b> — 재전송 큐도, 저장도, 재시도 로직도 없습니다.",
+            "대신 메시지 본문은 이미 DB에 커밋돼 있습니다(DB가 Source of Truth).",
+            "따라서 복구 주체는 Redis가 아니라 <b>Client입니다</b> — 다음 Step에서 재조회로 메꿉니다."],
+          retryPolicy: [["Redis 재시도", "없음"], ["Redis 저장", "없음(durable queue 아님)"],
+            ["메시지 본문", "DB에 이미 커밋됨"], ["복구 주체", "Client 재조회"], ["복구 트리거", "채팅방 재진입·스크롤"]],
+          limits: "설계 해석이다. Redis를 실제로 중단·복구시키는 실험과 cursor 재조회로 누락분이 100% 복구되는지의 실측은 아직 수행하지 않았다(미실행).",
           codeReferences: ["RedisChatMessagePublisher.publish"],
           codeSnippet: { file: "RedisChatMessagePublisher.java", method: "RedisChatMessagePublisher.publish()", code: `public void publish(ChatMessageSentResponse response) {
     try {
@@ -560,22 +598,43 @@ public void onMessage(Message message, byte[] pattern) {
                 response.messageId(), response.chatRoomId(), exception.getClass().getSimpleName());
         businessMetricRecorder.increment(BusinessMetricEvent.CHAT_REALTIME_PUBLISH_FAILED);
     }
-}` },
+}` , annotations: [{"from": 2, "to": 5, "text": "다른 인스턴스들이 구독 중인 채널로 한 번 전파한다."}, {"from": 6, "to": 10, "text": "핵심: 실패해도 로그와 지표만 남기고 재시도하지 않는다 — best-effort라는 계약이 코드에 그대로 드러난다."}]},
           evidenceReferences: [evidence.redis] }),
-      step("recover", "Client", "DB cursor query", "↻ 다시 열면 놓친 메시지도 다 보여요", "실시간 알림을 놓쳤더라도 메시지 자체는 DB에 안전하게 남아있으므로, 채팅방에 다시 들어오면 놓친 메시지까지 전부 볼 수 있습니다.",
-        { domainState: "DB가 최종 근거(Source of Truth)", redis: "자동 재전송 없음", factStatus: FACT.FUTURE,
-          visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "request", "not verified", "core", [], { nodeId: "client", text: "cursor 조회" }),
-          limits: "cursor N/N actual recovery와 ALB/WSS는 NOT_RUN.", evidenceReferences: [evidence.redis] })
+      step("recover", "Client", "DB cursor 재조회", "↻ Client가 DB에서 다시 읽어 메꿔요", "",
+        { domainState: "DB가 최종 근거(Source of Truth)", redis: "자동 재전송 없음", retryOwner: "Client(cursor 재조회)", factStatus: FACT.FUTURE,
+          narrationPoints: [
+            "Client는 마지막으로 받은 메시지 id를 <b>cursor</b>로 들고 있습니다.",
+            "채팅방에 다시 들어오거나 위로 스크롤하면 그 cursor 이후 메시지를 <b>DB에 다시 요청</b>합니다.",
+            "Redis를 거치지 않고 Client → API → DB 경로로 직접 읽으므로, 놓친 구간이 채워집니다.",
+            "즉 실시간 전달은 best-effort이고, <b>전달 보장은 이 재조회가 담당</b>합니다."],
+          retryPolicy: [["복구 경로", "Client → API → DB"], ["기준값", "마지막 수신 messageId(cursor)"],
+            ["Redis 관여", "없음"], ["트리거", "채팅방 재진입·과거 스크롤"], ["검증 상태", "실측 미수행"]],
+          visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "request", "not verified", "core", [], { nodeId: "client", text: "cursor 재조회" },
+            { request: "cursor 이후 재요청" }),
+          limits: "이 복구 경로는 설계상 계약이며 아직 실측하지 않았다. 누락된 N건이 재조회로 정확히 N건 복구되는지의 검증과 ALB/WSS 환경에서의 재연결 검증은 모두 수행하지 않았다(미실행).",
+          evidenceReferences: [evidence.redis] })
     ]}
   ]},
   { id: "hotpath-performance", shortLabel: "Ch4 — 예약 조회 성능 개선",
     title: "조회가 몰리면 어디가 병목이고, 어떻게 줄였는가?", subtitle: "인기 예약 조회 성능 병목 분석과 배치 쿼리 개선",
-    summary: "인기 있는 회차(시간대)에 조회가 몰리면 서비스가 느려질 수 있다. 실제로 부하를 걸어 측정해보니 회차 조회 하나가 DB 연결을 거의 다 써버리는 것을 확인했고, 그 원인을 찾아 최소한의 변경으로 개선한 뒤 다시 측정해 실제로 나아졌는지 확인해야 했다.", scenarios: [
+    summary: "맛집으로 알려진 식당은 회차(예약 가능한 시간대) 예약이 열리는 순간에 트래픽이 몰린다. 실제 사용자는 예약 버튼을 누르기 전에 '식당 상세 → 회차 목록'을 반복해서 새로고침하므로, 조회 경로가 먼저 포화된다. 이 Chapter는 그 순간을 K6 부하 시나리오로 재현해 어느 API가 병목인지 분리 측정하고, 원인을 찾아 최소 변경으로 개선한 뒤 동일 조건에서 재측정한 과정을 재생한다.", scenarios: [
     { id: "batch-optimization", title: "인기 회차 조회 병목 개선", steps: [
-      step("saturation", "K6 Load/Stress", "bobfull-k6-test-app", "▲ 손님이 몰리자 서비스가 느려졌어요", "인기 회차 조회가 몰리자 CPU와 DB Connection Pool이 거의 동시에 포화됐다(#142 실측, Stress 20→320 iter/s 계단식).",
+      step("saturation", "K6 Load/Stress", "bobfull-k6-test-app", "▲ 예약 오픈 순간처럼 몰리자 느려졌어요", "",
         { factStatus: FACT.MEASURED, visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "event", "failure", "core", [], { nodeId: "db", text: "CPU 88~98% · Pool 10/10" }),
+          narrationPoints: [
+            "인기 회차 예약이 열리는 순간을 가정해 조회 요청을 계단식으로 늘렸습니다.",
+            "부하 조건: <b>초당 20건에서 320건까지</b> 단계적으로 증가(K6 Stress, peak-restaurant-view.js).",
+            "요청은 에러 없이 <b>쌓이면서 점점 느려지는</b> 포화(saturation) 패턴을 보였습니다.",
+            "CPU와 DB Connection Pool이 거의 동시에 한계에 도달했습니다."],
+          retryPolicy: [["부하 도구", "K6"], ["부하 형태", "Stress(계단식 증가)"], ["시작 → 최대", "20 → 320 iter/s"],
+            ["측정 대상", "인기 회차 조회 경로"], ["DB Pool 크기", "HikariCP 10"]],
           performance: [{ metric: "p95(#142 Stress 전체 실행)", before: "13.14s" }, { metric: "CPU(최고 단계)", before: "88~98%" },
             { metric: "HikariCP pending(최고 단계)", before: "~190건" }, { metric: "dropped_iterations", before: "61,851건(78.2/s)" }],
+          metricGlossary: [
+            ["p95", "전체 요청을 응답 시간 순으로 줄 세웠을 때 95번째 지점의 값. 100건 중 느린 쪽 5건을 뺀 나머지가 이 시간 안에 끝났다는 뜻이라, 평균보다 체감 지연을 잘 나타낸다."],
+            ["iter/s", "K6가 초당 시작하는 시나리오 반복 횟수. 실제 사용자가 초당 몇 번 조회를 시도하는지에 해당한다."],
+            ["HikariCP pending", "DB 커넥션을 받지 못해 순서를 기다리는 요청 수. 0보다 크면 Pool이 부족해 대기가 생겼다는 뜻이다."],
+            ["dropped_iterations", "K6가 목표 속도를 맞추려 했지만 서버가 받아주지 못해 <b>아예 실행하지 못한</b> 반복 횟수. 많을수록 처리 용량을 초과했다는 뜻이다."]],
           logs: "요청이 에러 없이 쌓여 점점 느려지는 saturation 패턴(#142)", evidenceReferences: [evidence.peak] }),
       step("split-detail", "K6 restaurant-view-hotpath", "GET /api/restaurants/{id}", "✓ 식당 정보 조회는 문제 없었어요", "둘 중 어디가 느린가? — 식당 상세는 이미 단일 쿼리라 병목이 아니다.",
         { factStatus: FACT.MEASURED, visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "request", "committed", "core", [], { nodeId: "db", text: "p95 16.5ms · 오류율 0%" }),
@@ -637,7 +696,7 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
 
     return new AvailableDiningSessionBatchContext(
             activeReservationByTimeSlotId, closedTimeSlotIds, participantCountByReservationId, readyHoldPartySizeByTimeSlotId);
-}` },
+}` , annotations: [{"from": 2, "to": 2, "text": "회차 ID를 먼저 한 번에 모은다 — 이후 모든 조회가 이 목록 하나로 처리된다."}, {"from": 4, "to": 13, "text": "회차마다 반복하던 조회를 IN 절 한 번으로 대체한다(활성 예약 / 마감 여부)."}, {"from": 18, "to": 26, "text": "참여 인원 합계와 결제 선점 합계도 각각 집계 쿼리 1회로 처리한다 — 회차가 몇 개든 쿼리 수는 늘지 않는다."}]},
           evidenceReferences: [evidence.hotpath] }),
       step("same-load-result", "K6 Load(20 iter/s)", "동일 조건 재측정", "✓ 같은 상황에서 다시 재봤더니 훨씬 빨라졌어요", "동일 부하(Load 20 iter/s, 워밍업 후)에서 지연·CPU·DB Pool 세 지표 모두 뚜렷이 개선됐다.",
         { factStatus: FACT.MEASURED, visual: visual(["client", "web", "app", "db"], ["request", "request-app", "persist"], "commit", "completed", "core", [], { nodeId: "db", text: "p95 60.27ms" }),
@@ -652,11 +711,25 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
           performance: [{ metric: "p95(#142와 동일 Stress 전체 실행)", before: "13.14s", after: "1.34s", beforeValue: 13.14, afterValue: 1.34, scaleUnit: "s", improvement: "89.8% 개선" },
             { metric: "HTTP RPS", before: "51.4 req/s", after: "195.3 req/s", beforeValue: 51.4, afterValue: 195.3, scaleUnit: "req/s", improvement: "3.8배 증가" },
             { metric: "dropped_iterations", before: "61,851건(78.2/s)", after: "5,886건(7.5/s)", beforeValue: 61851, afterValue: 5886, scaleUnit: "건", improvement: "90.5% 감소" }],
+          metricGlossary: [
+            ["p95", "요청을 응답 시간 순으로 줄 세웠을 때 95번째 지점의 값. 느린 쪽 5%를 제외한 대부분의 사용자가 이 시간 안에 응답을 받았다는 뜻이다."],
+            ["HTTP RPS", "requests per second — 서버가 <b>실제로 처리해낸</b> 초당 요청 수. 부하를 얼마나 걸었는지가 아니라 얼마나 소화했는지를 나타내는 처리량 지표다."],
+            ["dropped_iterations", "서버가 받아주지 못해 K6가 아예 실행하지 못한 반복 횟수. 줄어들수록 같은 부하에서 더 많은 요청을 실제로 처리했다는 뜻이다."]],
           evidenceReferences: [evidence.hotpath, evidence.peak] }),
-      step("limits", "Human 판단", "포화 임계점 재평가", "▲ 더 버틸 수 있게 됐지만 완전히 해결된 건 아니에요", "병목이 사라진 게 아니라 임계점이 약 40 iter/s에서 약 320 iter/s로 8배 밀렸을 뿐이다 — 최고 부하에서는 CPU·Pool이 다시 포화된다.",
+      step("limits", "Human 판단", "포화 임계점 재평가", "▲ 임계점이 8배 밀렸지만 병목이 사라진 것은 아니에요", "",
         { factStatus: FACT.MEASURED, visual: visual(["app", "db"], ["persist"], "failure", "failure", "core", [], { nodeId: "db", text: "40 → 320 iter/s" }),
+          narrationPoints: [
+            "<b>무엇이 한계인가</b>: 포화가 시작되는 지점이 초당 40건에서 320건으로 밀렸을 뿐, 320건 부근에서는 CPU 96~98%·Pool 10/10으로 다시 포화됩니다.",
+            "<b>왜 남았는가</b>: 남은 병목은 쿼리 수가 아니라 <b>단일 인스턴스의 CPU</b>입니다. Pool을 10→30으로 늘린 재검증(#142)에서는 CPU가 부족한 상태라 오히려 악화됐습니다.",
+            "<b>지금 어떻게 했는가</b>: 애플리케이션 레벨에서 더 짜내지 않고 여기서 멈추기로 확정했습니다 — 현재 목표 트래픽은 320 iter/s 아래이므로 추가 최적화의 실익이 없다고 판단했습니다.",
+            "<b>다음에 무엇을 하는가</b>: CPU 병목은 코드가 아니라 인스턴스 수로 푸는 문제이므로 <b>#191 Auto Scaling</b>으로 이관했습니다. 2대→N대 동일 조건 측정이 선행 조건이며, 그 측정 전까지는 확장 효과를 주장하지 않습니다."],
+          retryPolicy: [["남은 병목", "단일 인스턴스 CPU"], ["현재 결론", "애플리케이션 최적화 종료"],
+            ["이관 대상", "#191 Auto Scaling"], ["이관 선행 조건", "2→N대 동일 조건 측정"], ["미측정 구간", "320 iter/s 초과"]],
           performance: [{ metric: "포화 시작 임계점(iter/s)", before: "~40", after: "~320", beforeValue: 40, afterValue: 320, scaleUnit: "iter/s", improvement: "8배 상승(완전 제거 아님)" }],
-          limits: "Stress 최고 단계(320 iter/s)에서는 CPU 96~98%, HikariCP active 10/10, pending ~190건이 다시 관측된다(#235 4절). 320 iter/s를 넘는 부하는 측정하지 않았다. Pool 크기를 10→30으로 늘려도(#142 재검증) CPU가 부족한 상태에서는 개선되지 않고 오히려 악화됐다.",
+          metricGlossary: [
+            ["포화 시작 임계점", "부하를 계단식으로 올릴 때 응답 시간이 급격히 나빠지기 시작하는 지점. 이 지점이 높을수록 더 많은 동시 사용자를 견딘다."],
+            ["HikariCP active 10/10", "DB 커넥션 10개를 전부 사용 중이라는 뜻. 이 상태가 지속되면 이후 요청은 커넥션을 기다리며 대기한다."]],
+          limits: "Stress 최고 단계(320 iter/s)에서 CPU 96~98%, HikariCP active 10/10, pending 약 190건이 다시 관측된다(#235 4절). 320 iter/s를 넘는 부하는 측정하지 않았으므로 그 이상 구간의 거동은 알 수 없다. Pool 크기를 10에서 30으로 늘린 #142 재검증에서는 CPU가 이미 포화된 상태라 개선되지 않고 오히려 악화됐다 — 남은 병목이 커넥션 수가 아니라 CPU라는 근거다.",
           sideNote: { title: "다른 성능 의사결정 — #62 검색 Redis Cache",
             body: "회차 조회와는 별도로, 동일 검색 반복 시 DB Connection Pool 포화가 실측됐다(No Cache 동시 30×5: p50 32ms/p95 43ms/max 56ms, Pool active 10/10·awaiting 20, 요청당 쿼리 2). Warm Cache Hit은 p50 10ms/p95 14ms/max 19ms, Pool active/awaiting 0/0, 쿼리 0으로 DB를 완전히 우회했다. 캐시는 기술 스택을 늘리려고 넣은 게 아니라 반복 조회의 DB Connection 병목을 실측한 뒤 제한적으로(date/time 없는 검색만, TTL 60초) 적용했다. Redis Cache ≠ 예약 정합성 — 예약 성공 여부는 항상 DB가 최종 판단한다." },
           evidenceReferences: [evidence.hotpath, evidence.peak, evidence.searchCache] })
@@ -747,7 +820,7 @@ private static RejectedExecutionHandler discardAndLog() {
             ? message.getId().toString()
             : message.getChatRoomId().toString();
     kafkaTemplate.send(topic, key, payload).get(ackTimeoutSeconds, TimeUnit.SECONDS);
-}` },
+}` , annotations: [{"from": 9, "to": 12, "text": "핵심: Partition Key를 무엇으로 쓰는지 결정하는 지점. messageId면 메시지마다 고르게 분산되고, chatRoomId면 같은 방이 한 Partition에 몰린다."}]},
           evidenceReferences: [evidence.partitionKey] }),
       step("domain-contract", "Human 도메인 검토", "Moderation 계약", "? 정말 순서를 지켜야 할까요?", "메시지가 한곳에 몰린 이유는 같은 채팅방 메시지를 순서대로 처리하기 위해서였다. 그런데 AI 검토는 메시지 하나하나를 따로 확인하는 작업이라, 같은 방이라고 꼭 순서를 지킬 필요는 없었다.",
         { factStatus: FACT.DESIGN, visual: visual(["app", "db"], ["persist"], null, null, "outbox"),
@@ -772,7 +845,7 @@ private static RejectedExecutionHandler discardAndLog() {
             ? message.getId().toString()
             : message.getChatRoomId().toString();
     kafkaTemplate.send(topic, key, payload).get(ackTimeoutSeconds, TimeUnit.SECONDS);
-}` },
+}` , annotations: [{"from": 9, "to": 12, "text": "핵심: Partition Key를 무엇으로 쓰는지 결정하는 지점. messageId면 메시지마다 고르게 분산되고, chatRoomId면 같은 방이 한 Partition에 몰린다."}]},
           sideNote: { title: "더 큰 workload에서도 확인 — #192 실험 0-1/0-2",
             body: "메시지 300건·채팅방 30개로 늘려도 결론은 같았다. Async 50.9초(5.90 msg/s) · Kafka+chatRoomId key 71.8~72.5초(4.14~4.18 msg/s) · Kafka+messageId key(실험용) 61.0초(4.92 msg/s). messageId key가 chatRoomId보다 빨라지긴 하지만, 이 규모에서도 Kafka가 Async보다 빠르다는 결론으로 뒤집히지는 않았다. 로컬 Testcontainers·Fake AI 500ms 조건이며 Production 규모 대용량 검증은 아니다." },
           evidenceReferences: [evidence.partitionKey, evidence.aiWorkerScaling] }),
@@ -792,7 +865,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
             new FixedBackOff(retryBackoffMs, retriesAfterFirstAttempt));
     errorHandler.addNotRetryableExceptions(CustomException.class, InvalidChatMessageEventException.class);
     return errorHandler;
-}` },
+}` , annotations: [{"from": 7, "to": 8, "text": "핵심: 최초 처리를 포함해 최대 3회까지만 시도하도록 재시도 횟수와 간격을 지정한다."}, {"from": 9, "to": 9, "text": "재시도해도 소용없는 예외(잘못된 메시지 형식 등)는 즉시 DLT로 보내 불필요한 반복 호출을 막는다."}]},
           evidenceReferences: [evidence.pipeline, evidence.aiWorkerScaling] }),
       step("conclusion", "Human 판단", "Kafka 도입 최종 결론", "✓ 최종 결론: 속도가 아니라 신뢰성 때문에", "Kafka는 Async보다 빠른 Queue라서 선택한 것이 아니다. 느리고 실패할 수 있는 AI 후속 작업을 적체·Retry·실패 격리·복구·Consumer 확장이 가능한 처리 경계로 분리하기 위해 선택했다. 이후 실제 병목(chatRoomId Hot-Key)을 찾아 Moderation 도메인 계약에 맞는 Key로 개선한 것도 같은 원칙의 연장이다.",
         { factStatus: FACT.DESIGN, visual: visual(["outbox", "kafka", "consumer", "llm"], ["outbox-publish", "kafka-consume", "ai-call"], "commit", "completed", "outbox", ["app", "db"]),
@@ -824,7 +897,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
     if (personal) return flagged(ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
     if (profanity) return flagged(ModerationCategory.PROFANITY, RiskLevel.HIGH);
     return flagged(ModerationCategory.SPAM, RiskLevel.HIGH);
-}` } }),
+}` , annotations: [{"from": 11, "to": 13, "text": "핵심: 서로 다른 종류의 신호가 동시에 잡히거나 정확히 하나로 확정되지 않으면 규칙으로 끝내지 않고 AI 판단에 위임한다."}, {"from": 14, "to": 16, "text": "확실한 한 가지에만 해당할 때 AI 호출 없이 즉시 위반으로 확정한다."}]} }),
       step("rule-hit", "ModerationRuleFilter", "Validator", "✓ AI한테 안 물어보고 바로 판단했어요", "너무 명확한 위반이라 AI(OpenAI)에게 물어보지 않고 바로 판정했다 — AI 호출 0회.",
         { factStatus: FACT.VERIFIED, topologyKey: "moderation", visual: visual(["rule", "validator"], ["rule-bypass"], "commit", "completed", "rule"),
           decisionBadge: "CLEAR_FLAGGED는 있어도 CLEAR_SAFE는 없다",
@@ -858,7 +931,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
     if (personal) return flagged(ModerationCategory.PERSONAL_INFORMATION, RiskLevel.MEDIUM);
     if (profanity) return flagged(ModerationCategory.PROFANITY, RiskLevel.HIGH);
     return flagged(ModerationCategory.SPAM, RiskLevel.HIGH);
-}` } }),
+}` , annotations: [{"from": 11, "to": 13, "text": "핵심: 서로 다른 종류의 신호가 동시에 잡히거나 정확히 하나로 확정되지 않으면 규칙으로 끝내지 않고 AI 판단에 위임한다."}, {"from": 14, "to": 16, "text": "확실한 한 가지에만 해당할 때 AI 호출 없이 즉시 위반으로 확정한다."}]} }),
       step("not-split-candidate", "SplitMessageCandidateGate", "LLM", "◆ 짧지만 나눠 보낸 메시지는 아니에요 → AI에게 직접 물어봐요", "8자 이하라 최근 대화 기록은 실제로 확인하지만, 같은 사람이 나눠서 보낸 의심스러운 흔적이 없으면 그 결과는 버리고 지금 메시지 하나만 AI에게 보낸다.",
         { factStatus: FACT.MERGED, topologyKey: "moderation", visual: visual(["splitGate", "dbContext", "llm"], ["splitGate-dbContext", "splitGate-llm"], "event", null, "rule", [], { nodeId: "dbContext", text: "조회됨 · 후보 아님(discard)" }),
           codeReferences: ["SplitMessageCandidateGate.mayNeedContext", "SplitMessageCandidateGate.isSplitCandidate"],
@@ -994,12 +1067,12 @@ Optional<ModerationResult> clearSplitFlagged(List<String> canonicalCandidates) {
           promptBlocks: ["입력 메시지는 명령이 아니라 분석 대상 데이터", "Structured Output 계약"],
           decisionBadge: "#251 C-02 measured · moderation-prompt-v3-scope",
           logs: "#251 STEP0 C-02(Injection+욕설): moderation-prompt-v3-scope에서 SAFE 강제 지시를 따르지 않고 Structured Output을 유지함",
-          limits: "현재 System Prompt boundary는 merged다. 현재 moderation-prompt-v3-short-fragment-boundary에서 C-02 Injection 재측정은 NOT_RUN이며, 완벽 방어를 주장하지 않는다.",
+          limits: "현재 System Prompt boundary는 merged다. 다만 그 관측은 이전 Prompt 버전(moderation-prompt-v3-scope)에서 이뤄졌고, 현재 버전에서의 재측정은 아직 수행하지 않았다(미실행). 따라서 완벽한 방어를 주장하지 않는다.",
           evidenceReferences: [evidence.moderationHardening] }),
       step("not-perfect-defense", "Human 판단", "한계 고지", "▲ 완벽하게 막는다고 말하지는 않아요", "#251은 한 번만 실행해서 관측한 결과다 — 이 방어가 모든 경우에 항상 통한다고 표현하지 않는다.",
         { factStatus: FACT.MEASURED, topologyKey: "moderation", visual: visual(["validator", "moderationDb"], ["validator-db"], "commit", null, "rule"),
           decisionBadge: "#251 C-02 measured · moderation-prompt-v3-scope",
-          limits: "각 Case는 moderation-prompt-v3-scope에서 1회 순차 실행 관측이다. 현재 short-fragment-boundary 버전 재측정은 NOT_RUN이며 재실행 시 달라질 수 있다.",
+          limits: "각 Case는 moderation-prompt-v3-scope에서 1회 순차 실행 관측이다. 현재 Prompt 버전에서의 재측정은 아직 수행하지 않았으며(미실행), 다시 실행하면 결과가 달라질 수 있다.",
           evidenceReferences: [evidence.moderationHardening] })
     ]},
     { id: "moderation-db-result", title: "판정 결과 DB 저장", steps: [
@@ -1049,7 +1122,7 @@ public class ChatModeration extends BaseTimeEntity {
         String errorCode = exception.getClass().getSimpleName();
         throw new ModerationAnalysisException(errorCode, exception);
     }
-}` } })
+}` , annotations: [{"from": 2, "to": 6, "text": "핵심(멱등성): 이미 판정이 끝난 메시지면 AI를 다시 부르지 않고 그대로 종료한다 — 같은 메시지가 두 번 와도 안전한 이유."}, {"from": 13, "to": 14, "text": "AI 응답도 외부 입력이므로 저장 전에 조합 규칙을 다시 검증한다."}]} })
     ]}
   ]}
 ];

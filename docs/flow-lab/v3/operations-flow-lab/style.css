@@ -3,7 +3,7 @@
   --text:#f3ece1;--muted:#a89b89;
   --accent:#ff7d3d;--accent-strong:#ffa06a;
   --success:#7cc98a;--failure:#e2685f;
-  --code-bg:#12100c
+  --code-bg:#12100c;--annot:#ffb066
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
@@ -32,10 +32,12 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .chapter-intro p{margin:0;color:var(--muted);font-size:13px}
 .chapter-origin{flex:1 1 320px;min-width:0;margin:0 !important;padding-left:20px;border-left:1px solid var(--line);color:var(--text) !important;font-size:12.5px;line-height:1.6}
 
-.playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;flex-direction:column;gap:8px;padding:10px max(20px,4vw) 12px;background:var(--bg);border-top:1px solid var(--line)}
-.scenario-buttons{display:flex;gap:6px;flex-wrap:wrap}
-.scenario-buttons button{padding:6px 10px;font-size:12px}
-.playback-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.scenario-bar{padding:14px 0 4px}
+.scenario-buttons{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.scenario-buttons button{flex:0 0 auto;padding:7px 14px;font-size:12.5px;white-space:nowrap}
+
+.playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;padding:8px max(20px,4vw) 10px;background:var(--bg);border-top:1px solid var(--line)}
+.playback-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%}
 #secondaryControls{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.75;transform:scale(.96);transform-origin:left center}
 #counter{color:var(--muted);font:12px ui-monospace,monospace;margin-left:auto}
 
@@ -43,7 +45,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .stage-heading{display:flex;justify-content:space-between;gap:16px;align-items:baseline;margin-bottom:14px}
 .stage-heading h2{margin:0;font-size:15px;font-weight:600;color:var(--muted)}
 .stage-heading span{color:var(--muted);font-size:11px}
-.stage-body{display:grid;grid-template-columns:1fr 280px;gap:22px;align-items:start}
+.stage-body{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:start}
 .stage-main{min-width:0}
 .canvas{width:100%;padding:6px 0;overflow-x:auto}
 .topology{display:block;width:100%;height:auto;max-height:540px}
@@ -70,10 +72,17 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .flow-outcome.dlt{color:var(--failure)}
 .legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:11px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px}
 
-.stage-notes{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
+.stage-notes{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;min-width:0;overflow-wrap:anywhere}
 .kicker{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
-.stage-notes h3{margin:0 0 4px;font-size:18px}
+.stage-notes h3{margin:0 0 6px;font-size:19px;line-height:1.35}
 .narration{margin:0 0 10px;color:var(--text);font-size:14px;line-height:1.6}
+.narration[hidden]{display:none}
+/* 긴 설명 대신 번호가 붙은 짧은 흐름으로 읽히게 한다. */
+.narration-points{margin:0 0 10px;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.narration-points[hidden]{display:none}
+.narration-points li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;color:var(--text);font-size:13.5px;line-height:1.55;overflow-wrap:anywhere}
+.narration-points li::before{content:counter(narration-step);counter-increment:narration-step;display:block;width:19px;height:19px;border-radius:50%;border:1px solid var(--accent);color:var(--accent-strong);font:700 11px/18px ui-monospace,monospace;text-align:center}
+.narration-points{counter-reset:narration-step}
 .step-status{display:flex;flex-direction:column;gap:4px;margin:0 0 6px}
 .step-status[hidden]{display:none}
 .step-status-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)}
@@ -91,7 +100,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .fact-caption .fact-strong{color:var(--accent-strong);font-weight:700}
 .fact-caption .decision{color:var(--accent-strong);font-weight:600}
 .quick-state{display:grid;gap:3px;margin:8px 0 0}
-.quick-state div{display:grid;grid-template-columns:76px 1fr;gap:8px}
+.quick-state div{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px}
 .quick-state dt{color:var(--muted);font:10px ui-monospace,monospace}
 .quick-state dd{margin:0;color:var(--text);font-size:12px}
 .prompt-blocks{margin:8px 0 0;color:var(--muted);font-size:11px}
@@ -133,27 +142,60 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .perf-bar-fill.after{background:var(--success)}
 .perf-bar-value{font:11px ui-monospace,monospace;color:var(--text)}
 .perf-improvement{margin:6px 0 0;color:var(--success);font-size:12px;font-weight:600}
+/* 지표 이름만 보고는 뜻을 알 수 없으므로 같은 화면에서 바로 풀어준다. */
+.metric-glossary{grid-column:1/-1;display:flex;flex-direction:column;gap:5px;margin-top:4px;padding-top:12px;border-top:1px solid var(--line)}
+.metric-glossary div{display:grid;grid-template-columns:150px 1fr;gap:10px;font-size:12px}
+.metric-glossary dt,.metric-glossary .term{color:var(--accent-strong);font:600 11.5px ui-monospace,monospace}
+.metric-glossary dd,.metric-glossary .desc{margin:0;color:var(--muted);line-height:1.5}
 
-.state-section{margin-bottom:20px}
-.state-section h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:12px}
-.state-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.state-grid article{border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--panel)}
-.state-grid .na{opacity:.5}
-.state-grid h3{margin-bottom:5px;color:var(--muted);font-size:11px;font-weight:600}
-.state-grid p{margin:0;overflow-wrap:anywhere;font-size:13px}
+/* 실행 주체·주기·재시도 한도 — Canvas 바로 아래 고정 노출. */
+.retry-policy{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.retry-policy[hidden]{display:none}
+.retry-policy div{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);min-width:132px}
+.rp-term{color:var(--muted);font-size:10.5px}
+.rp-value{color:var(--accent-strong);font:600 12.5px ui-monospace,monospace}
+
+/* 저장 위치 비교(Outbox DB row vs 메모리 리스너). 코드를 읽지 않아도 "DB에 남는가"가 한눈에 보이게 한다. */
+.store-compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+.store-compare[hidden]{display:none}
+.store-box{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--panel)}
+.store-box.gone{border-color:var(--failure)}
+.store-box.kept{border-color:var(--success)}
+.store-tag{display:block;color:var(--muted);font-size:11px;margin-bottom:2px}
+.store-box h3{margin:0 0 10px;font-size:14px}
+.store-box.gone h3{color:var(--failure)}
+.store-box.kept h3{color:var(--success)}
+.store-table-wrap{overflow-x:auto}
+.store-table{width:100%;border-collapse:collapse;font:11.5px ui-monospace,monospace}
+.store-table th{background:var(--code-bg);color:var(--muted);font-weight:600;text-align:left;padding:6px 10px;border:1px solid var(--line);white-space:nowrap}
+.store-table td{color:var(--text);padding:6px 10px;border:1px solid var(--line);white-space:nowrap}
+.store-empty{margin:0;padding:18px 10px;text-align:center;color:var(--failure);font-size:12.5px;border:1px dashed var(--failure);border-radius:6px}
+.store-note{margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.55}
 
 .code-view{margin-bottom:24px}
 .code-view h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:12px}
 .code-stepper{display:flex;flex-wrap:wrap;gap:5px 16px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
 .code-stepper span.active{color:var(--accent-strong);font-weight:700;text-decoration:underline;text-underline-offset:3px}
 .code-card{border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.code-card-head{background:var(--panel);border-bottom:1px solid var(--line);padding:8px 14px}
-.code-method-tag{color:var(--success);font-size:11px;font-weight:700;letter-spacing:.02em}
-.code-method{color:var(--text);font:600 13px ui-monospace,monospace;margin-left:6px}
-.code-file{color:var(--muted);font:11px ui-monospace,monospace;margin-top:3px}
-.code-block{margin:0;background:var(--code-bg);padding:14px;overflow-x:auto}
-.code-block code{color:var(--text);font:12.5px/1.6 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;white-space:pre}
+.code-card-head{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px}
+.code-method-tag{color:var(--success);font-size:11.5px;font-weight:700;letter-spacing:.02em}
+.code-method{color:var(--text);font:600 14.5px ui-monospace,monospace;margin-left:6px}
+.code-file{color:var(--muted);font:11.5px ui-monospace,monospace;margin-top:3px}
+.code-block{margin:0;background:var(--code-bg);padding:16px 18px;overflow-x:auto}
+.code-block code{color:var(--text);font:14px/1.75 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;white-space:pre}
 .code-empty{margin:0;padding:14px;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+/* Java syntax highlighting — 토크나이저가 붙이는 class와 1:1로 대응한다. */
+.tok-keyword{color:#c191ff}
+.tok-anno{color:#ffa06a}
+.tok-string{color:#9ed77f}
+.tok-comment{color:#7b7263;font-style:italic}
+.tok-number{color:#f0a878}
+.tok-type{color:#6fd0e0}
+.tok-method{color:#ffd479}
+/* 핵심 구간만 테두리로 묶고 "이 코드가 무슨 일을 하는가"를 한 줄로 붙인다. */
+.code-annotated{display:block;position:relative;margin:10px 0;padding:8px 12px 8px 14px;border:1px solid var(--annot);border-left-width:3px;border-radius:6px;background:rgba(255,125,61,.05)}
+.code-annotation{display:block;margin-bottom:6px;color:var(--annot);font:600 12.5px/1.5 system-ui,"Malgun Gothic",sans-serif;white-space:normal}
+.code-annotation .num{display:inline-block;min-width:19px;height:19px;margin-right:6px;border-radius:50%;background:var(--annot);color:var(--code-bg);font:700 11px/19px system-ui;text-align:center}
 
 .outcomes{margin-bottom:24px}
 .outcomes h2{font-size:14px;color:var(--muted);font-weight:600;margin:20px 0 6px}
@@ -182,15 +224,15 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
   .topbar{display:block}
   .brand{margin-bottom:8px}
   .stage-body{grid-template-columns:1fr}
-  .state-grid{grid-template-columns:1fr 1fr}
   .comparison{grid-template-columns:1fr}
+  .store-compare{grid-template-columns:1fr}
   .chapter-intro{flex-direction:column;gap:10px}
   .chapter-intro-main{flex:none}
   .chapter-origin{flex:none;padding-left:0;border-left:none;padding-top:10px;border-top:1px solid var(--line)}
 }
 @media(max-width:520px){
   main{padding:16px}
-  .state-grid{grid-template-columns:1fr}
   .comparison{grid-template-columns:1fr}
+  .metric-glossary div{grid-template-columns:1fr;gap:2px}
   .topology{min-width:760px}
 }

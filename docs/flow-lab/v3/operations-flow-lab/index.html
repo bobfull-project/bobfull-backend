@@ -23,8 +23,11 @@
       <p id="chapterOrigin" class="chapter-origin"></p>
     </section>
 
+    <section class="scenario-bar" aria-label="Scenario 선택">
+      <div id="scenarioButtons" class="scenario-buttons"></div>
+    </section>
+
     <section class="playback" aria-label="재생 제어">
-      <div id="scenarioButtons" class="scenario-buttons" aria-label="Scenario 선택"></div>
       <div class="playback-controls">
         <button id="play" class="primary">▶ 시나리오 실행</button>
         <div id="secondaryControls">
@@ -41,6 +44,8 @@
         <div class="stage-main">
           <div id="canvas" class="canvas" aria-label="시스템 흐름 Canvas"></div>
           <div class="legend"><span>● 요청</span><span>◆ 이벤트</span><span>✓ 확정</span><span>↻ 재시도</span><span>↓ DLT</span><span>↠ Redis 전파</span><span>× 실패</span></div>
+          <div id="retryPolicy" class="retry-policy" hidden></div>
+          <section id="storeCompare" class="store-compare" hidden></section>
           <section id="comparison" class="comparison" hidden></section>
           <section id="performance" class="performance" hidden></section>
           <section id="kafkaPartitions" class="performance" hidden></section>
@@ -49,6 +54,7 @@
           <span class="kicker">현재 단계</span>
           <h3 id="stepTitle"></h3>
           <p id="narration" class="narration"></p>
+          <ol id="narrationPoints" class="narration-points" hidden></ol>
           <div id="stepStatus" class="step-status"></div>
           <p id="stepNext" class="step-next"></p>
           <span class="kicker tech-label">기술적으로는</span>
@@ -57,8 +63,6 @@
         </aside>
       </div>
     </section>
-
-    <section class="state-section"><h2>핵심 상태</h2><div id="stateGrid" class="state-grid"></div></section>
 
     <section class="code-view" aria-label="실제 코드">
       <h2>코드로 보기</h2>
