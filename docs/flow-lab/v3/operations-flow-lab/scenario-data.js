@@ -55,12 +55,17 @@ const topology = {
     "kafka-dlt": "M875 105 V145", "dlt-db": "M825 180 H630 V225 H600",
     "redis-publish": "M600 225 H630 V385 H670", "redis-app-a": "M770 385 H810 V325 H850", "redis-app-b": "M770 385 H810 V425 H850",
     "local-stomp": "M950 325 H1000 V375 H1050", "local-stomp-b": "M950 425 H1000 V375 H1050",
-    "commit-async": "M385 260 V350"
+    "commit-async": "M385 260 V350",
+    /* #274 통제 비교(Outbox+Async vs Outbox+Kafka)용 — Outbox에서 Async로 이어지는 경로.
+       기존 commit-async(Application→Async 직결 bypass)는 #192 당시의 구식(Outbox 없는 Memory
+       Async) 비교를 그대로 나타내므로 그 Step들에는 남겨두고, 이 edge는 #274 이후 같은 Outbox를
+       공유하는 Step에서만 쓴다. */
+    "outbox-async": "M670 90 H610 V320 H385 V350"
   },
   labels: { request: [135, 180], "request-app": [285, 180], persist: [440, 180], "outbox-write": [620, 112],
     "outbox-publish": [775, 24], "kafka-consume": [930, 24], "ai-call": [1085, 24], "kafka-dlt": [880, 128],
     "dlt-db": [700, 216], "redis-publish": [620, 332], "redis-app-a": [780, 286], "redis-app-b": [780, 402],
-    "local-stomp": [970, 305], "local-stomp-b": [970, 445], "commit-async": [395, 310] },
+    "local-stomp": [970, 305], "local-stomp-b": [970, 445], "commit-async": [395, 310], "outbox-async": [460, 300] },
   /* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위한, 아주 옅은 배경 구분.
      경로 강조(active/dim)는 그대로 두고 "이건 서로 다른 세 가지 책임 영역"이라는 것만 배경으로 표시한다.
      async(비교 기준 baseline)는 어느 영역에도 속하지 않으므로 의도적으로 제외한다. */
@@ -1012,13 +1017,13 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
           limits: "\"Async는 유실되고 Kafka는 보존한다\"는 예전 해석은 이 confound 때문에 폐기한다. 실제로 유실/보존 여부를 가른 것이 Outbox인지 Kafka인지는 다음 Step의 통제 비교에서 확인한다.",
           evidenceReferences: [evidence.aiWorkerScaling, evidence.outboxAsyncVsKafka] }),
       step("controlled-setup", "Human 설계", "Outbox + Async vs Outbox + Kafka", "◆ 같은 조건으로 다시 비교했다", "ChatMessage와 OutboxEvent를 같은 트랜잭션에 저장하는 것은 두 경로 모두 동일하다. 그 다음 단계만 다르다 — 하나는 Outbox processor가 claim한 뒤 bounded local executor에서 처리하고(Outbox+Async), 다른 하나는 Kafka Broker ACK 뒤 Consumer Group이 소비한다(Outbox+Kafka).",
-        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["persist", "outbox-write"], "commit", "committed", "outbox"),
+        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["persist", "outbox-write", "outbox-async"], "commit", "committed", "outbox"),
           retryPolicy: [["공통 조건", "ChatMessage + OutboxEvent 같은 트랜잭션"], ["경로 A", "Outbox + Local Async(bounded executor)"],
             ["경로 B", "Outbox + Kafka(messageId key, partition 3)"], ["Workload", "30건 · Fake AI 500ms · concurrency 3"]],
           limits: "H2(MySQL mode) 기반 테스트 환경 실측이며, 실제 AWS 다중 EC2 운영 환경 수치는 아니다.",
           evidenceReferences: [evidence.outboxAsyncVsKafka] }),
       step("controlled-performance", "K6/Testcontainers", "Drain / Throughput", "◆ Kafka는 더 빠르지 않았다", "같은 Outbox 조건에서 다시 재보니, 이번에도 Kafka가 더 빠르지 않았다 — 오히려 Async 쪽 drain이 더 짧았다.",
-        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["outbox-write", "commit-async", "outbox-publish", "kafka-consume"], "event", null, "outbox", ["db"]),
+        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["outbox-write", "outbox-async", "outbox-publish", "kafka-consume"], "event", null, "outbox", ["db"]),
           performance: [{ metric: "Outbox + Async drain median(3 run)", before: "5.394s" }, { metric: "Outbox + Kafka drain median(3 run)", before: "7.210s" },
             { metric: "Outbox + Async throughput median", before: "5.56 msg/s" }, { metric: "Outbox + Kafka throughput median", before: "4.16 msg/s" }],
           metricGlossary: [["drain median", "30건 메시지가 전부 처리 완료될 때까지 걸린 시간의 3회 반복 median 값 — 짧을수록 빠르다."],
@@ -1027,11 +1032,11 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
           limits: "Outbox+Kafka drain median 7.210s는 3회 실행(7.210s/7.201s/7.309s) 중앙값이다. Kafka를 처리 속도 때문에 채택한다는 결론은 이 Evidence로 지지되지 않는다.",
           evidenceReferences: [evidence.outboxAsyncVsKafka] }),
       step("controlled-normal-reliability", "Application", "정상 실행 결과", "✓ 정상 실행에서는 둘 다 문제 없었다", "장애 없이 정상적으로 실행했을 때는 두 경로 모두 메시지 유실도 중복도 없었다.",
-        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["outbox-write", "commit-async", "outbox-publish", "kafka-consume"], "commit", "completed", "outbox"),
+        { factStatus: FACT.MEASURED, visual: visual(["app", "db", "outbox", "async", "kafka", "consumer"], ["outbox-write", "outbox-async", "outbox-publish", "kafka-consume"], "commit", "completed", "outbox"),
           performance: [{ metric: "Outbox + Async — lost / duplicate(정상 실행)", before: "0 / 0" }, { metric: "Outbox + Kafka — lost / duplicate(정상 실행)", before: "0 / 0" }],
           evidenceReferences: [evidence.outboxAsyncVsKafka] }),
       step("controlled-crash-recovery", "실제 프로세스 강제 종료", "Actual Process Crash/Restart", "▲ 실제로 프로세스를 강제 종료했다", "이번엔 시뮬레이션이 아니라 실제로 child JVM을 destroyForcibly()로 강제 종료한 뒤 재시작해서 두 경로 모두 회복되는지 확인했다.",
-        { factStatus: FACT.MEASURED, visual: visual(["async", "kafka"], ["commit-async", "outbox-publish"], "retry", null, "outbox", ["app", "outbox", "db"]),
+        { factStatus: FACT.MEASURED, visual: visual(["async", "kafka"], ["outbox-async", "outbox-publish"], "retry", null, "outbox", ["app", "outbox", "db"]),
           performance: [{ metric: "Async — restart → 처리 재개", before: "296.825s" }, { metric: "Kafka — restart → 처리 재개", before: "40.614s" },
             { metric: "Async — crash lost / duplicate", before: "0 / 0" }, { metric: "Kafka — crash lost / duplicate", before: "0 / 0" }],
           narrationPoints: [
@@ -1041,7 +1046,7 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
           limits: "30건 workload·Fake AI 500ms·H2 기반 테스트 환경 값이다. 실제 AWS 다중 EC2 운영 장애 복구를 측정한 값은 아니다. Retry/DLT failure injection은 이 실험에서 별도로 검증하지 않았다.",
           evidenceReferences: [evidence.outboxAsyncVsKafka] }),
       step("recovery-boundary", "Human 분석", "복구 경계의 차이", "◆ 차이는 유실 여부가 아니라 복구 경계였다", "두 경로 모두 살아남았다는 점은 같다. 다른 것은 \"누가, 어떤 방식으로 다시 찾아내는가\"였다.",
-        { factStatus: FACT.DESIGN, visual: visual(["outbox", "async", "kafka", "consumer"], ["commit-async", "kafka-consume"], "event", null, "outbox"),
+        { factStatus: FACT.DESIGN, visual: visual(["outbox", "async", "kafka", "consumer"], ["outbox-async", "kafka-consume"], "event", null, "outbox"),
           narrationPoints: [
             "<b>Outbox + Async</b>: claim된 행이 PROCESSING 상태로 DB에 남고, 약 5분 stale threshold가 지나면 scheduler가 reclaim해 local executor로 다시 넘긴다.",
             "<b>Outbox + Kafka</b>: 커밋된 이벤트가 Broker에 backlog로 남고, 재시작한 Consumer Group이 그 backlog를 이어서 소비한다.",
