@@ -45,10 +45,11 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .stage-heading{display:flex;justify-content:space-between;gap:16px;align-items:baseline;margin-bottom:14px}
 .stage-heading h2{margin:0;font-size:15px;font-weight:600;color:var(--muted)}
 .stage-heading span{color:var(--muted);font-size:11px}
-.stage-body{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:start}
+/* 도표를 먼저 전체 폭으로 크게 보여주고, 설명은 그 아래에 둔다 — 좌우 분할보다 도표 가독성이 우선이다. */
+.stage-body{display:flex;flex-direction:column;gap:20px}
 .stage-main{min-width:0}
 .canvas{width:100%;padding:6px 0;overflow-x:auto}
-.topology{display:block;width:100%;height:auto;max-height:540px}
+.topology{display:block;width:100%;height:auto;max-height:760px}
 .connector{fill:none;stroke:var(--line);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .connector.dim{opacity:.4}
 .connector.active{stroke:var(--accent);opacity:1}
