@@ -433,19 +433,18 @@ const fullArchitectureTopology = {
     "tgBlue-blue1": "M350 160 V190 H290 V220", "tgBlue-blue2": "M350 160 V190 H440 V220",
     "tgGreen-green1": "M650 160 V190 H590 V220", "tgGreen-green2": "M650 160 V190 H740 V220",
     /* `pool`은 실제 인프라가 아니라, Blue/Green EC2가 공통 자원을 사용한다는 것을 보여 주는
-       구성도상의 합류 좌표(460·360)다. Node나 배포 리소스로 표시하지 않는다. */
+       구성도상의 합류 좌표(460·360)다. Node나 배포 리소스로 표시하지 않는다.
+       이 pool 기반 edge들은 이제 "항상 흐리게 보이는 구조적 배경"으로만 쓴다 — 현재 흐름을
+       가리키는 주황 강조선은 이 edge를 재사용하지 않고 app.js의 computeArchActivePath()가
+       실제 Node 좌표만으로 그때그때 새로 계산한다(pool 같은 고정 waypoint를 거치지 않음).
+       archFlowGroups의 각 sequence.path는 이제 순수 Node id 배열이고, 그 사이 강조선은
+       전부 computeArchActivePath()가 담당한다. */
     "blue1-pool": "M290 290 V360 H460", "blue2-pool": "M440 290 V360 H460",
     "green1-pool": "M590 290 V360 H460", "green2-pool": "M740 290 V360 H460",
     "pool-rds": "M460 360 H310 V430", "pool-redis": "M460 360 V430", "pool-kafka": "M460 360 H610 V430",
     "kafka-pool": "M610 430 V360 H460", "pool-green1": "M460 360 H590 V290",
     "pool-s3": "M460 360 H850 V455 H890", "s3-lambda": "M940 490 V510",
-    "pool-openai": "M460 360 H850 V75 H890", "pool-smtp": "M460 360 H850 V280 H890",
-    /* PortOne은 Green EC2(x590)보다 동쪽(x890)에 있는데, 공용 pool 좌표(x460)는 Green EC2보다
-       서쪽이다 — green1-pool(590→460)에 이어 pool-portone(460→850)을 그대로 쓰면 Green EC2에서
-       내려온 수직선이 왼쪽(460)으로 꺾였다가 다시 오른쪽(850)으로 꺾이는 불필요한 좌측 구간이
-       생긴다. PortOne 연결은 pool을 거치지 않고 Green EC2 바로 아래(x590)에서 곧장 오른쪽으로만
-       꺾이는 전용 edge로 둔다 — 이 조합은 "결제 승인" Sequence 외에는 쓰이지 않는다. */
-    "green1-portone": "M590 290 V360 H850 V185 H890",
+    "pool-openai": "M460 360 H850 V75 H890", "pool-portone": "M460 360 H850 V185 H890", "pool-smtp": "M460 360 H850 V280 H890",
     "pool-prometheus": "M460 360 H850 V610 H310 V630", "pool-cloudwatch": "M460 360 H850 V610 H820 V630",
     "prometheus-grafana": "M360 665 H430", "grafana-slack": "M530 665 H600",
     "developer-ghaction": "M1180 110 V150", "ghaction-ecr": "M1180 220 V260", "ecr-ssm": "M1180 330 V370",
@@ -501,45 +500,41 @@ const fullArchitectureNodeDetails = {
   cloudwatch: { role: "애플리케이션 로그 저장 — 메트릭 도구가 아니다(메트릭은 Prometheus/Grafana)", runtime: "awslogs Docker log driver", connectedTo: "Application", network: "—", evidence: "deploy-backend-v1.sh(--log-driver=awslogs)" }
 };
 /* 전체 인프라 구성도 — Node를 아무것도 클릭하지 않은 기본 상태에서 4개 그룹을 순서대로 계속
-   순환 재생한다("가만히 있으면 계속 흐름이 돈다"). 처음엔 그룹의 Node 전부를 한 번에 켰는데,
-   "화살표가 순서대로 흘러야 한다"는 피드백으로 각 그룹을 실제 topology edge를 따라 이동하는
-   순차 애니메이션으로 바꿨다 — `path` 배열의 각 항목이 [edge id 또는 null, node id 또는 null]이며
-   렌더러가 한 항목씩 순서대로 재생한다(edge가 있으면 화살표 토큰이 그 edge를 타고 이동, node가
-   있으면 도착한 순간 그 Node가 켜진다). 이미 지나간 edge/node는 committed(초록, 기존 Scenario Map과
-   같은 관례)로 남고, 아직 도달 못한 edge는 dim으로 흐리게 둔다 — Node 클릭 시 단일 Node만 테두리
-   켜는 기존 동작과는 별개다(그건 여전히 Edge 강조 없음). 모니터링만 예외로 Client에서 시작하지
-   않는다(사용자 요청이 아니라 Application이 스스로 내보내는 지표/로그이므로). */
-const archPathClientToApp = [
-  { node: "users" },
-  { edge: "users-route53", node: "route53" },
-  { edge: "route53-alb", node: "alb" },
-  { edge: "alb-tgGreen", node: "tgGreen" },
-  { edge: "tgGreen-green1", node: "green1" }
-];
+   순환 재생한다("가만히 있으면 계속 흐름이 돈다"). `path`는 이제 실제로 방문하는 Node id만
+   순서대로 나열한 배열이다 — pool 같은 고정 공용 waypoint를 경유하는 edge 문자열을 더 이상
+   참조하지 않는다. 연속된 두 Node 사이의 주황 강조선은 app.js의 computeArchActivePath()가
+   두 Node의 실제 좌표만 보고 그때그때 새로 계산한다(exit → 장애물 없는 첫 빈 가로 띠로 이동 →
+   도착 Node 진입), 그래서 "출발 Node 기준 반대 방향으로 먼저 움직이는" segment가 구조적으로
+   생기지 않는다 — green1-portone처럼 특정 목적지 하나만을 위한 전용 edge를 추가하는 방식은
+   쓰지 않는다. 이미 지나간 Node는 committed(초록, 기존 Scenario Map과 같은 관례)로 남고,
+   Node 클릭 시 단일 Node만 테두리 켜는 기존 동작과는 별개다(그건 여전히 Edge 강조 없음).
+   모니터링만 예외로 Client에서 시작하지 않는다(사용자 요청이 아니라 Application이 스스로
+   내보내는 지표/로그이므로). */
+const archPathClientToApp = ["users", "route53", "alb", "tgGreen", "green1"];
 /* 전체 구성도는 App에서 여러 외부 자원으로 fan-out하는 구조다. 이를 한 줄 path로 연결하면
    RDS→Redis나 Slack→CloudWatch처럼 실제로 없는 관계를 만들어 버린다. 각 버튼은 실제 실행
    단위별 sequence를 차례로 재생하며, 매 sequence는 독립적으로 App 또는 Kafka에서 시작한다. */
 const archFlowGroups = [
   { id: "restaurant", label: "① 사장님 식당 등록", sequences: [
-    { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, { edge: "green1-pool" }, { edge: "pool-s3", node: "s3" }, { edge: "s3-lambda", node: "lambda" }] }
+    { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, "s3", "lambda"] }
   ] },
   { id: "reservation", label: "② 예약·결제·채팅방·이메일", sequences: [
-    { label: "결제 승인", path: [...archPathClientToApp, { edge: "green1-portone", node: "portone" }] },
-    { label: "예약 상태 저장", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-rds", node: "rds" }] },
-    { label: "채팅방 실시간 준비", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-redis", node: "redis" }] },
-    { label: "확정 이메일 발송", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-smtp", node: "smtp" }] }
+    { label: "결제 승인", path: [...archPathClientToApp, "portone"] },
+    { label: "예약 상태 저장", path: ["green1", "rds"] },
+    { label: "채팅방 실시간 준비", path: ["green1", "redis"] },
+    { label: "확정 이메일 발송", path: ["green1", "smtp"] }
   ] },
   { id: "chat-ai", label: "③ 채팅 AI 분석", sequences: [
-    { label: "Kafka 발행", path: [...archPathClientToApp, { edge: "green1-pool" }, { edge: "pool-kafka", node: "kafka" }] },
-    { label: "AI Consumer가 소비 후 LLM 호출", path: [{ node: "kafka" }, { edge: "kafka-pool" }, { edge: "pool-green1", node: "green1" }, { edge: "green1-pool" }, { edge: "pool-openai", node: "openai" }] },
-    { label: "검수 결과 저장", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-rds", node: "rds" }] }
+    { label: "Kafka 발행", path: [...archPathClientToApp, "kafka"] },
+    { label: "AI Consumer가 소비 후 LLM 호출", path: ["kafka", "green1", "openai"] },
+    { label: "검수 결과 저장", path: ["green1", "rds"] }
   ] },
   { id: "monitoring", label: "④ 모니터링·알람", sequences: [
-    { label: "메트릭 수집·알림", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-prometheus", node: "prometheus" }, { edge: "prometheus-grafana", node: "grafana" }, { edge: "grafana-slack", node: "slack" }] },
-    { label: "애플리케이션 로그 기록", path: [{ node: "green1" }, { edge: "green1-pool" }, { edge: "pool-cloudwatch", node: "cloudwatch" }] }
+    { label: "메트릭 수집·알림", path: ["green1", "prometheus", "grafana", "slack"] },
+    { label: "애플리케이션 로그 기록", path: ["green1", "cloudwatch"] }
   ] }
 ];
-archFlowGroups.forEach((group) => { group.nodes = [...new Set(group.sequences.flatMap((sequence) => sequence.path.map((step) => step.node).filter(Boolean)))]; });
+archFlowGroups.forEach((group) => { group.nodes = [...new Set(group.sequences.flatMap((sequence) => sequence.path))]; });
 
 /* 핵심 시스템 흐름 탭 > "AI 채팅 검수" 전용 topology/step.
    기존에는 {chapter,scenario,step} 참조로 실제 Ch2(kafka-ai)·Ch6(ai-moderation) Step을 그대로
