@@ -186,7 +186,9 @@ const serviceUnifiedTopology = {
   },
   labels: {
     "o-reservation-payout": [575, 216], "o-payout-noshow": [725, 216],
-    "a-judge-chatroom": [520, 422], "a-judge-email": [555, 428],
+    /* a-judge-chatroom/a-judge-email은 라벨을 일부러 안 둔다 — 두 edge가 같은 지점(a-judge 아래)에서
+       바로 갈라져 라벨 두 개를 붙일 공간이 없고, 각 node 자체 텍스트("채팅방 생성"/"이메일 발송")로
+       이미 충분히 설명된다. */
     "cross-setup-explore": [200, 145], "cross-pay-paid": [365, 152], "cross-accumulate-reservation": [430, 305],
     "cross-judge-confirm": [590, 152], "cross-meal-mealend": [845, 152]
   },
