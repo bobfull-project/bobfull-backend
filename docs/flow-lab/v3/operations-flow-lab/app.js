@@ -552,92 +552,18 @@ function archNodeSvg(t, id, label, cls) {
   const compress = label.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
   return `<g class="canvas-node${cls ? ` ${cls}` : ""}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
 }
-function archNodeBox(t, id) {
-  const [x, y] = t.nodePositions[id];
-  return { x1: x, y1: y, x2: x + 100, y2: y + 70, cx: x + 50, cy: y + 35 };
-}
-/* xRange를 주면(옵션) 그 가로 구간과 전혀 안 겹치는 Node는 애초에 장애물 후보에서 뺀다 — 안 그러면
-   실제로는 지나갈 일 없는 먼 x의 Node(예: PortOne, GitHub Actions)가 y만 겹친다는 이유로 ALB→
-   TG Green처럼 전혀 다른 x 구간의 shelf 탐색까지 막아버린다. */
-function archBoxesInYRange(t, yTop, yBottom, excludeIds, xRange) {
-  return t.nodes
-    .map(([id]) => id)
-    .filter((id) => !excludeIds.includes(id))
-    .map((id) => archNodeBox(t, id))
-    .filter((box) => box.y1 < yBottom && box.y2 > yTop)
-    .filter((box) => !xRange || (box.x1 < xRange[1] && box.x2 > xRange[0]));
-}
-/* startX에서 시작해, boxes 중 (1) 수직 하강 column(x, exitY~enterY) 또는 (2) 도착 높이에서의
-   최종 가로 접근(x~to.cx, enterY)을 실제로 가리는 것이 있으면 진행 방향(dir)으로 계속 밀어내
-   둘 다 피할 때까지 반복한다 — "목적지 쪽으로 이미 지나가는 중"이라는 뜻이라 source 반대쪽으로는
-   절대 움직이지 않는다. 최대 8회로 무한루프를 막는다(이 topology 실제 장애물 행은 최대 서너
-   개뿐이라 충분하다). */
-function archDodgeLShape(startX, exitY, enterY, toCx, dir, boxes) {
-  let x = startX;
-  for (let guard = 0; guard < 8; guard++) {
-    const hit = boxes.find((box) => {
-      const vHit = x > box.x1 && x < box.x2 && Math.max(exitY, enterY) > box.y1 && Math.min(exitY, enterY) < box.y2;
-      const hLo = Math.min(x, toCx), hHi = Math.max(x, toCx);
-      const hHit = enterY > box.y1 && enterY < box.y2 && hHi > box.x1 && hLo < box.x2;
-      return vHit || hHit;
-    });
-    if (!hit) return x;
-    x = dir >= 0 ? hit.x2 + 12 : hit.x1 - 12;
-  }
-  return x;
-}
-/* 전체 인프라 구성도의 활성(주황) 경로 생성기 — pool 같은 고정 공용 waypoint를 전혀 참조하지
-   않고, 두 실제 Node의 좌표만으로 매번 새로 계산한다. exit(출발 Node 가장자리) → 두 Node
-   사이 구간(exit~enter) 전체에서 걸리는 Node를 진행 방향으로 한 번에 피하는 x로 수직 이동 →
-   도착 Node 가장자리로 진입, 순서로 구성된다. 가로 이동은 전부 destination 방향으로만
-   계산되므로(archDodgeColumn이 항상 dir로만 밀어낸다), source 기준 반대쪽으로 먼저 움직이는
-   segment가 구조적으로 나오지 않는다 — Node별 전용 edge를 만들어 대응하지 않는다. */
-function computeArchActivePath(t, fromId, toId) {
-  const from = archNodeBox(t, fromId), to = archNodeBox(t, toId);
-  const dir = to.cx >= from.cx ? 1 : -1;
-  /* 두 Node의 세로 범위가 겹치면(예: Green EC2 y220-290 vs SMTP y245-315) "같은 행 옆으로 바로
-     연결"을 먼저 시도한다 — 그 사이에 다른 Node가 실제로 끼어 있지 않을 때만 그렇게 한다. */
-  const overlapsY = from.y1 < to.y2 && from.y2 > to.y1;
-  if (overlapsY) {
-    const y = (Math.max(from.y1, to.y1) + Math.min(from.y2, to.y2)) / 2;
-    const between = archBoxesInYRange(t, y - 2, y + 2, [fromId, toId])
-      .filter((box) => dir > 0 ? box.cx > from.cx && box.cx < to.cx : box.cx < from.cx && box.cx > to.cx);
-    if (!between.length) return [[dir > 0 ? from.x2 : from.x1, y], [dir > 0 ? to.x1 : to.x2, y]];
-  }
-  const goingDown = to.cy >= from.cy;
-  const exitY = goingDown ? from.y2 : from.y1;
-  /* 목적지가 출발 Node의 가장자리보다 반대편에 있으면(겹치는 경우) 가까운 가장자리 대신 먼
-     가장자리로 진입한다 — 안 그러면 진입 지점이 출발 가장자리보다 "뒤"에 있어 구간이 0 이하가
-     되거나, 두 Node 사이에 낀 다른 Node(예: Green EC2 #2)를 그대로 지나가게 된다. */
-  const enterY = goingDown
-    ? (to.y1 >= from.y2 ? to.y1 : to.y2)
-    : (to.y2 <= from.y1 ? to.y2 : to.y1);
-  const yLo = Math.min(exitY, enterY), yHi = Math.max(exitY, enterY);
-  /* 걸리는 Node는 실제로 지나갈 가로 구간(from.cx~to.cx, 여유 40px)에 있는 것만 본다 — 안 그러면
-     PortOne처럼 전혀 다른 x의 Node가 y만 겹친다는 이유로 ALB→TG Green처럼 무관한 구간까지
-     막아버린다. */
-  const xRange = [Math.min(from.cx, to.cx) - 40, Math.max(from.cx, to.cx) + 40];
-  const alongTheWay = archBoxesInYRange(t, yLo, yHi, [fromId, toId], xRange);
-  /* 수직 하강 구간과 도착 높이에서의 최종 가로 접근 구간을 한 번에 피한다 — Green EC2 바로 아래
-     Kafka가 있는 경우(수직 하강이 막힘)와, TG Green이 도착 높이에 걸쳐 있어 마지막 가로 이동이
-     막히는 경우(예: Green EC2→OpenAI) 둘 다 이 한 번의 dodge로 잡는다. */
-  const safeX = archDodgeLShape(from.cx, exitY, enterY, to.cx, dir, alongTheWay);
-  const pts = [[from.cx, exitY]];
-  if (safeX !== from.cx) pts.push([safeX, exitY]);
-  pts.push([safeX, enterY]);
-  if (safeX !== to.cx) pts.push([to.cx, enterY]);
-  return pts;
-}
-function archPathPointsToD(pts) {
-  return pts.map((p, i) => (i === 0 ? `M${p[0]} ${p[1]}` : p[0] === pts[i - 1][0] ? `V${p[1]}` : `H${p[0]}`)).join(" ");
-}
+/* 전체 인프라 구성도의 흐름 강조 — Edge는 항상 구조적 배경(회색, pool 기반 fan-out 그대로)만
+   보여주고 절대 강조하지 않는다. 실행 순서를 보여주는 것은 오직 Node 자체의 반짝임뿐이다 —
+   방문 순서대로 Node를 하나씩 active(주황)로 켜고, 이미 지나간 Node는 committed(초록)로 남는다.
+   Edge 경로를 계산하거나 강조하려 했던 이전 시도(고정 pool waypoint, 좌표 기반 자동 라우팅)는
+   전부 제거했다 — "선 빼고 Node만 순서대로 반짝이기"가 최종 방향이다. */
 function renderArchCanvas() {
   const t = fullArchitectureTopology;
   const regionSvg = regionBgSvg(t);
-  let edgeSvg, tokenSvg, nodesSvg;
+  let nodesSvg;
+  const edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector dim" d="${path}"/>`).join("");
+  const tokenSvg = "";
   if (state.archSelected) {
-    edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector" d="${path}"/>`).join("");
-    tokenSvg = "";
     nodesSvg = t.nodes.map(([id, label]) => archNodeSvg(t, id, label, id === state.archSelected ? "active" : "")).join("");
   } else {
     const path = archFlowGroups[state.archFlowIndex].sequences[state.archSequenceIndex].path;
@@ -645,18 +571,6 @@ function renderArchCanvas() {
     const visitedNodes = path.slice(0, step + 1);
     const activeNode = visitedNodes[visitedNodes.length - 1];
     const committedNodes = visitedNodes.slice(0, -1);
-    /* 구조적 배경(회색)은 항상 원래 topology 그대로, pool 기반 fan-out을 그대로 보여준다 —
-       이 화면의 "inactive connector"는 바뀌지 않는다. */
-    let edgeMarkup = Object.entries(t.edges).map(([id, edgePath]) => `<path id="arch-edge-${id}" class="connector dim" d="${edgePath}"/>`).join("");
-    /* 활성(주황) 경로는 t.edges를 재사용하지 않고, 방문한 실제 Node를 순서대로 이어 매번
-       computeArchActivePath()로 새로 계산한다 — dim 배경 위에 마지막으로 그려 항상 보이게 한다. */
-    for (let i = 0; i < visitedNodes.length - 1; i++) {
-      const pts = computeArchActivePath(t, visitedNodes[i], visitedNodes[i + 1]);
-      edgeMarkup += `<path class="connector active" d="${archPathPointsToD(pts)}"/>`;
-    }
-    edgeSvg = edgeMarkup;
-    /* 이 화면은 구조와 연결 관계를 보여 주므로 이동 점을 두지 않는다. */
-    tokenSvg = "";
     nodesSvg = t.nodes.map(([id, label]) =>
       archNodeSvg(t, id, label, id === activeNode ? "active" : committedNodes.includes(id) ? "committed" : "")).join("");
   }
