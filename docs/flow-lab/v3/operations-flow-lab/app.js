@@ -293,7 +293,7 @@ function renderPerformanceHighlights() {
 const DECISION_HIGHLIGHTS = [
   { chapter: "outbox", scenario: "chatroom-outbox", step: "retry",
     title: "메모리 기반 @TransactionalEventListener(AFTER_COMMIT) → Transactional Outbox 전환",
-    body: "V2는 결제·예약 커밋 직후 Spring 이벤트 리스너가 같은 JVM 메모리 위에서 채팅방 생성을 수행했다. 이 실행 요청은 어디에도 영속화되지 않으므로 리스너가 예외로 종료되거나 인스턴스가 내려가면 '무엇을 다시 해야 하는지'를 복구할 근거 자체가 남지 않는다. V3는 같은 트랜잭션 안에서 outbox_event 행(status=PENDING)을 함께 커밋해 실행 요청을 DB에 영속화하고, 별도 ChatRoomOutboxProcessor가 스케줄 주기마다 PENDING 행을 조건부 UPDATE로 claim(PENDING→PROCESSING)해 실행한다. 실패 시 attempt_count를 올리고 next_attempt_at을 5·10·20·40·80초 지수 backoff로 재예약하며, MAX_RETRIES(5) 초과 시 FAILED로 종료한다." },
+    body: "V2는 결제·예약 커밋 직후 Spring 이벤트 리스너가 같은 JVM 메모리 위에서 채팅방 생성을 수행했다. 이 실행 요청은 어디에도 영속화되지 않으므로 리스너가 예외로 종료되거나 인스턴스가 내려가면 '무엇을 다시 해야 하는지'를 복구할 근거 자체가 남지 않는다. V3는 같은 트랜잭션 안에서 outbox_event 행(status=PENDING)을 함께 커밋해 실행 요청을 DB에 영속화한다. 커밋 직후에는 ChatRoomOutboxProcessor.signal()이 즉시 호출돼 대부분 곧바로 처리되고, 별도 ChatRoomOutboxScheduler가 5초 주기로 폴링하며 signal 유실·인스턴스 재시작에 대비한 안전망 역할을 한다. 두 경로 모두 결국 Processor가 조건부 UPDATE로 claim(PENDING→PROCESSING)해 실행한다. 실패 시 attempt_count를 올리고 next_attempt_at을 5·10·20·40·80초 지수 backoff로 재예약하며, MAX_RETRIES(5) 초과 시 FAILED로 종료한다." },
   { chapter: "kafka-ai", scenario: "publish-failure", step: "retry",
     title: "Kafka publish 실패의 재시도 책임을 Outbox Processor가 보유",
     body: "ChatMessage 커밋과 Kafka publish는 하나의 원자적 단위가 아니다. publish가 실패해도 outbox_event 행이 PENDING으로 남아 있으므로 ChatMessageOutboxProcessor가 backoff 재예약 후 재발행한다. 메시지 본문은 이미 커밋된 ChatMessage가 Source of Truth이며 Outbox는 '아직 발행되지 않은 발행 요청'만 보관한다." },
