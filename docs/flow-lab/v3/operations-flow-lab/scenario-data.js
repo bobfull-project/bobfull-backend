@@ -19,9 +19,9 @@ const evidence = {
   partitionKey: ref("#258 Moderation Partition Key 판단", "../../../evidence/v3/258-moderation-partition-key/README.md"),
   moderationHardening: ref("#251 AI Moderation Rule Fast Path", "../../../evidence/v3/251-ai-moderation-hardening/README.md"),
   splitMessage: ref("#266 Split Message Moderation", "../../../evidence/v3/266-split-message-moderation/README.md"),
-  /* #274는 PR #275(docs-only)의 docs/274-kafka-evidence branch에서 확정됐지만 아직 develop에
-     merge되지 않아 이 저장소 경로에 파일이 없다 — merge 전까지는 link 없는 caption으로만 표시한다. */
-  outboxAsyncVsKafka: refPlain("#274 Outbox+Async vs Outbox+Kafka Controlled Comparison(PR #275, merge 대기)")
+  /* PR #275(docs-only)가 develop에 merge되면서 #274 Evidence 파일이 이 저장소 경로에 생겼다 —
+     link 없는 caption(refPlain)에서 실제 상대 경로 link로 교체했다. */
+  outboxAsyncVsKafka: ref("#274 Outbox+Async vs Outbox+Kafka Controlled Comparison", "../../../evidence/v3/274-outbox-async-vs-kafka/README.md")
 };
 /* committedNodes: 현재 active path에 없어도 여전히 유효한(dim과 구별되는) 이미 커밋된 노드.
    badge: 특정 노드 옆에 짧은 텍스트 배지(성능 수치 등)를 표시한다. */

@@ -8,14 +8,14 @@ Operations Flow Lab은 BobFull 내부 구현을 단순 문서로 읽는 대신, 
 
 Lab의 역할은 두 가지로 분리된다.
 
-- **Ch0 · BobFull System Showcase**: README/발표/포트폴리오에서 몇 초만 보여줘도 시스템 설계를 이해시키기 위한 한 화면 프레젠테이션. Chapter 선택에서 `Ch0`을 고르면 진입하며, Auto Play로 자동 재생되고 Capture 모드(Esc로 해제)로 조작 UI를 감춰 GIF/스크린샷 촬영에 쓸 수 있다. `showcaseScenarios`(app.js)는 아래 Ch1~Ch6의 실제 Step을 `{chapter, scenario, step}` 참조로만 모아 재생한다 — Showcase 전용 데이터를 새로 만들거나 이중 관리하지 않는다. URL `?chapter=showcase&scenario=<id>&capture=true`로 특정 Scenario에 직접 진입할 수 있다(`id`: `full-flow` | `ai-failure` | `multi-instance`).
+- **Ch0 · BobFull System Showcase**: README/발표/포트폴리오에서 몇 초만 보여줘도 시스템 설계를 이해시키기 위한 별도 프레젠테이션 화면. Chapter 선택에서 `Ch0`을 고르면 진입하며, **서비스 흐름 / 핵심 시스템 흐름 / 인프라 흐름** 3개 탭으로 나뉜다. Auto Play로 자동 재생되고 Capture 모드(Esc로 해제)로 조작 UI를 감춰 GIF/스크린샷 촬영에 쓸 수 있다. `SHOWCASE_SCENARIOS_BY_TAB`(app.js)는 일부 Scenario(`ai-failure`, `multi-instance`)만 Ch2/Ch3의 실제 Step을 `{chapter, scenario, step}` 참조로 재사용하고, 나머지(서비스 흐름, 결제 확정 후속 처리, AI 채팅 검수, 인프라 흐름 4개 Scenario)는 `scenario-data.js`에 Ch0 전용 topology/step을 새로 정의한다 — 어느 쪽이든 같은 `renderCanvas()`로 그린다. 인프라 흐름 탭에는 4개 Scenario 요약 Map과 별개로 **"전체 인프라 구성도 보기"** 버튼이 있어, 실제 AWS 배치 관계(Topology)를 Node 클릭형 Detail Panel과 함께 볼 수 있다. URL `?chapter=showcase&scenario=<id>&capture=true`로 특정 Scenario에 직접 진입할 수 있다(`id` 예: `infra-api`, `ai-failure`, `multi-instance`).
 - **Ch1~Ch6**: 왜 이렇게 만들었는지 실제 코드와 Evidence로 증명하는 상세 문서형 학습 공간(아래 내용 전부 여기 해당).
 
 - Chapter 1: V2 `AFTER_COMMIT`과 V3 Transactional Outbox의 동일 failure boundary를 동기화된 two-lane 진행 상태(4-stage lane strip)로 비교
 - Chapter 2: `ChatMessage → Outbox → Kafka → AI Moderation`과 `NORMAL`, `PUBLISH_FAILURE`, `DUPLICATE_DELIVERY`, `AI_TRANSIENT_FAILURE`, `RETRY_EXHAUSTED_DLT`, `ACK_THEN_CRASH`
 - Chapter 3: `LOCAL_TWO_INSTANCE_NORMAL`, `AWS_CROSS_INSTANCE_NORMAL`(다중 EC2 + 공용 ElastiCache Redis 실제 검증), `REDIS_DELIVERY_MISS`
 - Chapter 4: 인기 회차 조회 Hot-path 병목 개선(#142 발견 → #235 분리·배치 개선 → 동일 조건 Before/After → 남은 한계)
-- Chapter 5 — Kafka 도입 의사결정 Lab: "Kafka는 왜 도입했을까? — 더 빠르기 위해서가 아니었다"를 가설→실측→기각→신뢰성 비교→Hot-Key 발견→도메인 계약 재검토→Partition Key 개선→결론까지 `kafka-adoption-decision` 1개 연속 Scenario(13 Step)로 재생
+- Chapter 5 — Kafka 도입 의사결정 Lab: "Kafka는 왜 도입했을까? — 더 빠르기 위해서가 아니었다"를 가설→실측→기각→비교 오류 발견→통제 재실험(#274)→신뢰성 비교→Hot-Key 발견→도메인 계약 재검토→Partition Key 개선→결론까지 `kafka-adoption-decision` 1개 연속 Scenario(19 Step)로 재생
 - Chapter 6 — AI Moderation Decision Lab: Rule → DB Context → Split Rule → LLM → Validator → ChatModeration DB 판정 경로를 이해하는 Learning Deep Dive(`CLEAR_FLAGGED_FAST_PATH`, `LLM_REQUIRED`, `SPLIT_MESSAGE_EVASION`, `WHY_NOT_CONTEXT_LLM`, `PROMPT_INJECTION_BOUNDARY`, `MODERATION_DB_RESULT`)
 
 Ch1~Ch4는 시스템 설계/발표 중심이고, Ch5~Ch6는 Learning Deep Dive 중심이다. 발표 모드에서도 Ch5/Ch6를 볼 수 있지만 상세 코드/Evidence는 학습 모드에서만 펼친다.
@@ -47,9 +47,9 @@ Ch1~Ch4 Canvas는 `Client → Web/STOMP → Application → DB` 뒤에 Outbox/Ka
 
 Chapter 4의 모든 수치는 [#142 인기 회차 예약 부하 측정](../../../evidence/v3/142-reservation-peak/README.md), [#235 Hot-path 병목 개선](../../../evidence/v3/restaurant-view-hotpath/README.md), [#62 검색 Redis Cache 판단](../../../evidence/v3/62-search-cache/README.md)의 실측값을 그대로 인용한다(`factStatus=measured`). "병목 완전 제거"라고 쓰지 않고 "포화 시작 임계점이 약 40 iter/s에서 약 320 iter/s로 8배 이동했으며, 최고 부하 단계에서는 CPU·HikariCP Pool이 다시 포화된다"고 명시한다. #62(검색 Redis Cache)는 별도 Chapter가 아니라 Chapter 4 학습 상세의 "다른 성능 의사결정" 카드로만 짧게 연결한다.
 
-`#191`(Auto Scaling)만 아직 `future improvement` Evidence Gate다. `#169`(App HA + AWS Redis cross-instance), `#192`(Kafka Async 비교·Consumer scaling·통합 모놀리스 결정), `#258`(messageId Partition Key), `#251`(Rule Fast Path), `#266`(Split Message Rule Context)는 실제 검증이 끝나 각각 Ch3/Ch5/Ch6에 반영됐다. 실제 Evidence가 생길 때만 Scenario 또는 Chapter로 추가 승격한다. 발표 모드에서는 지금 보고 있는 Chapter와 무관하므로 학습 모드에서만 노출한다.
+`#191`(Auto Scaling)만 아직 `future improvement` Evidence Gate다. `#169`(App HA + AWS Redis cross-instance), `#192`(Kafka Async 비교·Consumer scaling·통합 모놀리스 결정), `#274`(Outbox+Async vs Outbox+Kafka 통제 비교 — Kafka 최종 채택 근거), `#258`(messageId Partition Key), `#251`(Rule Fast Path), `#266`(Split Message Rule Context)는 실제 검증이 끝나 각각 Ch3/Ch5/Ch6에 반영됐다. 실제 Evidence가 생길 때만 Scenario 또는 Chapter로 추가 승격한다. 발표 모드에서는 지금 보고 있는 Chapter와 무관하므로 학습 모드에서만 노출한다.
 
-Chapter 5·6의 Evidence: [#192 Kafka AI Worker Scaling](../../../evidence/v3/192-ai-worker-scaling/README.md), [#258 Moderation Partition Key](../../../evidence/v3/258-moderation-partition-key/README.md), [#251 AI Moderation Rule Fast Path](../../../evidence/v3/251-ai-moderation-hardening/README.md), [#266 Split Message Moderation](../../../evidence/v3/266-split-message-moderation/README.md), [#169 App HA](../../../evidence/v3/169-app-ha/README.md).
+Chapter 5·6의 Evidence: [#192 Kafka AI Worker Scaling](../../../evidence/v3/192-ai-worker-scaling/README.md), [#274 Outbox+Async vs Outbox+Kafka Controlled Comparison](../../../evidence/v3/274-outbox-async-vs-kafka/README.md), [#258 Moderation Partition Key](../../../evidence/v3/258-moderation-partition-key/README.md), [#251 AI Moderation Rule Fast Path](../../../evidence/v3/251-ai-moderation-hardening/README.md), [#266 Split Message Moderation](../../../evidence/v3/266-split-message-moderation/README.md), [#169 App HA](../../../evidence/v3/169-app-ha/README.md).
 
 Ch5의 `consumer-1`/`consumer-2`/`consumer-3` Step은 화면에도 `#192 measured · legacy chatRoomId key` badge를 표시한다. Consumer concurrency 1/2/3 실측(#192 실험 D)은 당시 기본 key였던 `chatRoomId` 조건에서 측정됐으며, concurrency=3에서 개선이 관측됐더라도 Consumer 수만으로 처리량이 결정되지는 않고 key→partition 분산이 함께 영향을 준다. 현재 Production 기본 key(`#258` 이후 `messageId`)의 결과인 것처럼 표현하지 않는다.
 
@@ -62,4 +62,4 @@ LLM Path의 DB `model` 값은 Provider metadata가 있으면 그 값을 저장�
 ## 알려진 UX 한계
 
 - Canvas는 데스크톱 화면을 우선한다. 작은 화면에서는 topology가 컨테인먼트로 축소돼 전체가 보이지만, 노드 텍스트가 작아질 수 있다(일반 Chapter는 우측 상단 "크게 보기"로, Showcase는 큰 Canvas 영역 자체로 보완한다).
-- Ch1~Ch6는 Sticky Canvas(약 38~42vh)를 유지한 채 Step 상세 설명을 스크롤한다. Ch0 Showcase는 반대로 스크롤 없는 한 화면 레이아웃이다 — 둘을 같은 화면에서 동시에 만족시키려 하지 않는다.
+- Ch1~Ch6는 Canvas를 고정(Sticky)하지 않는다 — 한때 시도했으나 사용성 피드백으로 되돌렸고, 지금은 도표도 Step 상세 설명과 함께 페이지를 따라 그냥 스크롤된다(Canvas 높이 예산은 기본 48vh, 최대 480px). Ch0 Showcase는 반대로 스크롤 없는 한 화면 레이아웃이다 — 둘을 같은 화면에서 동시에 만족시키려 하지 않는다.
