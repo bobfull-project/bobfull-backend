@@ -10,7 +10,7 @@
 
 - Primary KPI: 평상시 inactive EC2 STOP으로 inactive Hikari Connection 제거, 동일 Stress Test 재측정 시 Hikari Pending과 Connection Acquire Latency 변화 확인
 - Secondary KPI: `Threads_connected`, Hikari Active, App CPU, RDS CPU, RDS ReadLatency, avg, p95, p99, max, HTTP 실패율, dropped iterations
-- Guardrail: Blue-Green 배포의 SSM deploy, Target Group health, ALB traffic switch, public readiness/API 검증, rollback fail-safe 유지
+- Guardrail: Blue-Green 배포의 SSM deploy, Target Group health, ALB traffic switch, public readiness/API 검증, Prometheus Active target 갱신/UP 확인, rollback fail-safe 유지
 
 ## 기준 코드
 
@@ -109,12 +109,19 @@ Inactive Blue 환경은 사용자 트래픽을 받지 않지만 Spring Boot/Hika
   - 기타 상태는 오류로 실패
   - EC2 running 이후 SSM `PingStatus=Online`까지 polling
   - public 검증 성공 후 rollback window 동안 기존 active EC2 유지
+  - 새 Active Target Group의 EC2 private IP 2개 조회
+  - Monitoring EC2에 SSM 명령으로 Prometheus `bobfull-backend` scrape target 갱신
+  - Prometheus `/-/reload` 호출
+  - 새 Active target 2대가 모두 `up=1`일 때만 기존 active STOP 단계 진행
+  - Prometheus target 갱신 또는 UP 확인 실패 시 기존 active EC2 STOP 금지
   - rollback window 종료 후 배포 시작 시점에 저장한 active instance id만 STOP
   - rollback 발생 또는 rollback 시도 시 기존 active EC2 STOP 금지
 - `.github/workflows/deploy-backend-v1.yml`
-  - EC2 상태 대기, SSM Online 대기, 이전 active 유지 시간 변수를 전달
+  - EC2 상태 대기, SSM Online 대기, 이전 active 유지 시간, Monitoring EC2/Prometheus 갱신 변수를 전달
 - `docs/deployment/aws-v1-backend.md`
   - 운영 흐름, GitHub Variables, IAM 권한, 성공 조건 업데이트
+- `docs/operations/monitoring-runbook.md`
+  - 수동 target 재기동 기준을 Blue-Green 자동 target 갱신과 reload 기준으로 업데이트
 
 ## After 결과
 
@@ -149,6 +156,9 @@ Dropped Iterations
 - Target Group health 실패 시 Listener traffic 전환 없음
 - ALB 전환 확인 실패 시 rollback 시도
 - public readiness/API 검증 실패 시 rollback 시도
+- public 검증 실패 rollback 시 Prometheus target 변경 전이므로 이전 Active target 유지
+- Prometheus target 갱신 실패 시 기존 active EC2 STOP 금지
+- Prometheus 신규 Active target 2대 중 하나라도 UP 확인 실패 시 기존 active EC2 STOP 금지
 - rollback 발생 또는 rollback 시도 시 기존 active EC2 STOP 금지
 - 정상 검증 후 stop 대상은 배포 시작 시점의 active instance id로 고정
 
@@ -164,6 +174,9 @@ Dropped Iterations
 - SSM Online status summary
 - Target Group health summary
 - Listener weight 확인 summary
+- 새 Active EC2 private IP
+- Prometheus target 갱신 대상과 file_sd target preview
+- Prometheus target별 `UP`/`DOWN` 확인 결과
 - 이전 active EC2 유지 시간
 - 이전 active EC2 stop 대상과 stopped 확인 summary
 

@@ -40,6 +40,51 @@ GRAFANA_SLACK_RECIPIENT=<slack-channel-name>
 
 ALB DNS를 Prometheus target으로 사용하지 않는다. Prometheus target은 App EC2 private IP 또는 private DNS와 `8080` 포트를 직접 지정해야 instance별 지표를 분리할 수 있다.
 
+Monitoring EC2 최초 구성 때는 `.env`에 현재 Active 2대의 초기값을 한 번 입력한다.
+
+```text
+BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
+```
+
+이후 Blue-Green 배포에서는 `scripts/aws/deploy-backend-blue-green-v1.sh`가 ALB 전환과 public 검증 이후 새 Active Target Group의 EC2 private IP 2개를 조회하고, Monitoring EC2에 SSM 명령을 보내 다음을 자동 수행한다.
+
+1. Monitoring EC2의 `monitoring/.env`에서 `BOBFULL_BACKEND_METRICS_TARGETS`를 새 Active 2대로 갱신한다.
+2. Prometheus 컨테이너 내부 file_sd target 파일(`/tmp/prometheus-targets/bobfull-backend.yml`)을 같은 값으로 갱신한다.
+3. Prometheus `/-/reload`를 호출한다.
+4. Prometheus API에서 새 Active target 2대의 `up{job="bobfull-backend"}` 값이 모두 `1`인지 확인한다.
+
+이 단계가 실패하면 배포 스크립트는 이전 Active EC2를 STOP하지 않는다.
+
+자동 갱신에 필요한 GitHub Variables:
+
+```text
+BACKEND_MONITORING_EC2_INSTANCE_ID
+BACKEND_MONITORING_COMPOSE_DIR
+```
+
+선택적으로 다음 값을 운영 환경에 맞게 조정할 수 있다.
+
+```text
+BACKEND_PROMETHEUS_CONTAINER_NAME
+BACKEND_PROMETHEUS_TARGET_FILE
+BACKEND_PROMETHEUS_PORT
+BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS
+BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS
+BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME
+BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS
+BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS
+```
+
+배포 실패 로그에서 확인할 항목:
+
+- `New active EC2 private IPs`
+- `New active EC2 metrics targets`
+- `Prometheus target file preview`
+- `Prometheus target state target=<ip:port> state=UP|DOWN`
+- `Prometheus target update or UP verification failed. Previous active EC2 instances will remain running.`
+
+수동으로 현재 Active target을 확인해야 할 때는 다음 순서를 사용한다.
+
 1. GitHub Variables 또는 운영 기록에서 Blue/Green Listener와 Target Group ARN을 확인한다.
 
 ```bash
@@ -74,13 +119,13 @@ aws ec2 describe-instances \
   --output text
 ```
 
-5. Monitoring EC2의 `monitoring/.env`에 Active App 2대를 comma-separated 값으로 입력한다.
+5. Monitoring EC2의 `monitoring/.env` 또는 Prometheus UI에서 Active App 2대가 comma-separated target으로 반영됐는지 확인한다.
 
 ```text
 BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
 ```
 
-6. Prometheus와 Grafana를 재기동한 뒤 Prometheus UI `Status -> Targets`에서 `bobfull-backend` target 2개가 모두 `UP`인지 확인한다.
+6. Prometheus UI `Status -> Targets`에서 `bobfull-backend` target 2개가 모두 `UP`인지 확인한다. 평상시 Blue-Green 배포 후 갱신은 `/-/reload`로 처리하므로 Prometheus/Grafana 재기동을 우선하지 않는다.
 
 ## 확인 순서
 

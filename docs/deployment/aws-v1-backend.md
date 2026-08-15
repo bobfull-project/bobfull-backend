@@ -13,6 +13,7 @@
 - GitHub Actions 기반 백엔드 CI workflow와 자동 배포 workflow 파일
 - ALB Target Group weight 기반 Blue-Green 배포 orchestration
 - 평상시 비활성 Blue/Green App EC2 STOP, 배포 시작 시 START, 배포 검증 후 기존 Active EC2 STOP 기준
+- Blue-Green ALB 전환 후 Monitoring EC2의 Prometheus backend scrape target 자동 갱신과 UP 확인 기준
 - 운영 환경변수 이름과 Parameter Store 이름 기준
 - 이미지 저장용 S3 버킷 이름 환경변수 기준
 - 식당 이미지 검증용 Java Lambda 수동 설정 기준
@@ -128,6 +129,7 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 모니터링 V1은 App EC2와 분리된 Monitoring EC2에서 Prometheus와 Grafana를 Docker Compose로 함께 실행한다.
 
 - 백엔드는 기존 애플리케이션 포트(`8080`)의 `/actuator/prometheus`를 노출하고, Prometheus가 App EC2 private IP 또는 내부 DNS로 scrape한다.
+- Prometheus는 `BOBFULL_BACKEND_METRICS_TARGETS`로 `bobfull-backend` file_sd target을 만들고, Blue-Green 배포 성공 후 GitHub Actions가 Monitoring EC2에 SSM 명령을 보내 새 Active EC2 2대의 private IP로 target을 갱신한 뒤 `/-/reload`를 호출한다.
 - App EC2 보안 그룹은 Monitoring EC2 보안 그룹에서 들어오는 `8080` 접근만 허용한다. Grafana 외부 접속 포트(`3000`)는 운영 접근 주체로 제한한다.
 - Slack Alert Contact Point는 실제 모니터링 채널 Webhook URL을 `monitoring/.env` 또는 운영 비밀 저장소로 주입하고, 배포 직후 Grafana Contact Point `Test` 수신을 확인한다.
 - Prometheus/Grafana 구성 파일은 `monitoring/` 아래에 두며, 상세 실행·검증·장애 대응 기준은 [monitoring-runbook.md](../operations/monitoring-runbook.md)를 따른다.
@@ -172,6 +174,9 @@ main push
 → ALB Listener weight를 기존 활성 0, 신규 활성 100으로 전환
 → public readiness와 API 검증
 → 실패 시 기존 Listener default action으로 rollback
+→ 신규 Active Target Group의 EC2 2대 private IP 조회
+→ Monitoring EC2에 SSM Run Command로 Prometheus `bobfull-backend` target 갱신
+→ Prometheus `up{job="bobfull-backend"}`에서 신규 Active target 2대가 모두 UP인지 확인
 → public 검증 성공 후 기존 활성 EC2 2대를 rollback window 동안 running 유지
 → rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 stop-instances 실행
 → ECR, Parameter Store, S3, CloudWatch 확인
@@ -190,6 +195,8 @@ BACKEND_BLUE_TARGET_GROUP_ARN
 BACKEND_GREEN_TARGET_GROUP_ARN
 BACKEND_PUBLIC_READINESS_URL
 BACKEND_PUBLIC_API_VERIFY_URL
+BACKEND_MONITORING_EC2_INSTANCE_ID
+BACKEND_MONITORING_COMPOSE_DIR
 ```
 
 선택 GitHub Variables:
@@ -208,6 +215,14 @@ BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS
 BACKEND_SSM_ONLINE_TIMEOUT_SECONDS
 BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS
 BACKEND_PREVIOUS_ENV_KEEP_SECONDS
+BACKEND_PROMETHEUS_CONTAINER_NAME
+BACKEND_PROMETHEUS_TARGET_FILE
+BACKEND_PROMETHEUS_PORT
+BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS
+BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS
+BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME
+BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS
+BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS
 ```
 
 기본값:
@@ -219,6 +234,14 @@ BACKEND_PREVIOUS_ENV_KEEP_SECONDS
 | `BACKEND_SSM_ONLINE_TIMEOUT_SECONDS` | `300` | EC2 running 이후 SSM `PingStatus=Online` 대기 timeout |
 | `BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS` | `10` | SSM Online polling 간격 |
 | `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` | `600` | public 검증 성공 후 기존 active EC2를 rollback 가능 상태로 유지하는 시간 |
+| `BACKEND_PROMETHEUS_CONTAINER_NAME` | `bobfull-prometheus` | Monitoring EC2의 Prometheus 컨테이너 이름 |
+| `BACKEND_PROMETHEUS_TARGET_FILE` | `/tmp/prometheus-targets/bobfull-backend.yml` | Prometheus 컨테이너 내부 `bobfull-backend` file_sd target 파일 |
+| `BACKEND_PROMETHEUS_PORT` | `9090` | Monitoring EC2 localhost에서 Prometheus API와 `/-/reload`에 접근하는 포트 |
+| `BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS` | `180` | Prometheus target 갱신 후 신규 Active 2대 UP 확인 timeout |
+| `BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS` | `10` | Prometheus target UP 확인 polling 간격 |
+| `BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME` | `AWS-RunShellScript` | Monitoring EC2 target 갱신에 사용할 SSM 문서 |
+| `BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS` | `300` | Monitoring EC2 SSM 명령 완료 대기 timeout |
+| `BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS` | `3` | Monitoring EC2 SSM 명령 상태 polling 간격 |
 
 현재 구현은 `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` 동안 GitHub Actions job 안에서 bounded `sleep`으로 대기한다. 구조가 단순하고 배포 직후 rollback window가 한 workflow 로그에 남는 장점이 있다. 다만 workflow 점유 시간이 운영상 부담되면 후속으로 EventBridge Scheduler 또는 별도 수동 cleanup workflow를 검토한다.
 
@@ -258,6 +281,8 @@ s3:ListBucket
 logs:DescribeLogStreams
 ```
 
+Prometheus target 자동 갱신은 새 AWS action 이름을 추가로 요구하지 않는다. 다만 기존 `ssm:SendCommand`, `ssm:GetCommandInvocation`, `ssm:DescribeInstanceInformation` 권한의 Resource 범위에 Monitoring EC2 instance ARN과 `AWS-RunShellScript` 문서 ARN이 포함되어야 한다. 새 Active EC2 private IP 조회는 이미 필요한 `ec2:DescribeInstances`를 사용한다.
+
 대상 EC2는 SSM managed instance로 등록되어 있어야 하며, EC2 instance profile에는 SSM Agent 동작과 EC2 내부 배포 스크립트 실행에 필요한 권한이 필요하다.
 
 ```text
@@ -293,12 +318,16 @@ CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 - 비활성 EC2 2대 내부 `localhost` 기준 readiness health check 성공
 - 비활성 Target Group의 target 2대가 모두 `healthy`
 - ALB Listener weight 전환 후 public readiness와 API 검증 성공
+- 신규 Active Target Group의 EC2 2대 private IP 조회 성공
+- Monitoring EC2 SSM 명령으로 `BOBFULL_BACKEND_METRICS_TARGETS`와 Prometheus file_sd target 파일 갱신 성공
+- Prometheus `/-/reload` 성공
+- Prometheus API 기준 신규 Active target 2대의 `up{job="bobfull-backend"}`가 모두 `1`
 - public 검증 성공 후 rollback window 동안 기존 활성 EC2 2대 running 유지
 - rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 `stopped`
 - Parameter Store 경로 조회, S3 이미지 버킷 접근, CloudWatch Log Group 접근 확인
 - 비활성 EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
 
-비활성 EC2 START, EC2 running 대기, SSM Online 대기, 비활성 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다. Traffic 전환 후 Listener 확인 또는 public 검증이 실패하면 전환 직전에 저장한 Listener default action으로 rollback한다. rollback이 발생했거나 rollback을 시도한 경우 기존 활성 EC2는 절대 stop하지 않는다. stop 대상은 ALB 전환 이후 다시 계산하지 않고 배포 시작 시점에 저장한 active Target Group의 EC2 instance id만 사용한다. EC2 배포 실패 원인은 EC2 Docker/CloudWatch Logs에서 확인한다.
+비활성 EC2 START, EC2 running 대기, SSM Online 대기, 비활성 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다. Traffic 전환 후 Listener 확인 또는 public 검증이 실패하면 전환 직전에 저장한 Listener default action으로 rollback하며, 이 시점에는 Prometheus target을 아직 바꾸지 않았으므로 이전 Active target이 유지된다. rollback이 발생했거나 rollback을 시도한 경우 기존 활성 EC2는 절대 stop하지 않는다. public 검증 성공 후 Prometheus target 갱신, reload 또는 신규 Active target 2대 UP 확인이 실패해도 기존 활성 EC2는 stop하지 않는다. stop 대상은 ALB 전환 이후 다시 계산하지 않고 배포 시작 시점에 저장한 active Target Group의 EC2 instance id만 사용한다. EC2 배포 실패 원인은 EC2 Docker/CloudWatch Logs에서 확인한다.
 
 ## CORS와 S3 프론트엔드 Origin
 

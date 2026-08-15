@@ -147,6 +147,335 @@ join_by_comma() {
   printf '%s' "$*"
 }
 
+extract_instance_private_ips() {
+  aws ec2 describe-instances \
+    --region "${AWS_REGION}" \
+    --instance-ids "$@" \
+    --output json > "${ec2_instance_details_file}"
+
+  python3 - "${ec2_instance_details_file}" "$@" <<'PY'
+import json
+import sys
+
+details_path = sys.argv[1]
+expected_ids = sys.argv[2:]
+with open(details_path, encoding="utf-8") as source:
+    payload = json.load(source)
+
+private_ips = {}
+for reservation in payload.get("Reservations", []):
+    for instance in reservation.get("Instances", []):
+        instance_id = instance.get("InstanceId")
+        private_ip = instance.get("PrivateIpAddress")
+        if instance_id:
+            private_ips[instance_id] = private_ip
+
+missing = [instance_id for instance_id in expected_ids if instance_id not in private_ips]
+without_private_ip = [
+    instance_id
+    for instance_id in expected_ids
+    if instance_id in private_ips and not private_ips.get(instance_id)
+]
+
+if missing:
+    raise SystemExit("Missing EC2 instance details: " + ", ".join(sorted(missing)))
+if without_private_ip:
+    raise SystemExit("EC2 instances without PrivateIpAddress: " + ", ".join(sorted(without_private_ip)))
+
+for instance_id in sorted(expected_ids):
+    print(private_ips[instance_id])
+PY
+}
+
+build_prometheus_target_yaml() {
+  local output_file="$1"
+  shift
+  local target
+
+  {
+    printf -- "- targets:\n"
+    for target in "$@"; do
+      printf "  - '%s'\n" "${target}"
+    done
+  } > "${output_file}"
+}
+
+build_prometheus_update_payload() {
+  local payload_file="$1"
+  local targets_csv="$2"
+  local target_yaml_file="$3"
+
+  python3 - "${payload_file}" "${targets_csv}" "${target_yaml_file}" \
+      "${BACKEND_MONITORING_COMPOSE_DIR}" "${BACKEND_PROMETHEUS_CONTAINER_NAME}" \
+      "${BACKEND_PROMETHEUS_TARGET_FILE}" "${BACKEND_PROMETHEUS_PORT}" \
+      "${BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS}" \
+      "${BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS}" <<'PY'
+import json
+import shlex
+import sys
+
+(
+    payload_path,
+    targets_csv,
+    target_yaml_path,
+    compose_dir,
+    container_name,
+    prometheus_target_file,
+    prometheus_port,
+    target_up_timeout_seconds,
+    target_up_poll_interval_seconds,
+) = sys.argv[1:10]
+
+with open(target_yaml_path, encoding="utf-8") as source:
+    target_yaml = source.read().rstrip()
+
+remote_script = """#!/usr/bin/env bash
+set -euo pipefail
+
+required_remote_env() {
+  local key="$1"
+  if [ -z "${!key:-}" ]; then
+    echo "Missing required remote environment variable: ${key}" >&2
+    exit 1
+  fi
+}
+
+required_remote_env BACKEND_MONITORING_COMPOSE_DIR
+required_remote_env BACKEND_PROMETHEUS_CONTAINER_NAME
+required_remote_env BACKEND_PROMETHEUS_TARGET_FILE
+required_remote_env BACKEND_PROMETHEUS_PORT
+required_remote_env BACKEND_PROMETHEUS_TARGETS
+required_remote_env BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS
+required_remote_env BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "docker command is required on Monitoring EC2." >&2
+  exit 1
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl command is required on Monitoring EC2." >&2
+  exit 1
+fi
+
+if [ ! -d "${BACKEND_MONITORING_COMPOSE_DIR}" ]; then
+  echo "Monitoring compose directory not found: ${BACKEND_MONITORING_COMPOSE_DIR}" >&2
+  exit 1
+fi
+
+cd "${BACKEND_MONITORING_COMPOSE_DIR}"
+
+if [ ! -f .env ]; then
+  echo "Monitoring .env file not found in ${BACKEND_MONITORING_COMPOSE_DIR}" >&2
+  exit 1
+fi
+
+target_file_staging="/tmp/bobfull-backend-prometheus-targets.yml"
+cat > "${target_file_staging}" <<'BOBFULL_PROMETHEUS_TARGETS_YAML'
+__TARGET_YAML__
+BOBFULL_PROMETHEUS_TARGETS_YAML
+
+echo "New active backend metrics targets: ${BACKEND_PROMETHEUS_TARGETS}"
+echo "Prometheus target file preview:"
+sed 's/^/  /' "${target_file_staging}"
+
+if grep -q '^BOBFULL_BACKEND_METRICS_TARGETS=' .env; then
+  tmp_env="$(mktemp)"
+  sed "s|^BOBFULL_BACKEND_METRICS_TARGETS=.*|BOBFULL_BACKEND_METRICS_TARGETS=${BACKEND_PROMETHEUS_TARGETS}|" .env > "${tmp_env}"
+  mv "${tmp_env}" .env
+else
+  printf '\\nBOBFULL_BACKEND_METRICS_TARGETS=%s\\n' "${BACKEND_PROMETHEUS_TARGETS}" >> .env
+fi
+echo "Monitoring .env updated: BOBFULL_BACKEND_METRICS_TARGETS=${BACKEND_PROMETHEUS_TARGETS}"
+
+if ! docker ps --format '{{.Names}}' | grep -Fx "${BACKEND_PROMETHEUS_CONTAINER_NAME}" >/dev/null; then
+  echo "Prometheus container is not running: ${BACKEND_PROMETHEUS_CONTAINER_NAME}" >&2
+  exit 1
+fi
+
+docker exec -i "${BACKEND_PROMETHEUS_CONTAINER_NAME}" \
+  sh -c 'tmp_file="${1}.tmp"; cat > "${tmp_file}"; mv "${tmp_file}" "$1"' sh "${BACKEND_PROMETHEUS_TARGET_FILE}" < "${target_file_staging}"
+echo "Prometheus target file updated in container: ${BACKEND_PROMETHEUS_TARGET_FILE}"
+
+curl --fail --silent --show-error \
+  -X POST "http://127.0.0.1:${BACKEND_PROMETHEUS_PORT}/-/reload" >/tmp/bobfull-prometheus-reload.out
+echo "Prometheus reload succeeded via /-/reload."
+
+old_ifs="${IFS}"
+IFS=','
+read -r -a expected_targets <<< "${BACKEND_PROMETHEUS_TARGETS}"
+IFS="${old_ifs}"
+
+deadline=$((SECONDS + BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS))
+while true; do
+  all_up=true
+  checked_count=0
+
+  for raw_target in "${expected_targets[@]}"; do
+    target="$(printf '%s' "${raw_target}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    if [ -z "${target}" ]; then
+      continue
+    fi
+
+    checked_count=$((checked_count + 1))
+    query="up{job=\\"bobfull-backend\\",instance=\\"${target}\\"}"
+    if response="$(curl --fail --silent --show-error --get \
+        --data-urlencode "query=${query}" \
+        "http://127.0.0.1:${BACKEND_PROMETHEUS_PORT}/api/v1/query" 2>&1)" \
+        && printf '%s' "${response}" | grep -F '"status":"success"' >/dev/null \
+        && printf '%s' "${response}" | grep -F "\\"instance\\":\\"${target}\\"" >/dev/null \
+        && printf '%s' "${response}" | grep -F '"value":[' >/dev/null \
+        && printf '%s' "${response}" | grep -F '"1"' >/dev/null; then
+      echo "Prometheus target state target=${target} state=UP response=${response}"
+    else
+      all_up=false
+      echo "Prometheus target state target=${target} state=DOWN response=${response:-curl/query failed}"
+    fi
+  done
+
+  if [ "${checked_count}" -eq 0 ]; then
+    echo "No Prometheus targets were provided for UP verification." >&2
+    exit 1
+  fi
+
+  if [ "${all_up}" = "true" ]; then
+    echo "Prometheus target update completed: ${BACKEND_PROMETHEUS_TARGETS}"
+    exit 0
+  fi
+
+  if [ "${SECONDS}" -ge "${deadline}" ]; then
+    echo "Prometheus targets did not all become UP before timeout." >&2
+    exit 1
+  fi
+
+  sleep "${BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS}"
+done
+""".replace("__TARGET_YAML__", target_yaml)
+
+command_env = {
+    "BACKEND_MONITORING_COMPOSE_DIR": compose_dir,
+    "BACKEND_PROMETHEUS_CONTAINER_NAME": container_name,
+    "BACKEND_PROMETHEUS_TARGET_FILE": prometheus_target_file,
+    "BACKEND_PROMETHEUS_PORT": prometheus_port,
+    "BACKEND_PROMETHEUS_TARGETS": targets_csv,
+    "BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS": target_up_timeout_seconds,
+    "BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS": target_up_poll_interval_seconds,
+}
+env_prefix = " ".join(f"{key}={shlex.quote(value)}" for key, value in command_env.items())
+
+commands = [
+    "trap 'rm -f /tmp/bobfull-prometheus-target-update.sh' EXIT",
+    "cat > /tmp/bobfull-prometheus-target-update.sh <<'BOBFULL_PROMETHEUS_UPDATE_SCRIPT'\n"
+    f"{remote_script}\n"
+    "BOBFULL_PROMETHEUS_UPDATE_SCRIPT",
+    "chmod 700 /tmp/bobfull-prometheus-target-update.sh",
+    f"{env_prefix} bash /tmp/bobfull-prometheus-target-update.sh",
+]
+
+with open(payload_path, "w", encoding="utf-8") as output:
+    json.dump({"commands": commands}, output)
+PY
+}
+
+wait_prometheus_update_command() {
+  local command_id="$1"
+  local deadline=$((SECONDS + BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS))
+  local status
+
+  while true; do
+    status="$(
+      aws ssm get-command-invocation \
+        --region "${AWS_REGION}" \
+        --command-id "${command_id}" \
+        --instance-id "${BACKEND_MONITORING_EC2_INSTANCE_ID}" \
+        --query 'Status' \
+        --output text 2>/dev/null || true
+    )"
+
+    case "${status}" in
+      Success)
+        echo "Prometheus target update SSM command status: Success"
+        return 0
+        ;;
+      Pending|InProgress|Delayed|"")
+        echo "Prometheus target update SSM command status: waiting"
+        ;;
+      *)
+        echo "Prometheus target update SSM command status: ${status}" >&2
+        return 1
+        ;;
+    esac
+
+    if [ "${SECONDS}" -ge "${deadline}" ]; then
+      echo "Prometheus target update SSM command timed out." >&2
+      return 1
+    fi
+
+    sleep "${BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS}"
+  done
+}
+
+print_prometheus_update_command_output() {
+  local command_id="$1"
+  local standard_error
+
+  echo "----- Prometheus target update SSM stdout ${BACKEND_MONITORING_EC2_INSTANCE_ID} -----"
+  aws ssm get-command-invocation \
+    --region "${AWS_REGION}" \
+    --command-id "${command_id}" \
+    --instance-id "${BACKEND_MONITORING_EC2_INSTANCE_ID}" \
+    --query 'StandardOutputContent' \
+    --output text || true
+
+  echo "----- Prometheus target update SSM stderr ${BACKEND_MONITORING_EC2_INSTANCE_ID} -----" >&2
+  standard_error="$(
+    aws ssm get-command-invocation \
+      --region "${AWS_REGION}" \
+      --command-id "${command_id}" \
+      --instance-id "${BACKEND_MONITORING_EC2_INSTANCE_ID}" \
+      --query 'StandardErrorContent' \
+      --output text 2>/dev/null || true
+  )"
+
+  if [ "${standard_error}" != "None" ] && [ -n "${standard_error}" ]; then
+    echo "${standard_error}" >&2
+  fi
+}
+
+update_prometheus_targets() {
+  local targets_csv="$1"
+  shift
+  local metric_targets=("$@")
+  local command_id
+
+  echo "Updating Prometheus bobfull-backend targets on Monitoring EC2: ${BACKEND_MONITORING_EC2_INSTANCE_ID}"
+  echo "New active EC2 metrics targets: ${targets_csv}"
+  build_prometheus_target_yaml "${prometheus_target_yaml_file}" "${metric_targets[@]}"
+  build_prometheus_update_payload "${prometheus_command_payload_file}" "${targets_csv}" "${prometheus_target_yaml_file}"
+
+  wait_ssm_online "${BACKEND_MONITORING_EC2_INSTANCE_ID}"
+
+  command_id="$(
+    aws ssm send-command \
+      --region "${AWS_REGION}" \
+      --instance-ids "${BACKEND_MONITORING_EC2_INSTANCE_ID}" \
+      --document-name "${BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME}" \
+      --comment "Update bobfull backend Prometheus targets" \
+      --parameters "file://${prometheus_command_payload_file}" \
+      --query 'Command.CommandId' \
+      --output text
+  )"
+
+  echo "Prometheus target update SSM command id: ${command_id}"
+  if wait_prometheus_update_command "${command_id}"; then
+    print_prometheus_update_command_output "${command_id}"
+    return 0
+  fi
+
+  print_prometheus_update_command_output "${command_id}"
+  return 1
+}
+
 describe_instance_states() {
   aws ec2 describe-instances \
     --region "${AWS_REGION}" \
@@ -660,6 +989,8 @@ required_env BACKEND_BLUE_TARGET_GROUP_ARN
 required_env BACKEND_GREEN_TARGET_GROUP_ARN
 required_env BACKEND_PUBLIC_READINESS_URL
 required_env BACKEND_PUBLIC_API_VERIFY_URL
+required_env BACKEND_MONITORING_EC2_INSTANCE_ID
+required_env BACKEND_MONITORING_COMPOSE_DIR
 
 require_commands aws bash curl python3 mktemp
 
@@ -677,7 +1008,16 @@ BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS="${BACKEND_EC2_STATE_POLL_INTERVAL_SECON
 BACKEND_SSM_ONLINE_TIMEOUT_SECONDS="${BACKEND_SSM_ONLINE_TIMEOUT_SECONDS:-300}"
 BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS="${BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS:-10}"
 BACKEND_PREVIOUS_ENV_KEEP_SECONDS="${BACKEND_PREVIOUS_ENV_KEEP_SECONDS:-600}"
+BACKEND_PROMETHEUS_CONTAINER_NAME="${BACKEND_PROMETHEUS_CONTAINER_NAME:-bobfull-prometheus}"
+BACKEND_PROMETHEUS_TARGET_FILE="${BACKEND_PROMETHEUS_TARGET_FILE:-/tmp/prometheus-targets/bobfull-backend.yml}"
+BACKEND_PROMETHEUS_PORT="${BACKEND_PROMETHEUS_PORT:-9090}"
+BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS="${BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS:-180}"
+BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS="${BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS:-10}"
+BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME="${BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME:-AWS-RunShellScript}"
+BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS="${BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS:-300}"
+BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS="${BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS:-3}"
 
+validate_positive_integer BACKEND_TARGET_PORT "${BACKEND_TARGET_PORT}"
 validate_non_negative_integer BACKEND_TG_HEALTH_TIMEOUT_SECONDS "${BACKEND_TG_HEALTH_TIMEOUT_SECONDS}"
 validate_positive_integer BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS "${BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS}"
 validate_positive_integer BACKEND_PUBLIC_VERIFY_ATTEMPTS "${BACKEND_PUBLIC_VERIFY_ATTEMPTS}"
@@ -690,6 +1030,11 @@ validate_positive_integer BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS "${BACKEND_EC2
 validate_non_negative_integer BACKEND_SSM_ONLINE_TIMEOUT_SECONDS "${BACKEND_SSM_ONLINE_TIMEOUT_SECONDS}"
 validate_positive_integer BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS "${BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS}"
 validate_non_negative_integer BACKEND_PREVIOUS_ENV_KEEP_SECONDS "${BACKEND_PREVIOUS_ENV_KEEP_SECONDS}"
+validate_positive_integer BACKEND_PROMETHEUS_PORT "${BACKEND_PROMETHEUS_PORT}"
+validate_non_negative_integer BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS "${BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS}"
+validate_positive_integer BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS "${BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS}"
+validate_non_negative_integer BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS "${BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS}"
+validate_positive_integer BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS "${BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS}"
 
 tmp_dir="$(mktemp -d)"
 listener_actions_file="${tmp_dir}/listener-actions-before.json"
@@ -698,6 +1043,9 @@ switch_actions_file="${tmp_dir}/listener-actions-switch.json"
 target_health_file="${tmp_dir}/target-health.json"
 ssm_info_file="${tmp_dir}/ssm-info.json"
 ec2_instance_state_file="${tmp_dir}/ec2-instance-states.json"
+ec2_instance_details_file="${tmp_dir}/ec2-instance-details.json"
+prometheus_target_yaml_file="${tmp_dir}/prometheus-targets.yml"
+prometheus_command_payload_file="${tmp_dir}/prometheus-command-payload.json"
 
 load_listener_actions "${listener_actions_file}"
 IFS='|' read -r active_color active_target_group_arn inactive_color inactive_target_group_arn blue_weight green_weight \
@@ -753,6 +1101,31 @@ fi
 
 if ! verify_public_url api "${BACKEND_PUBLIC_API_VERIFY_URL}"; then
   rollback_listener
+  exit 1
+fi
+
+mapfile -t new_active_instance_ids < <(extract_target_instance_ids "${inactive_target_group_arn}")
+if [ "${#new_active_instance_ids[@]}" -ne "${EXPECTED_TARGET_COUNT}" ]; then
+  echo "New active target group must resolve to exactly ${EXPECTED_TARGET_COUNT} EC2 instance ids." >&2
+  exit 1
+fi
+printf 'New active target instances after switch: %s\n' "${new_active_instance_ids[*]}"
+
+mapfile -t new_active_private_ips < <(extract_instance_private_ips "${new_active_instance_ids[@]}")
+if [ "${#new_active_private_ips[@]}" -ne "${EXPECTED_TARGET_COUNT}" ]; then
+  echo "New active EC2 private IP lookup must return exactly ${EXPECTED_TARGET_COUNT} IPs." >&2
+  exit 1
+fi
+printf 'New active EC2 private IPs: %s\n' "${new_active_private_ips[*]}"
+
+new_active_metric_targets=()
+for private_ip in "${new_active_private_ips[@]}"; do
+  new_active_metric_targets+=("${private_ip}:${BACKEND_TARGET_PORT}")
+done
+new_active_metric_targets_csv="$(join_by_comma "${new_active_metric_targets[@]}")"
+
+if ! update_prometheus_targets "${new_active_metric_targets_csv}" "${new_active_metric_targets[@]}"; then
+  echo "Prometheus target update or UP verification failed. Previous active EC2 instances will remain running." >&2
   exit 1
 fi
 
