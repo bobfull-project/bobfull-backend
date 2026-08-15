@@ -94,6 +94,13 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .canvas-node.baseline rect{stroke-dasharray:4 3}
 .canvas-node .node-sublabel{fill:var(--muted);font:9px system-ui;text-anchor:middle}
 .canvas-node.active .node-sublabel{fill:var(--accent-strong)}
+/* AI 채팅 검수 unified topology 전용(animateNodes) — "AI Consumer 안으로 들어갔다"는 느낌을 주기
+   위해 그 Step에서 새로 active되는 node만 살짝 커졌다 제자리로 돌아오는 pop-in을 준다.
+   .zoom-topology 클래스가 있을 때만 적용되므로 다른 topology의 active node는 전혀 바뀌지 않는다. */
+.zoom-topology .canvas-node{transform-box:fill-box;transform-origin:center}
+.zoom-topology .canvas-node.active{animation:canvasNodePopIn .45s ease}
+@keyframes canvasNodePopIn{0%{opacity:.35;transform:scale(.9)}100%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.zoom-topology .canvas-node.active{animation:none}}
 /* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위한, 아주 옅은 영역 구분.
    active/dim 강조 위계를 방해하지 않도록 배경만 다르고 테두리는 거의 보이지 않게 한다. */
 .region-bg{fill:var(--panel);opacity:.4;stroke:var(--line);stroke-opacity:.5}

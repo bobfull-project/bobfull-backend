@@ -9,7 +9,7 @@ const currentStep = () => currentScenario().steps[state.step];
    별도 renderer를 새로 만들지 않는다. */
 const TOPOLOGY_BY_KEY = {
   moderation: moderationTopology, "payment-followup": paymentFollowupTopology,
-  "service-unified": serviceUnifiedTopology,
+  "service-unified": serviceUnifiedTopology, "ai-moderation-journey": aiModerationJourneyTopology,
   infra: infraTopology
 };
 const topologyFor = (data) => TOPOLOGY_BY_KEY[data.topologyKey] || topology;
@@ -85,7 +85,10 @@ function renderCanvas(data) {
     return `<g class="canvas-node ${cls}" transform="translate(${x} ${y})"><rect width="100" height="70" rx="6"/><text x="50" y="42"${compress}>${text}</text></g>`;
   }).join("");
   const badgeSvg = badgeSvgFor(t, v.badge);
-  $("canvas").innerHTML = `<svg class="topology" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
+  /* animateNodes(AI 채팅 검수 unified topology만 씀) — 활성화되는 순간 살짝 커졌다 제자리로
+     돌아오는 pop-in을 준다. 이 topology 안에서만 켜지므로 다른 Chapter 렌더링은 그대로다. */
+  const zoomCls = t.animateNodes ? " zoom-topology" : "";
+  $("canvas").innerHTML = `<svg class="topology${zoomCls}" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
   $("flowCaption").textContent = data.action.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
 }
 function badgeSvgFor(t, badge) {
@@ -409,16 +412,7 @@ const SHOWCASE_SCENARIOS_BY_TAB = {
       problem: "모든 메시지를 똑같이 LLM으로 보내야 할까?",
       solution: "명백한 위반은 Rule Filter가 즉시 판정하고, 애매한 경우만 LLM에 맡긴 뒤 결과를 검증해 저장합니다.",
       outcomes: ["확실한 것은 규칙으로 빠르게", "애매한 것만 LLM으로", "LLM 결과도 검증 후 저장"],
-      steps: [
-        { chapter: "kafka-ai", scenario: "normal", step: "send" },
-        { chapter: "kafka-ai", scenario: "normal", step: "commit" },
-        { chapter: "kafka-ai", scenario: "normal", step: "publish" },
-        { chapter: "ai-moderation", scenario: "clear-flagged-fast-path", step: "rule-check" },
-        { chapter: "ai-moderation", scenario: "clear-flagged-fast-path", step: "rule-hit" },
-        { chapter: "ai-moderation", scenario: "llm-required", step: "rule-miss" },
-        { chapter: "ai-moderation", scenario: "llm-required", step: "prompt-call" },
-        { chapter: "ai-moderation", scenario: "llm-required", step: "persisted" }
-      ] },
+      steps: aiModerationJourneySteps },
     { id: "ai-failure", title: "AI 장애 대응",
       problem: "AI 검수가 실패하면 채팅 저장까지 함께 실패해야 할까?",
       solution: "핵심 거래(메시지 저장)와 AI 후속 검수를 분리해, AI 장애가 메시지 저장에 영향을 주지 않게 격리했습니다.",
