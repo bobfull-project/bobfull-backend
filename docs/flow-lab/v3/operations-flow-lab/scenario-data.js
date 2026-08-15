@@ -494,12 +494,16 @@ const fullArchitectureNodeDetails = {
   cloudwatch: { role: "애플리케이션 로그 저장 — 메트릭 도구가 아니다(메트릭은 Prometheus/Grafana)", runtime: "awslogs Docker log driver", connectedTo: "Application", network: "—", evidence: "deploy-backend-v1.sh(--log-driver=awslogs)" }
 };
 /* 전체 인프라 구성도 — Node를 아무것도 클릭하지 않은 기본 상태에서 4개 그룹을 순서대로 계속
-   순환 강조한다("가만히 있으면 계속 흐름이 돈다"). Edge는 강조하지 않는다 — Node 테두리만 켠다. */
+   순환 강조한다("가만히 있으면 계속 흐름이 돈다"). Edge는 강조하지 않는다 — Node 테두리만 켠다.
+   목적지 Node만 따로 빛나면 "어디서 왔는지"가 안 보인다는 피드백으로, 사용자가 실제로 거치는
+   Client→Route53→ALB→Application(Blue/Green 4대) 구간도 항상 같이 강조한다 — 모니터링만 예외로
+   Client에서 시작하지 않는다(사용자 요청이 아니라 Application이 스스로 내보내는 지표/로그이므로). */
+const archEntryToApp = ["users", "route53", "alb", "tgBlue", "tgGreen", "blue1", "blue2", "green1", "green2"];
 const archFlowGroups = [
-  { id: "restaurant", label: "① 사장님 식당 등록", nodes: ["s3", "lambda"] },
-  { id: "reservation", label: "② 예약·결제·채팅방·이메일", nodes: ["rds", "redis", "smtp", "portone"] },
-  { id: "chat-ai", label: "③ 채팅 AI 분석", nodes: ["kafka", "openai"] },
-  { id: "monitoring", label: "④ 모니터링·알람", nodes: ["prometheus", "grafana", "slack", "cloudwatch"] }
+  { id: "restaurant", label: "① 사장님 식당 등록", nodes: [...archEntryToApp, "s3", "lambda"] },
+  { id: "reservation", label: "② 예약·결제·채팅방·이메일", nodes: [...archEntryToApp, "rds", "redis", "smtp", "portone"] },
+  { id: "chat-ai", label: "③ 채팅 AI 분석", nodes: [...archEntryToApp, "kafka", "openai"] },
+  { id: "monitoring", label: "④ 모니터링·알람", nodes: ["blue1", "blue2", "green1", "green2", "prometheus", "grafana", "slack", "cloudwatch"] }
 ];
 
 /* 핵심 시스템 흐름 탭 > "AI 채팅 검수" 전용 topology/step.

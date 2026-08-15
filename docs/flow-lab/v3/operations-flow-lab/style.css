@@ -348,19 +348,21 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .arch-view{display:flex;flex-direction:column;gap:10px}
 .arch-view-head{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line)}
 .arch-view-hint{margin:0;color:var(--muted);font-size:12px}
-.arch-view-body{display:flex;gap:14px;align-items:stretch}
-.arch-canvas{flex:1;min-width:0;min-height:420px;max-height:640px;display:flex;align-items:center;justify-content:center;overflow:auto;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px}
+/* 도표를 옆이 아니라 위아래로 쌓는다 — 옆에 260px짜리 패널이 있으면 도표 폭이 그만큼 줄어들어
+   작아 보였다. 세로로 쌓으면 도표가 전체 폭을 다 쓸 수 있다. */
+.arch-view-body{display:flex;flex-direction:column;gap:14px}
+.arch-canvas{width:100%;min-height:480px;max-height:760px;display:flex;align-items:center;justify-content:center;overflow:auto;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px;box-sizing:border-box}
 .arch-canvas .topology{cursor:default}
 .arch-canvas .canvas-node{cursor:pointer}
-.arch-detail-panel{flex:none;width:260px;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:16px;overflow-y:auto;max-height:640px}
+.arch-detail-panel{width:100%;box-sizing:border-box;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:16px;overflow-y:auto;max-height:220px}
 .arch-detail-panel h3{margin:0 0 10px;font-size:15px;color:var(--text)}
 .arch-detail-hint{margin:0;color:var(--muted);font-size:12.5px}
-.arch-detail-list{margin:0;display:flex;flex-direction:column;gap:10px}
+/* 패널이 아래로 넓어졌으니 5개 필드를 세로로 쭉 나열하지 않고 grid로 나란히 배치해 공간을 아낀다. */
+.arch-detail-list{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 20px}
 .arch-detail-list dt{color:var(--accent-strong);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
 .arch-detail-list dd{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5}
 @media (max-width:760px){
-  .arch-view-body{flex-direction:column}
-  .arch-detail-panel{width:auto;max-height:220px}
+  .arch-detail-list{grid-template-columns:1fr}
 }
 
 /* Capture — README GIF/브로셔 촬영용. 같은 Showcase 컴포넌트에서 조작 UI만 감추고,
