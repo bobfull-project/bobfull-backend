@@ -53,11 +53,14 @@ import org.springframework.test.context.ContextConfiguration;
  * earliest offset부터 Backfill이 실제로 일어나는지 확인한다.</p>
  *
  * <p>이 테스트는 CI에서 기동되지 않는, 이 프로젝트의 로컬 개발용 {@code docker-compose.yml}
- * Kafka broker(localhost:9092)가 실제로 떠 있을 때만 실행하는 Evidence 재현용 테스트다.
- * {@code RESTAURANT_INSIGHT_LOCAL_BROKER_TEST=true} 환경변수를 명시적으로 설정한 로컬
- * 환경에서만 활성화되며(기존 {@code Issue251Step0OpenAiBaselineTest}의
- * {@code @EnabledIfEnvironmentVariable} 관례를 따름), CI를 포함한 기본 실행에서는 스킵된다.</p>
+ * Kafka broker(localhost:9092)가 실제로 떠 있을 때만 실행하는 Evidence 재현용 테스트다. 기존
+ * {@code kafka-evidence} Tag 관례(build.gradle의 기본 {@code test} task는 이 Tag를 제외하고,
+ * 별도 {@code kafkaEvidenceTest} task에서만 포함)를 따라 기본 실행·CI에서 제외되며, 추가로
+ * {@code RESTAURANT_INSIGHT_LOCAL_BROKER_TEST=true} 환경변수가 명시된 로컬 환경에서만
+ * 활성화되도록 이중으로 방어한다(기존 {@code Issue251Step0OpenAiBaselineTest}의
+ * {@code @EnabledIfEnvironmentVariable} 관례도 함께 따름).</p>
  */
+@org.junit.jupiter.api.Tag("kafka-evidence")
 @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RESTAURANT_INSIGHT_LOCAL_BROKER_TEST", matches = "true")
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:restaurant-insight-real-broker-backfill-it;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",

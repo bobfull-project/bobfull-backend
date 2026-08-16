@@ -37,6 +37,23 @@ class RestaurantInsightPrivacyValidatorTest {
         assertThat(validator.isSafeAspect("직원 친절")).isTrue();
     }
 
+    // 재리뷰 지적(MAJOR): 고정 placeholder 목록에 없는 임의 이름도 역할 단어와 결합되면 차단해야 한다.
+    @Test
+    void 목록에_없는_임의_이름도_역할_단어와_결합되면_차단한다() {
+        assertThat(validator.isSafeAspect("직원 김현승")).isFalse();
+        assertThat(validator.isSafeAspect("김현승 직원")).isFalse();
+        assertThat(validator.isSafeAspect("김현승 매니저")).isFalse();
+        assertThat(validator.containsSensitiveIdentifier("직원 김현승 친절했어요")).isTrue();
+        // 역할 단어 근처의 메뉴/일반 명사는 이름으로 오인해 차단하지 않는다.
+        assertThat(validator.isSafeAspect("직원 응대")).isTrue();
+        assertThat(validator.isSafeAspect("직원 친절")).isTrue();
+        assertThat(validator.isSafeAspect("탕수육")).isTrue();
+        assertThat(validator.isSafeAspect("김말이")).isTrue();
+        assertThat(validator.isSafeAspect("짜장면")).isTrue();
+        assertThat(validator.isSafeAspect("서비스 속도")).isTrue();
+        assertThat(validator.containsSensitiveIdentifier("탕수육 짜장면 직원 서비스 후기")).isFalse();
+    }
+
     @Test
     void URL과_계정_식별자가_포함된_문장은_Provider_전송에서_제외한다() {
         assertThat(validator.containsSensitiveIdentifier("메뉴는 www.example.com/menu에서 보세요")).isTrue();

@@ -205,33 +205,36 @@ Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개�
 - 본인 소유 식당 조회 성공, 타 OWNER 조회 `ACCESS_DENIED` 거부, 존재하지 않는 식당 `RESTAURANT_ID_NOT_FOUND` 거부.
 - OWNER Controller 응답 JSON에 `senderMemberId`/`messageId`/`nickname` 경로 자체가 없음을 MockMvc로 확인.
 
-## 전체 회귀 (Docker 활성화 후 실제 실행)
+## 전체 회귀 (Docker 활성화, repository-level 설정 고정 후 실제 실행)
 
-`./gradlew :test`(프로젝트 메인 모듈) — **937개 중 933개 통과, 4개 실패, 65개 skip.**
+`./gradlew :test`(프로젝트 메인 모듈, 환경변수 없이 실행) — **937개 중 873개 통과, 0개 실패, 64개 skip.**
 
-이전 세션에서 Docker 미탑재로 실패했던 5건(`ChatModerationConsumerIntegrationTest`,
-`ChatModerationDltPublishFailureIntegrationTest`, `ChatMessageOutboxProcessorIntegrationTest`,
-`RestaurantInsightKafkaIntegrationTest`, `RestaurantInsightDltPublishFailureIntegrationTest`)은
-**전부 해소되어 PASS**로 전환됐다(단독 실행·전체 실행 모두 확인).
+PR 재리뷰 과정에서 발견된 두 가지 문제를 모두 repository에 고정한 뒤 이 결과를 얻었다(§PR 독립 리뷰 반영 참고).
 
-남은 4건 실패는 `PaymentExpirationRepositoryTest`(1) / `SettlementAmountRepositoryTest`(3)이며, 원인은
-`BeanCreationException: ... 'jpaAuditingHandler': Cannot resolve reference to bean 'jpaMappingContext'`다.
-두 클래스 모두 **#277 변경 파일과 무관**(Payment/Settlement 도메인, `@DataJpaTest`)하고, 단독 실행 시
-매번 PASS했으며(`./gradlew :test --tests "com.bobfull.payment.repository.PaymentExpirationRepositoryTest" --tests "com.bobfull.payment.repository.SettlementAmountRepositoryTest"` → BUILD SUCCESSFUL),
-전체 suite를 두 번 반복 실행했을 때 동일한 4건이 동일하게 재현되는 것으로 보아 **전체 suite 실행 시의
-Spring Test Context 캐시/리소스 경합으로 인한 기존 테스트 격리 문제**로 판단한다. #277 파일 Diff에 이
-두 클래스나 관련 Payment/Settlement 코드가 전혀 포함되지 않으므로 #277 회귀는 아니다.
+- `build.gradle`의 `test` task에 `maxHeapSize = '4g'`를 명시했다. 기본 힙으로는 수백 개의 서로 다른
+  Spring TestContext를 한 JVM에서 순차 기동하는 full-suite 실행에서 `PaymentExpirationRepositoryTest`/
+  `SettlementAmountRepositoryTest`가 간헐적으로 `BeanCreationException`으로 실패함을
+  `JAVA_TOOL_OPTIONS=-Xmx2g`(재현) vs `-Xmx4g`(해소) 비교로 실측했다.
+- `src/test/resources/spring.properties`에 `spring.test.context.cache.maxSize=500`을 추가했다. 이 값은
+  Spring `SpringProperties` 메커니즘으로 테스트 부트스트랩 시점에 클래스패스에서 직접 읽히므로, 실행할 때
+  마다 환경변수를 수동으로 붙이지 않아도 repository 자체 설정만으로 적용된다.
+- 두 설정을 함께 고정한 뒤 위 수치로 `./gradlew :test --console=plain --rerun`이 환경변수 없이
+  **BUILD SUCCESSFUL**임을 확인했다. `PaymentExpirationRepositoryTest`/`SettlementAmountRepositoryTest`도
+  이제 전체 suite 안에서 PASS한다.
+- Production 런타임 설정(`application-prod.yml` 등)에는 이 test-only 설정을 반영하지 않았다.
 
 ### PR 독립 리뷰 반영(재검증 완료)
 
 최초 Draft PR CI에서 `RestaurantInsightRealBrokerBackfillEvidenceTest`가 CI 환경(로컬 Docker broker
-없음)에서 `TimeoutException`으로 실패해 `932 tests / 5 failed`로 CI가 깨졌었다. 이 테스트는 이 프로젝트의
-로컬 개발용 `docker-compose.yml` Kafka broker(localhost:9092)가 실제로 떠 있을 때만 의미 있는 Evidence
-재현 테스트이므로, 기존 `Issue251Step0OpenAiBaselineTest`의 `@EnabledIfEnvironmentVariable` 관례를 따라
-`RESTAURANT_INSIGHT_LOCAL_BROKER_TEST=true`가 명시된 로컬 환경에서만 실행되도록 게이팅했다(기본/CI
-실행에서는 skip, 로컬에서 env var를 켜면 실제 재현 가능함을 재확인).
+없음)에서 `TimeoutException`으로 실패해 CI가 깨졌었다. 이 테스트는 이 프로젝트의 로컬 개발용
+`docker-compose.yml` Kafka broker(localhost:9092)가 실제로 떠 있을 때만 의미 있는 Evidence 재현
+테스트이므로, 기존 `kafka-evidence` Tag 관례(기본 `test` task는 제외, 별도 `kafkaEvidenceTest` task에서만
+포함)와 `Issue251Step0OpenAiBaselineTest`의 `@EnabledIfEnvironmentVariable` 관례를 이중으로 적용해
+`RESTAURANT_INSIGHT_LOCAL_BROKER_TEST=true`가 명시된 로컬 환경에서만 실행되도록 게이팅했다. 기본/CI
+실행에서는 skip되고, 로컬에서 env var를 켜면 실제 재현 가능함을 재확인했다(C-2/C-3 결합 과장 없음, §C 유지).
 
-같은 리뷰에서 지적된 3건의 MAJOR도 함께 수정하고 재검증했다.
+같은 리뷰에서 지적된 MAJOR 3건과, 재리뷰에서 지적된 잔여 MAJOR(고정 인명 목록 의존)까지 모두 수정하고
+재검증했다.
 
 - 전용 `ConcurrentKafkaListenerContainerFactory`가 Boot의 `ConcurrentKafkaListenerContainerFactoryConfigurer`를
   거치지 않아 `spring.kafka.listener.ack-mode: RECORD` 등 공통 설정이 Moderation/Insight 모두에 반영되지
@@ -242,6 +245,13 @@ Spring Test Context 캐시/리소스 경합으로 인한 기존 테스트 격리
   기반 방어선임을 명시). 계약과 다르던 허용 문자(`.,+` 대신 `- · / & ( )`)와 UTF-16 길이 기준
   `{1,40}`(code point 기준 아님) 문제도 함께 고치고, `RestaurantInsightPrivacyValidatorTest`에 해당
   케이스를 전부 추가해 재검증했다.
+- **(재리뷰 잔여 MAJOR)** 고정 placeholder 인명 목록에 없는 임의 이름("김현승" 등)이 `직원`/`매니저` 같은
+  역할 단어와 결합될 때 통과하던 문제를 고쳤다. 역할 단어와 바로 인접한 2~4글자 한글 토큰이 "응대/친절/
+  서비스/속도" 같은 일반화된 피드백 표현이 아니고, 흔한 한국 성씨로 시작할 때만 임의 이름으로 간주해
+  차단한다(성씨 시작 조건 없이 역할 인접성만으로 판단하면 "짜장면 직원"처럼 역할 단어 근처의 메뉴 명사까지
+  오탐하는 것을 실측으로 확인해 두 조건을 함께 요구하도록 좁혔다). `직원 김현승`/`김현승 직원`/`김현승 매니저`/
+  `직원 김현승 친절했어요`는 차단되고, `직원 응대`/`직원 친절`/`탕수육`/`김말이`/`짜장면`/`서비스 속도`는
+  계속 허용됨을 테스트로 확인했다.
 - `consumer-enabled=true` + `ai.restaurant-insight.enabled=false`(Provider 없음) 설정 오류 상태에서
   Event를 조용히 성공 처리(offset 커밋)하던 문제를 `IllegalStateException`을 던지도록 고쳐 Kafka
   Retry/DLT 경계로 넘어가게 했다. `RestaurantFeedbackInsightServiceProviderMissingTest`(신규)로 재검증했다.
@@ -251,7 +261,8 @@ Spring Test Context 캐시/리소스 경합으로 인한 기존 테스트 격리
   경쟁 테스트에 "모든 호출자가 예외 없이 종료"하는 단언을 추가해 재검증했다(기존에는 작업 스레드 예외를
   무시했던 것을 실제로 단언하도록 강화).
 
-수정 후 `./gradlew :test` 재실행 결과는 위 937/933/4/65 수치에 반영돼 있다.
+수정 후 `./gradlew :test`(환경변수 없이) 재실행 결과는 위 937/873/0/64 수치에 반영돼 있으며, 이 전체
+suite 실행은 이 최종 검증에서 딱 한 번만 수행했다.
 
 `./gradlew clean build -x test` 성공. `git diff --check` 통과.
 
