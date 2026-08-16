@@ -129,9 +129,9 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 모니터링 V1은 App EC2와 분리된 Monitoring EC2에서 Prometheus와 Grafana를 Docker Compose로 함께 실행한다.
 
 - 백엔드는 기존 애플리케이션 포트(`8080`)의 `/actuator/prometheus`를 노출하고, Prometheus가 App EC2 private IP 또는 내부 DNS로 scrape한다.
-- Prometheus는 `BOBFULL_BACKEND_METRICS_TARGETS`로 `bobfull-backend` file_sd target을 만들고, Blue-Green 배포 성공 후 GitHub Actions가 Monitoring EC2에 SSM 명령을 보내 새 Active EC2 2대의 private IP로 target을 갱신한 뒤 `/-/reload`를 호출한다.
+- Prometheus는 `BOBFULL_BACKEND_METRICS_TARGETS`로 `bobfull-backend` file_sd target을 만들고, Blue-Green 배포 성공 후 GitHub Actions가 Monitoring EC2에 SSM 명령을 보내 새 Active EC2 2대의 private IP로 target을 갱신한 뒤 `/-/reload`를 호출한다. 운영에서 env 파일과 compose/config 경로가 분리될 수 있으므로 env 파일은 `BACKEND_MONITORING_ENV_FILE`, compose/config 위치는 `BACKEND_MONITORING_COMPOSE_DIR`로 각각 받는다.
 - App EC2 보안 그룹은 Monitoring EC2 보안 그룹에서 들어오는 `8080` 접근만 허용한다. Grafana 외부 접속 포트(`3000`)는 운영 접근 주체로 제한한다.
-- Slack Alert Contact Point는 실제 모니터링 채널 Webhook URL을 `monitoring/.env` 또는 운영 비밀 저장소로 주입하고, 배포 직후 Grafana Contact Point `Test` 수신을 확인한다.
+- Slack Alert Contact Point는 실제 모니터링 채널 Webhook URL을 `BACKEND_MONITORING_ENV_FILE` 경로의 env 파일 또는 운영 비밀 저장소로 주입하고, 배포 직후 Grafana Contact Point `Test` 수신을 확인한다.
 - Prometheus/Grafana 구성 파일은 `monitoring/` 아래에 두며, 상세 실행·검증·장애 대응 기준은 [monitoring-runbook.md](../operations/monitoring-runbook.md)를 따른다.
 - 초기 Alert Rule 임계값은 테스트 기준으로 시작한다. p95, 오류율, 로그인 실패 임계값은 실제 AWS 단일 App EC2 k6 기준선 측정 후 [monitoring-baseline-template.md](../operations/monitoring-baseline-template.md)에 기록한 값으로 조정한다.
 
@@ -197,6 +197,7 @@ BACKEND_PUBLIC_READINESS_URL
 BACKEND_PUBLIC_API_VERIFY_URL
 BACKEND_MONITORING_EC2_INSTANCE_ID
 BACKEND_MONITORING_COMPOSE_DIR
+BACKEND_MONITORING_ENV_FILE
 ```
 
 선택 GitHub Variables:
@@ -242,6 +243,13 @@ BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS
 | `BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME` | `AWS-RunShellScript` | Monitoring EC2 target 갱신에 사용할 SSM 문서 |
 | `BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS` | `300` | Monitoring EC2 SSM 명령 완료 대기 timeout |
 | `BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS` | `3` | Monitoring EC2 SSM 명령 상태 polling 간격 |
+
+Monitoring EC2 실제 운영 경로 예시:
+
+```text
+BACKEND_MONITORING_ENV_FILE=/opt/bobfull-monitoring/.env
+BACKEND_MONITORING_COMPOSE_DIR=/opt/bobfull-monitoring/repo/monitoring
+```
 
 현재 구현은 `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` 동안 GitHub Actions job 안에서 bounded `sleep`으로 대기한다. 구조가 단순하고 배포 직후 rollback window가 한 workflow 로그에 남는 장점이 있다. 다만 workflow 점유 시간이 운영상 부담되면 후속으로 EventBridge Scheduler 또는 별도 수동 cleanup workflow를 검토한다.
 
@@ -319,7 +327,7 @@ CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 - 비활성 Target Group의 target 2대가 모두 `healthy`
 - ALB Listener weight 전환 후 public readiness와 API 검증 성공
 - 신규 Active Target Group의 EC2 2대 private IP 조회 성공
-- Monitoring EC2 SSM 명령으로 `BOBFULL_BACKEND_METRICS_TARGETS`와 Prometheus file_sd target 파일 갱신 성공
+- Monitoring EC2 SSM 명령으로 `BACKEND_MONITORING_ENV_FILE`의 `BOBFULL_BACKEND_METRICS_TARGETS`와 Prometheus file_sd target 파일 갱신 성공
 - Prometheus `/-/reload` 성공
 - Prometheus API 기준 신규 Active target 2대의 `up{job="bobfull-backend"}`가 모두 `1`
 - public 검증 성공 후 rollback window 동안 기존 활성 EC2 2대 running 유지

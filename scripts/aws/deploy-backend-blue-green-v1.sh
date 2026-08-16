@@ -206,7 +206,8 @@ build_prometheus_update_payload() {
   local target_yaml_file="$3"
 
   python3 - "${payload_file}" "${targets_csv}" "${target_yaml_file}" \
-      "${BACKEND_MONITORING_COMPOSE_DIR}" "${BACKEND_PROMETHEUS_CONTAINER_NAME}" \
+      "${BACKEND_MONITORING_COMPOSE_DIR}" "${BACKEND_MONITORING_ENV_FILE}" \
+      "${BACKEND_PROMETHEUS_CONTAINER_NAME}" \
       "${BACKEND_PROMETHEUS_TARGET_FILE}" "${BACKEND_PROMETHEUS_PORT}" \
       "${BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS}" \
       "${BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS}" <<'PY'
@@ -219,12 +220,13 @@ import sys
     targets_csv,
     target_yaml_path,
     compose_dir,
+    env_file,
     container_name,
     prometheus_target_file,
     prometheus_port,
     target_up_timeout_seconds,
     target_up_poll_interval_seconds,
-) = sys.argv[1:10]
+) = sys.argv[1:11]
 
 with open(target_yaml_path, encoding="utf-8") as source:
     target_yaml = source.read().rstrip()
@@ -241,6 +243,7 @@ required_remote_env() {
 }
 
 required_remote_env BACKEND_MONITORING_COMPOSE_DIR
+required_remote_env BACKEND_MONITORING_ENV_FILE
 required_remote_env BACKEND_PROMETHEUS_CONTAINER_NAME
 required_remote_env BACKEND_PROMETHEUS_TARGET_FILE
 required_remote_env BACKEND_PROMETHEUS_PORT
@@ -263,14 +266,30 @@ if [ ! -d "${BACKEND_MONITORING_COMPOSE_DIR}" ]; then
   exit 1
 fi
 
-cd "${BACKEND_MONITORING_COMPOSE_DIR}"
-
-if [ ! -f .env ]; then
-  echo "Monitoring .env file not found in ${BACKEND_MONITORING_COMPOSE_DIR}" >&2
+if [ ! -f "${BACKEND_MONITORING_COMPOSE_DIR}/docker-compose.yml" ]; then
+  echo "Monitoring docker-compose.yml not found: ${BACKEND_MONITORING_COMPOSE_DIR}/docker-compose.yml" >&2
   exit 1
 fi
 
+if [ ! -f "${BACKEND_MONITORING_ENV_FILE}" ]; then
+  echo "Monitoring env file not found: ${BACKEND_MONITORING_ENV_FILE}" >&2
+  exit 1
+fi
+
+cd "${BACKEND_MONITORING_COMPOSE_DIR}"
+
 target_file_staging="/tmp/bobfull-backend-prometheus-targets.yml"
+tmp_env=""
+cleanup_remote_tmp() {
+  if [ -n "${target_file_staging:-}" ]; then
+    rm -f "${target_file_staging}"
+  fi
+  if [ -n "${tmp_env:-}" ]; then
+    rm -f "${tmp_env}"
+  fi
+}
+trap cleanup_remote_tmp EXIT
+
 cat > "${target_file_staging}" <<'BOBFULL_PROMETHEUS_TARGETS_YAML'
 __TARGET_YAML__
 BOBFULL_PROMETHEUS_TARGETS_YAML
@@ -279,14 +298,26 @@ echo "New active backend metrics targets: ${BACKEND_PROMETHEUS_TARGETS}"
 echo "Prometheus target file preview:"
 sed 's/^/  /' "${target_file_staging}"
 
-if grep -q '^BOBFULL_BACKEND_METRICS_TARGETS=' .env; then
-  tmp_env="$(mktemp)"
-  sed "s|^BOBFULL_BACKEND_METRICS_TARGETS=.*|BOBFULL_BACKEND_METRICS_TARGETS=${BACKEND_PROMETHEUS_TARGETS}|" .env > "${tmp_env}"
-  mv "${tmp_env}" .env
-else
-  printf '\\nBOBFULL_BACKEND_METRICS_TARGETS=%s\\n' "${BACKEND_PROMETHEUS_TARGETS}" >> .env
+env_dir="${BACKEND_MONITORING_ENV_FILE%/*}"
+if [ "${env_dir}" = "${BACKEND_MONITORING_ENV_FILE}" ]; then
+  env_dir="."
 fi
-echo "Monitoring .env updated: BOBFULL_BACKEND_METRICS_TARGETS=${BACKEND_PROMETHEUS_TARGETS}"
+env_base="${BACKEND_MONITORING_ENV_FILE##*/}"
+tmp_env="$(mktemp "${env_dir}/.${env_base}.tmp.XXXXXX")"
+
+if grep -q '^BOBFULL_BACKEND_METRICS_TARGETS=' "${BACKEND_MONITORING_ENV_FILE}"; then
+  sed "s|^BOBFULL_BACKEND_METRICS_TARGETS=.*|BOBFULL_BACKEND_METRICS_TARGETS=${BACKEND_PROMETHEUS_TARGETS}|" \
+    "${BACKEND_MONITORING_ENV_FILE}" > "${tmp_env}"
+else
+  cat "${BACKEND_MONITORING_ENV_FILE}" > "${tmp_env}"
+  printf '\\nBOBFULL_BACKEND_METRICS_TARGETS=%s\\n' "${BACKEND_PROMETHEUS_TARGETS}" >> "${tmp_env}"
+fi
+chmod --reference="${BACKEND_MONITORING_ENV_FILE}" "${tmp_env}" 2>/dev/null || true
+chown --reference="${BACKEND_MONITORING_ENV_FILE}" "${tmp_env}" 2>/dev/null || true
+mv "${tmp_env}" "${BACKEND_MONITORING_ENV_FILE}"
+tmp_env=""
+echo "Monitoring env file updated: ${BACKEND_MONITORING_ENV_FILE}"
+echo "Monitoring env target updated: BOBFULL_BACKEND_METRICS_TARGETS=${BACKEND_PROMETHEUS_TARGETS}"
 
 if ! docker ps --format '{{.Names}}' | grep -Fx "${BACKEND_PROMETHEUS_CONTAINER_NAME}" >/dev/null; then
   echo "Prometheus container is not running: ${BACKEND_PROMETHEUS_CONTAINER_NAME}" >&2
@@ -354,6 +385,7 @@ done
 
 command_env = {
     "BACKEND_MONITORING_COMPOSE_DIR": compose_dir,
+    "BACKEND_MONITORING_ENV_FILE": env_file,
     "BACKEND_PROMETHEUS_CONTAINER_NAME": container_name,
     "BACKEND_PROMETHEUS_TARGET_FILE": prometheus_target_file,
     "BACKEND_PROMETHEUS_PORT": prometheus_port,
@@ -991,6 +1023,7 @@ required_env BACKEND_PUBLIC_READINESS_URL
 required_env BACKEND_PUBLIC_API_VERIFY_URL
 required_env BACKEND_MONITORING_EC2_INSTANCE_ID
 required_env BACKEND_MONITORING_COMPOSE_DIR
+required_env BACKEND_MONITORING_ENV_FILE
 
 require_commands aws bash curl python3 mktemp
 

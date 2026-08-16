@@ -6,7 +6,7 @@
 - Prometheus는 App EC2의 `/actuator/prometheus`를 scrape한다.
 - Grafana는 Prometheus Data Source, BobFull Overview Dashboard, 초기 Grafana Alert Rule, Slack Contact Point를 provisioning으로 로드한다.
 - Slack으로 발송되는 운영 Alert의 기준은 Grafana Alert Rule이다. Prometheus는 Spring Boot 메트릭 scrape와 Grafana Data Source 역할만 맡는다.
-- Slack Webhook URL, Grafana 관리자 비밀번호 같은 비밀값은 `monitoring/.env` 또는 운영 비밀 저장소에만 둔다.
+- Slack Webhook URL, Grafana 관리자 비밀번호 같은 비밀값은 `BACKEND_MONITORING_ENV_FILE` 경로의 env 파일 또는 운영 비밀 저장소에만 둔다.
 
 ## 네트워크
 
@@ -17,10 +17,12 @@
 ## 배포
 
 ```bash
-cd monitoring
-cp .env.example .env
-vi .env
-docker compose up -d
+cp /opt/bobfull-monitoring/repo/monitoring/.env.example /opt/bobfull-monitoring/.env
+vi /opt/bobfull-monitoring/.env
+docker compose \
+  --env-file /opt/bobfull-monitoring/.env \
+  -f /opt/bobfull-monitoring/repo/monitoring/docker-compose.yml \
+  up -d
 ```
 
 필수 값:
@@ -40,7 +42,14 @@ GRAFANA_SLACK_RECIPIENT=<slack-channel-name>
 
 ALB DNS를 Prometheus target으로 사용하지 않는다. Prometheus target은 App EC2 private IP 또는 private DNS와 `8080` 포트를 직접 지정해야 instance별 지표를 분리할 수 있다.
 
-Monitoring EC2 최초 구성 때는 `.env`에 현재 Active 2대의 초기값을 한 번 입력한다.
+Monitoring EC2 최초 구성 때는 env 파일에 현재 Active 2대의 초기값을 한 번 입력한다. 실제 운영 구조에서 env 파일과 compose/config 경로가 분리되어 있으면 env 파일은 `BACKEND_MONITORING_ENV_FILE`, compose/config 위치는 `BACKEND_MONITORING_COMPOSE_DIR`로 각각 지정한다.
+
+운영 경로 예시:
+
+```text
+BACKEND_MONITORING_ENV_FILE=/opt/bobfull-monitoring/.env
+BACKEND_MONITORING_COMPOSE_DIR=/opt/bobfull-monitoring/repo/monitoring
+```
 
 ```text
 BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
@@ -48,7 +57,7 @@ BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
 
 이후 Blue-Green 배포에서는 `scripts/aws/deploy-backend-blue-green-v1.sh`가 ALB 전환과 public 검증 이후 새 Active Target Group의 EC2 private IP 2개를 조회하고, Monitoring EC2에 SSM 명령을 보내 다음을 자동 수행한다.
 
-1. Monitoring EC2의 `monitoring/.env`에서 `BOBFULL_BACKEND_METRICS_TARGETS`를 새 Active 2대로 갱신한다.
+1. Monitoring EC2의 `BACKEND_MONITORING_ENV_FILE`에서 `BOBFULL_BACKEND_METRICS_TARGETS`를 새 Active 2대로 갱신한다.
 2. Prometheus 컨테이너 내부 file_sd target 파일(`/tmp/prometheus-targets/bobfull-backend.yml`)을 같은 값으로 갱신한다.
 3. Prometheus `/-/reload`를 호출한다.
 4. Prometheus API에서 새 Active target 2대의 `up{job="bobfull-backend"}` 값이 모두 `1`인지 확인한다.
@@ -60,6 +69,7 @@ BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
 ```text
 BACKEND_MONITORING_EC2_INSTANCE_ID
 BACKEND_MONITORING_COMPOSE_DIR
+BACKEND_MONITORING_ENV_FILE
 ```
 
 선택적으로 다음 값을 운영 환경에 맞게 조정할 수 있다.
@@ -79,9 +89,12 @@ BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS
 
 - `New active EC2 private IPs`
 - `New active EC2 metrics targets`
+- `Monitoring env file updated`
 - `Prometheus target file preview`
 - `Prometheus target state target=<ip:port> state=UP|DOWN`
 - `Prometheus target update or UP verification failed. Previous active EC2 instances will remain running.`
+
+로그에는 `BOBFULL_BACKEND_METRICS_TARGETS` 갱신 결과만 출력하고, Grafana 비밀번호·Slack Webhook 같은 다른 env 값은 출력하지 않는다.
 
 수동으로 현재 Active target을 확인해야 할 때는 다음 순서를 사용한다.
 
@@ -119,7 +132,7 @@ aws ec2 describe-instances \
   --output text
 ```
 
-5. Monitoring EC2의 `monitoring/.env` 또는 Prometheus UI에서 Active App 2대가 comma-separated target으로 반영됐는지 확인한다.
+5. Monitoring EC2의 `BACKEND_MONITORING_ENV_FILE` 또는 Prometheus UI에서 Active App 2대가 comma-separated target으로 반영됐는지 확인한다. env 파일에는 Grafana 비밀번호와 Slack Webhook 같은 secret이 포함될 수 있으므로 전체 파일 내용을 로그나 PR에 붙이지 않는다.
 
 ```text
 BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080

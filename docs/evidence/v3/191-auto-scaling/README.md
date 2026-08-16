@@ -110,7 +110,7 @@ Inactive Blue 환경은 사용자 트래픽을 받지 않지만 Spring Boot/Hika
   - EC2 running 이후 SSM `PingStatus=Online`까지 polling
   - public 검증 성공 후 rollback window 동안 기존 active EC2 유지
   - 새 Active Target Group의 EC2 private IP 2개 조회
-  - Monitoring EC2에 SSM 명령으로 Prometheus `bobfull-backend` scrape target 갱신
+  - Monitoring EC2에 SSM 명령으로 `BACKEND_MONITORING_ENV_FILE`의 `BOBFULL_BACKEND_METRICS_TARGETS`와 Prometheus `bobfull-backend` scrape target 갱신
   - Prometheus `/-/reload` 호출
   - 새 Active target 2대가 모두 `up=1`일 때만 기존 active STOP 단계 진행
   - Prometheus target 갱신 또는 UP 확인 실패 시 기존 active EC2 STOP 금지
