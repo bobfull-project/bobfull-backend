@@ -95,6 +95,34 @@ function regionBgSvg(t) {
     return `<g class="region"><rect class="region-bg${laneCls}${roleCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/>${icon}<text class="region-label${laneCls}${roleCls}" x="${textX}" y="${labelY}">${region.label}</text></g>`;
   }).join("");
 }
+/* Ch0는 발표·GIF용 Showcase이므로, 학습용 Step 데이터의 구어체 자막만 이 화면에서 발표체로
+   바꾼다. 원본 action은 Ch1~Ch6의 학습 흐름과 Evidence 설명에서 그대로 재사용된다. */
+const SHOWCASE_CAPTIONS = new Map([
+  ["1. 식당 정보를 새로 등록해요", "1. 식당 정보를 새로 등록합니다"],
+  ["2. 합석 가능한 시간과 테이블을 만들어요", "2. 합석 가능한 시간과 테이블을 만듭니다"],
+  ["3. 새 회차가 탐색 화면에 떠요 — 비회원도 둘러볼 수 있어요", "3. 새 회차가 탐색 화면에 표시됩니다 — 비회원도 둘러볼 수 있습니다"],
+  ["4. 시간과 잔여 좌석을 확인하고 골라요", "4. 시간과 잔여 좌석을 확인하고 선택합니다"],
+  ["5. 인원을 정하고 결제하면 바로 반영돼요", "5. 인원을 정하고 결제하면 바로 반영됩니다"],
+  ["6. 결제 결과가 참여 인원 수에 쌓여요", "6. 결제 결과가 참여 인원 수에 반영됩니다"],
+  ["7. 쌓인 인원과 예약 상태를 확인해요", "7. 누적 인원과 예약 상태를 확인합니다"],
+  ["8. 기준 충족 여부를 판단하고 모집을 마감해요", "8. 기준 충족 여부를 판단하고 모집을 마감합니다"],
+  ["9. 기준을 채우면 예약이 확정돼요", "9. 기준을 채우면 예약이 확정됩니다"],
+  ["10. 채팅방을 만들고 확정 이메일을 보내요", "10. 채팅방을 생성하고 확정 이메일을 발송합니다"],
+  ["11. 참여자들과 미리 대화를 나눠요", "11. 참여자들과 미리 대화를 나눕니다"],
+  ["12. 약속한 시간에 만나 식사해요", "12. 약속한 시간에 만나 식사합니다"],
+  ["13. 식사가 끝나면 종료로 처리해요", "13. 식사가 끝나면 종료로 처리합니다"],
+  ["14. 이번 예약 이용이 끝나요", "14. 이번 예약 이용이 종료됩니다"],
+  ["15. 예약별 지급 예정 금액을 확인해요", "15. 예약별 지급 예정 금액을 확인합니다"],
+  ["16. 식사 종료 후 참여 상태를 관리해요", "16. 식사 종료 후 참여 상태를 관리합니다"],
+  ["✓ 메시지가 저장됐어요", "✓ 메시지가 저장됐습니다"],
+  ["× Kafka로 보내지 못했어요", "× Kafka로 전송하지 못했습니다"],
+  ["✓ 다시 전달해서 성공했어요", "✓ 다시 전달해 성공했습니다"],
+  ["× AI 검토가 계속 실패했어요", "× AI 검토가 계속 실패했습니다"],
+  ["↓ 여러 번 실패해서 따로 보관했어요", "↓ 여러 번 실패해 별도로 보관했습니다"],
+  ["↠ 다른 서버에도 알렸어요", "↠ 다른 서버에도 알렸습니다"],
+  ["↠ 각 서버가 접속한 사용자에게 전달했어요", "↠ 각 서버가 접속한 사용자에게 전달했습니다"]
+]);
+function showcaseCaption(action) { return SHOWCASE_CAPTIONS.get(action) || action; }
 function renderCanvas(data) {
   const v = data.visual;
   const t = topologyFor(data);
@@ -153,8 +181,9 @@ function renderCanvas(data) {
   /* animateNodes(AI 채팅 검수 unified topology만 씀) — 활성화되는 순간 살짝 커졌다 제자리로
      돌아오는 pop-in을 준다. 이 topology 안에서만 켜지므로 다른 Chapter 렌더링은 그대로다. */
   const topologyClass = `${t.animateNodes ? " zoom-topology" : ""}${isServiceShowcase ? " service-topology" : ""}`;
-  $("canvas").innerHTML = `<svg class="topology${topologyClass}" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="edge-labels">${labelSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${data.action}` : ""}</div>`;
-  $("flowCaption").textContent = data.action.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
+  const caption = state.mode === "showcase" ? showcaseCaption(data.action) : data.action;
+  $("canvas").innerHTML = `<svg class="topology${topologyClass}" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${caption}` : ""}</div>`;
+  $("flowCaption").textContent = caption.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
 }
 function badgeSvgFor(t, badge) {
   if (!badge) return "";

@@ -99,27 +99,32 @@ const moderationTopology = {
 };
 /* ===== Ch0 Showcase 전용 topology/step — 기존 Ch1~6 chapters[]는 건드리지 않는다. ===== */
 /* 결제 확정 후속 처리(핵심 시스템 흐름 탭). PaymentCompletionTransactionService.complete →
-   ReservationConfirmationService.confirm(MANDATORY, 같은 트랜잭션) → ChatRoom/Email은 Outbox로 분리.
-   실제 코드 기준(ADR 0008): ChatRoom 저장 실패가 이미 끝난 결제·예약을 롤백시키지 않기 위해서다.
-   "같은 트랜잭션" vs "Outbox 후속 처리"라는 큰 글자 region 캡션은 node 박스와 겹쳐서 깨져 보였다 —
-   글자를 더 넣는 대신, 실제 코드 차이 그 자체를 도표 구조로 보여준다: ChatRoom은 COMMIT에서
-   한 번에 연결되고(커밋 스레드가 직접 처리), Email은 "전용 Executor" node를 한 단계 더 거친다
-   (email-followup Step의 limits 참고: "커밋 스레드가 직접 신호를 처리하지 않고 전용 Executor로
-   넘긴다는 것뿐이다"). 둘 다 Outbox 기반이고 Email이 Outbox 없는 별도의 "Async" 경로인 것은
-   아니다 — Ch5의 Memory Async(Outbox 없음)와는 다른 개념이라 그렇게 표현하지 않는다. */
+   ReservationConfirmationService.confirm(MANDATORY, 같은 트랜잭션) 안에서 ChatRoom/Email Outbox를
+   PENDING으로 기록한 뒤 COMMIT한다. AFTER_COMMIT은 Outbox를 저장하는 시점이 아니라, 이미 커밋된
+   Outbox의 처리를 시작하는 경계다. ChatRoom은 Processor가 직접 signal하고, Email만 Dispatcher를
+   거쳐 전용 Executor에서 Processor를 signal한다. */
 const paymentFollowupTopology = {
-  viewBox: "0 0 900 370",
-  nodes: [["payment", "Payment"], ["reservation", "Reservation"], ["participant", "Participant"], ["commit", "COMMIT"],
-    ["chatroom", "ChatRoom"], ["emailExecutor", "전용 Executor"], ["email", "Email"]],
-  nodePositions: { payment: [20, 150], reservation: [180, 150], participant: [340, 150], commit: [500, 150],
-    chatroom: [700, 40], emailExecutor: [650, 260], email: [800, 260] },
+  viewBox: "0 0 1100 430",
+  nodes: [["payment", "Payment"], ["reservation", "Reservation"], ["participant", "Participant"],
+    ["chatOutbox", "ChatRoom Outbox"], ["emailOutbox", "Email Outbox"], ["commit", "COMMIT"],
+    ["afterCommit", "AFTER_COMMIT"], ["chatProcessor", "ChatRoom Processor"], ["chatroom", "ChatRoom"],
+    ["emailExecutor", "Email Async Executor"], ["emailProcessor", "Email Processor"], ["email", "Email"]],
+  nodePositions: { payment: [30, 80], reservation: [160, 80], participant: [290, 80],
+    chatOutbox: [440, 40], emailOutbox: [440, 120], commit: [610, 80], afterCommit: [760, 80],
+    chatProcessor: [760, 180], chatroom: [760, 290], emailExecutor: [950, 140], emailProcessor: [950, 235], email: [950, 330] },
   edges: {
-    "payment-reservation": "M120 185 H180", "reservation-participant": "M280 185 H340", "participant-commit": "M440 185 H500",
-    "commit-chatroom": "M600 175 H650 V75 H700", "commit-emailExecutor": "M600 195 H625 V295 H650",
-    "emailExecutor-email": "M750 295 H800"
+    "payment-reservation": "M130 115 H160", "reservation-participant": "M260 115 H290",
+    "participant-chatOutbox": "M390 115 H415 V75 H440", "participant-emailOutbox": "M390 115 H415 V155 H440",
+    "chatOutbox-commit": "M540 75 H575 V115 H610", "emailOutbox-commit": "M540 155 H575 V115 H610",
+    "commit-afterCommit": "M710 115 H760", "afterCommit-chatProcessor": "M810 150 V180",
+    "chatProcessor-chatroom": "M810 250 V290", "afterCommit-emailExecutor": "M860 115 H900 V175 H950",
+    "emailExecutor-emailProcessor": "M1000 210 V235", "emailProcessor-email": "M1000 305 V330"
   },
-  labels: { "payment-reservation": [125, 175], "reservation-participant": [285, 175], "participant-commit": [445, 175],
-    "commit-chatroom": [610, 110], "commit-emailExecutor": [610, 260] }
+  labels: {},
+  regions: [
+    { label: "핵심 거래 TX · Outbox PENDING 기록", x: 10, y: 20, w: 710, h: 180 },
+    { label: "COMMIT 이후 · 독립 후속 처리", x: 740, y: 20, w: 350, h: 390 }
+  ]
 };
 const paymentFollowupSteps = [
   step("payment-success", "PortOne", "Payment", "● PortOne 외부 결제 검증을 통과해 결제가 완료됩니다", "사용자가 결제를 마쳤고, PortOne 외부 결제 검증까지 확인됐습니다.",
@@ -131,25 +136,36 @@ const paymentFollowupSteps = [
   step("participant-confirm", "ReservationConfirmationService", "Participant", "◆ 결제한 사용자의 참여자 정보를 새로 저장합니다", "결제한 사람의 참여 정보(인원수 포함)가 새로 저장됩니다 — CREATE든 JOIN이든 항상 새로 만들어집니다.",
     { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant"], ["payment-reservation", "reservation-participant"], "event", null, "core", ["payment", "reservation"]),
       nextAction: "핵심 거래 확정하기", evidenceReferences: [evidence.chatroom] }),
-  step("core-commit", "Application", "COMMIT", "✓ 결제·예약·참여자 저장을 모두 확정한 뒤 핵심 Transaction을 Commit합니다", "결제·예약·참여자 정보가 하나의 트랜잭션으로 확정됩니다. 채팅방과 이메일은 아직 만들지 않았습니다 — 여기서 실패해도 결제·예약은 그대로 유지됩니다.",
-    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant", "commit"], ["payment-reservation", "reservation-participant", "participant-commit"], "commit", "committed", "core"),
-      statusChecklist: [["결제", "done"], ["예약", "done"], ["참여자", "done"]],
-      decisionBadge: "핵심 거래와 후속 기능의 실패 범위를 분리",
+  step("outbox-pending", "ReservationConfirmationService", "ChatRoom Outbox · Email Outbox", "◆ CREATE 결제에서는 같은 핵심 Transaction에 두 Outbox를 PENDING으로 기록합니다", "후속 작업 자체를 지금 실행하지 않습니다. CREATE 결제의 ChatRoom 생성과 Email 발송 의도를 DB Outbox에 PENDING으로 함께 남겨, 핵심 거래가 성공할 때만 처리할 대상을 보존합니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup",
+      visual: visual(["participant", "chatOutbox", "emailOutbox"], ["participant-chatOutbox", "participant-emailOutbox"], "event", null, "core", ["payment", "reservation"], null, null, { chatOutbox: "PENDING", emailOutbox: "PENDING" }),
+      codeReferences: ["ReservationConfirmationService.confirm", "EmailOutboxEventService.enqueue"], evidenceReferences: [evidence.chatroom, evidence.email] }),
+  step("core-commit", "Application", "COMMIT", "✓ 핵심 거래와 두 Outbox를 함께 COMMIT합니다", "CREATE 결제에서는 Payment·Reservation·Participant와 ChatRoom·Email Outbox PENDING이 하나의 핵심 Transaction에서 모두 성공한 뒤 확정됩니다. AFTER_COMMIT은 Outbox를 저장하는 단계가 아닙니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup",
+      visual: visual(["commit"], ["chatOutbox-commit", "emailOutbox-commit"], "commit", "committed", "core", ["payment", "reservation", "participant", "chatOutbox", "emailOutbox"], null, null, { chatOutbox: "PENDING", emailOutbox: "PENDING" }),
+      statusChecklist: [["Payment", "done"], ["Reservation", "done"], ["Participant", "done"], ["두 Outbox", "done"]], decisionBadge: "핵심 거래 + Outbox 의도를 함께 확정",
+      evidenceReferences: [evidence.chatroom, evidence.email] }),
+  step("after-commit", "AfterCommitExecutor", "AFTER_COMMIT", "◆ COMMIT 성공 뒤에만 후속 처리 신호가 시작됩니다", "이제 처리 경계가 핵심 Transaction 밖으로 넘어갑니다. 이미 COMMIT된 핵심 거래와 PENDING Outbox는 이후 후속 처리 실패와 독립적으로 유지됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup",
+      visual: visual(["afterCommit"], ["commit-afterCommit"], "event", null, "core", ["payment", "reservation", "participant", "chatOutbox", "emailOutbox", "commit"], null, { "commit-afterCommit": "afterCommit signal" }, { chatOutbox: "PENDING", emailOutbox: "PENDING" }),
+      codeReferences: ["AfterCommitExecutor.run"], evidenceReferences: [evidence.chatroom, evidence.email] }),
+  step("chatroom-followup", "ChatRoomOutboxProcessor", "ChatRoom", "◆ ChatRoom Outbox Processor가 ChatRoom을 생성합니다", "ChatRoom 경로는 AFTER_COMMIT signal 뒤 Processor가 직접 처리합니다. Email처럼 Async Executor를 거치지 않으며, 성공하면 ChatRoom Outbox는 COMPLETED가 됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup",
+      visual: visual(["chatProcessor", "chatroom"], ["afterCommit-chatProcessor", "chatProcessor-chatroom"], "event", "completed", "core", ["payment", "reservation", "participant", "chatOutbox", "emailOutbox", "commit", "afterCommit"], null, null, { chatOutbox: "COMPLETED", emailOutbox: "PENDING" }),
+      codeReferences: ["ChatRoomOutboxProcessor.signal"], evidenceReferences: [evidence.chatroom] }),
+  step("email-followup", "EmailOutboxSignalDispatcher", "Email", "◆ Email은 Async Executor 뒤 Processor가 SMTP 발송을 처리합니다", "Email AFTER_COMMIT dispatch는 전용 Executor에 작업만 제출합니다. Executor 스레드의 Email Outbox Processor가 Email/SMTP를 처리하므로 요청 스레드와도 분리되고, Email Outbox 기반 복구는 그대로 유지됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup",
+      visual: visual(["emailExecutor", "emailProcessor", "email"], ["afterCommit-emailExecutor", "emailExecutor-emailProcessor", "emailProcessor-email"], "event", "completed", "core", ["payment", "reservation", "participant", "chatOutbox", "emailOutbox", "commit", "afterCommit", "chatProcessor", "chatroom"], null, null, { chatOutbox: "COMPLETED", emailOutbox: "COMPLETED" }),
+      codeReferences: ["EmailOutboxSignalDispatcher.dispatch", "EmailOutboxProcessor.signal"], evidenceReferences: [evidence.email] }),
+  step("failure-boundary", "ChatRoomOutboxProcessor", "ChatRoom Outbox", "↻ ChatRoom 생성이 실패해도 핵심 거래는 확정 상태로 유지됩니다", "실패한 ChatRoom Outbox는 PENDING 재처리 대상으로 남습니다. ChatRoomOutboxScheduler가 안전망으로 다시 Processor를 호출할 수 있지만, 이미 COMMIT된 Payment·Reservation·Participant와 Email 결과는 되돌리지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup",
+      visual: visual(["chatProcessor", "chatOutbox"], ["afterCommit-chatProcessor"], "retry", null, "core", ["payment", "reservation", "participant", "emailOutbox", "commit", "afterCommit", "chatroom", "emailExecutor", "emailProcessor", "email"], null, null, { chatOutbox: "PENDING · 재처리", emailOutbox: "COMPLETED" }),
+      retryOwner: "ChatRoomOutboxScheduler → ChatRoomOutboxProcessor", codeReferences: ["ChatRoomOutboxProcessor", "ChatRoomOutboxScheduler"],
       evidenceReferences: [evidence.chatroom] }),
-  step("chatroom-followup", "Outbox Processor", "ChatRoom", "◆ 커밋 이후 별도 후속 처리에서 Outbox Processor가 ChatRoom 생성을 실행합니다", "핵심 거래가 끝난 뒤, 별도 트랜잭션의 Outbox Processor가 채팅방을 만듭니다. 채팅방 생성이 실패해도 이미 끝난 결제·예약은 되돌아가지 않습니다.",
-    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["commit", "chatroom"], ["commit-chatroom"], "event", null, "core", ["payment", "reservation", "participant"]),
-      codeReferences: ["ReservationConfirmationService.confirm", "OutboxEventType.CHAT_ROOM_CREATION_REQUESTED", "ChatRoomOutboxProcessor.signal"],
-      limits: "ADR 0008: \"ChatRoom 저장 실패가 Payment·Reservation을 롤백시킨다\"는 이유로 핵심 트랜잭션 안에서의 처리를 명시적으로 제외했다. Kafka/RabbitMQ도 \"단일 후속 처리에는 과도하다\"고 기각됐다.",
-      evidenceReferences: [evidence.chatroom] }),
-  step("email-followup", "Email Outbox Processor", "Email", "◆ 이메일 발송은 핵심 거래와 분리된 후속 작업으로 전용 Executor에서 실행합니다", "이메일도 같은 트랜잭션에 발송 의도를 남기는 것은 채팅방과 같습니다 — 다른 점은 커밋 스레드가 직접 처리하지 않고 전용 Executor로 넘긴 뒤 거기서 발송을 처리한다는 것뿐입니다.",
-    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["commit", "emailExecutor", "email"], ["commit-emailExecutor", "emailExecutor-email"], "event", null, "core", ["payment", "reservation", "participant", "chatroom"]),
-      codeReferences: ["EmailOutboxEventService.enqueue", "EmailOutboxSignalDispatcher.dispatch"],
-      limits: "ChatRoom과 유일하게 다른 점: 커밋 스레드가 직접 신호를 처리하지 않고 전용 Executor로 넘긴다는 것뿐이다 — 5초 주기 Scheduler가 안전망인 것은 동일하다. Outbox 없는 별도의 Async 경로가 아니다.",
-      evidenceReferences: [evidence.email] }),
-  step("all-complete", "Human 판단", "전체 완료", "✓ 결제·예약·참여자는 즉시 확정되며 채팅방·이메일은 각자 안전하게 재시도됩니다", "결제·예약·참여자는 즉시 확정되고, 채팅방·이메일은 실패해도 핵심 거래에 영향을 주지 않으면서 각자 안전하게 다시 시도할 수 있습니다.",
-    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup", visual: visual(["payment", "reservation", "participant", "commit", "chatroom", "emailExecutor", "email"], ["payment-reservation", "reservation-participant", "participant-commit", "commit-chatroom", "commit-emailExecutor", "emailExecutor-email"], "commit", "completed", "core"),
-      decisionBadge: "핵심 거래 ✓ · 채팅방 ✓ · 이메일 ✓",
-      evidenceReferences: [evidence.chatroom, evidence.email] })
+  step("all-complete", "Application", "전체 완료", "✓ 핵심 거래는 먼저 확정 · 후속 작업은 COMMIT 이후 독립 처리", "두 Outbox는 핵심 Transaction에 기록하고, COMMIT 뒤 각자의 경로로 처리합니다. 후속 작업의 실패·재처리는 핵심 결제와 예약의 실패 범위에 들어오지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "payment-followup",
+      visual: visual(["payment", "reservation", "participant", "chatOutbox", "emailOutbox", "commit", "afterCommit", "chatProcessor", "chatroom", "emailExecutor", "emailProcessor", "email"], ["payment-reservation", "reservation-participant", "participant-chatOutbox", "participant-emailOutbox", "chatOutbox-commit", "emailOutbox-commit", "commit-afterCommit", "afterCommit-chatProcessor", "chatProcessor-chatroom", "afterCommit-emailExecutor", "emailExecutor-emailProcessor", "emailProcessor-email"], "commit", "completed", "core", null, null, null, { chatOutbox: "COMPLETED", emailOutbox: "COMPLETED" }),
+      decisionBadge: "핵심 거래 먼저 확정 ✓ · 후속 작업은 COMMIT 이후 독립 처리 ✓", evidenceReferences: [evidence.chatroom, evidence.email] })
 ];
 
 /* 서비스 흐름 탭(BobFull은 어떤 서비스인가) — 일반 사용자/사장님/자동 관리를 3개의 독립 탭으로

@@ -375,15 +375,31 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
   .arch-detail-list{grid-template-columns:1fr}
 }
 
-/* Capture — README GIF/브로셔 촬영용. 같은 Showcase 컴포넌트에서 조작 UI만 감추고,
-   Scenario 제목·문제/해결·도표·현재 상태·Step 진행·결과는 그대로 남긴다. */
+/* Capture — README GIF/브로셔 촬영용. 일반 Showcase의 정보는 보존하되, GIF에서는
+   제목·문제 → 큰 도표 → 현재 Step 자막만 남긴다. Canvas 안의 flow-outcome은 caption과
+   같은 Step 메시지를 반복하면서 높이를 차지하므로 Capture에서만 숨긴다. */
 body.capture-mode .topbar{display:none}
 body.capture-mode .scenario-select{display:none}
+body.capture-mode .showcase-topbar{display:none}
+body.capture-mode .showcase-tab-question{display:none}
 body.capture-mode .showcase-main-tabs{display:none}
 body.capture-mode .showcase-tabs{display:none}
 body.capture-mode .showcase-actions{display:none}
-body.capture-mode .showcase-controls-buttons{display:none}
-body.capture-mode .showcase{min-height:100vh}
+body.capture-mode .showcase-solution{display:none}
+body.capture-mode .showcase-outcomes{display:none}
+body.capture-mode .showcase-controls{display:none}
+body.capture-mode .flow-outcome{display:none}
+body.capture-mode main{max-width:none;height:100vh;padding:18px max(20px,4vw);overflow:hidden}
+body.capture-mode .showcase{height:100%;min-height:0;padding:0;gap:8px}
+body.capture-mode .showcase-subheader{flex:none;padding:0;border-top:none}
+body.capture-mode .showcase-scenario-title{font-size:clamp(20px,2.3vw,28px)}
+body.capture-mode #showcaseScenarioView:not([hidden]){display:flex;flex:1;min-height:0;flex-direction:column;gap:8px}
+body.capture-mode .showcase-copy{flex:none}
+body.capture-mode .showcase-problem{font-size:14px;line-height:1.35}
+body.capture-mode .showcase-stage{flex:1;min-height:0;max-height:none;padding:10px}
+body.capture-mode #showcaseCanvasSlot{gap:0}
+body.capture-mode #showcaseCanvasSlot .canvas{flex:1;min-height:0}
+body.capture-mode #showcaseCanvasSlot .flow-caption{flex:none;margin:8px 0 0;padding:7px 12px;font-size:13px;line-height:1.4}
 
 @media(max-width:860px){
   .topbar{display:block}
