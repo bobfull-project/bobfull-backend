@@ -9,6 +9,7 @@ import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +20,7 @@ public class SpringAiModerationAdapter implements AiModerationPort {
     private final ChatClient chatClient;
     private final String configuredModel;
     private final int maxOutputTokens;
-    public SpringAiModerationAdapter(ChatClient moderationChatClient,
+    public SpringAiModerationAdapter(@Qualifier("moderationChatClient") ChatClient moderationChatClient,
             @Value("${spring.ai.openai.chat.model:gpt-4o-mini}") String configuredModel,
             @Value("${bobfull.ai.moderation.max-output-tokens:128}") int maxOutputTokens) {
         this.chatClient = moderationChatClient; this.configuredModel = configuredModel; this.maxOutputTokens = maxOutputTokens;

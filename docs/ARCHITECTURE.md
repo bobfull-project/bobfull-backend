@@ -204,6 +204,33 @@ ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
 
 DB→Broker 구간 유실 방지는 Outbox가, Broker 이후 AI 처리 실패의 재시도/격리는 Kafka Retry/DLT가 담당한다. 상세 근거는 [ADR 0010](./adr/0010-chat-message-outbox-kafka-pipeline.md)을 따른다.
 
+### Restaurant Feedback Insight — Event Reuse (#277)
+
+같은 `ChatMessageCreatedEvent`를 Moderation과 서로 다른 독립 Consumer Group이 재사용한다. Producer(Outbox Processor)는 두 번째 소비자의 존재를 알 필요가 없고, Event Schema도 변경하지 않는다(`restaurantId`를 이벤트에 추가하지 않고 `messageId` 기반 DB 조회로 역산).
+
+```text
+ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
+→ 커밋 후 signal
+→ ChatMessageOutboxProcessor → Kafka(bobfull.chat.message-created.v1)
+       │
+       ├─ Group A: bobfull-chat-moderation
+       │   → ChatModerationConsumer → ChatModerationService.analyze(messageId)
+       │   → 실패 시 최대 3회 재시도 → 소진 시 Moderation 전용 DLT + recordFinalFailure
+       │
+       └─ Group B: bobfull-restaurant-insight-{staging|production}
+           → RestaurantFeedbackInsightConsumer → RestaurantFeedbackInsightService.analyze(messageId)
+           → messageId로 ChatRoom→Reservation→TimeSlot→SharedTable→Restaurant 역추적
+           → 입력 PII/Candidate Gate 통과분만 Provider 호출 → items[] Structured Output
+           → normalizedAspect 개인정보·길이·문자 Validation → RestaurantFeedbackAnalysis/Item 저장
+           → 실패 시 최대 2회 재시도(설정값) → 소진 시 Insight 전용 DLT + Metric(Moderation과 완전 분리)
+```
+
+두 Group은 각각 독립된 Offset/Retry/DLT/ErrorHandler/ContainerFactory를 가지므로 한쪽의 장애·적체가 다른 쪽에 전파되지 않는다(Failure Isolation). Insight Consumer가 없던 시점에 쌓인 Event는 retention 범위 안에서 Offset이 없는 신규 Insight groupId로 Backfill할 수 있다(무한 재생은 아니다).
+
+Production 기본값은 `bobfull.kafka.restaurant-insight.consumer-enabled=false`, `bobfull.ai.restaurant-insight.enabled=false`로 Listener/Provider 자체가 비활성이다. 합성 데이터가 있는 스테이징/테스트에서만 명시적으로 활성화한다. OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 최근 7일 + `activePromptVersion` + `category+aspectType+normalizedAspect+opinionType+sentiment` 5-field 동일 그룹에서 distinct 발신자 3명 이상인 결과만 서버 템플릿 문구로 반환하며, 원문·닉네임·`memberId`·`messageId`는 노출하지 않는다.
+
+이 Consumer들은 별도 배포 Microservice가 아니라 같은 애플리케이션 안의 독립 Consumer Group이다. 이 구조는 Kafka가 Async보다 빠르다는 근거가 아니라, Event Reuse·Independent Consumer·Retention 범위 Backfill·Consumer별 실패 격리라는 별도 가치를 검증하기 위한 것이다(#274 대비 근거는 [Evidence](./evidence/v3/277-restaurant-feedback-event-reuse/README.md) 참고).
+
 ## 8. 저장값·계산값과 운영 관찰
 
 ERD에 정의된 엔티티는 관계와 상태 이력을 저장한다. 반면 예약 상세의 `currentParticipantCount`, `availableCapacity`, `confirmationThreshold`와 지급 예정 예약금은 원천 데이터에서 계산해 제공한다. 응답 계산값을 별도 컬럼으로 중복 저장하지 않는다.

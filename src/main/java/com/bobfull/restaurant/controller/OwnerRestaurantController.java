@@ -9,6 +9,8 @@ import com.bobfull.restaurant.dto.RestaurantCreateRequest;
 import com.bobfull.restaurant.dto.RestaurantIdResponse;
 import com.bobfull.restaurant.dto.RestaurantUpdateRequest;
 import com.bobfull.restaurant.service.RestaurantService;
+import com.bobfull.restaurantinsight.dto.RestaurantFeedbackInsightListResponse;
+import com.bobfull.restaurantinsight.service.RestaurantFeedbackInsightService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -29,9 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class OwnerRestaurantController {
 
     private final RestaurantService restaurantService;
+    private final RestaurantFeedbackInsightService feedbackInsightService;
 
-    public OwnerRestaurantController(RestaurantService restaurantService) {
-        this.restaurantService = restaurantService;
+    public OwnerRestaurantController(RestaurantService restaurantService, RestaurantFeedbackInsightService feedbackInsightService) {
+        this.restaurantService = restaurantService; this.feedbackInsightService = feedbackInsightService;
     }
 
     @PostMapping
@@ -58,6 +61,11 @@ public class OwnerRestaurantController {
     ) {
         return ApiResponse.success(restaurantService.getMyRestaurant(authMember.id(), restaurantId));
     }
+
+    @GetMapping("/{restaurantId}/feedback-insights")
+    public ApiResponse<RestaurantFeedbackInsightListResponse> getFeedbackInsights(
+            @AuthenticationPrincipal AuthMember authMember, @PathVariable Long restaurantId
+    ) { return ApiResponse.success(feedbackInsightService.getOwnerInsights(authMember.id(), restaurantId)); }
 
     @PatchMapping("/{restaurantId}")
     public ApiResponse<RestaurantIdResponse> update(

@@ -1,0 +1,251 @@
+# Issue #277 — Restaurant Feedback Insight Event Reuse Evidence
+
+## 검증 대상
+
+`ChatMessageCreatedEvent`(#59 Outbox+Kafka)를 기존 `bobfull-chat-moderation` Consumer Group과
+새로운 `bobfull-restaurant-insight-*` Consumer Group이 각각 독립적으로 재사용해
+음식/서비스/가격/청결 피드백을 `RestaurantFeedbackAnalysis`/`RestaurantFeedbackItem`으로
+파생시키고, OWNER에게 5-field 익명 집계(`category+aspectType+normalizedAspect+opinionType+sentiment`,
+`distinct senderMemberId >= 3`)로만 노출하는 파이프라인.
+
+- 1차 인수 세션은 Docker daemon에 접근할 수 없는 샌드박스에서 진행해 Kafka 실행 항목을 미실행으로
+  남겼다. **이번 재개 세션은 Docker가 활성화된 환경에서 진행했으며(`docker info`/`docker ps` 정상,
+  기존에 기동 중이던 `bobfull-kafka`/`bobfull-mysql`/`bobfull-redis`/`bobfull-mailpit` 컨테이너 확인),
+  A/B/D는 `Testcontainers`(`ConfluentKafkaContainer`, 테스트마다 새로 기동·폐기)로, C는 이 프로젝트의
+  `docker-compose.yml`이 정의한 실제 로컬 Kafka broker(`apache/kafka:3.9.0`, container `bobfull-kafka`,
+  `localhost:9092`, PLAINTEXT)로 각각 실제 실행까지 완료했다.**
+- E/F/G와 DB 레벨 멱등성은 이전과 동일하게 H2 기반 `@SpringBootTest`로 실제 실행했다(재확인 완료).
+
+## A. Event Reuse / Fan-out — EXECUTED (실제 실행, Testcontainers)
+
+`RestaurantInsightKafkaIntegrationTest#동일_Event를_Moderation과_Insight가_서로_다른_Group으로_각각_전부_소비한다`
+
+- source Event: **5건**(`chat-moderation-consumer-it` 계열과 동일 패턴, 별도 topic `restaurant-insight-it.v1`)
+- Moderation Group(`bobfull-chat-moderation`) consumed: **5/5**(`ChatModeration` row 5건 생성)
+- Insight Group(`bobfull-restaurant-insight-it`) consumed: **5/5**(`RestaurantFeedbackAnalysis` row 5건 생성, `activePromptVersion=v1`)
+- Producer/Event Schema 변경: **없음.** `ChatMessageCreatedEvent`는 기존 필드(`eventId`, `eventVersion`,
+  `messageId`, `chatRoomId`, `occurredAt`)만 유지하며 `restaurantId`를 추가하지 않았다(STEP0 PASS
+  댓글대로 `messageId` 기반 DB 조회로 Restaurant을 역산).
+- 실행: `./gradlew :test --tests "com.bobfull.kafka.consumer.RestaurantInsightKafkaIntegrationTest"` → PASS(0.182s)
+
+## B. Failure Isolation — EXECUTED (실제 실행, Testcontainers)
+
+`RestaurantInsightKafkaIntegrationTest#Insight가_실패해도_Moderation은_영향받지_않는다`
+
+- Insight Provider를 강제로 항상 실패시킨 상태에서 Event 발행
+- Moderation: 정상 처리 확인(`ChatModeration` 상태가 `ANALYSIS_FAILED`가 아님, 즉 Moderation은
+  자기 흐름대로 완료됨) — Insight 실패의 영향 **0**
+- Insight: 재시도(설정값 `consumer-max-attempts=2`) 소진 후 Insight 전용 DLT
+  (`restaurant-insight-it.insight.dlt.v1`)에서 실패 레코드 확인, `RestaurantFeedbackAnalysis` row 생성 **0건**
+- Moderation 상태·DLT·Metric에 대한 접근 자체가 코드 구조상 없음(`RestaurantInsightDltRecoverer`는
+  `ChatModerationDltRecoverer`를 호출하지 않음, §D3 참고)
+- 실행: 같은 클래스 PASS(1.216s)
+
+### D3(연계): Insight 전용 Retry/DLT
+
+`RestaurantInsightKafkaIntegrationTest#Insight_반복_실패는_Insight_전용_DLT로만_이동한다` — Insight
+강제 실패 시 `consumer-max-attempts=2`대로 Provider가 **2회 이상** 호출된 뒤 Insight 전용 DLT Topic에서
+해당 `messageId`를 포함한 레코드를 확인. Moderation DLT Topic은 별개(`restaurant-insight-it.moderation.dlt.v1`).
+PASS(1.075s)
+
+### D4(연계): DLT 발행 자체 실패
+
+`RestaurantInsightDltPublishFailureIntegrationTest#DLT_발행_자체가_실패하면_final_failure_지표를_증가시키지_않는다`
+— DLT 발행을 강제로 실패시키는 Mock `KafkaOperations`로 실제 Kafka(Testcontainers)에 대해 검증.
+DLT 발행 시도(mock 캡처로 확인)는 발생하지만 `RestaurantFeedbackAnalysis` row는 저장되지 않고,
+`BusinessMetricRecorder`의 `RESTAURANT_INSIGHT_RETRY_EXHAUSTED` Counter 값도 증가하지 않음(before/after
+동일) — `RestaurantInsightDltRecoverer.accept()`가 `delegate.accept()`(DLT 발행) 성공 이후에만
+metric을 증가시키는 순서가 실제로 지켜짐을 확인. PASS(0.721s)
+
+## C. Retained Event Backfill — EXECUTED (실제 실행, 로컬 Docker Kafka broker — Testcontainers 아님)
+
+**실행 환경**: 이 프로젝트 `docker-compose.yml`의 `kafka` 서비스로 이미 기동 중이던 실제 컨테이너
+(`bobfull-kafka`, `apache/kafka:3.9.0`, `localhost:9092`, PLAINTEXT, `KAFKA_AUTO_CREATE_TOPICS_ENABLE=true`).
+Testcontainers가 아니라 이 세션 시작 전부터 떠 있던 **로컬 Docker broker**를 그대로 사용했다. Staging/운영
+broker 자격 증명·네트워크 접근은 이번에도 없었으므로, 이 broker를 "실제 접근 가능한 Kafka Broker"로
+사용하되 아래처럼 **Issue의 C 항목 요구사항(retention.ms 실측, 신규 groupId, offset 미존재 확인, 신규
+Group consume, Analysis/Item row 생성)을 모두 충족**하는 방식으로 실행했다.
+
+### C-1. 실제 broker retention.ms 확인
+
+```text
+docker exec bobfull-kafka /opt/kafka/bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type brokers --entity-name 1 --describe --all
+```
+
+결과(발췌): `log.retention.hours=168`(7일, `DEFAULT_CONFIG`). `application-*.yml`의 값이 아니라
+브로커가 실제로 보고하는 설정값이다.
+
+### C-2. 기존에 이미 쌓여 있던 실제 retained Event로 신규 group backfill 확인(raw 소비)
+
+기동 시점부터 이 broker에는 이전 로컬 개발 세션이 실제로 발행한 `bobfull.chat.message-created.v1`
+Event가 이미 남아 있었다(합성 테스트 데이터, 실사용 채팅 아님 — payload에 메시지 원문이 없고
+`eventId`/`eventVersion`/`messageId`/`chatRoomId`/`occurredAt`만 있는 구조이므로 채팅 원문 유출이 없음).
+
+- 사전 확인: `kafka-consumer-groups.sh --describe --group bobfull-evidence-c-probe-1` →
+  `Error: Consumer group 'bobfull-evidence-c-probe-1' does not exist.`(신규 groupId임을 실행 전에 확인)
+- `kafka-console-consumer.sh --group bobfull-evidence-c-probe-1 --from-beginning`로 전체 소비:
+  **59건** 전부 소비(partition 0: 40, partition 1: 12, partition 2: 7 — `bobfull-chat-moderation` 기존
+  group의 offset과 일치)
+  - 가장 오래된 Event 시각: `2026-08-11T13:04:12.089Z`(`messageId=5`)
+  - 가장 최근 Event 시각: `2026-08-14T05:29:18.088Z`(`messageId=63`)
+  - 실측 span: 약 64.4시간(2일 이상) — retention 168시간 안쪽의 실제 과거 Event
+- 이 단계는 Kafka 레벨(신규 group + earliest + 실제 오래된 Event 재생) 메커니즘만 확인하는 raw 소비이며,
+  이 messageId들은 이번 세션의 격리된 H2 테스트 DB에는 없으므로 Analysis/Item 생성까지는 연결하지 않았다
+  (§한계 참고). probe 종료 후 `kafka-consumer-groups.sh --delete --group bobfull-evidence-c-probe-1`로
+  정리해 공유 broker에 흔적을 남기지 않았다.
+
+### C-3. 합성 Fixture로 신규 group → Insight 소비 → DB Analysis/Item 생성까지 전체 파이프라인 확인
+
+`RestaurantInsightRealBrokerBackfillEvidenceTest`(신규 작성, Testcontainers 아님 —
+`spring.kafka.bootstrap-servers=localhost:9092`로 위 실제 broker에 직접 연결):
+
+- 전용 topic `bobfull-evidence-277-c.v1`(이 broker의 auto-create로 신규 생성), 신규 groupId
+  `bobfull-restaurant-insight-evidence-c`
+- 사전 확인: `kafka-consumer-groups.sh --describe --group bobfull-restaurant-insight-evidence-c` →
+  `does not exist`(신규 groupId임을 실행 전 확인)
+- Insight Listener Container를 명시적으로 정지한 상태에서(=Consumer가 없던 시점 재현) 합성 ChatMessage
+  Fixture 5건을 생성하고 대응하는 `ChatMessageCreatedEvent` 5건을 topic에 발행 → 이 시점에
+  `RestaurantFeedbackAnalysis` row **0건**(아직 아무도 소비하지 않았음)을 확인
+  - Fixture는 합성 데이터(`"탕수육 맛 좋아요 backfill-N"`), 실사용 채팅 미사용
+- Container를 시작(`earliest` offset, `application.yml`의 `auto-offset-reset: earliest` 전역 설정 적용)
+  → **5/5 consumed**, `RestaurantFeedbackAnalysis` **5 row**, `RestaurantFeedbackItem` **5 row** 생성,
+  Fake Provider 호출 **5회**(중복 없음) 확인
+- 실행 후 실제 broker offset 재확인: `kafka-consumer-groups.sh --describe --group
+  bobfull-restaurant-insight-evidence-c` → `CURRENT-OFFSET=5, LOG-END-OFFSET=5, LAG=0`
+- 정리: 검증 후 `kafka-consumer-groups.sh --delete`/`kafka-topics.sh --delete`로 신규 topic·group을
+  삭제해 공유 로컬 broker를 원상태로 되돌렸다.
+- 실행: `./gradlew :test --tests "com.bobfull.kafka.consumer.RestaurantInsightRealBrokerBackfillEvidenceTest"` → PASS(약 12s)
+
+### C 결론
+
+**PASS.** 단, C-2와 C-3은 **서로 다른 별개의 검증이며 하나로 합쳐서 과장하지 않는다.**
+
+- **C-2(raw 소비)가 실제로 증명하는 것**: 신규 groupId + `earliest` offset으로 **실제로 며칠 전(약
+  64.4시간 전)에 쌓인 진짜 retained Event 59건**을 온전히 읽어올 수 있음(Kafka 레벨 backfill 메커니즘).
+  이 실행에서는 Analysis/Item 생성을 확인하지 않았다(messageId가 이번 세션 DB에 없어 연결하지 않음).
+- **C-3(합성 Fixture)이 실제로 증명하는 것**: Consumer가 없던 시점을 재현한 뒤 신규 group을 시작하면
+  Insight 파이프라인이 실제로 동작해 **Analysis 5 row / Item 5 row**까지 생성됨(엔드투엔드 파이프라인).
+  단, 이 5건은 이번 검증을 위해 직접 발행한 합성 Event이며 발행 후 곧바로 소비했으므로, retained
+  기간이 C-2만큼 길지는 않다(§한계 참고).
+- 두 검증을 합쳐 "64시간 전 Event로부터 Analysis/Item이 생성됐다"는 식으로 진술하지 않는다. 실제로는
+  (a) 오래 retained된 진짜 Event를 신규 group이 읽어올 수 있음과 (b) 신규 group이 읽은 Event로부터
+  Insight 파이프라인이 Analysis/Item을 생성함을 **각각 별도로** 확인한 것이다.
+- 실제 접근 가능한 로컬 Docker Kafka broker(Testcontainers 아님)에서 실측 `retention.ms`, 사전 미존재
+  확인된 신규 groupId, 신규 group의 실제 소비를 확인했다. Staging/운영 broker는 아니며, Kafka
+  retention이 지난 Event까지 무한 재생 가능하다고 주장하지 않는다(§금지 Claim).
+
+## D. Idempotent Reprocessing
+
+### D-Kafka(실broker, Testcontainers): 동일 Event 재전달
+
+`RestaurantInsightKafkaIntegrationTest#동일_Event_재전달은_Provider_Analysis_Item_증가를_유발하지_않는다`
+— 실제 Kafka(Testcontainers)에 동일 Event를 3회 발행(최초 1회 + 재전달 2회).
+
+| 지표 | delta |
+|---|---|
+| Provider 호출 | 0 (최초 처리 이후 재전달 2회 추가 호출 없음) |
+| Analysis row | 0 |
+| Item row | 0 |
+
+PASS(3.161s)
+
+### D-DB(H2, Kafka 없이): 순차/동시 재처리
+
+`RestaurantFeedbackInsightServiceIntegrationTest`로 재확인(이전 세션과 동일 결과).
+
+| 시나리오 | Provider 호출 delta | Analysis delta | Item delta |
+|---|---|---|---|
+| 순차 재전달 3회(`analyze()` 4회 총 호출) | 0 | 0 | 0 |
+| 완전 동시 8-thread 중복 처리(`CountDownLatch` 동기화) | 측정 대상 아님(§한계) | 최종 **1 row**로 수렴 | 최종 **1 row**로 수렴 |
+| v1 terminal 후 activePromptVersion=v2 재처리 | v2만 신규 1회 호출 | v1/v2 **공존**(각 1건, 합계 2) | v1/v2 각각 독립 유지 |
+
+DB UNIQUE(`chat_message_id, prompt_version`)로 동시 경쟁 시에도 최종 저장 결과가 정상 수렴함을
+확인했다. **Concurrent Provider exactly-once는 이번 검증 대상이 아니며 보장하지 않는다.**
+
+## E. Candidate Gate — EXECUTED (실제 실행)
+
+`RestaurantInsightCandidateGateFrozenDatasetTest`, 합성 Frozen Dataset(실사용 채팅 미사용) 16건 기준.
+
+| 항목 | 값 |
+|---|---|
+| 전체 메시지 | 16 |
+| Gate 통과(Provider 호출 필요) | 8 |
+| Gate 차단(Provider 호출 절감) | 8 |
+| 절감율 | 50% |
+
+Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개선은 주장하지 않는다.
+
+## F. Structured Output / Privacy — EXECUTED (실제 실행)
+
+`RestaurantFeedbackInsightServiceIntegrationTest`, `RestaurantInsightPrivacyValidatorTest`.
+
+- 한 메시지 → `items[]` 3개 추출 및 5-field(category/aspectType/normalizedAspect/opinionType/sentiment)
+  전부 저장값 일치 확인.
+- `normalizedAspect` NFKC 정규화 + 공백 축약 확인, 40 Unicode code point 초과 시 거부 확인.
+- PII(전화번호) 포함 aspect Item만 개별 제외 + 나머지 유효 Item 저장 확인.
+- 입력 자체 PII(`EXCLUDED_INPUT_PII`) / Candidate Gate 미통과(`EXCLUDED_CANDIDATE`) 시 Provider
+  호출 **0회** 확인.
+- `relevant=false` 또는 `items=[]` 또는 전체 Item invalid(`EXCLUDED_OUTPUT_VALIDATION`) 시 저장
+  Item **0개**, 재전달 시 Provider 재호출 **0회** 확인.
+- OWNER 응답에 `senderMemberId`/`messageId`/닉네임 필드 자체가 존재하지 않음(DTO 구조 + MockMvc 재확인).
+
+## G. Distinct Sender Aggregation — EXECUTED (실제 실행)
+
+`RestaurantFeedbackInsightOwnerQueryIntegrationTest`, 13개 시나리오 전부 실행·통과. (내용은 이전과 동일,
+이번 세션에서 재실행해 재확인.)
+
+- 동일 sender 1명이 동일 집계 키에 3회 기여 → distinct=1 → OWNER 미노출.
+- 서로 다른 sender 3명 기여 → OWNER 노출, `count=3`(distinct sender 수).
+- sender A(3건)+B(4건)+C(1건) 총 8건 메시지 → distinct 3명 → `count=3`.
+- `aspectType`/`opinionType`/`sentiment` 중 하나만 달라도 별도 그룹으로 분리.
+- 서로 다른 `restaurantId` 결과가 섞이지 않음.
+- 최근 7일 이내만 포함, 7일 밖(8일 전) sender는 집계에서 제외됨을 확인.
+- v1/v2 공존 시 `activePromptVersion=v2`만 집계되고 v1은 무시됨을 확인.
+- 본인 소유 식당 조회 성공, 타 OWNER 조회 `ACCESS_DENIED` 거부, 존재하지 않는 식당 `RESTAURANT_ID_NOT_FOUND` 거부.
+- OWNER Controller 응답 JSON에 `senderMemberId`/`messageId`/`nickname` 경로 자체가 없음을 MockMvc로 확인.
+
+## 전체 회귀 (Docker 활성화 후 실제 실행)
+
+`./gradlew :test`(프로젝트 메인 모듈) — **932개 중 928개 통과, 4개 실패, 64개 skip.**
+
+이전 세션에서 Docker 미탑재로 실패했던 5건(`ChatModerationConsumerIntegrationTest`,
+`ChatModerationDltPublishFailureIntegrationTest`, `ChatMessageOutboxProcessorIntegrationTest`,
+`RestaurantInsightKafkaIntegrationTest`, `RestaurantInsightDltPublishFailureIntegrationTest`)은
+**전부 해소되어 PASS**로 전환됐다(단독 실행·전체 실행 모두 확인).
+
+남은 4건 실패는 `PaymentExpirationRepositoryTest`(1) / `SettlementAmountRepositoryTest`(3)이며, 원인은
+`BeanCreationException: ... 'jpaAuditingHandler': Cannot resolve reference to bean 'jpaMappingContext'`다.
+두 클래스 모두 **#277 변경 파일과 무관**(Payment/Settlement 도메인, `@DataJpaTest`)하고, 단독 실행 시
+매번 PASS했으며(`./gradlew :test --tests "com.bobfull.payment.repository.PaymentExpirationRepositoryTest" --tests "com.bobfull.payment.repository.SettlementAmountRepositoryTest"` → BUILD SUCCESSFUL),
+전체 suite를 두 번 반복 실행했을 때 동일한 4건이 동일하게 재현되는 것으로 보아 **전체 suite 실행 시의
+Spring Test Context 캐시/리소스 경합으로 인한 기존 테스트 격리 문제**로 판단한다. #277 파일 Diff에 이
+두 클래스나 관련 Payment/Settlement 코드가 전혀 포함되지 않으므로 #277 회귀는 아니다.
+
+`./gradlew clean build -x test` 성공. `git diff --check` 통과.
+
+## Kafka/설정 명시
+
+- source topic: `${bobfull.kafka.chat-message.topic:bobfull.chat.message-created.v1}`(기존 유지)
+- Moderation group: `bobfull-chat-moderation`(기존 유지)
+- Insight group: staging `bobfull-restaurant-insight-staging`, production `bobfull-restaurant-insight-production`(환경별 분리)
+- Insight DLT: `${bobfull.kafka.restaurant-insight.dlt-topic:bobfull.restaurant-insight.dlt.v1}`(Moderation DLT와 분리)
+- Production 기본값: `bobfull.kafka.restaurant-insight.consumer-enabled=false`,
+  `bobfull.ai.restaurant-insight.enabled=false`(둘 다 OFF가 기본)
+- Evidence C에 사용한 실제 broker: 로컬 `docker-compose.yml`의 `kafka` 서비스(`apache/kafka:3.9.0`,
+  container `bobfull-kafka`, `localhost:9092`) — staging/운영 broker 아님
+
+## 한계
+
+- Concurrent Provider exactly-once는 검증 대상이 아니며 보장하지 않는다. DB 최종 결과 수렴(UNIQUE
+  경쟁 후 단일 row)만 보장 범위다.
+- Evidence C의 §C-2(기존 retained 59건 raw 소비)는 Kafka 레벨 backfill 메커니즘만 증명하며, 그
+  messageId들이 이번 세션 격리 H2 DB에 없어 Analysis/Item 생성까지 연결하지 않았다. Analysis/Item
+  생성까지 포함한 전체 파이프라인 증명은 §C-3(합성 Fixture)에서 별도로 수행했다.
+- Candidate Gate의 Frozen Dataset은 16건 규모의 합성 데이터이며 accuracy/precision/recall을
+  주장하지 않는다.
+- Production에서 Restaurant Insight는 여전히 비활성 상태이며, 이 Evidence는 이 상태를 바꾸지 않는다.
+- 실제 OpenAI Provider 호출 품질은 검증 대상이 아니다. `RestaurantFeedbackInsightPort`를 Fake로
+  대체해 결정적으로 검증했다.
+- 남은 4건의 Payment/Settlement 테스트 실패는 #277과 무관한 기존 테스트 스위트의 전체 실행 시
+  격리 문제로 판단하며, 이번 Issue 범위에서 수정하지 않았다(범위 밖 변경).

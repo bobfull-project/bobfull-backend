@@ -6,6 +6,9 @@ import com.bobfull.kafka.exception.InvalidChatMessageEventException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
@@ -27,5 +30,16 @@ public class ChatModerationConsumerErrorHandlingConfig {
                 new FixedBackOff(retryBackoffMs, retriesAfterFirstAttempt));
         errorHandler.addNotRetryableExceptions(CustomException.class, InvalidChatMessageEventException.class);
         return errorHandler;
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<Object, Object> chatModerationKafkaListenerContainerFactory(
+            ConsumerFactory<Object, Object> consumerFactory,
+            @Qualifier("chatModerationErrorHandler") CommonErrorHandler errorHandler
+    ) {
+        ConcurrentKafkaListenerContainerFactory<Object, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory);
+        factory.setCommonErrorHandler(errorHandler);
+        return factory;
     }
 }

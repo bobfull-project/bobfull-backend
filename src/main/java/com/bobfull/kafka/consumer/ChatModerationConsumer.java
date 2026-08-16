@@ -24,6 +24,7 @@ public class ChatModerationConsumer {
     @KafkaListener(
             topics = "${bobfull.kafka.chat-message.topic:bobfull.chat.message-created.v1}",
             groupId = "${spring.kafka.consumer.group-id:bobfull-chat-moderation}",
+            containerFactory = "chatModerationKafkaListenerContainerFactory",
             concurrency = "${bobfull.kafka.chat-message.consumer-concurrency:1}"
     )
     public void onChatMessageCreated(ChatMessageCreatedEvent event) {
