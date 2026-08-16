@@ -259,6 +259,7 @@ required_parameters=(
 optional_parameters=(
   "REDIS_PORT:redis-port"
   "REDIS_SSL_ENABLED:redis-ssl-enabled"
+  "DB_POOL_MAX_SIZE:db-pool-max-size"
   "AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS:auth-refresh-token-expiration-seconds"
   "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
   "JPA_DDL_AUTO:jpa-ddl-auto"
