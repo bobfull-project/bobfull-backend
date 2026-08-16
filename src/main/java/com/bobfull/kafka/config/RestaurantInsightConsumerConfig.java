@@ -5,6 +5,7 @@ import com.bobfull.kafka.consumer.RestaurantInsightDltRecoverer;
 import com.bobfull.kafka.exception.InvalidChatMessageEventException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.kafka.autoconfigure.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -21,8 +22,15 @@ public class RestaurantInsightConsumerConfig {
         handler.addNotRetryableExceptions(CustomException.class, InvalidChatMessageEventException.class); return handler;
     }
     @Bean
-    ConcurrentKafkaListenerContainerFactory<Object, Object> restaurantInsightKafkaListenerContainerFactory(ConsumerFactory<Object, Object> consumerFactory, @Qualifier("restaurantInsightErrorHandler") CommonErrorHandler errorHandler) {
+    ConcurrentKafkaListenerContainerFactory<Object, Object> restaurantInsightKafkaListenerContainerFactory(
+            ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
+            ConsumerFactory<Object, Object> consumerFactory,
+            @Qualifier("restaurantInsightErrorHandler") CommonErrorHandler errorHandler) {
+        // configurer.configure()가 spring.kafka.listener.*(ack-mode 등) 공통 설정을 먼저 적용한 뒤,
+        // Insight 전용 ErrorHandler만 override한다.
         ConcurrentKafkaListenerContainerFactory<Object, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory); factory.setCommonErrorHandler(errorHandler); return factory;
+        configurer.configure(factory, consumerFactory);
+        factory.setCommonErrorHandler(errorHandler);
+        return factory;
     }
 }

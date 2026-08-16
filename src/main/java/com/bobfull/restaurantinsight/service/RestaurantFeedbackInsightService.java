@@ -38,8 +38,9 @@ public class RestaurantFeedbackInsightService {
     private final TimeSlotRepository timeSlots; private final SharedTableRepository tables; private final RestaurantRepository restaurants;
     private final RestaurantFeedbackInsightRepository insights; private final RestaurantInsightCandidateGate candidateGate;
     private final RestaurantInsightPrivacyValidator privacyValidator; private final ObjectProvider<RestaurantFeedbackInsightPort> provider; private final Clock clock; private final String activePromptVersion;
-    public RestaurantFeedbackInsightService(ChatMessageRepository messages, ChatRoomRepository rooms, ReservationRepository reservations, TimeSlotRepository timeSlots, SharedTableRepository tables, RestaurantRepository restaurants, RestaurantFeedbackInsightRepository insights, RestaurantInsightCandidateGate candidateGate, RestaurantInsightPrivacyValidator privacyValidator, ObjectProvider<RestaurantFeedbackInsightPort> provider, Clock clock, @Value("${bobfull.restaurant-feedback.active-prompt-version:restaurant-feedback-v1}") String activePromptVersion) {
-        this.messages=messages; this.rooms=rooms; this.reservations=reservations; this.timeSlots=timeSlots; this.tables=tables; this.restaurants=restaurants; this.insights=insights; this.candidateGate=candidateGate; this.privacyValidator=privacyValidator; this.provider=provider; this.clock=clock; this.activePromptVersion=activePromptVersion;
+    private final RestaurantFeedbackInsightWriter writer;
+    public RestaurantFeedbackInsightService(ChatMessageRepository messages, ChatRoomRepository rooms, ReservationRepository reservations, TimeSlotRepository timeSlots, SharedTableRepository tables, RestaurantRepository restaurants, RestaurantFeedbackInsightRepository insights, RestaurantInsightCandidateGate candidateGate, RestaurantInsightPrivacyValidator privacyValidator, ObjectProvider<RestaurantFeedbackInsightPort> provider, Clock clock, @Value("${bobfull.restaurant-feedback.active-prompt-version:restaurant-feedback-v1}") String activePromptVersion, RestaurantFeedbackInsightWriter writer) {
+        this.messages=messages; this.rooms=rooms; this.reservations=reservations; this.timeSlots=timeSlots; this.tables=tables; this.restaurants=restaurants; this.insights=insights; this.candidateGate=candidateGate; this.privacyValidator=privacyValidator; this.provider=provider; this.clock=clock; this.activePromptVersion=activePromptVersion; this.writer=writer;
     }
     @Transactional
     public void analyze(Long messageId) {
@@ -49,17 +50,25 @@ public class RestaurantFeedbackInsightService {
         if (privacyValidator.containsSensitiveIdentifier(message.getContent())) { saveExcluded(messageId, restaurantId, RestaurantFeedbackAnalysisStatus.EXCLUDED_INPUT_PII); return; }
         if (!candidateGate.isCandidate(message.getContent())) { saveExcluded(messageId, restaurantId, RestaurantFeedbackAnalysisStatus.EXCLUDED_CANDIDATE); return; }
         RestaurantFeedbackInsightPort activeProvider = provider.getIfAvailable();
-        if (activeProvider == null) return; // production default: listener/provider OFF, no source data change
+        if (activeProvider == null) {
+            // consumer-enabled=false인 Production 기본값에서는 Consumer Bean 자체가 없어 이 메서드가 호출되지
+            // 않는다. 반대로 consumer-enabled=true인데 ai.restaurant-insight.enabled=false로 Provider가 없는
+            // 설정 오류 상태에서 여기까지 도달하면, 조용히 offset을 커밋시키지 않고 기술 실패로 재시도/DLT되게 한다.
+            throw new IllegalStateException(
+                    "Restaurant Insight consumer is enabled but no RestaurantFeedbackInsightPort bean is configured");
+        }
         RestaurantFeedbackInsightPort.Result result = activeProvider.analyze(message.getContent());
         if (result.analysis() == null) throw new IllegalStateException("Insight structured output analysis is missing");
         java.util.List<com.bobfull.restaurantinsight.dto.RestaurantFeedbackAnalysis.Item> rawItems = !result.analysis().relevant() || result.analysis().items() == null ? java.util.List.of() : result.analysis().items();
         java.util.List<com.bobfull.restaurantinsight.dto.RestaurantFeedbackAnalysis.Item> validItems = rawItems.stream().filter(item -> item.category() != null && item.aspectType() != null && item.opinionType() != null && item.sentiment() != null && privacyValidator.isSafeAspect(item.normalizedAspect())).toList();
         RestaurantFeedbackInsight insight = validItems.isEmpty() ? RestaurantFeedbackInsight.excluded(messageId, restaurantId, activePromptVersion, clock.instant(), RestaurantFeedbackAnalysisStatus.EXCLUDED_OUTPUT_VALIDATION) : RestaurantFeedbackInsight.completed(messageId, restaurantId, activePromptVersion, result.provider(), result.modelName(), clock.instant());
         for (var item : validItems) insight.addItem(item.category(), item.aspectType(), privacyValidator.normalizeSafeAspect(item.normalizedAspect()), item.opinionType(), item.sentiment());
-        try { insights.saveAndFlush(insight); } catch (DataIntegrityViolationException exception) { if (insights.findByMessageIdAndPromptVersion(messageId, activePromptVersion).isEmpty()) throw exception; }
+        // writer.save()는 REQUIRES_NEW로 별도 트랜잭션에서 실행되므로, 동시 경쟁으로 인한 UNIQUE 위반이
+        // 이 메서드(및 호출자인 Kafka listener)의 트랜잭션을 rollback-only로 오염시키지 않는다.
+        try { writer.save(insight); } catch (DataIntegrityViolationException exception) { if (insights.findByMessageIdAndPromptVersion(messageId, activePromptVersion).isEmpty()) throw exception; }
     }
     private void saveExcluded(Long messageId, Long restaurantId, RestaurantFeedbackAnalysisStatus status) {
-        try { insights.saveAndFlush(RestaurantFeedbackInsight.excluded(messageId, restaurantId, activePromptVersion, clock.instant(), status)); }
+        try { writer.save(RestaurantFeedbackInsight.excluded(messageId, restaurantId, activePromptVersion, clock.instant(), status)); }
         catch (DataIntegrityViolationException exception) { if (insights.findByMessageIdAndPromptVersion(messageId, activePromptVersion).isEmpty()) throw exception; }
     }
     @Transactional(readOnly = true)

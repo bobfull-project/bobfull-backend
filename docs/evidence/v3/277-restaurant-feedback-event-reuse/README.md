@@ -207,7 +207,7 @@ Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개�
 
 ## 전체 회귀 (Docker 활성화 후 실제 실행)
 
-`./gradlew :test`(프로젝트 메인 모듈) — **932개 중 928개 통과, 4개 실패, 64개 skip.**
+`./gradlew :test`(프로젝트 메인 모듈) — **937개 중 933개 통과, 4개 실패, 65개 skip.**
 
 이전 세션에서 Docker 미탑재로 실패했던 5건(`ChatModerationConsumerIntegrationTest`,
 `ChatModerationDltPublishFailureIntegrationTest`, `ChatMessageOutboxProcessorIntegrationTest`,
@@ -221,6 +221,37 @@ Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개�
 전체 suite를 두 번 반복 실행했을 때 동일한 4건이 동일하게 재현되는 것으로 보아 **전체 suite 실행 시의
 Spring Test Context 캐시/리소스 경합으로 인한 기존 테스트 격리 문제**로 판단한다. #277 파일 Diff에 이
 두 클래스나 관련 Payment/Settlement 코드가 전혀 포함되지 않으므로 #277 회귀는 아니다.
+
+### PR 독립 리뷰 반영(재검증 완료)
+
+최초 Draft PR CI에서 `RestaurantInsightRealBrokerBackfillEvidenceTest`가 CI 환경(로컬 Docker broker
+없음)에서 `TimeoutException`으로 실패해 `932 tests / 5 failed`로 CI가 깨졌었다. 이 테스트는 이 프로젝트의
+로컬 개발용 `docker-compose.yml` Kafka broker(localhost:9092)가 실제로 떠 있을 때만 의미 있는 Evidence
+재현 테스트이므로, 기존 `Issue251Step0OpenAiBaselineTest`의 `@EnabledIfEnvironmentVariable` 관례를 따라
+`RESTAURANT_INSIGHT_LOCAL_BROKER_TEST=true`가 명시된 로컬 환경에서만 실행되도록 게이팅했다(기본/CI
+실행에서는 skip, 로컬에서 env var를 켜면 실제 재현 가능함을 재확인).
+
+같은 리뷰에서 지적된 3건의 MAJOR도 함께 수정하고 재검증했다.
+
+- 전용 `ConcurrentKafkaListenerContainerFactory`가 Boot의 `ConcurrentKafkaListenerContainerFactoryConfigurer`를
+  거치지 않아 `spring.kafka.listener.ack-mode: RECORD` 등 공통 설정이 Moderation/Insight 모두에 반영되지
+  않던 문제를 `configurer.configure(factory, consumerFactory)`로 고치고, `RestaurantInsightConsumerOnConfigurationTest`에
+  ack-mode/auto-startup이 실제로 적용됨을 확인하는 테스트를 추가해 재검증했다.
+- `RestaurantInsightPrivacyValidator`가 존칭 없는 실명("김철수"), 신체·복장 묘사가 결합된 직원 식별
+  표현("안경 쓴 남자 직원"), URL을 통과시키던 문제를 보강했다(일반 NLP 개체명 인식이 아닌 정규식/키워드
+  기반 방어선임을 명시). 계약과 다르던 허용 문자(`.,+` 대신 `- · / & ( )`)와 UTF-16 길이 기준
+  `{1,40}`(code point 기준 아님) 문제도 함께 고치고, `RestaurantInsightPrivacyValidatorTest`에 해당
+  케이스를 전부 추가해 재검증했다.
+- `consumer-enabled=true` + `ai.restaurant-insight.enabled=false`(Provider 없음) 설정 오류 상태에서
+  Event를 조용히 성공 처리(offset 커밋)하던 문제를 `IllegalStateException`을 던지도록 고쳐 Kafka
+  Retry/DLT 경계로 넘어가게 했다. `RestaurantFeedbackInsightServiceProviderMissingTest`(신규)로 재검증했다.
+- `RestaurantFeedbackInsightService`가 저장 시 `DataIntegrityViolationException`을 같은 트랜잭션에서
+  catch하던 것을, 별도 `RestaurantFeedbackInsightWriter` Bean의 `REQUIRES_NEW` 트랜잭션으로 분리해
+  동시 경쟁으로 진 호출자에게 `UnexpectedRollbackException`이 전파되지 않도록 고쳤다. 8-thread 동시
+  경쟁 테스트에 "모든 호출자가 예외 없이 종료"하는 단언을 추가해 재검증했다(기존에는 작업 스레드 예외를
+  무시했던 것을 실제로 단언하도록 강화).
+
+수정 후 `./gradlew :test` 재실행 결과는 위 937/933/4/65 수치에 반영돼 있다.
 
 `./gradlew clean build -x test` 성공. `git diff --check` 통과.
 

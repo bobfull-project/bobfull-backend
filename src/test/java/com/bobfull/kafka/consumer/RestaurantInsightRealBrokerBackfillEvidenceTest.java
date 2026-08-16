@@ -51,7 +51,14 @@ import org.springframework.test.context.ContextConfiguration;
  * {@code auto-startup=false}로 기동해 "Consumer가 없던 시점에 쌓인 Event"를 재현한 뒤,
  * 사전에 존재하지 않음을 확인한 신규 groupId로 Listener Container를 수동 시작해
  * earliest offset부터 Backfill이 실제로 일어나는지 확인한다.</p>
+ *
+ * <p>이 테스트는 CI에서 기동되지 않는, 이 프로젝트의 로컬 개발용 {@code docker-compose.yml}
+ * Kafka broker(localhost:9092)가 실제로 떠 있을 때만 실행하는 Evidence 재현용 테스트다.
+ * {@code RESTAURANT_INSIGHT_LOCAL_BROKER_TEST=true} 환경변수를 명시적으로 설정한 로컬
+ * 환경에서만 활성화되며(기존 {@code Issue251Step0OpenAiBaselineTest}의
+ * {@code @EnabledIfEnvironmentVariable} 관례를 따름), CI를 포함한 기본 실행에서는 스킵된다.</p>
  */
+@org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RESTAURANT_INSIGHT_LOCAL_BROKER_TEST", matches = "true")
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:restaurant-insight-real-broker-backfill-it;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver",
@@ -117,8 +124,9 @@ class RestaurantInsightRealBrokerBackfillEvidenceTest {
     @Test
     void 실제_로컬_Docker_Kafka_broker에서_Offset_없는_신규_group이_retention_범위_안의_Event를_Backfill한다() {
         // given: Insight Listener Container를 명시적으로 멈춰 "Consumer가 없던 시점"을 재현한 뒤
-        // 합성 Event 5건을 먼저 쌓아둔다. (custom ContainerFactory는 spring.kafka.listener.auto-startup을
-        // 적용하지 않아 context startup 시 이미 실행 중일 수 있으므로 명시적으로 stop한다.)
+        // 합성 Event 5건을 먼저 쌓아둔다. ContainerFactory는 Boot의
+        // ConcurrentKafkaListenerContainerFactoryConfigurer를 거치므로 spring.kafka.listener.auto-startup=false가
+        // 정상 적용되지만, 방어적으로 실행 중이면 한 번 더 멈춘다.
         assertThat(registry.getListenerContainers()).hasSize(1);
         MessageListenerContainer insightContainer = registry.getListenerContainers().iterator().next();
         if (insightContainer.isRunning()) {

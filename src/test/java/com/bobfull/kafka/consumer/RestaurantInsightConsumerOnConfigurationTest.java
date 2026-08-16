@@ -58,6 +58,19 @@ class RestaurantInsightConsumerOnConfigurationTest {
         assertThat(containers).allMatch(ConcurrentMessageListenerContainer.class::isInstance);
     }
 
+    // 리뷰 지적(MAJOR): 전용 ContainerFactory가 직접 new된 팩토리라 Boot의
+    // ConcurrentKafkaListenerContainerFactoryConfigurer(spring.kafka.listener.* 공통 설정)를 거치지 않으면
+    // ack-mode/auto-startup 같은 공통 설정이 두 Consumer 모두에 반영되지 않는다. 재검증한다.
+    @Test
+    void 전용_ContainerFactory도_공통_listener_속성을_적용받는다() {
+        Collection<MessageListenerContainer> containers = registry.getListenerContainers();
+        for (MessageListenerContainer container : containers) {
+            var props = ((ConcurrentMessageListenerContainer<?, ?>) container).getContainerProperties();
+            assertThat(props.getAckMode()).isEqualTo(org.springframework.kafka.listener.ContainerProperties.AckMode.RECORD);
+        }
+        assertThat(containers).allMatch(c -> !c.isAutoStartup());
+    }
+
     @Test
     void insight_전용_Consumer_Bean이_정상_주입된다() {
         assertThat(insightConsumer).isNotNull();

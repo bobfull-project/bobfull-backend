@@ -19,8 +19,40 @@ class RestaurantInsightPrivacyValidatorTest {
     }
 
     @Test
-    void aspect는_NFKC와_공백을_정규화하고_40자를_초과하면_제외한다() {
+    void aspect는_NFKC와_공백을_정규화하고_40_code_point를_초과하면_제외한다() {
         assertThat(validator.normalizeSafeAspect("  탕수육　 맛  ")).isEqualTo("탕수육 맛");
         assertThat(validator.normalizeSafeAspect("가".repeat(41))).isNull();
+        assertThat(validator.normalizeSafeAspect("가".repeat(40))).isNotNull();
+    }
+
+    // 리뷰 지적(MAJOR): 존칭 없는 실명, 신체·복장 묘사가 결합된 직원 식별 표현, URL을 차단해야 한다.
+    @Test
+    void 특정_인물_이름과_직원_식별_표현을_차단한다() {
+        assertThat(validator.isSafeAspect("김철수")).isFalse();
+        assertThat(validator.isSafeAspect("안경 쓴 남자 직원")).isFalse();
+        assertThat(validator.isSafeAspect("창가의 모자 쓴 직원")).isFalse();
+        assertThat(validator.isSafeAspect("박수민씨")).isFalse();
+        // "직원 응대"처럼 인상착의 묘사 없이 일반화된 표현은 계속 허용한다.
+        assertThat(validator.isSafeAspect("직원 응대")).isTrue();
+        assertThat(validator.isSafeAspect("직원 친절")).isTrue();
+    }
+
+    @Test
+    void URL과_계정_식별자가_포함된_문장은_Provider_전송에서_제외한다() {
+        assertThat(validator.containsSensitiveIdentifier("메뉴는 www.example.com/menu에서 보세요")).isTrue();
+        assertThat(validator.containsSensitiveIdentifier("자세한건 http://example.com 참고")).isTrue();
+        assertThat(validator.containsSensitiveIdentifier("아이디 abc123으로 문의주세요")).isTrue();
+    }
+
+    @Test
+    void 계약이_허용한_기호만_aspect에서_허용한다() {
+        assertThat(validator.isSafeAspect("한식/양식")).isTrue();
+        assertThat(validator.isSafeAspect("스테이크(미디엄)")).isTrue();
+        assertThat(validator.isSafeAspect("A&B 세트")).isTrue();
+        assertThat(validator.isSafeAspect("중간점 · 표기")).isTrue();
+        // 계약에 없는 기호(.,+)는 더 이상 허용하지 않는다.
+        assertThat(validator.isSafeAspect("가격+할인")).isFalse();
+        assertThat(validator.isSafeAspect("가성비.최고")).isFalse();
+        assertThat(validator.isSafeAspect("맛,가격")).isFalse();
     }
 }

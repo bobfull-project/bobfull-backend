@@ -247,19 +247,22 @@ class RestaurantFeedbackInsightServiceIntegrationTest {
 
     // A9: 완전히 동시에 시작한 duplicate processing도 DB UNIQUE로 최종 결과가 정상 수렴한다.
     // (Concurrent Provider exactly-once는 보장 대상이 아니며, DB에 남는 최종 row 수렴만 검증한다.)
+    // 리뷰 지적(MAJOR) 재검증: 저장을 REQUIRES_NEW로 분리했으므로, 경쟁에서 진 호출도 예외 없이
+    // 정상 종료해야 한다(UnexpectedRollbackException이 호출자까지 전파되면 안 됨).
     @Test
-    void 동시_중복_처리도_최종적으로_Analysis와_Item이_중복없이_수렴한다() throws InterruptedException {
+    void 동시_중복_처리도_최종적으로_Analysis와_Item이_중복없이_수렴하고_호출자에게_예외가_전파되지_않는다() throws InterruptedException {
         Long id = fixture("탕수육 맛 좋아요");
         int threadCount = 8;
         CountDownLatch ready = new CountDownLatch(threadCount);
         CountDownLatch start = new CountDownLatch(1);
+        java.util.List<Throwable> unexpectedFailures = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
         ExecutorService pool = Executors.newFixedThreadPool(threadCount);
         try {
             for (int i = 0; i < threadCount; i++) {
                 pool.submit(() -> {
                     ready.countDown();
                     try { start.await(10, TimeUnit.SECONDS); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-                    try { service.analyze(id); } catch (Exception ignored) { /* 경쟁 예외는 DB 수렴 검증 대상이 아님 */ }
+                    try { service.analyze(id); } catch (Throwable failure) { unexpectedFailures.add(failure); }
                 });
             }
             ready.await(10, TimeUnit.SECONDS);
@@ -269,6 +272,7 @@ class RestaurantFeedbackInsightServiceIntegrationTest {
             pool.awaitTermination(15, TimeUnit.SECONDS);
         }
 
+        assertThat(unexpectedFailures).isEmpty();
         assertThat(analyses.findAll()).hasSize(1);
         assertThat(analyses.count()).isEqualTo(1);
         // 저장된 단일 Analysis의 Item만 존재하고 중복 Item이 없다.
