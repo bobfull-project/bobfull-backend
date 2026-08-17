@@ -21,7 +21,8 @@ const evidence = {
   splitMessage: ref("#266 Split Message Moderation", "../../../evidence/v3/266-split-message-moderation/README.md"),
   /* PR #275(docs-only)가 develop에 merge되면서 #274 Evidence 파일이 이 저장소 경로에 생겼다 —
      link 없는 caption(refPlain)에서 실제 상대 경로 link로 교체했다. */
-  outboxAsyncVsKafka: ref("#274 Outbox+Async vs Outbox+Kafka Controlled Comparison", "../../../evidence/v3/274-outbox-async-vs-kafka/README.md")
+  outboxAsyncVsKafka: ref("#274 Outbox+Async vs Outbox+Kafka Controlled Comparison", "../../../evidence/v3/274-outbox-async-vs-kafka/README.md"),
+  restaurantInsight: ref("#277 Restaurant Feedback Insight Evidence", "../../../evidence/v3/277-restaurant-feedback-event-reuse/README.md")
 };
 /* committedNodes: 현재 active path에 없어도 여전히 유효한(dim과 구별되는) 이미 커밋된 노드.
    badge: 특정 노드 옆에 짧은 텍스트 배지(성능 수치 등)를 표시한다. */
@@ -585,23 +586,26 @@ const aiModerationJourneyTopology = {
   nodes: [
     ["client", "Client"], ["web", "Web / STOMP"], ["app", "Application"], ["db", "ChatMessage"],
     ["outbox", "Outbox Event"], ["processor", "Outbox Processor"], ["scheduler", "Scheduler"],
-    ["kafka", "Kafka"], ["consumer", "AI Consumer"],
+    ["kafka", "Kafka"], ["consumer", "AI Consumer"], ["insightConsumer", "Restaurant Insight Consumer"],
     ["ai-rule", "Rule Filter"], ["ai-fast", "Fast Path"], ["ai-context", "최근 메시지 문맥"],
     ["ai-llm", "LLM"], ["ai-validator", "Validator"], ["ai-modDb", "Moderation DB"]
   ],
   nodePositions: {
     client: [25, 190], web: [180, 190], app: [335, 190], db: [500, 190],
     outbox: [620, 190], processor: [670, 55], scheduler: [620, 290],
-    kafka: [825, 55], consumer: [980, 55],
+    kafka: [825, 55], consumer: [980, 55], insightConsumer: [980, 370],
     "ai-rule": [900, 200], "ai-fast": [1050, 130], "ai-context": [1050, 280],
     "ai-llm": [1200, 280], "ai-validator": [1350, 200], "ai-modDb": [1350, 360]
   },
-  nodeSublabels: { outbox: "PENDING", "ai-context": "쪼개 보내기 우회 탐지" },
-  secondaryNodes: ["scheduler"],
+  nodeSublabels: { outbox: "PENDING", "ai-context": "쪼개 보내기 우회 탐지", insightConsumer: "Restaurant Insight(Group B) · 별도 Chapter" },
+  secondaryNodes: ["scheduler", "insightConsumer"],
   dashedEdges: ["scheduler-outbox"],
   edges: {
     request: "M125 225 H180", "request-app": "M280 225 H335", persist: "M435 225 H500",
     "outbox-processor": "M670 190 V150 H720 V125", "processor-kafka": "M770 90 H825", "kafka-consume": "M925 90 H980",
+    /* Kafka Topic/Event Schema는 그대로 두고, 같은 이벤트를 Restaurant Insight Consumer Group이
+       독립적으로 재사용하는 fan-out만 별도 edge로 보여준다(#277) — 상세 흐름은 별도 Chapter에서 다룬다. */
+    "kafka-consume-insight": "M875 125 V405 H980",
     "scheduler-outbox": "M670 290 V260",
     /* AI Consumer 박스 아래로 내려가 Rule Filter로 이어진다 — "박스 안으로 들어가는" 지점. */
     "consumer-rule": "M1030 125 V160 H950 V200",
@@ -612,7 +616,8 @@ const aiModerationJourneyTopology = {
   },
   labels: {
     "outbox-processor": [685, 165], "processor-kafka": [750, 145],
-    "rule-fast": [995, 192], "rule-context": [990, 318]
+    "rule-fast": [995, 192], "rule-context": [990, 318],
+    "kafka-consume-insight": [790, 260]
   },
   regions: [
     { label: "핵심 요청", x: 10, y: 175, w: 445, h: 100 },
@@ -722,11 +727,21 @@ public class ChatModerationConsumer {
         }
     }` },
       evidenceReferences: [evidence.pipeline, evidence.moderation] }),
+  /* #277 — 같은 ChatMessageCreatedEvent를 별도 Consumer Group(Restaurant Feedback Insight)이
+     독립적으로 재사용하는 fan-out만 여기서 짧게 보여준다. 상세 Candidate/Privacy Gate·AI 구조화·
+     Canonicalization·5-field 집계는 이 Chapter를 복잡하게 만들지 않기 위해 별도 Chapter(Ch8)에서
+     다룬다 — 이 Step은 "독립 fan-out"이라는 개념만 전달한다. */
+  step("kafka-fanout", "Kafka", "Consumer Group 분리", "◆ 같은 이벤트를 서로 다른 Consumer Group이 독립적으로 재사용합니다", "Kafka Topic·Event Schema는 그대로입니다 — bobfull.chat.message-created.v1 토픽 하나를 Moderation Consumer Group과 Restaurant Insight Consumer Group이 각자 독립적인 offset·Retry·DLT 경계로 가져갑니다. 이 Chapter는 계속 Moderation(Group A) 내부만 확대해서 봅니다 — Restaurant Insight(Group B) 상세 흐름은 별도 Chapter에서 다룹니다.",
+    { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey",
+      visual: visual(["kafka", "consumer", "insightConsumer"], ["kafka-consume-insight"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor"], null, { "kafka-consume-insight": "Group B: Restaurant Insight" }),
+      codeReferences: ["ChatModerationConsumer.onChatMessageCreated", "RestaurantFeedbackInsightConsumer.onChatMessageCreated"],
+      limits: "Restaurant Insight Consumer는 Production 기본값이 OFF다(RESTAURANT_INSIGHT_AI_ENABLED=false, KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED=false) — 이 fan-out은 켜졌을 때 기준이다.",
+      evidenceReferences: [evidence.restaurantInsight, evidence.pipeline] }),
   step("zoom-focus", "AI Consumer", "내부 판정 로직", "◆ Kafka에서 메시지를 받은 AI Consumer가 실제 채팅 검수 절차를 시작합니다", "AI Consumer가 메시지를 받으면 내부적으로 어떤 순서로 판단하는지 확대해서 봅니다 — 명백한 경우는 규칙만으로 즉시 걸러내고, 애매한 경우에만 AI에게 맡기는 구조입니다.",
     { factStatus: FACT.DESIGN, topologyKey: "ai-moderation-journey",
-      visual: visual(["ai-rule"], ["consumer-rule"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"]) }),
+      visual: visual(["ai-rule"], ["consumer-rule"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "insightConsumer"]) }),
   step("rule-check", "ModerationRuleFilter", "clearFlagged()", "◆ Rule Filter가 먼저 욕설·스팸·개인정보의 명확한 패턴과 일치하는지 확인합니다", "명백한 개인 전화번호+개인 문맥, 정확한 욕설 패턴, 명백한 투자/리딩방/대출 스팸 같은 고신뢰 표현만 이 규칙이 처리한다.",
-    { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey", visual: visual(["ai-rule"], [], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"]),
+    { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey", visual: visual(["ai-rule"], [], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "insightConsumer"]),
       codeReferences: ["ModerationRuleFilter.clearFlagged"],
       codeSnippet: { file: "ModerationRuleFilter.java", method: "ModerationRuleFilter.clearFlagged()", code: `public Optional<ModerationResult> clearFlagged(String content) {
     if (isPromptInjectionCandidate(content)) return Optional.empty();
@@ -746,16 +761,16 @@ public class ChatModerationConsumer {
 }` , annotations: [{"from": 11, "to": 13, "text": "핵심: 서로 다른 종류의 신호가 동시에 잡히거나 정확히 하나로 확정되지 않으면 규칙으로 끝내지 않고 AI 판단에 위임한다."}, {"from": 14, "to": 16, "text": "확실한 한 가지에만 해당할 때 AI 호출 없이 즉시 위반으로 확정한다."}]} }),
   step("rule-hit", "ModerationRuleFilter", "Validator", "✓ 명백한 욕설·스팸·개인정보는 Rule Filter가 즉시 판정해 LLM 호출을 생략합니다", "너무 명확한 위반이라 AI(OpenAI)에게 물어보지 않고 바로 판정했다 — AI 호출 0회.",
     { factStatus: FACT.VERIFIED, topologyKey: "ai-moderation-journey",
-      visual: visual(["ai-rule", "ai-fast", "ai-validator"], ["rule-fast", "fast-validator"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"], null, { "rule-fast": "확실한 위반" }),
+      visual: visual(["ai-rule", "ai-fast", "ai-validator"], ["rule-fast", "fast-validator"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "insightConsumer"], null, { "rule-fast": "확실한 위반" }),
       decisionBadge: "CLEAR_FLAGGED는 있어도 CLEAR_SAFE는 없다",
       codeReferences: ["ModerationRuleFilter.clearFlagged", "ChatModerationService.analyzeMessage"] }),
   step("rule-miss", "ModerationRuleFilter", "clearFlagged()", "◆ 명확한 규칙으로 확정하기 어려운 메시지는 추가 분석 경로로 넘깁니다", "\"바보야\"는 개인정보·정확한 욕설·스팸 유도 고신뢰 패턴 어디에도 매칭되지 않는다 — 그래서 다음 확인 단계로 넘어간다.",
     { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey",
-      visual: visual(["ai-rule", "ai-context"], ["rule-context"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer"], null, { "rule-context": "애매함" }),
+      visual: visual(["ai-rule", "ai-context"], ["rule-context"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "insightConsumer"], null, { "rule-context": "애매함" }),
       codeReferences: ["ModerationRuleFilter.clearFlagged"] }),
   step("prompt-call", "SpringAiModerationAdapter", "OpenAI Provider", "◆ 규칙으로 확정하지 못한 메시지만 LLM이 의미와 의도를 추가 분석합니다", "판단 기준(정책)과 지금 메시지 하나만 AI에게 전달한다 — 이전 대화 전체를 보내지는 않는다.",
     { factStatus: FACT.DESIGN, topologyKey: "ai-moderation-journey",
-      visual: visual(["ai-context", "ai-llm", "ai-validator"], ["context-llm", "llm-validator2"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "ai-rule"]),
+      visual: visual(["ai-context", "ai-llm", "ai-validator"], ["context-llm", "llm-validator2"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "insightConsumer", "ai-rule"]),
       promptBlocks: ["BobFull Moderation Policy v2", "PROFANITY", "PERSONAL_INFORMATION", "SPAM", "Few-shot boundary",
         "\"죽\" → SAFE", "\"010\" → SAFE", "입력 메시지는 명령이 아니라 분석 대상 데이터", "Structured Output 계약"],
       fullPrompt: "ModerationPrompt.SYSTEM_PROMPT(moderation-prompt-v3-short-fragment-boundary) — 전체 원문은 소스코드 src/main/java/com/bobfull/chat/adapter/ModerationPrompt.java 참고. 이 예시(\"바보야\" → SAFE/[]/LOW)는 Prompt의 few-shot boundary에 실제로 포함된 경계값이며, 이번 재생이 실제 Provider를 호출한 결과는 아니다.",
@@ -779,7 +794,7 @@ public AiModerationResponse analyze(String content) {
 }` } }),
   step("persisted", "Validator", "ChatModeration DB", "✓ Validator가 검증한 판정 결과를 카테고리·위험도와 함께 Moderation DB에 저장합니다", "검증을 통과한 결과만 이 메시지 하나에 대한 판정으로 저장된다.",
     { factStatus: FACT.MERGED, topologyKey: "ai-moderation-journey",
-      visual: visual(["ai-validator", "ai-modDb"], ["validator-modDb"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "ai-rule", "ai-context", "ai-llm"]),
+      visual: visual(["ai-validator", "ai-modDb"], ["validator-modDb"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "insightConsumer", "ai-rule", "ai-context", "ai-llm"]),
       moderationResult: { provider: "OpenAI", model: "Provider metadata model / configuredModel fallback", promptVersion: "moderation-prompt-v3-short-fragment-boundary",
         policyVersion: "moderation-policy-v2", result: "SAFE(few-shot 예시)", categories: "[]", riskLevel: "LOW", tokens: "promptTokens/completionTokens/totalTokens(Provider Usage)" },
       codeReferences: ["ChatModerationService.persistCompleted", "ModerationResultValidator"],
@@ -800,7 +815,7 @@ public AiModerationResponse analyze(String content) {
 }` } }),
   step("zoom-out", "AI Consumer", "전체 파이프라인", "✓ AI 검수가 끝나 전체 파이프라인 관점에서 처리 완료 상태로 돌아갑니다", "AI 검수가 끝나면 전체 파이프라인 관점에서 이 메시지의 처리가 모두 끝난 상태로 보입니다.",
     { factStatus: FACT.DESIGN, topologyKey: "ai-moderation-journey",
-      visual: visual([], [], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "ai-rule", "ai-fast", "ai-context", "ai-llm", "ai-validator", "ai-modDb"]) })
+      visual: visual([], [], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "processor", "kafka", "consumer", "insightConsumer", "ai-rule", "ai-fast", "ai-context", "ai-llm", "ai-validator", "ai-modDb"]) })
 ];
 
 const stageLabels1 = ["결제·예약 확정", "채팅방 생성 시도", "실패 발생", "최종 결과"];
@@ -1187,6 +1202,159 @@ const outboxComparisonSteps = [
   step("reliability-recap", "공통 Reliability Lane", "Signal vs Scheduler", "✓ Signal은 빠른 경로, Scheduler는 복구 경로입니다", "Signal은 빠르게 실행하기 위한 경로이고, Scheduler는 놓친 작업을 복구하기 위한 경로입니다 — 세 사례 모두 이 두 경로를 함께 갖습니다.",
     { factStatus: FACT.DESIGN, topologyKey: "outbox-comparison",
       visual: visual(["scheduler", "common"], ["scheduler-common"], "retry", "completed", "core", ["commit", "aftercommit", "proc1", "svc1", "res1", "proc2", "exec2", "res2", "proc3", "exec3", "res3", "consumer3"]) })
+];
+
+
+/* ===== Ch8 — 채팅 이벤트 재사용 → 식당 운영 인사이트(#277) 전용 topology/step.
+   Kafka Topic·ChatMessageCreatedEvent Schema를 바꾸지 않고, Moderation과 완전히 독립된
+   Consumer Group(Restaurant Feedback Insight)이 같은 이벤트를 재사용해 식당 운영 인사이트를
+   만든다. 실제 구현(RestaurantFeedbackInsightService/Consumer/Repository/Canonicalizer/Gate)과
+   Evidence(docs/evidence/v3/277-restaurant-feedback-event-reuse/README.md)를 직접 대조해 작성
+   했다 — restaurantId는 Kafka Event에 추가되지 않았고, messageId → ChatRoom → Reservation →
+   TimeSlot → SharedTable → Restaurant로 기존 DB 관계에서 역추적한다. Production 기본값은
+   consumer/AI 모두 OFF다. 왼쪽 공통 구간(Client~Outbox~Kafka)은 aiModerationJourneyTopology와
+   같은 좌표 관례를 재사용해 "같은 Outbox/Kafka 구조를 그대로 쓴다"는 것이 느껴지게 한다. */
+const restaurantInsightTopology = {
+  viewBox: "0 0 1720 480",
+  nodes: [
+    ["client", "Client"], ["web", "Web / STOMP"], ["app", "Application"], ["db", "ChatMessage"],
+    ["outbox", "Outbox Event"], ["kafka", "Kafka"],
+    ["consumerA", "Moderation Consumer"], ["consumerB", "Restaurant Insight Consumer"],
+    ["gate", "Candidate / Privacy Gate"], ["excluded", "제외 · AI 미호출"],
+    ["aiProvider", "AI Provider(Structured Output)"], ["canonicalizer", "Server Canonicalization"],
+    ["repository", "5-field + Distinct Sender 집계"], ["ownerCard", "OWNER Insight"]
+  ],
+  nodePositions: {
+    client: [25, 190], web: [180, 190], app: [335, 190], db: [500, 190], outbox: [650, 190], kafka: [800, 190],
+    consumerA: [800, 60], consumerB: [950, 190],
+    gate: [1100, 190], excluded: [1100, 330],
+    aiProvider: [1250, 190], canonicalizer: [1250, 330],
+    repository: [1400, 190], ownerCard: [1550, 190]
+  },
+  nodeSublabels: {
+    outbox: "PENDING", consumerA: "Group A(기존, 변경 없음)", consumerB: "Group B(신규)",
+    excluded: "EXCLUDED_INPUT_PII / EXCLUDED_CANDIDATE", repository: "MINIMUM_DISTINCT_SENDERS = 3",
+    ownerCard: "익명 집계만 노출"
+  },
+  secondaryNodes: ["consumerA", "excluded"],
+  dashedEdges: ["kafka-consumerA", "gate-excluded", "aiProvider-repository-bypass"],
+  edges: {
+    request: "M125 225 H180", "request-app": "M280 225 H335", persist: "M435 225 H500",
+    "db-outbox": "M600 225 H650", "outbox-kafka": "M750 225 H800",
+    "kafka-consumerA": "M850 190 V130",
+    "kafka-consumerB": "M900 225 H950",
+    "consumerB-gate": "M1050 225 H1100",
+    "gate-excluded": "M1150 260 V330",
+    "gate-aiProvider": "M1200 225 H1250",
+    "aiProvider-canonicalizer": "M1300 260 V330",
+    /* MENU / aspectType==ETC / opinionType==ETC — Canonicalizer를 거치지 않고 검증된 LLM
+       normalizedAspect를 그대로 유지한 채 바로 집계로 간다(자유 target 예외, #277 후속 수정). */
+    "aiProvider-repository-bypass": "M1350 205 H1400",
+    "canonicalizer-repository": "M1350 365 H1375 V245 H1400",
+    "repository-ownerCard": "M1500 225 H1550"
+  },
+  labels: {
+    "kafka-consumerA": [860, 160], "kafka-consumerB": [905, 210],
+    "gate-excluded": [1155, 295], "aiProvider-repository-bypass": [1355, 195]
+  },
+  regions: [
+    { label: "핵심 요청 · DB Transaction", x: 10, y: 175, w: 690, h: 100 },
+    { label: "Kafka Event Reuse(Fan-out)", x: 780, y: 40, w: 300, h: 230 },
+    { label: "Restaurant Insight Consumer 내부(#277)", x: 1080, y: 40, w: 620, h: 430, emphasis: true }
+  ]
+};
+const restaurantInsightSteps = [
+  step("insight-send", "Client", "ChatMessage + Outbox", "● 사용자가 식당에 대한 채팅 메시지를 보냅니다", "예: \"탕수육 맛있어요\", \"직원 친절했어요\" — 채팅 메시지는 평소와 똑같이 저장되고, 같은 트랜잭션에서 Outbox 이벤트가 PENDING으로 기록됩니다. 이 시점까지는 Restaurant Insight 기능과 관련된 어떤 코드도 실행되지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "restaurant-insight",
+      visual: visual(["client", "web", "app", "db", "outbox"], ["request", "request-app", "persist", "db-outbox"], "request", null, "core"),
+      nextAction: "Kafka로 발행하기",
+      codeReferences: ["ChatMessageCommandService.send"],
+      evidenceReferences: [evidence.pipeline] }),
+  step("insight-fanout", "Kafka", "Consumer Group 분리", "◆ 같은 ChatMessageCreatedEvent를 서로 다른 Consumer Group이 독립적으로 재사용합니다", "Kafka Topic(bobfull.chat.message-created.v1)과 Event Schema는 그대로입니다 — Moderation Consumer Group(bobfull-chat-moderation)과 Restaurant Insight Consumer Group이 각자 독립적인 offset·Retry·DLT 경계로 같은 이벤트를 가져갑니다.",
+    { factStatus: FACT.MERGED, topologyKey: "restaurant-insight",
+      visual: visual(["outbox", "kafka", "consumerA", "consumerB"], ["outbox-kafka", "kafka-consumerA", "kafka-consumerB"], "event", null, "kafka", ["client", "web", "app", "db"]),
+      codeReferences: ["RestaurantFeedbackInsightConsumer.onChatMessageCreated", "RestaurantInsightConsumerConfig"],
+      codeSnippet: { file: "RestaurantFeedbackInsightConsumer.java", method: "RestaurantFeedbackInsightConsumer.onChatMessageCreated()", code: `@Component
+@ConditionalOnProperty(prefix = "bobfull.kafka.restaurant-insight", name = "consumer-enabled", havingValue = "true")
+public class RestaurantFeedbackInsightConsumer {
+
+    private final RestaurantFeedbackInsightService insightService;
+
+    @KafkaListener(
+            topics = "\${bobfull.kafka.chat-message.topic:bobfull.chat.message-created.v1}",
+            groupId = "\${bobfull.kafka.restaurant-insight.group-id:bobfull-restaurant-insight-staging}",
+            containerFactory = "restaurantInsightKafkaListenerContainerFactory"
+    )
+    public void onChatMessageCreated(ChatMessageCreatedEvent event) {
+        if (event.eventVersion() != 1) {
+            throw new InvalidChatMessageEventException(
+                    "지원하지 않는 eventVersion입니다: " + event.eventVersion() + " messageId=" + event.messageId());
+        }
+        insightService.analyze(event.messageId());
+    }` , annotations: [{"from": 2, "to": 2, "text": "Production 기본값은 OFF다 — 이 Bean 자체가 존재하지 않는다(KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED=false)."}, {"from": 8, "to": 8, "text": "새 Topic이 아니라 기존 채팅 메시지 Topic을 그대로 구독한다 — Producer/Schema 변경 없음."}] },
+      limits: "ChatMessageCreatedEvent에는 restaurantId 필드가 추가되지 않았다 — Restaurant는 messageId로 ChatRoom→Reservation→TimeSlot→SharedTable→Restaurant를 거쳐 기존 DB 관계에서 역추적한다. Restaurant Insight Consumer는 Production 기본값이 OFF다(RESTAURANT_INSIGHT_AI_ENABLED=false, KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED=false).",
+      evidenceReferences: [evidence.restaurantInsight, evidence.pipeline] }),
+  step("insight-gate", "RestaurantInsightPrivacyValidator · RestaurantInsightCandidateGate", "PII / Candidate Gate", "◆ messageId로 원문을 조회한 뒤, PII와 후보 여부를 먼저 걸러냅니다", "messageId로 ChatMessage 원문을 조회한 뒤, 전화번호·이메일·특정 인물 지칭 같은 민감 정보가 있으면 EXCLUDED_INPUT_PII로 종료합니다. PII가 없어도 맛·서비스·가격 등 식당 피드백과 무관해 보이면 EXCLUDED_CANDIDATE로 종료해 AI Provider를 호출하지 않습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "restaurant-insight",
+      visual: visual(["consumerB", "gate"], ["consumerB-gate"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "kafka", "consumerA"]),
+      decisionBadge: "목적은 정확도 향상이 아니라 불필요한 AI 호출 절감",
+      codeReferences: ["RestaurantInsightPrivacyValidator.containsSensitiveIdentifier", "RestaurantInsightCandidateGate.isCandidate"],
+      limits: "정규식·키워드 기반 방어다 — 완전한 개체명 인식(NLP)을 보장하지 않는다.",
+      evidenceReferences: [evidence.restaurantInsight] }),
+  step("insight-ai", "AI Provider", "Structured Output", "◆ AI Provider가 메시지를 category/aspectType/normalizedAspect/opinionType/sentiment로 구조화합니다", "예: \"직원 친절했어요\" → category=SERVICE, aspectType=SERVICE, normalizedAspect=\"직원 친절함\", opinionType=FRIENDLINESS, sentiment=POSITIVE. 그런데 같은 의미라도 다른 사용자의 메시지에서는 normalizedAspect가 \"친절\", \"직원\"처럼 자유 문구로 서로 다르게 나올 수 있습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "restaurant-insight",
+      visual: visual(["gate", "aiProvider"], ["gate-aiProvider"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "kafka", "consumerA", "consumerB"], null, null, { aiProvider: "\"직원 친절함\"(A) · \"친절\"(B) · \"직원\"(C) — 같은 FRIENDLINESS" }),
+      codeReferences: ["RestaurantFeedbackInsightService.analyze"],
+      limits: "출력 검증(길이 40자 이하, 허용 문자, PII 재검사)을 통과하지 못하면 EXCLUDED_OUTPUT_VALIDATION으로 종료된다.",
+      evidenceReferences: [evidence.restaurantInsight] }),
+  step("insight-canonicalize", "RestaurantInsightAspectCanonicalizer", "Server Canonical Key", "◆ LLM의 자유 문구를 그대로 집계 Key로 쓰지 않고, 서버 Canonical Key로 수렴시킵니다", "opinionType=FRIENDLINESS로 의미가 이미 확정된 항목은 서버가 \"직원 응대\"라는 고정 문구로 바꿉니다 — \"직원 친절함\"/\"친절\"/\"직원\" 세 표현이 모두 FRIENDLINESS이므로 같은 Canonical Key(\"직원 응대\")로 수렴합니다. 실제 수동 E2E에서 이 Canonicalization이 없으면 세 표현이 서로 다른 집계 Key가 되어 distinct sender 3명 조건을 채우지 못하는 문제가 발견됐습니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "restaurant-insight",
+      visual: visual(["aiProvider", "canonicalizer"], ["aiProvider-canonicalizer"], "commit", "committed", "kafka", ["client", "web", "app", "db", "outbox", "kafka", "consumerA", "consumerB", "gate"], null, null, { canonicalizer: "직원 친절함 / 친절 / 직원 → \"직원 응대\"" }),
+      decisionBadge: "서로 다른 표현 3개 → Canonical Key 1개로 수렴",
+      codeReferences: ["RestaurantInsightAspectCanonicalizer.canonicalAspectFor"],
+      codeSnippet: { file: "RestaurantInsightAspectCanonicalizer.java", method: "RestaurantInsightAspectCanonicalizer.canonicalAspectFor()", code: `static String canonicalAspectFor(FeedbackOpinionType opinionType) {
+    return switch (opinionType) {
+        case FRIENDLINESS -> "직원 응대";
+        case SERVICE_SPEED -> "서비스 속도";
+        case PRICE_LEVEL -> "가격";
+        case CLEANLINESS -> "매장 청결";
+        case WAITING -> "대기 시간";
+        case TASTE -> "맛";
+        case TEXTURE -> "식감";
+        case SALTINESS -> "간";
+        case SPICINESS -> "매운맛";
+        case SWEETNESS -> "단맛";
+        case PORTION -> "양";
+        case FRESHNESS -> "신선도";
+        case TEMPERATURE -> "온도";
+        case ETC -> throw new IllegalArgumentException("ETC는 호출측에서 먼저 자유 target으로 제외해야 한다");
+    };
+}` },
+      evidenceReferences: [evidence.restaurantInsight] }),
+  step("insight-free-target", "RestaurantFeedbackInsightService", "자유 target 예외", "◆ MENU / aspectType=ETC / opinionType=ETC는 Canonicalization하지 않고 LLM 표현을 그대로 유지합니다", "탕수육·김치찌개처럼 실제 메뉴명을 구분해야 하는 MENU, 국물·반찬·소스처럼 서로 다른 대상일 수 있는 aspectType=ETC, 의미가 enum으로 확정되지 않는 opinionType=ETC는 검증된 LLM normalizedAspect를 그대로 유지합니다 — 그 외 의미가 enum으로 확정되는 항목만 서버 Canonical Key로 수렴합니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "restaurant-insight",
+      visual: visual(["aiProvider", "repository"], ["aiProvider-repository-bypass"], "event", null, "kafka", ["client", "web", "app", "db", "outbox", "kafka", "consumerA", "consumerB", "gate", "canonicalizer"]),
+      decisionBadge: "MENU / aspectType ETC / opinionType ETC만 예외 — 그 외는 Canonicalize",
+      codeReferences: ["RestaurantFeedbackInsightService.analyze"],
+      codeSnippet: { file: "RestaurantFeedbackInsightService.java", method: "RestaurantFeedbackInsightService.analyze()", code: `boolean keepLlmAspect = item.aspectType() == FeedbackAspectType.MENU
+        || item.aspectType() == FeedbackAspectType.ETC
+        || item.opinionType() == FeedbackOpinionType.ETC;
+String aggregationAspect = keepLlmAspect
+        ? item.normalizedAspect()
+        : RestaurantInsightAspectCanonicalizer.canonicalAspectFor(item.opinionType());` , annotations: [{"from": 1, "to": 3, "text": "모든 비-MENU를 Canonicalize하는 것이 아니다 — aspectType==ETC와 opinionType==ETC도 자유 target으로 유지된다(예: 국물/반찬/소스)."}] },
+      evidenceReferences: [evidence.restaurantInsight] }),
+  step("insight-aggregate", "RestaurantFeedbackInsightRepository", "5-field + Distinct Sender 집계", "◆ 5개 필드가 모두 같고 서로 다른 sender가 3명 이상일 때만 OWNER에게 노출됩니다", "category + aspectType + normalizedAspect(또는 Canonical Key) + opinionType + sentiment 5개 필드가 정확히 같은 항목끼리 묶고, count(distinct senderMemberId) >= 3일 때만 OWNER에 노출됩니다. 같은 사용자가 3번 말해도 distinct sender는 1명입니다 — User A만 3번 말하면 숨겨지고, User A+B+C처럼 서로 다른 3명이 말해야 노출됩니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "restaurant-insight",
+      visual: visual(["canonicalizer", "repository"], ["canonicalizer-repository"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "kafka", "consumerA", "consumerB", "gate", "aiProvider"], null, null, { repository: "User A×3 → distinct 1명(숨김) · User A+B+C → distinct 3명(노출)" }),
+      decisionBadge: "MINIMUM_DISTINCT_SENDERS = 3",
+      codeReferences: ["RestaurantFeedbackInsightRepository.aggregateForOwner", "RestaurantFeedbackInsightService.MINIMUM_DISTINCT_SENDERS"],
+      evidenceReferences: [evidence.restaurantInsight] }),
+  step("insight-owner", "OwnerRestaurantController", "OWNER Insight 결과", "✓ OWNER에게는 개인 식별 없이 익명 집계 결과만 노출됩니다", "예: \"직원 응대에 대한 긍정 의견 3명\" — GET /api/owner/restaurants/{restaurantId}/feedback-insights 응답에는 senderMemberId·messageId·닉네임 어디에도 없고 category/aspectType/normalizedAspect/opinionType/sentiment/count/summary만 담깁니다.",
+    { factStatus: FACT.VERIFIED, topologyKey: "restaurant-insight",
+      visual: visual(["repository", "ownerCard"], ["repository-ownerCard"], "commit", "completed", "kafka", ["client", "web", "app", "db", "outbox", "kafka", "consumerA", "consumerB", "gate", "aiProvider", "canonicalizer"], null, null, { ownerCard: "\"직원 응대\" 긍정 의견 3명 · 익명 집계" }),
+      decisionBadge: "개별 사용자 identity·원문 채팅은 OWNER 화면에 노출되지 않음",
+      codeReferences: ["OwnerRestaurantController.getFeedbackInsights", "RestaurantFeedbackInsightResponse"],
+      evidenceReferences: [evidence.restaurantInsight] })
 ];
 
 const chapters = [
@@ -2222,5 +2390,15 @@ public class ChatModeration extends BaseTimeEntity {
       { id: "email", title: "② 이메일 발송", steps: outboxEmailSteps },
       { id: "ai-chat", title: "③ 채팅 AI 분석", steps: outboxAiSteps },
       { id: "comparison", title: "세 사례 비교", steps: outboxComparisonSteps }
+    ] },
+  { id: "restaurant-insight", shortLabel: "Ch8 — 채팅 이벤트 재사용 → 식당 인사이트",
+    title: "하나의 채팅 이벤트를 다른 목적의 Consumer가 재사용할 수 있을까?",
+    subtitle: "채팅 메시지 이벤트 하나를 Moderation과 별개로 Restaurant Feedback Insight Consumer Group이 독립적으로 재사용한다(#277).",
+    summary: { problem: "채팅 메시지 하나를 검수(Moderation) 말고 다른 목적으로도 안전하게 재사용할 수 있을까?",
+      solution: "같은 Kafka Topic·Event Schema를 바꾸지 않고, 독립된 Consumer Group(Restaurant Feedback Insight)이 같은 이벤트를 재사용해 식당 운영 인사이트를 만든다.",
+      why: "채팅 메시지는 이미 Kafka로 발행되고 있었다 — 식당 피드백 분석을 위해 새 이벤트나 API를 만드는 대신, 같은 이벤트를 다른 Consumer Group이 독립적으로 소비하게 하면 Producer/Schema를 건드리지 않고도 새 기능을 추가할 수 있다.",
+      how: "Consumer가 messageId로 원문을 조회해 PII/Candidate Gate를 통과한 메시지만 AI로 구조화하고, 서버 Canonicalization으로 자유 문구를 집계 가능한 Key로 수렴시킨 뒤, 5개 필드가 모두 같고 distinct sender가 3명 이상인 경우에만 OWNER에게 익명 집계로 노출한다." },
+    scenarios: [
+      { id: "event-reuse", title: "채팅 이벤트 재사용 → 식당 인사이트", steps: restaurantInsightSteps }
     ] }
 ];

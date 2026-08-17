@@ -13,7 +13,8 @@ const TOPOLOGY_BY_KEY = {
   infra: infraTopology,
   "outbox-chatroom": outboxChatroomTopology, "outbox-email": outboxEmailTopology,
   "outbox-ai": outboxAiTopology, "outbox-comparison": outboxComparisonTopology,
-  "chatroom-before": chatroomBeforeTopology, "chatroom-after": chatroomAfterTopology
+  "chatroom-before": chatroomBeforeTopology, "chatroom-after": chatroomAfterTopology,
+  "restaurant-insight": restaurantInsightTopology
 };
 const topologyFor = (data) => TOPOLOGY_BY_KEY[data.topologyKey] || topology;
 function populateSelects() {

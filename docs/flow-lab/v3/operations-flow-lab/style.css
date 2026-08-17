@@ -355,6 +355,7 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 /* 전체 인프라 구성도 — 요약 Map(Runtime Flow)과 분리된 정적 Topology 화면. 요약 Map과 같은 Dark
    Theme/Orange 강조/Node 스타일/Region Box를 그대로 재사용하되, Scenario Step 재생 UI는 전혀 없다. */
 .arch-view{display:flex;flex-direction:column;gap:10px}
+.arch-view[hidden]{display:none}
 .arch-view-head{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line)}
 .arch-view-hint{margin:0;color:var(--muted);font-size:12px}
 /* 도표를 옆이 아니라 위아래로 쌓는다 — 옆에 260px짜리 패널이 있으면 도표 폭이 그만큼 줄어들어
