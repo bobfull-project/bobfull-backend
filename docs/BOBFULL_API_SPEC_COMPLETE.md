@@ -3,7 +3,7 @@
 > 이 문서는 BobFull HTTP API의 **통합 요약 및 상세 명세 진입점**이다.
 > Request/Response DTO, Validation, 응답 예시, Endpoint별 Error 계약은 [API 상세 명세 목차](api/API.md) 및 각 도메인 상세 문서를 **Source of Truth**로 관리한다.
 
-현재 문서화 대상은 Application HTTP API **70개**와 Actuator Endpoint **2개**, 총 **72개**다. 실제 코드의 `Controller / DTO / Validation / SecurityConfig / ErrorCode`를 최종 기준으로 하며, 이 문서는 상세 계약을 중복하지 않는다.
+현재 문서화 대상은 Application HTTP API **71개**와 Actuator Endpoint **2개**, 총 **73개**다. 실제 코드의 `Controller / DTO / Validation / SecurityConfig / ErrorCode`를 최종 기준으로 하며, 이 문서는 상세 계약을 중복하지 않는다.
 
 ## #245 정적 계약 검증 기준선
 
@@ -20,15 +20,15 @@
 |---|---:|---|
 | 인증 | 5 | [auth-api.md](api/auth-api.md) |
 | 회원 | 2 | [member-api.md](api/member-api.md) |
-| 식당 | 8 | [restaurant-api.md](api/restaurant-api.md) |
+| 식당 | 9 | [restaurant-api.md](api/restaurant-api.md) |
 | 합석 테이블 / 회차 | 12 | [table-session-api.md](api/table-session-api.md) |
 | 예약 | 10 | [reservation-api.md](api/reservation-api.md) |
 | 결제 / 환불 / 정산 | 8 | [payment-api.md](api/payment-api.md) |
 | 노쇼 | 5 | [no-show-api.md](api/no-show-api.md) |
 | 채팅 / 신고 | 3 | [chat-api.md](api/chat-api.md) |
 | 관리자 / Moderation | 16 | [admin-api.md](api/admin-api.md) |
-| 운영 Endpoint / Webhook | 3 | [operations-api.md](api/operations-api.md) |
-| **합계** | **72** | [전체 상세 명세 목차](api/API.md) |
+| 운영 Endpoint / Webhook | 1 | [operations-api.md](api/operations-api.md) |
+| **합계** | **73** | [전체 상세 명세 목차](api/API.md) |
 
 ## 권한 표기
 
@@ -65,6 +65,7 @@
 | `POST` | `/api/owner/restaurants` | `OWNER` | 식당 등록 |
 | `GET` | `/api/owner/restaurants` | `OWNER` | 내 식당 목록 조회 |
 | `GET` | `/api/owner/restaurants/{restaurantId}` | `OWNER` | 내 식당 상세 조회 |
+| `GET` | `/api/owner/restaurants/{restaurantId}/feedback-insights` | `OWNER` | 최근 7일 익명 피드백 집계 조회 |
 | `PATCH` | `/api/owner/restaurants/{restaurantId}` | `OWNER` | 식당 정보 수정 |
 | `GET` | `/api/restaurants` | `PUBLIC` | 사용자용 식당 목록·검색 |
 | `GET` | `/api/restaurants/{restaurantId}` | `PUBLIC` | 사용자용 식당 상세 조회 |
