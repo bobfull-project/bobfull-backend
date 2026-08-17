@@ -33,26 +33,29 @@ public class RefundReconciliationScheduler {
     private final int batchSize;
     private final Duration minimumAge;
     private final Duration recheckDelay;
+    private final Duration maxAge;
     private final Map<Long, Instant> longRunningRefunds = new ConcurrentHashMap<>();
     private final Map<Long, Instant> lookupFailures = new ConcurrentHashMap<>();
 
     public RefundReconciliationScheduler(RefundRepository refundRepository, RefundReconciliationProcessor processor,
                                          Clock clock, @Value("${payment.refund-reconciliation.batch-size:20}") int batchSize,
                                          @Value("${payment.refund-reconciliation.minimum-age:10m}") Duration minimumAge,
-                                         @Value("${payment.refund-reconciliation.recheck-delay:5m}") Duration recheckDelay) {
+                                         @Value("${payment.refund-reconciliation.recheck-delay:5m}") Duration recheckDelay,
+                                         @Value("${payment.refund-reconciliation.max-age:24h}") Duration maxAge) {
         this.refundRepository = refundRepository;
         this.processor = processor;
         this.clock = clock;
         this.batchSize = batchSize;
         this.minimumAge = minimumAge;
         this.recheckDelay = recheckDelay;
+        this.maxAge = maxAge;
     }
 
     @Scheduled(fixedDelayString = "${payment.refund-reconciliation.fixed-delay:5m}")
     public void reconcileStalledRefunds() {
         Instant now = clock.instant();
         refundRepository.findReconciliationCandidates(List.of(RefundStatus.REQUESTED, RefundStatus.PROCESSING),
-                now.minus(minimumAge), now.minus(recheckDelay), PageRequest.of(0, batchSize))
+                now.minus(maxAge), now.minus(minimumAge), now.minus(recheckDelay), PageRequest.of(0, batchSize))
                 .forEach(refund -> reconcileOne(refund, now));
     }
 

@@ -80,10 +80,13 @@ payment:
     fixed-delay: ${PAYMENT_EXPIRATION_FIXED_DELAY:60s}
     batch-size: ${PAYMENT_EXPIRATION_BATCH_SIZE:100}
   refund-reconciliation:
-    enabled: ${PAYMENT_REFUND_RECONCILIATION_ENABLED:true}
+    # 로컬 DB에는 실제 PortOne에 없는 테스트성 결제/환불 데이터가 남기 쉬워, 기본값을 꺼둔다
+    # (Issue #272). 이 스케줄러 동작 자체를 로컬에서 검증하려면 일시적으로 true로 바꾼다.
+    enabled: ${PAYMENT_REFUND_RECONCILIATION_ENABLED:false}
     fixed-delay: ${PAYMENT_REFUND_RECONCILIATION_FIXED_DELAY:5m}
     minimum-age: ${PAYMENT_REFUND_RECONCILIATION_MINIMUM_AGE:10m}
     recheck-delay: ${PAYMENT_REFUND_RECONCILIATION_RECHECK_DELAY:5m}
+    max-age: ${PAYMENT_REFUND_RECONCILIATION_MAX_AGE:24h}
     batch-size: ${PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE:20}
 
 aws:

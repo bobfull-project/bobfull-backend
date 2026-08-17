@@ -36,7 +36,8 @@ class RefundReconciliationSchedulerTest {
         // given
         Instant now = Instant.parse("2026-08-05T00:00:00Z");
         given(refundRepository.findReconciliationCandidates(eq(List.of(RefundStatus.REQUESTED, RefundStatus.PROCESSING)),
-                eq(now.minus(Duration.ofMinutes(10))), eq(now.minus(Duration.ofMinutes(5))), any(Pageable.class)))
+                eq(now.minus(Duration.ofHours(24))), eq(now.minus(Duration.ofMinutes(10))),
+                eq(now.minus(Duration.ofMinutes(5))), any(Pageable.class)))
                 .willReturn(List.of(first, second));
         given(first.getUpdatedAt()).willReturn(now);
         given(second.getUpdatedAt()).willReturn(now);
@@ -48,7 +49,7 @@ class RefundReconciliationSchedulerTest {
         given(firstPayment.getPaymentId()).willReturn("payment-1");
 
         RefundReconciliationScheduler scheduler = new RefundReconciliationScheduler(refundRepository, processor,
-                Clock.fixed(now, ZoneOffset.UTC), 20, Duration.ofMinutes(10), Duration.ofMinutes(5));
+                Clock.fixed(now, ZoneOffset.UTC), 20, Duration.ofMinutes(10), Duration.ofMinutes(5), Duration.ofHours(24));
 
         // when
         scheduler.reconcileStalledRefunds();

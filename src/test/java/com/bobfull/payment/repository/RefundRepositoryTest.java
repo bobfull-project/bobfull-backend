@@ -87,7 +87,8 @@ class RefundRepositoryTest {
 
         // when
         List<Refund> candidates = refundRepository.findReconciliationCandidates(
-                List.of(RefundStatus.REQUESTED), now.plusSeconds(3600), now.plusSeconds(3600), PageRequest.of(0, 20));
+                List.of(RefundStatus.REQUESTED), now.minusSeconds(3600), now.plusSeconds(3600), now.plusSeconds(3600),
+                PageRequest.of(0, 20));
 
         // then
         assertThat(candidates).extracting(Refund::getId).containsExactly(requested.getId());
@@ -104,7 +105,28 @@ class RefundRepositoryTest {
         // when
         List<Refund> candidates = refundRepository.findReconciliationCandidates(
                 List.of(RefundStatus.REQUESTED, RefundStatus.PROCESSING),
-                now.minusSeconds(3600), now.plusSeconds(3600), PageRequest.of(0, 20));
+                now.minusSeconds(7200), now.minusSeconds(3600), now.plusSeconds(3600), PageRequest.of(0, 20));
+
+        // then
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void max_age보다_오래된_환불은_더_이상_후보로_재시도하지_않는다() {
+        // given: 재조정 스케줄러가 24시간 넘게 재시도해도 계속 실패하는 환불(Issue #272) —
+        // 자원 낭비를 막기 위해 이 시점부터는 후보에서 완전히 제외돼야 한다. updatedAt은
+        // @LastModifiedDate가 저장 시점(현재)으로 채우므로, updatedAfter를 미래로 둬 "이미
+        // max-age 기준보다 오래된 상태"를 흉내낸다(다른 테스트의 미래 기준값 방식과 동일).
+        Payment payment = paymentRepository.saveAndFlush(payment("payment-permanently-stuck", 1L));
+        refundRepository.saveAndFlush(Refund.create(payment, BigDecimal.TEN, RefundStatus.REQUESTED,
+                Instant.parse("2026-07-30T00:00:00Z"), null, "test-key-permanently-stuck", "test reason"));
+        Instant now = Instant.now();
+
+        // when
+        List<Refund> candidates = refundRepository.findReconciliationCandidates(
+                List.of(RefundStatus.REQUESTED, RefundStatus.PROCESSING),
+                now.plusSeconds(3600), now.plusSeconds(7200), now.plusSeconds(7200),
+                PageRequest.of(0, 20));
 
         // then
         assertThat(candidates).isEmpty();
@@ -128,7 +150,7 @@ class RefundRepositoryTest {
         // when
         List<Refund> candidates = refundRepository.findReconciliationCandidates(
                 List.of(RefundStatus.REQUESTED, RefundStatus.PROCESSING),
-                now.plusSeconds(3600), now.minusSeconds(60), PageRequest.of(0, 20));
+                now.minusSeconds(3600), now.plusSeconds(3600), now.minusSeconds(60), PageRequest.of(0, 20));
 
         // then
         assertThat(candidates).extracting(Refund::getId).containsExactly(neverChecked.getId());
@@ -159,7 +181,8 @@ class RefundRepositoryTest {
 
         // when
         List<Refund> candidates = refundRepository.findReconciliationCandidates(
-                List.of(RefundStatus.REQUESTED), now.plusSeconds(3600), now, PageRequest.of(0, 2));
+                List.of(RefundStatus.REQUESTED), now.minusSeconds(3600), now.plusSeconds(3600), now,
+                PageRequest.of(0, 2));
 
         // then
         assertThat(candidates).extracting(Refund::getId).containsExactly(oldest.getId(), middle.getId());
