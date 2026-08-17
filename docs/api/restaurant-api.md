@@ -12,6 +12,7 @@
 | `POST` | `/api/owner/restaurants` | `OWNER` | 식당 등록 | 201 |
 | `GET` | `/api/owner/restaurants` | `OWNER` | 내 식당 목록 조회 | 200 |
 | `GET` | `/api/owner/restaurants/{restaurantId}` | `OWNER` | 내 식당 상세 조회 | 200 |
+| `GET` | `/api/owner/restaurants/{restaurantId}/feedback-insights` | `OWNER` | 최근 7일 익명 피드백 집계 조회 | 200 |
 | `PATCH` | `/api/owner/restaurants/{restaurantId}` | `OWNER` | 식당 정보 수정 | 200 |
 | `GET` | `/api/restaurants` | `PUBLIC` | 사용자용 식당 목록·검색 | 200 |
 | `GET` | `/api/restaurants/{restaurantId}` | `PUBLIC` | 사용자용 식당 상세 조회 | 200 |
@@ -198,6 +199,84 @@
 
 ---
 
+## GET /api/owner/restaurants/{restaurantId}/feedback-insights — 최근 7일 익명 피드백 집계 조회
+
+**권한** `OWNER`
+
+
+### 개요
+
+- 설명: 식당 소유권 검증. ChatMessage를 `ChatRoom → Reservation → TimeSlot → SharedTable → Restaurant` 경로로
+  역추적해 파생한 `RestaurantFeedbackAnalysis`/`RestaurantFeedbackItem`을 익명 집계로만 노출한다.
+- 원문·닉네임·`memberId`·`messageId` 등 식별값은 응답에 포함하지 않는다. OWNER 자유 서술이 아니라
+  구조화 필드 기반 서버 템플릿 문구(`summary`)만 제공한다.
+- 집계 조건: 최근 7일(`analyzedAt >= now - 7d`) + `bobfull.restaurant-feedback.active-prompt-version`
+  설정값과 일치하는 결과만 + `category+aspectType+normalizedAspect+opinionType+sentiment` 5-field
+  동일 그룹에서 **distinct `senderMemberId` >= 3**인 그룹만 노출한다.
+- 동일 발신자가 같은 그룹에 여러 번 기여해도 `count`(=distinct sender 수)에는 최대 1회만 반영된다.
+- Kafka Consumer(`bobfull.kafka.restaurant-insight.consumer-enabled`)가 비활성인 환경(Production 기본값)에서는
+  신규 결과가 쌓이지 않으므로 이 조회는 항상 빈 목록을 반환한다.
+
+### Request
+
+### Path Variables
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `restaurantId` | Long | Y | restaurantId 식별자 |
+
+요청 Body와 Query Parameter는 사용하지 않는다(기간·집계 조건은 서버 고정값).
+
+### Response
+
+- Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공했습니다.",
+  "data": {
+    "restaurantId": 1,
+    "from": "2026-08-09T00:00:00Z",
+    "to": "2026-08-16T00:00:00Z",
+    "insights": [
+      {
+        "category": "FOOD",
+        "aspectType": "MENU",
+        "normalizedAspect": "탕수육",
+        "opinionType": "TEXTURE",
+        "sentiment": "POSITIVE",
+        "count": 8,
+        "summary": "탕수육 식감에 대한 긍정 의견 8명"
+      }
+    ]
+  }
+}
+```
+
+### Response Fields
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `restaurantId` | Long | 조회 대상 restaurantId |
+| `from` / `to` | Instant | 집계 기간(항상 최근 7일, 서버 `Clock` 기준 UTC) |
+| `insights[].category` | String | `FOOD` / `SERVICE` / `PRICE` / `CLEANLINESS` / `ETC` |
+| `insights[].aspectType` | String | `MENU` / `SERVICE` / `PRICE` / `CLEANLINESS` / `ETC` |
+| `insights[].normalizedAspect` | String | 정규화된 짧은 대상 텍스트(최대 40 Unicode code point, PII/재식별 단서 없음) |
+| `insights[].opinionType` | String | `TASTE`/`TEXTURE`/`SALTINESS`/`SPICINESS`/`SWEETNESS`/`PORTION`/`FRESHNESS`/`TEMPERATURE`/`FRIENDLINESS`/`SERVICE_SPEED`/`PRICE_LEVEL`/`CLEANLINESS`/`WAITING`/`ETC` |
+| `insights[].sentiment` | String | `POSITIVE` / `NEGATIVE` / `NEUTRAL` |
+| `insights[].count` | Long | distinct `senderMemberId` 수(message 수 아님), 항상 3 이상 |
+| `insights[].summary` | String | 구조화 필드 기반 서버 템플릿 문구(자유 서술 없음) |
+
+### Error
+
+| Status | Code | 설명 |
+|---:|---|---|
+| `401` | `UNAUTHORIZED` | 인증되지 않은 사용자 |
+| `403` | `ACCESS_DENIED` | 접근 권한이 없거나 본인 리소스가 아님 |
+| `404` | `RESTAURANT_ID_NOT_FOUND` | restaurantId에 해당하는 대상을 찾을 수 없음 |
+
+---
 
 ## PATCH /api/owner/restaurants/{restaurantId} — 식당 정보 수정
 

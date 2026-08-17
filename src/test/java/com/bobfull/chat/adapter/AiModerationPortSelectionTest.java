@@ -17,7 +17,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 class AiModerationPortSelectionTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withBean(ChatClient.class, () -> Mockito.mock(ChatClient.class))
+            .withBean("moderationChatClient", ChatClient.class, () -> Mockito.mock(ChatClient.class))
             .withUserConfiguration(SpringAiModerationAdapter.class, FakeAiModerationAdapter.class);
 
     @Test
