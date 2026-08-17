@@ -1,10 +1,21 @@
 package com.bobfull.restaurantinsight.dto;
 
+import com.bobfull.restaurantinsight.entity.FeedbackAspectType;
+import com.bobfull.restaurantinsight.entity.FeedbackOpinionType;
 import com.bobfull.restaurantinsight.repository.RestaurantFeedbackInsightRepository.Aggregation;
 
 public record RestaurantFeedbackInsightResponse(String category, String aspectType, String normalizedAspect, String opinionType, String sentiment, long count, String summary) {
     public static RestaurantFeedbackInsightResponse from(Aggregation result) {
-        return new RestaurantFeedbackInsightResponse(result.getCategory().name(), result.getAspectType().name(), result.getAspect(), result.getOpinionType().name(), result.getSentiment().name(), result.getSenderCount(), result.getAspect() + " " + opinionKorean(result.getOpinionType().name()) + "에 대한 " + sentimentKorean(result.getSentiment().name()) + " 의견 " + result.getSenderCount() + "명");
+        String sentimentText = sentimentKorean(result.getSentiment().name());
+        // MENU와 ETC는 normalizedAspect가 검증된 LLM 자유 텍스트(실제 메뉴명/구체 대상)라
+        // opinionType과 함께 써야 뜻이 통한다("탕수육 식감", "주차 공간 문의 대응"). 그 외에는
+        // normalizedAspect 자체가 이미 서버 canonical 문구("직원 응대", "가격" 등)라 opinionType을
+        // 따로 덧붙이면 "직원 응대 친절"처럼 중복된다.
+        boolean keepsLlmAspect = result.getAspectType() == FeedbackAspectType.MENU || result.getOpinionType() == FeedbackOpinionType.ETC;
+        String summary = keepsLlmAspect
+                ? result.getAspect() + " " + opinionKorean(result.getOpinionType().name()) + "에 대한 " + sentimentText + " 의견 " + result.getSenderCount() + "명"
+                : result.getAspect() + "에 대한 " + sentimentText + " 의견 " + result.getSenderCount() + "명";
+        return new RestaurantFeedbackInsightResponse(result.getCategory().name(), result.getAspectType().name(), result.getAspect(), result.getOpinionType().name(), result.getSentiment().name(), result.getSenderCount(), summary);
     }
     private static String sentimentKorean(String sentiment) { return switch (sentiment) { case "POSITIVE" -> "긍정"; case "NEGATIVE" -> "부정"; default -> "중립"; }; }
     private static String opinionKorean(String opinion) {

@@ -139,6 +139,39 @@ class RestaurantFeedbackInsightServiceIntegrationTest {
                 .containsExactlyInAnyOrder(FeedbackSentiment.POSITIVE, FeedbackSentiment.NEGATIVE, FeedbackSentiment.POSITIVE);
     }
 
+    // 실제 수동 E2E에서 발견된 회귀 재현: LLM이 같은 의견을 메시지마다 다른 문구("친절" vs
+    // "직원 친절함")로 normalizedAspect에 담아도, MENU가 아닌 aspectType은 opinionType 기준
+    // canonical 문구로 저장되어 항상 같은 5-field 키로 수렴해야 한다(distinct sender 집계가
+    // 문구 차이로 쪼개지지 않도록).
+    @Test
+    void MENU가_아닌_aspectType은_LLM_문구와_무관하게_canonical_normalizedAspect로_수렴한다() {
+        provider.result = List.of(new RestaurantFeedbackAnalysis.Item(
+                FeedbackCategory.SERVICE, FeedbackAspectType.SERVICE, "직원 친절함", FeedbackOpinionType.FRIENDLINESS, FeedbackSentiment.POSITIVE));
+        service.analyze(fixture("직원 친절했어요"));
+
+        provider.result = List.of(new RestaurantFeedbackAnalysis.Item(
+                FeedbackCategory.SERVICE, FeedbackAspectType.SERVICE, "친절", FeedbackOpinionType.FRIENDLINESS, FeedbackSentiment.POSITIVE));
+        service.analyze(fixture("직원 친절했어요"));
+
+        assertThat(analyses.count()).isEqualTo(2);
+        assertThat(items.count()).isEqualTo(2);
+        assertThat(items.findAll())
+                .extracting(com.bobfull.restaurantinsight.entity.RestaurantFeedbackItem::getNormalizedAspect)
+                .containsOnly("직원 응대");
+    }
+
+    // ETC opinionType은 "기타"라는 이름과 달리 의미가 enum만으로 확정되지 않는 자유 범주이므로
+    // MENU와 마찬가지로 canonicalize하지 않고 검증된 LLM normalizedAspect를 그대로 유지해야 한다.
+    @Test
+    void ETC_opinionType은_canonicalize하지_않고_검증된_LLM_aspect를_유지한다() {
+        provider.result = List.of(new RestaurantFeedbackAnalysis.Item(
+                FeedbackCategory.SERVICE, FeedbackAspectType.SERVICE, "주차 공간 문의 대응", FeedbackOpinionType.ETC, FeedbackSentiment.POSITIVE));
+        service.analyze(fixture("주차 관련 문의에 친절하게 답해주셨어요"));
+
+        assertThat(items.count()).isEqualTo(1);
+        assertThat(items.findAll().get(0).getNormalizedAspect()).isEqualTo("주차 공간 문의 대응");
+    }
+
     @Test
     void 유효하지_않은_Item만_제외하고_나머지를_저장한다() {
         provider.result = List.of(

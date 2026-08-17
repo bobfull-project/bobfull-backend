@@ -207,7 +207,8 @@ Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개�
 
 ## 전체 회귀 (Docker 활성화, repository-level 설정 고정 후 실제 실행)
 
-`./gradlew :test`(프로젝트 메인 모듈, 환경변수 없이 실행) — **937개 중 873개 통과, 0개 실패, 64개 skip.**
+`./gradlew :test`(프로젝트 메인 모듈, 환경변수 없이 실행) — **939개 중 875개 통과, 0개 실패, 64개 skip.**
+(canonicalization 관련 신규 테스트 2건 추가 후 재실행한 최신 수치. 아래 "Manual E2E 추가 검증" 참고.)
 
 PR 재리뷰 과정에서 발견된 두 가지 문제를 모두 repository에 고정한 뒤 이 결과를 얻었다(§PR 독립 리뷰 반영 참고).
 
@@ -276,6 +277,43 @@ suite 실행은 이 최종 검증에서 딱 한 번만 수행했다.
   `bobfull.ai.restaurant-insight.enabled=false`(둘 다 OFF가 기본)
 - Evidence C에 사용한 실제 broker: 로컬 `docker-compose.yml`의 `kafka` 서비스(`apache/kafka:3.9.0`,
   container `bobfull-kafka`, `localhost:9092`) — staging/운영 broker 아님
+
+### Manual E2E 추가 검증
+
+PR 재리뷰 반영 후 실제 로컬 서버(local profile, 실제 OpenAI Provider, 실제 Kafka broker)로 수동 E2E를
+수행하는 과정에서 아래 현상을 발견하고 수정했다.
+
+**초기**
+- 서로 다른 사용자 3명이 동일한 의미의 `직원 친절했어요`를 전송
+- LLM이 `normalizedAspect`를 메시지마다 `직원 친절함` / `친절` / `직원`으로 서로 다르게 생성
+- OWNER 5-field exact-match aggregation이 세 그룹으로 분산돼(그룹별 distinct sender 1명) `count>=3`
+  문턱을 넘지 못해 OWNER API에 노출되지 않음
+
+**개선**
+- `RestaurantInsightAspectCanonicalizer`(신규): `aspectType != MENU`이면서 `opinionType != ETC`인
+  경우에만, LLM이 반환한 자유 텍스트 대신 opinionType 기준 서버 canonical 문구로 저장(`FRIENDLINESS`→
+  "직원 응대", `SERVICE_SPEED`→"서비스 속도", `PRICE_LEVEL`→"가격", `CLEANLINESS`→"매장 청결" 등)
+- `MENU`(실제 메뉴명 식별 필요)와 `ETC`(이름과 달리 의미가 enum만으로 확정되지 않는 자유 범주)는
+  검증된 LLM `normalizedAspect`를 그대로 유지
+- privacy 검증(`RestaurantInsightPrivacyValidator.isSafeAspect`)은 canonicalization과 무관하게
+  모든 Item에 여전히 먼저 적용되며, canonical 치환으로 우회되지 않는다(PII 섞인 Item은 canonicalize
+  이전에 이미 제외됨)
+- canonical 치환으로 한 메시지 안에서 여러 Item이 동일 5-field로 수렴할 수 있어(예: LLM이 같은
+  opinionType을 두 번 반환) 저장 전 중복 제거를 추가해 `UNIQUE(analysis, 5-field)` 위반을 방지
+
+**재검증(실제 수동 E2E, 실제 OpenAI Provider)**
+- 서로 다른 사용자 3명이 `직원 친절했어요`를 다시 전송
+- 저장/조회: `SERVICE / SERVICE / 직원 응대 / FRIENDLINESS / POSITIVE`
+- OWNER API(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`) 응답에서 실제
+  `count=3` 노출 확인
+
+**주의(과장 금지)**
+- fuzzy matching, embedding 기반 semantic clustering을 구현한 것이 아니다.
+- LLM 출력의 문구 변동성(variability) 자체를 제거한 것이 아니다 — LLM은 여전히 메시지마다 다른
+  문구를 생성할 수 있다.
+- 의미가 opinionType만으로 이미 결정되는 비-MENU 항목에 한해, 서버가 그 문구를 canonical 값으로
+  **치환해 집계 키의 안정성을 높인 것**이다. MENU/ETC처럼 실제 자유 텍스트 식별이 필요한 항목은
+  여전히 LLM 출력 문구 그대로에 의존한다.
 
 ## 한계
 
