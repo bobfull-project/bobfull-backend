@@ -207,8 +207,8 @@ Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개�
 
 ## 전체 회귀 (Docker 활성화, repository-level 설정 고정 후 실제 실행)
 
-`./gradlew :test`(프로젝트 메인 모듈, 환경변수 없이 실행) — **939개 중 875개 통과, 0개 실패, 64개 skip.**
-(canonicalization 관련 신규 테스트 2건 추가 후 재실행한 최신 수치. 아래 "Manual E2E 추가 검증" 참고.)
+`./gradlew :test`(프로젝트 메인 모듈, 환경변수 없이 실행) — **940개 중 876개 통과, 0개 실패, 64개 skip.**
+(canonicalization 관련 신규 테스트 3건 추가 후 재실행한 최신 수치. 아래 "Manual E2E 추가 검증" 참고.)
 
 PR 재리뷰 과정에서 발견된 두 가지 문제를 모두 repository에 고정한 뒤 이 결과를 얻었다(§PR 독립 리뷰 반영 참고).
 
@@ -314,6 +314,13 @@ PR 재리뷰 반영 후 실제 로컬 서버(local profile, 실제 OpenAI Provid
 - 의미가 opinionType만으로 이미 결정되는 비-MENU 항목에 한해, 서버가 그 문구를 canonical 값으로
   **치환해 집계 키의 안정성을 높인 것**이다. MENU/ETC처럼 실제 자유 텍스트 식별이 필요한 항목은
   여전히 LLM 출력 문구 그대로에 의존한다.
+
+**재리뷰 후속 수정(과도한 병합 방지)**: `aspectType==ETC`인 Item이 `opinionType!=ETC`(예: `TASTE`)와
+결합될 때, 처음 구현에서는 `opinionType` 기준으로만 canonicalize 여부를 판단해 `FOOD/ETC/국물/TASTE`,
+`FOOD/ETC/반찬/TASTE`, `FOOD/ETC/소스/TASTE`처럼 실제로는 서로 다른 대상인 Item들이 canonical
+"맛"으로 잘못 병합될 수 있는 문제가 재리뷰에서 지적됐다. `aspectType==ETC`도 `MENU`와 동일하게
+자유-target으로 취급하도록 조건을 `aspectType==MENU || aspectType==ETC || opinionType==ETC`로
+수정했다("국물"/"반찬"/"소스"가 서로 다른 Item으로 유지됨을 회귀 테스트로 고정).
 
 ## 한계
 

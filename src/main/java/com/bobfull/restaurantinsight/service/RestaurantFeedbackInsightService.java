@@ -74,7 +74,12 @@ public class RestaurantFeedbackInsightService {
         // 같은 opinionType을 두 번 반환), UNIQUE(analysis, 5-field) 위반을 막기 위해 저장 전 중복 제거한다.
         java.util.LinkedHashSet<java.util.List<Object>> seenKeys = new java.util.LinkedHashSet<>();
         for (var item : validItems) {
+            // aspectType==ETC는 이름과 달리 enum만으로 실제 대상을 특정할 수 없는 자유-target
+            // 범주이므로 MENU와 동일하게 취급한다. 그렇지 않으면 opinionType만으로
+            // canonicalize할 때 서로 다른 대상("국물"/"반찬"/"소스" 등)이 같은 opinionType
+            // 하나로 잘못 병합될 수 있다(리뷰 지적: MAJOR).
             boolean keepLlmAspect = item.aspectType() == com.bobfull.restaurantinsight.entity.FeedbackAspectType.MENU
+                    || item.aspectType() == com.bobfull.restaurantinsight.entity.FeedbackAspectType.ETC
                     || item.opinionType() == com.bobfull.restaurantinsight.entity.FeedbackOpinionType.ETC;
             String normalizedAspect = keepLlmAspect
                     ? privacyValidator.normalizeSafeAspect(item.normalizedAspect())

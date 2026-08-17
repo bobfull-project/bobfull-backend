@@ -172,6 +172,24 @@ class RestaurantFeedbackInsightServiceIntegrationTest {
         assertThat(items.findAll().get(0).getNormalizedAspect()).isEqualTo("주차 공간 문의 대응");
     }
 
+    // 재리뷰 지적(MAJOR): aspectType==ETC도 MENU와 동일하게 자유-target으로 취급해야 한다.
+    // 그렇지 않으면 opinionType만으로 canonicalize할 때 서로 다른 대상("국물"/"반찬"/"소스")이
+    // 같은 opinionType 하나로 잘못 병합되는 false aggregation이 생긴다.
+    @Test
+    void aspectType이_ETC이면_같은_opinionType이어도_서로_다른_대상으로_유지된다() {
+        provider.result = List.of(
+                new RestaurantFeedbackAnalysis.Item(FeedbackCategory.FOOD, FeedbackAspectType.ETC, "국물", FeedbackOpinionType.TASTE, FeedbackSentiment.POSITIVE),
+                new RestaurantFeedbackAnalysis.Item(FeedbackCategory.FOOD, FeedbackAspectType.ETC, "반찬", FeedbackOpinionType.TASTE, FeedbackSentiment.POSITIVE),
+                new RestaurantFeedbackAnalysis.Item(FeedbackCategory.FOOD, FeedbackAspectType.ETC, "소스", FeedbackOpinionType.TASTE, FeedbackSentiment.POSITIVE)
+        );
+        service.analyze(fixture("국물도 반찬도 소스도 다 맛있었어요"));
+
+        assertThat(items.count()).isEqualTo(3);
+        assertThat(items.findAll())
+                .extracting(com.bobfull.restaurantinsight.entity.RestaurantFeedbackItem::getNormalizedAspect)
+                .containsExactlyInAnyOrder("국물", "반찬", "소스");
+    }
+
     @Test
     void 유효하지_않은_Item만_제외하고_나머지를_저장한다() {
         provider.result = List.of(

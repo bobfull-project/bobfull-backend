@@ -11,10 +11,12 @@ import com.bobfull.restaurantinsight.entity.FeedbackOpinionType;
  * 5-field 키로 모이게 한다.
  *
  * <p>{@code MENU} aspectType은 실제 메뉴명을 구분해야 하므로 치환 대상이 아니다. {@code ETC}
- * opinionType은 "기타"라는 이름과 달리 실제 의미가 enum만으로 확정되지 않는 자유 범주이므로
- * (구체적으로 무엇에 대한 기타 의견인지는 여전히 normalizedAspect 문구가 결정한다) 이 치환
- * 대상에서 제외한다. 두 경우 모두 검증된 LLM normalizedAspect를 그대로 유지한다
- * ({@link RestaurantFeedbackInsightService} 참고).</p>
+ * aspectType과 {@code ETC} opinionType은 둘 다 "기타"라는 이름과 달리 실제 의미가 enum만으로
+ * 확정되지 않는 자유 범주이므로(구체적으로 무엇에 대한 기타 의견인지는 여전히 normalizedAspect
+ * 문구가 결정한다) 이 치환 대상에서 제외한다. {@code aspectType==ETC}를 제외하지 않으면
+ * opinionType만으로 canonicalize할 때 서로 다른 대상("국물"/"반찬"/"소스" 등)이 같은
+ * opinionType 하나로 잘못 병합될 수 있다. 위 경우 모두 검증된 LLM normalizedAspect를 그대로
+ * 유지한다({@link RestaurantFeedbackInsightService} 참고).</p>
  */
 final class RestaurantInsightAspectCanonicalizer {
 

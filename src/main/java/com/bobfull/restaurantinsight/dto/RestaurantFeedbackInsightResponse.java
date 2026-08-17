@@ -11,7 +11,9 @@ public record RestaurantFeedbackInsightResponse(String category, String aspectTy
         // opinionType과 함께 써야 뜻이 통한다("탕수육 식감", "주차 공간 문의 대응"). 그 외에는
         // normalizedAspect 자체가 이미 서버 canonical 문구("직원 응대", "가격" 등)라 opinionType을
         // 따로 덧붙이면 "직원 응대 친절"처럼 중복된다.
-        boolean keepsLlmAspect = result.getAspectType() == FeedbackAspectType.MENU || result.getOpinionType() == FeedbackOpinionType.ETC;
+        boolean keepsLlmAspect = result.getAspectType() == FeedbackAspectType.MENU
+                || result.getAspectType() == FeedbackAspectType.ETC
+                || result.getOpinionType() == FeedbackOpinionType.ETC;
         String summary = keepsLlmAspect
                 ? result.getAspect() + " " + opinionKorean(result.getOpinionType().name()) + "에 대한 " + sentimentText + " 의견 " + result.getSenderCount() + "명"
                 : result.getAspect() + "에 대한 " + sentimentText + " 의견 " + result.getSenderCount() + "명";
