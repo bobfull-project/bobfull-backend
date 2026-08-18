@@ -6,7 +6,7 @@
 - Prometheus는 App EC2의 `/actuator/prometheus`를 scrape한다.
 - Grafana는 Prometheus Data Source, BobFull Overview Dashboard, 초기 Grafana Alert Rule, Slack Contact Point를 provisioning으로 로드한다.
 - Slack으로 발송되는 운영 Alert의 기준은 Grafana Alert Rule이다. Prometheus는 Spring Boot 메트릭 scrape와 Grafana Data Source 역할만 맡는다.
-- Slack Webhook URL, Grafana 관리자 비밀번호 같은 비밀값은 `monitoring/.env` 또는 운영 비밀 저장소에만 둔다.
+- Slack Webhook URL, Grafana 관리자 비밀번호 같은 비밀값은 `BACKEND_MONITORING_ENV_FILE` 경로의 env 파일 또는 운영 비밀 저장소에만 둔다.
 
 ## 네트워크
 
@@ -17,20 +17,128 @@
 ## 배포
 
 ```bash
-cd monitoring
-cp .env.example .env
-vi .env
-docker compose up -d
+cp /opt/bobfull-monitoring/repo/monitoring/.env.example /opt/bobfull-monitoring/.env
+vi /opt/bobfull-monitoring/.env
+docker compose \
+  --env-file /opt/bobfull-monitoring/.env \
+  -f /opt/bobfull-monitoring/repo/monitoring/docker-compose.yml \
+  up -d
 ```
 
 필수 값:
 
 ```text
-BOBFULL_BACKEND_METRICS_TARGET=<app-ec2-private-ip>:8080
+BOBFULL_BACKEND_METRICS_TARGETS=<active-app-ec2-private-ip-1>:8080,<active-app-ec2-private-ip-2>:8080
 GRAFANA_ADMIN_PASSWORD=<strong-password>
 GRAFANA_SLACK_WEBHOOK_URL=<slack-incoming-webhook-url>
 GRAFANA_SLACK_RECIPIENT=<slack-channel-name>
 ```
+
+`BOBFULL_BACKEND_METRICS_TARGET`는 기존 단일 App EC2 측정용 fallback이다. `BOBFULL_BACKEND_METRICS_TARGETS`가 비어 있을 때만 사용한다.
+
+## Blue/Green Active App 2대 측정 설정
+
+#191 기준선 측정은 현재 ALB Listener weight가 100인 Active Target Group의 App EC2 2대만 대상으로 한다. Inactive 환경까지 함께 scrape하면 HTTP RPS, latency, Hikari 지표가 섞이므로 같은 job에 넣지 않는다. Inactive 측정이 필요하면 별도 job 또는 label로 분리한다.
+
+ALB DNS를 Prometheus target으로 사용하지 않는다. Prometheus target은 App EC2 private IP 또는 private DNS와 `8080` 포트를 직접 지정해야 instance별 지표를 분리할 수 있다.
+
+Monitoring EC2 최초 구성 때는 env 파일에 현재 Active 2대의 초기값을 한 번 입력한다. 이후 Blue-Green 배포에서는 배포 스크립트가 Prometheus target을 자동 전환하므로, 평상시 운영 절차로 사람이 env 파일의 target을 직접 바꾸지 않는다. 실제 운영 구조에서 env 파일과 compose/config 경로가 분리되어 있으면 env 파일은 `BACKEND_MONITORING_ENV_FILE`, compose/config 위치는 `BACKEND_MONITORING_COMPOSE_DIR`로 각각 지정한다.
+
+운영 경로 예시:
+
+```text
+BACKEND_MONITORING_ENV_FILE=/opt/bobfull-monitoring/.env
+BACKEND_MONITORING_COMPOSE_DIR=/opt/bobfull-monitoring/repo/monitoring
+```
+
+```text
+BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
+```
+
+이후 Blue-Green 배포에서는 `scripts/aws/deploy-backend-blue-green-v1.sh`가 ALB 전환과 public 검증 이후 새 Active Target Group의 EC2 private IP 2개를 조회하고, Monitoring EC2에 SSM 명령을 보내 다음을 자동 수행한다.
+
+1. Monitoring EC2의 `BACKEND_MONITORING_ENV_FILE`에서 `BOBFULL_BACKEND_METRICS_TARGETS`를 새 Active 2대로 갱신한다.
+2. Prometheus 컨테이너 내부 file_sd target 파일(`/tmp/prometheus-targets/bobfull-backend.yml`)을 같은 값으로 갱신한다.
+3. Prometheus `/-/reload`를 호출한다.
+4. Prometheus API에서 새 Active target 2대의 `up{job="bobfull-backend"}` 값이 모두 `1`인지 확인한다.
+
+이 단계가 실패하면 배포 스크립트는 이전 Active EC2를 STOP하지 않는다.
+
+자동 갱신에 필요한 GitHub Variables:
+
+```text
+BACKEND_MONITORING_EC2_INSTANCE_ID
+BACKEND_MONITORING_COMPOSE_DIR
+BACKEND_MONITORING_ENV_FILE
+```
+
+선택적으로 다음 값을 운영 환경에 맞게 조정할 수 있다.
+
+```text
+BACKEND_PROMETHEUS_CONTAINER_NAME
+BACKEND_PROMETHEUS_TARGET_FILE
+BACKEND_PROMETHEUS_PORT
+BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS
+BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS
+BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME
+BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS
+BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS
+```
+
+배포 실패 로그에서 확인할 항목:
+
+- `New active EC2 private IPs`
+- `New active EC2 metrics targets`
+- `Monitoring env file updated`
+- `Prometheus target file preview`
+- `Prometheus target state target=<ip:port> state=UP|DOWN`
+- `Prometheus target update or UP verification failed. Previous active EC2 instances will remain running.`
+
+로그에는 `BOBFULL_BACKEND_METRICS_TARGETS` 갱신 결과만 출력하고, Grafana 비밀번호·Slack Webhook 같은 다른 env 값은 출력하지 않는다.
+
+자동 전환 실패 시 현재 Active target을 확인하거나 복구해야 할 때는 다음 순서를 사용한다.
+
+1. GitHub Variables 또는 운영 기록에서 Blue/Green Listener와 Target Group ARN을 확인한다.
+
+```bash
+export BACKEND_ALB_LISTENER_ARN=<listener-arn>
+export BACKEND_BLUE_TARGET_GROUP_ARN=<blue-target-group-arn>
+export BACKEND_GREEN_TARGET_GROUP_ARN=<green-target-group-arn>
+```
+
+2. Listener default action에서 weight가 100인 Target Group을 Active로 판단한다.
+
+```bash
+aws elbv2 describe-listeners \
+  --listener-arns "${BACKEND_ALB_LISTENER_ARN}" \
+  --query 'Listeners[0].DefaultActions'
+```
+
+3. Active Target Group에 등록된 target instance id를 확인한다.
+
+```bash
+aws elbv2 describe-target-health \
+  --target-group-arn "<active-target-group-arn>" \
+  --query 'TargetHealthDescriptions[].Target.Id' \
+  --output text
+```
+
+4. 해당 instance id 2개의 private IP를 확인한다.
+
+```bash
+aws ec2 describe-instances \
+  --instance-ids <instance-id-1> <instance-id-2> \
+  --query 'Reservations[].Instances[].PrivateIpAddress' \
+  --output text
+```
+
+5. Monitoring EC2의 `BACKEND_MONITORING_ENV_FILE` 또는 Prometheus UI에서 Active App 2대가 comma-separated target으로 반영됐는지 확인한다. 자동 전환이 실패해 복구가 필요할 때만 해당 env 파일의 `BOBFULL_BACKEND_METRICS_TARGETS`를 현재 Active 2대로 수정한다. env 파일에는 Grafana 비밀번호와 Slack Webhook 같은 secret이 포함될 수 있으므로 전체 파일 내용을 로그나 PR에 붙이지 않는다.
+
+```text
+BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
+```
+
+6. 복구 수정이 필요했다면 Prometheus 컨테이너 내부 file_sd target 파일을 같은 target 값으로 맞춘 뒤 `/-/reload`를 호출한다. Prometheus UI `Status -> Targets`에서 `bobfull-backend` target 2개가 모두 `UP`인지 확인한다. 평상시 Blue-Green 배포 후 갱신은 `/-/reload`로 처리하므로 Prometheus/Grafana 재기동을 우선하지 않는다.
 
 ## 확인 순서
 
@@ -51,6 +159,45 @@ histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_buc
 sum(jvm_memory_used_bytes{job="bobfull-backend",area="heap"}) / sum(jvm_memory_max_bytes{job="bobfull-backend",area="heap"})
 max(hikaricp_connections_pending{job="bobfull-backend"})
 sum by (event) (increase(bobfull_business_events_total[5m]))
+```
+
+## #191 instance별 측정 PromQL
+
+```promql
+process_cpu_usage{job="bobfull-backend"}
+
+sum by (instance, area) (
+  jvm_memory_used_bytes{job="bobfull-backend"}
+)
+
+sum by (instance) (
+  rate(http_server_requests_seconds_count{job="bobfull-backend",uri!~"/actuator/.*"}[1m])
+)
+
+histogram_quantile(0.95,
+  sum by (instance, le) (
+    rate(http_server_requests_seconds_bucket{job="bobfull-backend",uri!~"/actuator/.*"}[5m])
+  )
+)
+
+histogram_quantile(0.99,
+  sum by (instance, le) (
+    rate(http_server_requests_seconds_bucket{job="bobfull-backend",uri!~"/actuator/.*"}[5m])
+  )
+)
+
+sum by (instance, status) (
+  rate(http_server_requests_seconds_count{job="bobfull-backend",status=~"4..",uri!~"/actuator/.*"}[1m])
+)
+
+sum by (instance, status) (
+  rate(http_server_requests_seconds_count{job="bobfull-backend",status=~"5..",uri!~"/actuator/.*"}[1m])
+)
+
+hikaricp_connections_active{job="bobfull-backend"}
+hikaricp_connections_idle{job="bobfull-backend"}
+hikaricp_connections_pending{job="bobfull-backend"}
+hikaricp_connections_max{job="bobfull-backend"}
 ```
 
 ## Alert 기준
