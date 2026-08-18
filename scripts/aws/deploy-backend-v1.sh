@@ -260,6 +260,8 @@ optional_parameters=(
   "REDIS_PORT:redis-port"
   "REDIS_SSL_ENABLED:redis-ssl-enabled"
   "DB_POOL_MAX_SIZE:db-pool-max-size"
+  "RESTAURANT_INSIGHT_AI_ENABLED:restaurant-insight-ai-enabled"
+  "KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED:kafka-restaurant-insight-consumer-enabled"
   "AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS:auth-refresh-token-expiration-seconds"
   "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
   "JPA_DDL_AUTO:jpa-ddl-auto"
