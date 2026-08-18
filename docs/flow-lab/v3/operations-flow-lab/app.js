@@ -613,17 +613,30 @@ function archNodeSvg(t, id, label, cls) {
   const categoryCls = t.nodeCategories && t.nodeCategories[id] ? ` cat-${t.nodeCategories[id]}` : "";
   return `<g class="canvas-node${cls ? ` ${cls}` : ""}${categoryCls}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
 }
-/* 전체 인프라 구성도의 흐름 강조 — Edge는 항상 구조적 배경(회색, pool 기반 fan-out 그대로)만
-   보여주고 절대 강조하지 않는다. 실행 순서를 보여주는 것은 오직 Node 자체의 반짝임뿐이다 —
-   방문 순서대로 Node를 하나씩 active(주황)로 켜고, 이미 지나간 Node는 committed(초록)로 남는다.
-   Edge 경로를 계산하거나 강조하려 했던 이전 시도(고정 pool waypoint, 좌표 기반 자동 라우팅)는
-   전부 제거했다 — "선 빼고 Node만 순서대로 반짝이기"가 최종 방향이다. */
+/* 두 Node의 실제 좌표(박스 중심)만 보고 그때그때 강조선을 계산한다 — pool 같은 가상 waypoint를
+   거치는 고정 t.edges 문자열은 재사용하지 않는다(path가 "green1"→"rds"처럼 고정 edge에 없는
+   구간도 자유롭게 잇기 때문). dx/dy 중 더 큰 축으로 먼저 꺾어(elbow) 대부분의 실제 배치에서
+   다른 Node 박스를 덜 가로지르게 한다 — 완벽한 장애물 회피는 아니고, "이 구간을 지금 지나간다"는
+   방향성을 보여주는 근사 경로다. */
+function archNodeCenter(t, id) { const [x, y] = t.nodePositions[id]; return [x + 50, y + 35]; }
+function computeArchActivePath(t, fromId, toId) {
+  const [x1, y1] = archNodeCenter(t, fromId);
+  const [x2, y2] = archNodeCenter(t, toId);
+  if (Math.abs(x1 - x2) < 2) return `M${x1} ${y1} V${y2}`;
+  if (Math.abs(y1 - y2) < 2) return `M${x1} ${y1} H${x2}`;
+  return Math.abs(x1 - x2) >= Math.abs(y1 - y2) ? `M${x1} ${y1} H${x2} V${y2}` : `M${x1} ${y1} V${y2} H${x2}`;
+}
+/* 전체 인프라 구성도의 흐름 강조 — 구조적 배경 Edge(회색, pool 기반 fan-out)는 항상 그대로 두고,
+   그 위에 "지금 방문 중인 경로"만 computeArchActivePath()로 계산한 강조선을 얹는다. 이미 지나간 구간은
+   committed(초록), 마지막(현재) 구간만 active(주황 + 흐르는 token)로 표시해 요약 Scenario Map과
+   같은 색 관례를 유지한다. Node 클릭으로 단일 Node만 살펴보는 모드(archSelected)에서는 특정
+   경로가 없으므로 강조선을 그리지 않는다. */
 function renderArchCanvas() {
   const t = fullArchitectureTopology;
   const regionSvg = regionBgSvg(t);
   let nodesSvg;
-  const edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector dim" d="${path}"/>`).join("");
-  const tokenSvg = "";
+  const staticEdgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector dim" d="${path}"/>`).join("");
+  let dynamicEdgeSvg = "", tokenSvg = "";
   if (state.archSelected) {
     nodesSvg = t.nodes.map(([id, label]) => archNodeSvg(t, id, label, id === state.archSelected ? "active" : "")).join("");
   } else {
@@ -634,7 +647,15 @@ function renderArchCanvas() {
     const committedNodes = visitedNodes.slice(0, -1);
     nodesSvg = t.nodes.map(([id, label]) =>
       archNodeSvg(t, id, label, id === activeNode ? "active" : committedNodes.includes(id) ? "committed" : "")).join("");
+    const segments = visitedNodes.slice(1).map((id, i) => [visitedNodes[i], id]);
+    dynamicEdgeSvg = segments.map(([from, to], i) =>
+      `<path class="connector ${i === segments.length - 1 ? "active" : "committed"}" d="${computeArchActivePath(t, from, to)}"/>`).join("");
+    if (segments.length) {
+      const [lastFrom, lastTo] = segments[segments.length - 1];
+      tokenSvg = `<g class="token event"><rect x="-5" y="-5" width="10" height="10" transform="rotate(45)"/><animateMotion dur="1.1s" repeatCount="indefinite" fill="remove" path="${computeArchActivePath(t, lastFrom, lastTo)}"/></g>`;
+    }
   }
+  const edgeSvg = staticEdgeSvg + dynamicEdgeSvg;
   const flow = archFlowGroups[state.archFlowIndex];
   const sequence = flow.sequences[state.archSequenceIndex];
   const path = sequence.path;
