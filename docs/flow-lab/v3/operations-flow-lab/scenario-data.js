@@ -380,7 +380,7 @@ const infraSteps = {
         evidenceReferences: [evidence.appHa] }),
     step("api-3", "Green EC2", "RDS MySQL", "✓ 애플리케이션이 필요한 데이터를 RDS MySQL에서 조회하거나 저장합니다", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다 — RDS는 Blue·Green 어느 쪽이 활성이든 항상 같은 하나의 인스턴스입니다. Redis·Kafka·S3·LLM도 Application과 항상 연결된 구조지만(회색 선), 이번 요청에서는 쓰이지 않아 흐리게 남습니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-appPool", "appPool-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
-        limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 아직 미구현(#191, future). 이 Scenario는 캐시를 쓰지 않는 일반 API 기준이다 — 캐시를 쓰는 요청(#62 검색)만 Redis가 강조된다.",
+        limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 #191에서 실제 부하와 병목을 측정했으나, 현재 조건에서는 App capacity보다 Hikari Pool 대기가 먼저 관측돼 도입하지 않았다. 이 Scenario는 캐시를 쓰지 않는 일반 API 기준이다 — 캐시를 쓰는 요청(#62 검색)만 Redis가 강조된다.",
         evidenceReferences: [evidence.appHa] })
   ],
   chat: [
@@ -420,9 +420,9 @@ const infraSteps = {
         evidenceReferences: [evidence.appHa] }),
     step("deploy-6", "Client", "Blue EC2", "✓ 새로운 요청은 이제 Blue로 라우팅됩니다", "가중치 전환 이후 새로 들어오는 요청은 ALB → TG Blue → Blue EC2 #1/#2로 처리됩니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2"], ["client-route53", "route53-alb", "alb-tgBlue", "tgBlue-ec2Blue1", "tgBlue-ec2Blue2"], "request", "completed", "core", ["tgGreen", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"], null, null, { tgGreen: "STANDBY · 0%", tgBlue: "ACTIVE · 100%" }) }),
-    step("deploy-7", "Green EC2 #1/#2", "Standby", "◆ 기존 Green은 Standby로 남아 다음 배포를 기다립니다", "Green EC2를 자동으로 종료하거나 Drain시키는 스크립트는 확인되지 않았습니다 — Green은 그대로 남아 있다가, 다음 배포에서 다시 STANDBY 그룹으로 새 이미지를 받는 대상이 됩니다(다음 배포는 반대로 Green Deploy가 됩니다).",
+    step("deploy-7", "Green EC2 #1/#2", "Rollback window → STOP", "✓ 이전 Active는 rollback window 뒤 조건부로 STOP됩니다", "이전 Active EC2는 traffic switch 직후 바로 종료하지 않고 public readiness/API 검증과 Prometheus target 갱신·UP 검증 이후 `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` 동안 rollback window로 유지합니다. 이후 ALB Listener를 다시 읽어 새 Active 100 / 이전 Active 0 guard가 통과하면 이전 Active EC2를 STOP하고, 검증에 실패하면 안전하게 STOP을 건너뜁니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["tgGreen", "ec2Green1", "ec2Green2"], [], "commit", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2", "gha", "ecr", "ssm"], null, null, { tgGreen: "STANDBY · 0%", tgBlue: "ACTIVE · 100%" }),
-        limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 아직 없다(#191). 이전 색을 자동 종료·Drain하는 로직은 이번 조사에서 확인되지 않았다.",
+        limits: "Blue-Green weight flip, rollback window, 이전 Active STOP guard는 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 #191 측정 결과 현재 조건에서 미도입으로 정리됐으며, 이전 Active는 rollback window 뒤 조건부 STOP 대상이다.",
         evidenceReferences: [evidence.appHa] })
   ]
 };
@@ -2110,9 +2110,9 @@ private Restaurant findActiveOrThrow(Long restaurantId) {
             "DB stale scheduler는 애플리케이션 내부 책임이고, Broker+Consumer Group은 그 책임을 애플리케이션 바깥의 별도 인프라 경계로 분리한다.",
             "이 경계 차이가 40.614s와 296.825s라는 재개 시간 차이로 나타났다 — durability의 유무 차이가 아니다."],
           evidenceReferences: [evidence.outboxAsyncVsKafka] }),
-      step("kafka-verdict", "Human 최종 판단", "KAFKA_JUSTIFIED_FOR_OPERABILITY", "✓ Kafka를 유지하는 진짜 이유", "Kafka는 더 빠르지 않았다. Kafka만 메시지를 보존하는 것도 아니었다 — 같은 Outbox 조건이면 Async도 crash 뒤 lost=0으로 복구됐다. 그럼에도 Kafka를 유지하는 이유는 Consumer 이후의 적체·복구·관측·확장을 애플리케이션 내부의 DB stale scheduler가 아니라 Broker/Consumer Group이라는 독립된 운영 경계로 분리해주기 때문이다.",
+      step("kafka-verdict", "Human 최종 판단", "KAFKA_JUSTIFIED_FOR_OPERABILITY", "✓ Kafka를 유지하는 진짜 이유", "Kafka는 더 빠르지 않았다. Kafka 단독으로 메시지를 보존하는 것도 아니었다 — 같은 Outbox 조건이면 Async도 crash 뒤 lost=0으로 복구됐다. 그럼에도 Kafka를 유지하는 이유는 Consumer 이후의 적체·복구·관측·확장을 애플리케이션 내부의 DB stale scheduler가 아니라 Broker/Consumer Group이라는 독립된 운영 경계로 분리해주기 때문이다.",
         { factStatus: FACT.DESIGN, visual: visual(["outbox", "kafka", "consumer", "llm"], ["outbox-publish", "kafka-consume", "ai-call"], "commit", "completed", "outbox", ["app", "async", "db"]),
-          statusChecklist: [["속도 때문에 채택", "failed"], ["Kafka만 유실 방지", "failed"], ["운영 가능한 비동기 Worker 경계", "done"]],
+          statusChecklist: [["속도 때문에 채택", "failed"], ["Kafka 단독 유실 방지", "failed"], ["운영 가능한 비동기 Worker 경계", "done"]],
           decisionBadge: "B. KAFKA_JUSTIFIED_FOR_OPERABILITY",
           nextAction: "Broker backlog · Consumer Group · Partition 병렬 처리 · 독립 Worker/scale-out · Retry/DLT 구조",
           limits: "이번 crash 실험에서 Retry/DLT failure injection은 별도로 검증하지 않았다 — 그 효과까지 #274로 검증했다고 표현하지 않는다. 아래 이어지는 Hot-Key 발견·messageId Key 개선(#258)은 이 결론과 별개로 여전히 유효한 Evidence다.",
@@ -2202,7 +2202,7 @@ public CommonErrorHandler chatModerationErrorHandler(ChatModerationDltRecoverer 
           evidenceReferences: [evidence.pipeline, evidence.aiWorkerScaling] }),
       step("conclusion", "Human 판단", "Kafka 도입 최종 결론", "✓ 최종 결론: 속도도, 유일한 유실 방지 수단도 아니었다", "Kafka는 Async보다 빠른 Queue라서 선택한 것이 아니다. 같은 Outbox 조건이면 Async도 crash 뒤 살아남았다 — Kafka를 유지한 이유는 Consumer 이후의 적체·복구·관측·확장을 독립된 운영 경계로 분리해주기 때문이다. 이후 실제 병목(chatRoomId Hot-Key)을 찾아 Moderation 도메인 계약에 맞는 Key로 개선한 것(#258)은 이 결론과 별개로 여전히 유효하다.",
         { factStatus: FACT.DESIGN, visual: visual(["outbox", "kafka", "consumer", "llm"], ["outbox-publish", "kafka-consume", "ai-call"], "commit", "completed", "outbox", ["app", "async", "db"]),
-          decisionBadge: "ADOPT: Outbox + Kafka(운영 가능한 비동기 Worker 경계) · REJECTED: 속도 목적 채택 · REJECTED: Kafka만 durability 제공",
+          decisionBadge: "ADOPT: Outbox + Kafka(운영 가능한 비동기 Worker 경계) · REJECTED: 속도 목적 채택 · REJECTED: Kafka 단독 유실 방지 가정",
           evidenceReferences: [evidence.outboxAsyncVsKafka, evidence.aiWorkerScaling, evidence.partitionKey] })
     ]}
   ]},

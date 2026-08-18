@@ -5,8 +5,8 @@
 이 문서는 확정된 API와 프로젝트 정책을 구현 가능한 관계형 데이터 모델로 표현한다. 현재 정적 스키마의 Source of Truth는 실제 `Entity / @Table / @Column / @ElementCollection / Repository / Migration / Index` 정의이며, ERD는 그 구현을 사람이 검토할 수 있는 형태로 기록한다.
 
 - 기준: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md), [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)
-- 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회, V3 채팅 AI moderation에 필요한 영속 데이터
-- 비범위: Redis, Kafka, 실제 계좌 송금 및 아직 도입하지 않은 별도 영속 모델
+- 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회, V3 채팅 AI Moderation·Outbox·Restaurant Feedback Insight에 필요한 영속 데이터
+- 비범위: Redis, Kafka, 실제 계좌 송금 및 아직 도입하지 않은 별도 영속 모델. Redis와 Kafka는 운영 인프라이며 ERD 엔티티가 아니다.
 - 원칙: API Response DTO를 테이블로 만들지 않고, 기준 문서에 없는 정책은 확정하지 않는다. Mermaid의 표현 한계가 있으면 아래 엔티티 상세 표를 기준으로 한다.
 
 ### #245 정적 계약 검증 기준선
@@ -43,7 +43,7 @@
 
 ## 3. Mermaid ERD
 
-이 저장소는 `@ManyToOne`/`@OneToMany`/`@ManyToMany`를 쓰지 않고 참조를 원본 ID `Long` 컬럼 값으로만 저장한다. 실제 `@JoinColumn`으로 매핑돼 DB에 물리 FK 제약이 생성되는 컬럼은 `refund.payment_id`와 `chat_moderation_category.chat_moderation_id` 2건뿐이다. 아래 Mermaid의 `FK` 표기는 이 2건에만 사용하고, 나머지 참조 컬럼은 값 기반 참조이므로 컬럼에 `FK`를 표기하지 않는다(관계선으로만 논리적 연결을 표현). 각 컬럼이 실제 DB UNIQUE·INDEX를 갖는지는 섹션 4 상세 표를 기준으로 한다.
+대부분의 도메인 참조는 원본 ID `Long` 컬럼 값으로 저장하고 JPA 연관관계를 두지 않는다. 예외적으로 `Refund.payment`, `ChatModeration.categories`의 collection table, `RestaurantFeedbackItem.analysis`는 `@JoinColumn` 또는 JPA 연관 mapping을 가진다. 이 문서는 JPA mapping과 실제 운영 DB physical constraint 확인을 구분한다. 운영 RDS snapshot으로 확인된 physical FK는 #198 기준 `refund.payment_id`, `chat_moderation_category.chat_moderation_id` 2건이며, 이후 추가된 `restaurant_feedback_item.restaurant_feedback_analysis_id`는 최신 Entity의 `@ManyToOne/@JoinColumn` mapping을 반영하되 현재 live DB constraint 존재 여부와 제약명은 별도 DDL 확인이 필요하다. 아래 Mermaid의 `FK` 표기는 JPA mapping 또는 확인된 physical FK가 있는 컬럼에만 사용하고, 나머지 참조 컬럼은 값 기반 참조이므로 컬럼에 `FK`를 표기하지 않는다. 각 컬럼이 실제 DB UNIQUE·INDEX를 갖는지는 섹션 4 상세 표를 기준으로 한다.
 
 ```mermaid
 erDiagram
@@ -537,7 +537,7 @@ erDiagram
 | 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
 |---|---|---|---:|---|
 | `restaurant_feedback_item_id` | BIGINT | N | PK | 내부 식별자 |
-| `restaurant_feedback_analysis_id` | BIGINT | N | 물리 FK(`@JoinColumn`만 선언, `@ForeignKey(name=...)` 미지정으로 Hibernate 자동 생성명) → `restaurant_feedback_analysis.restaurant_feedback_analysis_id`, UNIQUE `uk_feedback_item_analysis_key`(`restaurant_feedback_analysis_id`, `category`, `aspect_type`, `normalized_aspect`, `opinion_type`, `sentiment`)의 선행 컬럼 | 소유 Analysis |
+| `restaurant_feedback_analysis_id` | BIGINT | N | JPA `@ManyToOne/@JoinColumn` 참조 → `restaurant_feedback_analysis.restaurant_feedback_analysis_id`, UNIQUE `uk_feedback_item_analysis_key`(`restaurant_feedback_analysis_id`, `category`, `aspect_type`, `normalized_aspect`, `opinion_type`, `sentiment`)의 선행 컬럼 | 소유 Analysis. 현재 live DB physical FK constraint 존재 여부와 제약명은 별도 DDL 확인 필요 |
 | `category` | ENUM('FOOD', 'SERVICE', 'PRICE', 'CLEANLINESS', 'ETC') | N | UNIQUE 후행 컬럼, INDEX `idx_feedback_item_aggregation`의 선행 컬럼 |  |
 | `aspect_type` | ENUM('MENU', 'SERVICE', 'PRICE', 'CLEANLINESS', 'ETC') | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 |  |
 | `normalized_aspect` | VARCHAR(40) | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 | NFKC 정규화, 공백 축약, Unicode 40 code point 이하, PII/재식별 단서(전화번호·이메일·예약·주문번호·인물 식별 표현 등) 검증을 통과한 값만 저장 |
@@ -602,7 +602,7 @@ OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 `
 - `RESERVATION 1:0..1 CHAT_ROOM`, `CHAT_ROOM 1:N CHAT_MESSAGE`: 예약당 하나의 채팅방과 여러 메시지다.
 - `MEMBER 1:N CHAT_MESSAGE`: 발신 회원을 추적한다. `sender_participant_id`는 해당 예약의 유효 참여자 여부를 검증한다.
 - `CHAT_MESSAGE 1:0..1 CHAT_MODERATION`: 원문 메시지 하나에 분석 결과·최종 실패 기록을 하나만 둔다. 완료 상태를 최종 실패가 덮지 않도록 `chat_moderation.version`으로 낙관적 락을 적용한다.
-- `CHAT_MESSAGE`와 `RESTAURANT_FEEDBACK_ANALYSIS`: 물리 FK가 아닌 값 참조이며 1:N이다(같은 `chat_message_id`가 서로 다른 `prompt_version`으로 여러 건 공존 가능). `RESTAURANT_FEEDBACK_ANALYSIS 1:N RESTAURANT_FEEDBACK_ITEM`: 메시지 하나에서 0..N개의 의견이 나올 수 있다.
+- `CHAT_MESSAGE`와 `RESTAURANT_FEEDBACK_ANALYSIS`: 물리 FK가 아닌 값 참조이며 1:N이다(같은 `chat_message_id`가 서로 다른 `prompt_version`으로 여러 건 공존 가능). `RESTAURANT_FEEDBACK_ANALYSIS 1:N RESTAURANT_FEEDBACK_ITEM`: `RestaurantFeedbackItem.analysis`의 JPA `@ManyToOne/@JoinColumn`으로 매핑되며, 메시지 하나에서 0..N개의 의견이 나올 수 있다. live DB physical FK constraint 존재 여부는 별도 DDL 확인 항목이다.
 
 ## 6. UNIQUE 및 정합성 제약
 
@@ -760,7 +760,7 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | 식당·테이블·회차 | `deleted_at` 기반 소프트 삭제 방향 | 예약·결제·노쇼 이력 보존. 회차는 삭제 후 같은 테이블·시작 시각으로 신규 생성 가능 |
 | 예약·참여자 | 물리 삭제하지 않고 상태 보존 | 취소·노쇼·정산·권한 이력 필요 |
 | 결제·환불 | 물리 삭제하지 않음 | PortOne 검증·환불·지급 예정 조회·감사 필요 |
-| 채팅 메시지 | 물리 삭제 정책 미확정 | 보관 기간과 CLOSED 후 조회 기간은 Human 결정 필요 |
+| 채팅 메시지 | 물리 삭제 정책 Human 결정 필요 | 보관 기간과 CLOSED 후 조회 기간은 Human 결정 필요 |
 
 모든 테이블에 소프트 삭제 컬럼을 일괄 추가하지 않는다. 채팅·결제·환불은 현재 기준 문서에 삭제 API가 없다.
 
@@ -791,4 +791,4 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | 채팅방·cursor 조회 | 충족 | ChatRoom reservation UNIQUE, ChatMessage PK cursor 인덱스 후보 |
 | 기준 문서 외 기술 | 충족 | Settlement, SeatHold, WebhookEvent, Redis, Kafka를 확정 엔티티로 추가하지 않음 |
 
-기준 문서와 ERD의 핵심 데이터 계약 충돌은 없다. 12장의 항목은 기준 문서가 미확정인 후속 설계 선택이며, 현재 V1·V2 모델 구현을 막는 충돌로 분류하지 않는다.
+기준 문서와 ERD의 핵심 데이터 계약 충돌은 없다. 12장의 항목은 기준 문서에서 후속 결정으로 남겨둔 설계 선택이며, 현재 V1·V2·V3 모델 구현을 막는 충돌로 분류하지 않는다.

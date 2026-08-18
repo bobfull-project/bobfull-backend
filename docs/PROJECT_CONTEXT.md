@@ -1,6 +1,6 @@
 # 밥풀(BobFull) 프로젝트 컨텍스트
 
-> 기준일: 2026-08-04
+> 기준일: 2026-08-18 Final QA 기준
 > API 계약의 최우선 기준은 [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md)다. 이 문서가 API 명세와 충돌하면 API 명세를 따른다.
 
 ## 1. 프로젝트 개요
@@ -187,9 +187,13 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 
 - Actuator 모니터링·헬스 체크
 - 실패 결제·환불 재처리, 정산 데이터 재집계
-- 부하 테스트, 검색 성능·이벤트 처리·모니터링·배포 고도화
+- 부하 테스트, 검색 성능·이벤트 처리·AI Moderation·Restaurant Feedback Insight·모니터링·배포 고도화
 
-Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 fan-out만 수행하고, 영속·재처리·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Redis Pub/Sub과 서로 대체하지 않는다.
+Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 fan-out만 수행하고, 영속·재처리·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Restaurant Feedback Insight는 같은 ChatMessage Event를 별도 Consumer Group으로 재사용한다. Redis Pub/Sub과 Kafka는 서로 대체하지 않는다.
+
+Restaurant Feedback Insight는 코드·테스트·Evidence 기준으로 구현됐지만 production 기본 설정은 `bobfull.kafka.restaurant-insight.consumer-enabled=false`, `bobfull.ai.restaurant-insight.enabled=false`다. 배포 스크립트의 환경변수 주입 경로가 존재하더라도 실제 운영에서 enabled 상태라고 단정하지 않는다.
+
+V3 인프라 판단은 Evidence 기준으로 구분한다. ALB 뒤 Active App EC2 2대, Blue-Green 전환, Inactive App EC2 평상시 STOP, Prometheus target 갱신은 저장소 Evidence로 검증된 구조다. App EC2 Auto Scaling은 #191에서 측정했으나 현재 부하 기준으로 App CPU/처리량 포화 근거가 부족해 미도입으로 정리한다.
 
 ## 9. API 공통 계약
 
@@ -200,12 +204,16 @@ Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub�
 
 ## 10. 역할 분배
 
-| 이름 | 핵심 도메인 | 공통·도전 기술 |
+| 이름 | 핵심 도메인 | 프로젝트 책임 범위 |
 |---|---|---|
 | 김현승 | 예약금 결제·환불·지급 예정 예약금 | AI·채팅 |
-| 김홍기 | 합석 테이블·예약 시간·검색 | AWS·CI/CD·로그·모니터링 |
-| 배지현 | 예약·참여·좌석 재고·동시성 | 프론트엔드·Kafka |
+| 김홍기 | 합석 테이블·예약 시간·검색 | 배포·인프라·모니터링 전반 |
+| 배지현 | 예약·참여·좌석 재고·동시성 | 프론트엔드 전반 |
 | 정용태 | 회원·인증·사장님·식당·관리자 | 캐시·조회 성능·K6 |
+
+배지현은 BobFull Frontend 전반과 Backend API 연동 영역을 담당한다. 이 Backend 저장소에서 세부 Frontend 구현 내역을 확인할 수 없는 항목은 기능별로 임의 확정하지 않는다.
+
+김홍기는 AWS 운영 환경, EC2/RDS/ALB 기반 인프라, Docker/ECR, GitHub Actions CI/CD, SSM 기반 배포, Blue-Green 배포, App EC2 다중화, Redis/Kafka 운영 인프라 구성·연결, Prometheus/Grafana, Health Check와 운영 모니터링, 운영 장애 분석, EC2 메모리 병목·Hikari Connection Pool 병목 검증, Auto Scaling 필요성 측정과 미도입 판단, 배포/인프라 Evidence 정리를 담당한다. 이는 운영 인프라 관점의 책임이며 Redis/Kafka의 모든 비즈니스 로직 구현 책임을 뜻하지 않는다.
 
 ## 11. 관련 문서
 
