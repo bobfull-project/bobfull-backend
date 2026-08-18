@@ -1,0 +1,423 @@
+:root{
+  --bg:#17130f;--stage:#1e1912;--panel:#1a1510;--line:#3d352a;
+  --text:#f3ece1;--muted:#a89b89;
+  --accent:#ff7d3d;--accent-strong:#ffa06a;
+  --success:#7cc98a;--failure:#e2685f;
+  --code-bg:#12100c;--annot:#b98552;
+  /* 서비스 흐름 Swimlane 전용 "역할 색" — 상태 색(주황=현재/초록=완료)과 절대 안 겹치도록
+     Blue/Gold/Violet만 쓴다. Node에는 안 쓰고 Lane 배경·제목·아이콘에만 쓴다. */
+  --role-user:#7fa8d9;--role-owner:#c9a25f;--role-auto:#a58ce0
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
+a{color:var(--accent-strong)}
+main{max-width:1260px;margin:auto;padding:24px max(20px,4vw) 140px}
+
+.topbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:24px;padding:14px max(22px,5vw);background:var(--bg);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:14px}
+.brand nav{display:flex;gap:8px;font-weight:400}
+.brand nav a{color:var(--muted);font-size:12px;text-decoration:none}
+.brand nav [aria-current="page"]{color:var(--accent-strong);font-weight:700}
+
+select,button{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text);padding:8px 12px;font:inherit}
+button{cursor:pointer}
+button:hover,button.active{border-color:var(--accent);color:var(--accent-strong)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#1c1006;font-weight:700;padding:11px 22px;font-size:14px}
+button.primary:hover{background:var(--accent-strong);color:#1c1006}
+
+.scenario-select{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:20px 0 16px;border-bottom:1px solid var(--line)}
+.scenario-select label{color:var(--muted);font-size:12px}
+.scenario-select .hint{margin:0;color:var(--muted);font-size:12px;flex-basis:100%}
+
+.chapter-intro{display:flex;gap:28px;padding:18px 0;border-bottom:1px solid var(--line)}
+.chapter-intro[hidden]{display:none}
+.chapter-intro-main{flex:1 1 340px;min-width:0}
+.chapter-intro h1{margin:0 0 6px;font-size:clamp(20px,2.6vw,30px);font-weight:700}
+.chapter-intro p{margin:0;color:var(--muted);font-size:13px}
+/* 도표까지 가는 거리를 줄이기 위해 기본은 문제/해결 한 줄 요약만 보여주고, 원래의 두 문단짜리
+   전체 설명은 <details>로 접어둔다 — 내용은 그대로 유지하고 기본 노출 분량만 줄인다. */
+.chapter-origin-wrap{flex:1 1 320px;min-width:0;padding-left:20px;border-left:1px solid var(--line)}
+.origin-short{margin:0;color:var(--text);font-size:13px;line-height:1.65}
+.origin-short strong{color:var(--accent-strong);font-weight:700;margin-right:5px}
+.origin-details{margin-top:8px}
+.origin-details summary{cursor:pointer;color:var(--muted);font-size:11.5px;list-style:none}
+.origin-details summary::-webkit-details-marker{display:none}
+.origin-details summary::before{content:"▸ ";color:var(--accent-strong)}
+.origin-details[open] summary::before{content:"▾ "}
+.chapter-origin{margin:10px 0 0 !important}
+/* Why(문제)/How(해결) 두 덩어리로 나눠 한 번에 읽히게 한다. 긴 한 문단 대신 요약 카드 2개. */
+.chapter-origin dt{margin:0 0 3px;color:var(--accent-strong);font:600 11px system-ui,"Malgun Gothic",sans-serif}
+.chapter-origin dd{margin:0 0 12px;color:var(--text);font-size:12.5px;line-height:1.6}
+.chapter-origin dd:last-child{margin-bottom:0}
+
+.scenario-bar{padding:14px 0 4px}
+.scenario-buttons{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.scenario-buttons button{flex:0 0 auto;padding:7px 14px;font-size:12.5px;white-space:nowrap}
+
+.playback{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;padding:8px max(20px,4vw) 10px;background:var(--bg);border-top:1px solid var(--line)}
+.playback[hidden]{display:none}
+.playback-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%}
+#secondaryControls{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.75;transform:scale(.96);transform-origin:left center}
+#counter{margin-left:auto;padding:6px 14px;border:1px solid var(--accent);border-radius:20px;background:rgba(255,125,61,.12);color:var(--accent-strong);font:700 15px ui-monospace,monospace;letter-spacing:.02em;white-space:nowrap}
+
+.stage{margin:4px 0 20px}
+/* sticky였다가(도표 고정 + 설명만 스크롤) 사용해보니 불편하다는 피드백으로 되돌렸다 — 도표도
+   설명과 함께 그냥 페이지를 따라 스크롤된다. */
+.stage-sticky{background:var(--stage);border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;padding:12px 20px 10px}
+.stage-heading{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:8px}
+.stage-heading h2{margin:0;font-size:14px;font-weight:600;color:var(--muted)}
+.expand-btn{border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);padding:5px 11px;font-size:11.5px;white-space:nowrap}
+.expand-btn:hover{border-color:var(--accent);color:var(--accent-strong)}
+/* 노트북 화면(짧은 세로)에서도 과하게 크지 않도록 상한은 유지하되, 예산 자체를 키웠다 — 이전 40vh/
+   max-height:400px 예산은 viewBox가 가로로 넓은 topology(1260x470 등)에서 세로 높이가 먼저
+   한계에 닿아 실제 가로 폭을 다 못 쓰고 도표가 작게 보였다(예: 720px 창에서 svg 260px 높이,
+   폭은 slot의 절반 정도만 사용). 48vh/max-height:480px로 올려 같은 창 높이에서도 도표가 더
+   크게 보이게 한다. */
+.canvas-slot{height:48vh;min-height:260px;max-height:480px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.canvas{width:100%;height:100%;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.topology{display:block;width:auto;height:auto;max-width:100%;max-height:100%}
+.stage-scroll{background:var(--stage);border:1px solid var(--line);border-radius:0 0 10px 10px;padding:14px 20px 22px;box-sizing:border-box}
+.stage-hint{margin:0 0 10px;color:var(--muted);font-size:11px}
+/* 크게 보기 — 같은 #canvas/#flowCaption 엘리먼트를 그대로 옮겨서 상태·강조를 다시 그리지 않는다. */
+.canvas-overlay{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:24px}
+.canvas-overlay[hidden]{display:none}
+.canvas-overlay-inner{position:relative;width:min(96vw,1600px);height:88vh;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:44px 20px 20px;display:flex;flex-direction:column}
+.canvas-overlay-inner #collapseCanvas{position:absolute;top:12px;right:14px}
+.canvas-overlay-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.canvas-overlay-body .canvas{flex:1;min-height:0}
+.canvas-overlay-body .flow-caption{flex:none;margin:12px 0 0}
+.connector{fill:none;stroke:var(--line);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.connector.dim{opacity:.4}
+.connector.active{stroke:var(--accent);opacity:1}
+/* 전체 인프라 구성도의 순차 흐름 애니메이션 전용 — 화살표가 이미 지나간 edge는 Node의 committed
+   상태(초록)와 같은 색으로 남겨 "여기까지 왔다"를 보여준다. */
+.connector.committed{stroke:var(--success);opacity:.7}
+/* dashedEdges(opt-in) — Scheduler 재시도 같은 보조 경로는 active여도 점선으로, 메인 흐름과 구분한다. */
+.connector.retry-dashed{stroke-dasharray:5 4}
+.canvas-node rect{fill:var(--panel);stroke:var(--line);stroke-width:2}
+.canvas-node text{fill:var(--muted);font:600 13px system-ui;text-anchor:middle}
+.canvas-node.dim{opacity:.5}
+.canvas-node.active rect{fill:#2c1c0f;stroke:var(--accent)}
+.canvas-node.active text{fill:var(--text)}
+.canvas-node.committed rect{stroke:var(--success);stroke-dasharray:3 3;fill:var(--panel)}
+.canvas-node.committed text{fill:var(--muted)}
+/* Async Queue는 실제 운영 경로가 아니라 Ch5 실험 비교용 baseline이다 — 활성화돼도 점선 테두리와
+   보조 라벨로 "지금 이건 비교 기준선"이라는 걸 항상 구분한다(진짜 흐름과 같은 위계로 보이지 않게). */
+.canvas-node.baseline rect{stroke-dasharray:4 3}
+.canvas-node .node-sublabel{fill:var(--muted);font:9px system-ui;text-anchor:middle}
+.canvas-node.active .node-sublabel{fill:var(--accent-strong)}
+/* secondaryNodes(opt-in) — Scheduler처럼 "메인 노드가 아니라 reliability 보조 장치"인 node는
+   항상 점선 테두리 + 살짝 작은 글자로, active여도 메인 흐름 node와 같은 무게로 안 보이게 한다. */
+.canvas-node.secondary rect{stroke-dasharray:4 3}
+.canvas-node.secondary text{font-size:11px}
+/* AI 채팅 검수 unified topology 전용(animateNodes) — "AI Consumer 안으로 들어갔다"는 느낌을 주기
+   위해 그 Step에서 새로 active되는 node만 살짝 커졌다 제자리로 돌아오는 pop-in을 준다.
+   .zoom-topology 클래스가 있을 때만 적용되므로 다른 topology의 active node는 전혀 바뀌지 않는다.
+   반드시 안쪽 .node-inner에만 건다 — 바깥 <g>는 transform="translate(x y)"(SVG attribute)로
+   위치를 담당하는데, 같은 요소에 CSS transform(scale) 애니메이션까지 걸면 브라우저가 둘을 잘못
+   합성해 node가 엉뚱한 좌표로 튀는 버그가 있었다. */
+.zoom-topology .canvas-node.active .node-inner{transform-box:fill-box;transform-origin:center;animation:canvasNodePopIn .45s ease}
+@keyframes canvasNodePopIn{0%{opacity:.35;transform:scale(.9)}100%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.zoom-topology .canvas-node.active .node-inner{animation:none}}
+/* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위한, 아주 옅은 영역 구분.
+   active/dim 강조 위계를 방해하지 않도록 배경만 다르고 테두리는 거의 보이지 않게 한다. */
+.region-bg{fill:var(--panel);opacity:.4;stroke:var(--line);stroke-opacity:.5}
+.region-label{fill:var(--muted);font:600 9.5px system-ui,"Malgun Gothic",sans-serif;letter-spacing:.04em}
+/* Swimlane처럼 region 자체가 "누구의 흐름인지" 나타내야 하는 경우(region.emphasis) 전용 — 훨씬
+   크고 굵게, 브랜드 Orange로 강조한다. emphasis를 안 쓰는 기존 region은 위 기본 스타일 그대로다. */
+.region-bg.lane{opacity:.5;stroke-opacity:.7}
+.region-label.lane{fill:var(--accent-strong);font:800 16px system-ui,"Malgun Gothic",sans-serif;letter-spacing:.02em}
+/* region.role(opt-in, 서비스 흐름 3개 Lane만 씀) — Lane 배경에 아주 옅은 역할 색 tint, 제목은
+   역할 색으로. 3-class selector로 위 .region-bg.lane/.region-label.lane보다 우선하게 한다.
+   fill-opacity는 낮게 유지해 "칠했다"가 아니라 "구분된다" 정도로만 보이게 한다. */
+.region-bg.lane.role-user{fill:var(--role-user);opacity:.09;stroke:var(--role-user);stroke-opacity:.35}
+.region-bg.lane.role-owner{fill:var(--role-owner);opacity:.09;stroke:var(--role-owner);stroke-opacity:.35}
+.region-bg.lane.role-auto{fill:var(--role-auto);opacity:.09;stroke:var(--role-auto);stroke-opacity:.35}
+.region-label.lane.role-user{fill:var(--role-user)}
+.region-label.lane.role-owner{fill:var(--role-owner)}
+.region-label.lane.role-auto{fill:var(--role-auto)}
+/* Lane 제목 앞 작은 단색 아이콘 — 노드 상태 색과 절대 안 겹치는 역할 색만 쓴다. */
+.lane-icon.role-user{fill:var(--role-user)}
+.lane-icon.role-owner{fill:var(--role-owner)}
+.lane-icon.role-auto .ring{fill:none;stroke:var(--role-auto);stroke-width:1.6}
+.lane-icon.role-auto line{stroke:var(--role-auto);stroke-width:1.6}
+.lane-icon.role-auto .hub{fill:var(--role-auto)}
+.node-badge rect{fill:var(--panel);stroke:var(--accent)}
+.node-badge text{fill:var(--accent-strong);font:10px ui-monospace,monospace;text-anchor:middle}
+.edge-label rect{fill:var(--stage);stroke:var(--line)}
+.edge-label text{fill:var(--accent-strong);font:10px ui-monospace,monospace}
+.token{fill:var(--accent);color:var(--accent);font:700 15px system-ui;text-anchor:middle}
+.token.failure{fill:var(--failure);color:var(--failure)}
+.token.dlt{fill:var(--failure);color:var(--failure)}
+.token.broadcast{fill:var(--success);color:var(--success)}
+.service-topology .canvas-node.committed{opacity:.38}
+.service-topology .canvas-node.committed rect{stroke-opacity:.62}
+/* Ch0 주체 간 전달은 선이 길고 꺾여서, token만으로는 방향을 놓치기 쉽다. 라벨을 조금 크게 하고
+   배경 대비를 높여 현재 전달의 출발·도착 관계를 먼저 읽게 한다. */
+.service-topology .edge-label rect{fill:#20170f;stroke:var(--accent);stroke-opacity:.7}
+.service-topology .edge-label text{font-size:11px;font-weight:700}
+.flow-outcome{min-height:22px;color:var(--muted);font:12px ui-monospace,monospace}
+.flow-outcome.failure{color:var(--failure)}
+.flow-outcome.dlt{color:var(--failure)}
+/* 도표가 커서 오른쪽 설명까지 스크롤하지 않도록, 지금 무슨 상황인지 도표 바로 아래 한 줄로 보여준다. */
+.flow-caption{margin:10px 0 12px;padding:9px 14px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;background:var(--panel);color:var(--text);font-size:13px;font-weight:600;line-height:1.5}
+.legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:11px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px}
+
+.stage-notes{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;min-width:0;overflow-wrap:anywhere}
+.kicker{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
+.stage-notes h3{margin:0 0 6px;font-size:19px;line-height:1.35}
+.narration{margin:0 0 10px;color:var(--text);font-size:14px;line-height:1.6}
+.narration[hidden]{display:none}
+/* 긴 설명 대신 번호가 붙은 짧은 흐름으로 읽히게 한다. */
+.narration-points{margin:0 0 10px;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.narration-points[hidden]{display:none}
+.narration-points li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;color:var(--text);font-size:13.5px;line-height:1.55;overflow-wrap:anywhere}
+.narration-points li::before{content:counter(narration-step);counter-increment:narration-step;display:block;width:19px;height:19px;border-radius:50%;border:1px solid var(--accent);color:var(--accent-strong);font:700 11px/18px ui-monospace,monospace;text-align:center}
+.narration-points{counter-reset:narration-step}
+.step-status{display:flex;flex-direction:column;gap:4px;margin:0 0 6px}
+.step-status[hidden]{display:none}
+.step-status-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)}
+.step-status-item .icon{width:16px;text-align:center}
+.step-status-item.failed{color:var(--failure)}
+.step-status-item.pending{color:var(--muted)}
+.step-status-line{margin:0;font-size:13px;color:var(--text)}
+.step-status-line .arrow{color:var(--accent-strong);font-weight:600;margin-right:4px}
+.step-next{margin:0 0 4px;font-size:13px;color:var(--text)}
+.step-next[hidden]{display:none}
+.step-next .arrow{color:var(--accent-strong);font-weight:700;margin-right:4px}
+.tech-label{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.fact{margin-top:2px}
+.fact-caption{margin:0;color:var(--muted);font-size:12px}
+.fact-caption .fact-strong{color:var(--accent-strong);font-weight:700}
+.fact-caption .decision{color:var(--accent-strong);font-weight:600}
+.quick-state{display:grid;gap:3px;margin:8px 0 0}
+.quick-state div{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px}
+.quick-state dt{color:var(--muted);font:10px ui-monospace,monospace}
+.quick-state dd{margin:0;color:var(--text);font-size:12px}
+.prompt-blocks{margin:8px 0 0;color:var(--muted);font-size:11px}
+.detail-list{display:flex;flex-direction:column;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.detail-list[hidden]{display:none}
+.detail-list article h3{margin:0 0 3px;color:var(--muted);font-size:11px;font-weight:600}
+.detail-list article p{margin:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere;color:var(--text)}
+.detail-list a{font-size:13px}
+/* merge 전이라 link가 없는 근거 — 클릭 가능한 것처럼 보이지 않게 muted로 표시한다. */
+.evidence-plain{color:var(--muted);font-size:13px}
+
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0}
+.comparison[hidden]{display:none}
+.comparison-intro{grid-column:1/-1;margin:0 0 4px;color:var(--muted);font-size:12px}
+.comparison article{border:1px solid var(--line);border-radius:8px;padding:14px}
+.lane-tag{color:var(--muted);font-size:11px}
+.lane h3{margin:2px 0 0;font-size:15px}
+.lane-strip{width:100%;margin:10px 0 6px}
+.lane-line{stroke:var(--line);stroke-width:3}
+.lane-line.done{stroke:var(--success)}
+.lane-line.pending{stroke:var(--line);opacity:.5}
+.lane-line.blocked{stroke:var(--failure);stroke-dasharray:4 3}
+.lane-node circle{fill:var(--panel);stroke:var(--line);stroke-width:2}
+.lane-node.active circle{stroke:var(--accent);fill:#2c1c0f}
+.lane-node.done circle{stroke:var(--success);fill:#173224}
+.lane-node.blocked circle{stroke:var(--failure);fill:#3a1c1c}
+.lane-node text{fill:var(--text);font:700 10px system-ui;text-anchor:middle}
+.lane-label{fill:var(--muted);font:9px ui-monospace,monospace;text-anchor:middle}
+.comparison p{margin:8px 0 0;font-size:13px;color:var(--muted)}
+
+.performance{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:14px 0}
+.performance[hidden]{display:none}
+.perf-stat,.perf-compare{padding:4px 0}
+.perf-stat h3,.perf-compare h3{margin-bottom:6px;color:var(--muted);font-size:11px;font-weight:600}
+.perf-value{margin:0;font-size:19px;font-weight:700;color:var(--accent-strong)}
+.perf-bar-row{display:grid;grid-template-columns:48px 1fr auto;gap:8px;align-items:center;margin-bottom:6px}
+.perf-bar-label{color:var(--muted);font-size:11px}
+.perf-bar{background:var(--panel);border-radius:4px;height:8px;overflow:hidden}
+.perf-bar-fill{height:100%;border-radius:4px}
+.perf-bar-fill.before{background:var(--failure)}
+.perf-bar-fill.after{background:var(--success)}
+.perf-bar-value{font:11px ui-monospace,monospace;color:var(--text)}
+.perf-improvement{margin:6px 0 0;color:var(--success);font-size:12px;font-weight:600}
+/* 지표 이름만 보고는 뜻을 알 수 없으므로 같은 화면에서 바로 풀어준다. */
+.metric-glossary{grid-column:1/-1;display:flex;flex-direction:column;gap:5px;margin-top:4px;padding-top:12px;border-top:1px solid var(--line)}
+.metric-glossary div{display:grid;grid-template-columns:150px 1fr;gap:10px;font-size:12px}
+.metric-glossary dt,.metric-glossary .term{color:var(--accent-strong);font:600 11.5px ui-monospace,monospace}
+.metric-glossary dd,.metric-glossary .desc{margin:0;color:var(--muted);line-height:1.5}
+
+/* 실행 주체·주기·재시도 한도 — Canvas 바로 아래 고정 노출. */
+.retry-policy{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.retry-policy[hidden]{display:none}
+.retry-policy div{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);min-width:132px}
+.rp-term{color:var(--muted);font-size:10.5px}
+.rp-value{color:var(--accent-strong);font:600 12.5px ui-monospace,monospace}
+
+/* 저장 위치 비교(Outbox DB row vs 메모리 리스너). 코드를 읽지 않아도 "DB에 남는가"가 한눈에 보이게 한다. */
+.store-compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+.store-compare[hidden]{display:none}
+.store-box{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--panel)}
+.store-box.gone{border-color:var(--failure)}
+.store-box.kept{border-color:var(--success)}
+.store-tag{display:block;color:var(--muted);font-size:11px;margin-bottom:2px}
+.store-box h3{margin:0 0 10px;font-size:14px}
+.store-box.gone h3{color:var(--failure)}
+.store-box.kept h3{color:var(--success)}
+.store-table-wrap{overflow-x:auto}
+.store-table{width:100%;border-collapse:collapse;font:11.5px ui-monospace,monospace}
+.store-table th{background:var(--code-bg);color:var(--muted);font-weight:600;text-align:left;padding:6px 10px;border:1px solid var(--line);white-space:nowrap}
+.store-table td{color:var(--text);padding:6px 10px;border:1px solid var(--line);white-space:nowrap}
+.store-empty{margin:0;padding:18px 10px;text-align:center;color:var(--failure);font-size:12.5px;border:1px dashed var(--failure);border-radius:6px}
+.store-note{margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.55}
+
+.code-view{margin-bottom:24px}
+.code-view h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:12px}
+.code-stepper{display:flex;flex-wrap:wrap;gap:5px 16px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.code-stepper span.active{color:var(--accent-strong);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.code-card{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.code-card-head{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px}
+.code-method-tag{color:var(--success);font-size:11.5px;font-weight:700;letter-spacing:.02em}
+.code-method{color:var(--text);font:600 14.5px ui-monospace,monospace;margin-left:6px}
+.code-file{color:var(--muted);font:11.5px ui-monospace,monospace;margin-top:3px}
+.code-block{margin:0;background:var(--code-bg);padding:16px 18px;overflow-x:auto}
+.code-block code{color:var(--text);font:14px/1.75 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;white-space:pre}
+.code-empty{margin:0;padding:14px;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+/* Java syntax highlighting — 토크나이저가 붙이는 class와 1:1로 대응한다. */
+.tok-keyword{color:#c191ff}
+.tok-anno{color:#ffa06a}
+.tok-string{color:#9ed77f}
+.tok-comment{color:#7b7263;font-style:italic}
+.tok-number{color:#f0a878}
+.tok-type{color:#6fd0e0}
+.tok-method{color:#ffd479}
+/* 핵심 구간만 테두리로 묶고 "이 코드가 무슨 일을 하는가"를 한 줄로 붙인다. */
+.code-annotated{display:block;position:relative;margin:10px 0;padding:8px 12px 8px 14px;border:1px solid var(--annot);border-left-width:3px;border-radius:6px;background:rgba(185,133,82,.08)}
+.code-annotation{display:block;margin-bottom:6px;color:var(--annot);font:600 12.5px/1.5 system-ui,"Malgun Gothic",sans-serif;white-space:normal}
+.code-annotation .num{display:inline-block;min-width:19px;height:19px;margin-right:6px;border-radius:50%;background:var(--annot);color:var(--code-bg);font:700 11px/19px system-ui;text-align:center}
+
+.outcomes{margin-bottom:24px}
+.outcomes h2{font-size:14px;color:var(--muted);font-weight:600;margin:20px 0 6px}
+.outcomes h2:first-child{margin-top:0}
+.outcomes-hint{margin:0 0 4px;color:var(--muted);font-size:12px}
+.perf-highlights{display:flex;flex-direction:column;gap:16px;margin:14px 0}
+.perf-highlight{border:1px solid var(--line);border-radius:8px;padding:16px;background:var(--panel)}
+.perf-highlight h3{margin:0 0 6px;font-size:15px;color:var(--text)}
+.perf-highlight>p{margin:0 0 14px;font-size:13px;color:var(--text);line-height:1.6}
+.perf-highlight .performance{margin:0}
+.outcome-list{margin-top:10px;padding-top:0;border-top:none}
+.outcome-list article{border-left:3px solid var(--success);border-radius:0 6px 6px 0;background:var(--panel);padding:10px 14px}
+.outcome-list article h3{margin:0 0 4px;color:var(--text);font-size:13px;font-weight:700}
+.outcome-list article p{margin:0 0 6px;font-size:13px;line-height:1.5;color:var(--text)}
+.outcome-list article p:last-child{margin-bottom:0}
+.outcome-list .decision{color:var(--accent-strong);font-weight:600;font-size:12px}
+.outcome-list .side-note{color:var(--muted);font-size:12px}
+
+/* Evidence 자체는 그대로 두되, Chapter별 스토리의 핵심이 아니라 검증 범위 참고자료이므로 기본 접힘. */
+.evidence-gate{margin-top:8px;padding-top:20px;border-top:1px solid var(--line)}
+.evidence-gate summary{cursor:pointer;color:var(--accent-strong);font-size:13px;font-weight:600;list-style:none}
+.evidence-gate summary::-webkit-details-marker{display:none}
+.evidence-gate[open] summary{margin-bottom:12px}
+.gate-status{display:block;color:var(--accent-strong);font-size:11px;margin-bottom:6px}
+.evidence-gate h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:8px}
+.evidence-gate p,.evidence-gate li{color:var(--muted);font-size:13px}
+.evidence-gate ul{padding-left:18px}
+
+/* Ch0 · BobFull System Showcase — 스크롤 없이 한 화면 안에서 문제→흐름→결과가 끝나야 하므로,
+   기존 Chapter의 상세 문서형 레이아웃과는 완전히 분리된 프레젠테이션 전용 뷰다. Canvas 렌더링과
+   Step 데이터는 renderCanvas()/findStep()을 그대로 재사용하고, 여기서는 배치만 새로 짠다. */
+.showcase{display:flex;flex-direction:column;gap:10px;min-height:calc(100vh - var(--topbar-h, 56px) - 24px);padding:14px 0 10px;box-sizing:border-box}
+.showcase[hidden]{display:none}
+.showcase-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.showcase-brand{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+/* 최상위 3개 관점(서비스/핵심 시스템/인프라) 탭 — 그 안의 Scenario 선택(.showcase-tabs)보다 한 단계
+   위 위계이므로 accent를 더 진하게 줘서 구분한다. */
+.showcase-main-tabs{overflow-x:visible;flex-wrap:wrap;padding-bottom:0}
+.showcase-main-tabs button{font-weight:700}
+.showcase-main-tabs button.active{background:var(--accent);border-color:var(--accent);color:#1c1006}
+.showcase-tab-question{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.showcase-subheader{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line)}
+.showcase-subheader[hidden]{display:none}
+.showcase-scenario-title{margin:0;font-size:clamp(19px,2.4vw,26px);font-weight:700}
+.showcase-tabs{overflow-x:visible;flex-wrap:wrap;padding-bottom:0}
+.showcase-actions{display:flex;gap:8px;align-self:center}
+.showcase-copy{display:flex;flex-direction:column;gap:3px}
+.showcase-problem{margin:0;color:var(--text);font-size:15px;font-weight:700;line-height:1.4}
+.showcase-solution{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+/* 시스템 도표가 항상 화면의 주인공 — 남는 세로 공간을 전부 차지하고, containment로 잘리지 않는다. */
+/* max-height 안전장치 — Showcase는 Chapter 모드의 .canvas-slot(max-height:400px)과 달리 높이 상한이
+   없어서, 세로로 긴 topology(예: 인프라 흐름의 Layer 구조)가 뷰포트를 거의 다 채워 아래 설명·배지가
+   화면 밖으로 밀려나는 문제가 있었다. flex:1은 유지하되 상한만 둔다. */
+.showcase-stage{flex:1;min-height:280px;max-height:520px;display:flex;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px}
+#showcaseCanvasSlot{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow:hidden}
+#showcaseCanvasSlot .canvas{width:100%;flex:1;min-height:0}
+#showcaseCanvasSlot .flow-caption{flex:none;width:100%;margin:0;text-align:center}
+.showcase-outcomes{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.showcase-outcome{border:1px solid var(--success);color:var(--success);background:rgba(124,201,138,.08);padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;white-space:nowrap}
+.showcase-controls{display:flex;align-items:center;justify-content:center;gap:16px}
+.showcase-controls-buttons{display:flex;gap:8px}
+.counter-pill{padding:6px 14px;border:1px solid var(--accent);border-radius:20px;background:rgba(255,125,61,.12);color:var(--accent-strong);font:700 14px ui-monospace,monospace}
+
+/* 전체 인프라 구성도 — 요약 Map(Runtime Flow)과 분리된 정적 Topology 화면. 요약 Map과 같은 Dark
+   Theme/Orange 강조/Node 스타일/Region Box를 그대로 재사용하되, Scenario Step 재생 UI는 전혀 없다. */
+.arch-view{display:flex;flex-direction:column;gap:10px}
+.arch-view[hidden]{display:none}
+.arch-view-head{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line)}
+.arch-view-hint{margin:0;color:var(--muted);font-size:12px}
+/* 도표를 옆이 아니라 위아래로 쌓는다 — 옆에 260px짜리 패널이 있으면 도표 폭이 그만큼 줄어들어
+   작아 보였다. 세로로 쌓으면 도표가 전체 폭을 다 쓸 수 있다. */
+.arch-view-body{display:flex;flex-direction:column;gap:14px}
+.arch-canvas{width:100%;min-height:480px;max-height:760px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:auto;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px;box-sizing:border-box}
+.arch-canvas .topology{cursor:default}
+.arch-canvas .canvas-node{cursor:pointer}
+.arch-progress{flex:none;margin:8px 0 0;padding:7px 12px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 5px 5px 0;background:var(--panel);color:var(--text);font-size:12px;font-weight:700}
+.arch-detail-panel{width:100%;box-sizing:border-box;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:16px;overflow-y:auto;max-height:220px}
+.arch-detail-panel h3{margin:0 0 10px;font-size:15px;color:var(--text)}
+.arch-detail-hint{margin:0;color:var(--muted);font-size:12.5px}
+/* 패널이 아래로 넓어졌으니 5개 필드를 세로로 쭉 나열하지 않고 grid로 나란히 배치해 공간을 아낀다. */
+.arch-detail-list{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 20px}
+.arch-detail-list dt{color:var(--accent-strong);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.arch-detail-list dd{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5}
+@media (max-width:760px){
+  .arch-detail-list{grid-template-columns:1fr}
+}
+
+/* Capture — README GIF/브로셔 촬영용. 일반 Showcase의 정보는 보존하되, GIF에서는
+   제목·문제 → 큰 도표 → 현재 Step 자막만 남긴다. Canvas 안의 flow-outcome은 caption과
+   같은 Step 메시지를 반복하면서 높이를 차지하므로 Capture에서만 숨긴다. */
+body.capture-mode .topbar{display:none}
+body.capture-mode .scenario-select{display:none}
+body.capture-mode .showcase-topbar{display:none}
+body.capture-mode .showcase-tab-question{display:none}
+body.capture-mode .showcase-main-tabs{display:none}
+body.capture-mode .showcase-tabs{display:none}
+body.capture-mode .showcase-actions{display:none}
+body.capture-mode .showcase-solution{display:none}
+body.capture-mode .showcase-outcomes{display:none}
+body.capture-mode .showcase-controls{display:none}
+body.capture-mode .flow-outcome{display:none}
+body.capture-mode main{max-width:none;height:100vh;padding:18px max(20px,4vw);overflow:hidden}
+body.capture-mode .showcase{height:100%;min-height:0;padding:0;gap:8px}
+body.capture-mode .showcase-subheader{flex:none;padding:0;border-top:none}
+body.capture-mode .showcase-scenario-title{font-size:clamp(20px,2.3vw,28px)}
+body.capture-mode #showcaseScenarioView:not([hidden]){display:flex;flex:1;min-height:0;flex-direction:column;gap:8px}
+body.capture-mode .showcase-copy{flex:none}
+body.capture-mode .showcase-problem{font-size:14px;line-height:1.35}
+body.capture-mode .showcase-stage{flex:1;min-height:0;max-height:none;padding:10px}
+body.capture-mode #showcaseCanvasSlot{gap:0}
+body.capture-mode #showcaseCanvasSlot .canvas{flex:1;min-height:0}
+body.capture-mode #showcaseCanvasSlot .flow-caption{flex:none;margin:8px 0 0;padding:7px 12px;font-size:13px;line-height:1.4}
+
+@media(max-width:860px){
+  .topbar{display:block}
+  .brand{margin-bottom:8px}
+  .comparison{grid-template-columns:1fr}
+  .store-compare{grid-template-columns:1fr}
+  .chapter-intro{flex-direction:column;gap:10px}
+  .chapter-intro-main{flex:none}
+  .chapter-origin-wrap{flex:none;padding-left:0;border-left:none;padding-top:10px;border-top:1px solid var(--line)}
+  .showcase-topbar{flex-direction:column;align-items:stretch}
+  .showcase-actions{align-self:flex-start}
+  .showcase-subheader{flex-direction:column;align-items:stretch}
+}
+@media(max-width:520px){
+  main{padding:16px}
+  .comparison{grid-template-columns:1fr}
+  .metric-glossary div{grid-template-columns:1fr;gap:2px}
+  .canvas-slot{height:40vh;min-height:220px}
+  .showcase-stage{min-height:220px}
+}
