@@ -613,17 +613,30 @@ function archNodeSvg(t, id, label, cls) {
   const categoryCls = t.nodeCategories && t.nodeCategories[id] ? ` cat-${t.nodeCategories[id]}` : "";
   return `<g class="canvas-node${cls ? ` ${cls}` : ""}${categoryCls}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
 }
-/* 전체 인프라 구성도의 흐름 강조 — Edge는 항상 구조적 배경(회색, pool 기반 fan-out 그대로)만
-   보여주고 절대 강조하지 않는다. 실행 순서를 보여주는 것은 오직 Node 자체의 반짝임뿐이다 —
-   방문 순서대로 Node를 하나씩 active(주황)로 켜고, 이미 지나간 Node는 committed(초록)로 남는다.
-   Edge 경로를 계산하거나 강조하려 했던 이전 시도(고정 pool waypoint, 좌표 기반 자동 라우팅)는
-   전부 제거했다 — "선 빼고 Node만 순서대로 반짝이기"가 최종 방향이다. */
+/* 두 Node의 실제 좌표(박스 중심)만 보고 그때그때 강조선을 계산한다 — pool 같은 가상 waypoint를
+   거치는 고정 t.edges 문자열은 재사용하지 않는다(path가 "green1"→"rds"처럼 고정 edge에 없는
+   구간도 자유롭게 잇기 때문). dx/dy 중 더 큰 축으로 먼저 꺾어(elbow) 대부분의 실제 배치에서
+   다른 Node 박스를 덜 가로지르게 한다 — 완벽한 장애물 회피는 아니고, "이 구간을 지금 지나간다"는
+   방향성을 보여주는 근사 경로다. */
+function archNodeCenter(t, id) { const [x, y] = t.nodePositions[id]; return [x + 50, y + 35]; }
+function computeArchActivePath(t, fromId, toId) {
+  const [x1, y1] = archNodeCenter(t, fromId);
+  const [x2, y2] = archNodeCenter(t, toId);
+  if (Math.abs(x1 - x2) < 2) return `M${x1} ${y1} V${y2}`;
+  if (Math.abs(y1 - y2) < 2) return `M${x1} ${y1} H${x2}`;
+  return Math.abs(x1 - x2) >= Math.abs(y1 - y2) ? `M${x1} ${y1} H${x2} V${y2}` : `M${x1} ${y1} V${y2} H${x2}`;
+}
+/* 전체 인프라 구성도의 흐름 강조 — 구조적 배경 Edge(회색, pool 기반 fan-out)는 항상 그대로 두고,
+   그 위에 "지금 방문 중인 경로"만 computeArchActivePath()로 계산한 강조선을 얹는다. 이미 지나간 구간은
+   committed(초록), 마지막(현재) 구간만 active(주황 + 흐르는 token)로 표시해 요약 Scenario Map과
+   같은 색 관례를 유지한다. Node 클릭으로 단일 Node만 살펴보는 모드(archSelected)에서는 특정
+   경로가 없으므로 강조선을 그리지 않는다. */
 function renderArchCanvas() {
   const t = fullArchitectureTopology;
   const regionSvg = regionBgSvg(t);
   let nodesSvg;
-  const edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector dim" d="${path}"/>`).join("");
-  const tokenSvg = "";
+  const staticEdgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector dim" d="${path}"/>`).join("");
+  let dynamicEdgeSvg = "", tokenSvg = "";
   if (state.archSelected) {
     nodesSvg = t.nodes.map(([id, label]) => archNodeSvg(t, id, label, id === state.archSelected ? "active" : "")).join("");
   } else {
@@ -634,26 +647,43 @@ function renderArchCanvas() {
     const committedNodes = visitedNodes.slice(0, -1);
     nodesSvg = t.nodes.map(([id, label]) =>
       archNodeSvg(t, id, label, id === activeNode ? "active" : committedNodes.includes(id) ? "committed" : "")).join("");
+    const segments = visitedNodes.slice(1).map((id, i) => [visitedNodes[i], id]);
+    dynamicEdgeSvg = segments.map(([from, to], i) =>
+      `<path class="connector ${i === segments.length - 1 ? "active" : "committed"}" d="${computeArchActivePath(t, from, to)}"/>`).join("");
+    if (segments.length) {
+      const [lastFrom, lastTo] = segments[segments.length - 1];
+      tokenSvg = `<g class="token event"><rect x="-5" y="-5" width="10" height="10" transform="rotate(45)"/><animateMotion dur="1.1s" repeatCount="indefinite" fill="remove" path="${computeArchActivePath(t, lastFrom, lastTo)}"/></g>`;
+    }
   }
+  const edgeSvg = staticEdgeSvg + dynamicEdgeSvg;
   const flow = archFlowGroups[state.archFlowIndex];
   const sequence = flow.sequences[state.archSequenceIndex];
   const path = sequence.path;
   const step = Math.min(state.archPathStep, path.length - 1);
+  /* captions[step]가 "지금 이 hop에서 실제로 무슨 일이 일어나는지"를 한 문장으로 설명한다 —
+     예전의 "현재 연결: A → B" 기계적 문구를 대체한다. captions가 없는(정의 안 된) sequence만
+     예전 방식으로 fallback한다. */
   const fromId = step > 0 ? path[step - 1] : null;
   const toId = path[step];
   const nodeLabel = (id) => id && t.nodes.find(([nodeId]) => nodeId === id)?.[1];
+  const fallbackCaption = fromId && fromId !== toId ? `현재 연결: ${nodeLabel(fromId)} → ${nodeLabel(toId)}` : `시작 지점: ${nodeLabel(toId) || flow.label}`;
   const progress = state.archSelected
     ? "선택한 구성 요소의 역할과 연결 정보를 확인하고 있습니다."
     : state.archHolding
       ? `${flow.label} · ${sequence.label} 확인 완료`
-      : toId && fromId && fromId !== toId
-        ? `현재 연결: ${nodeLabel(fromId)} → ${nodeLabel(toId)}`
-        : `시작 지점: ${nodeLabel(toId) || flow.label}`;
+      : (sequence.captions && sequence.captions[step]) || fallbackCaption;
   const archTopologyClass = t.categorized ? " categorized-topology" : "";
   $("archCanvas").innerHTML = `<svg class="topology arch-topology${archTopologyClass}" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g></svg><p class="arch-progress">${progress}</p>`;
   $("archLegend").innerHTML = t.nodeCategories ? categoryLegendHtml(ARCH_CATEGORY_LEGEND) : "";
   $("archLegend").hidden = !t.nodeCategories;
   renderArchFlowButtons();
+  /* 재생바는 특정 Node를 골라 살펴보는 중(archSelected)에는 의미가 없으므로 감춘다 — 그 상태는
+     이미 "선택한 구성 요소의 역할과 연결 정보를 확인하고 있습니다" 문구로 따로 안내한다. */
+  $("archControls").hidden = !!state.archSelected;
+  if (!state.archSelected) {
+    $("archPlayPause").textContent = archPlaying ? "⏸ Pause" : "▶ Play";
+    $("archStepCounter").textContent = archGroupProgress(flow);
+  }
 }
 function renderArchFlowButtons() {
   $("archFlowButtons").innerHTML = archFlowGroups.map((group, i) =>
@@ -698,8 +728,10 @@ function archFlowTick() {
   }
   renderArchCanvas();
 }
+let archPlaying = true;
 function startArchFlowCycle() {
   stopArchFlowCycle();
+  archPlaying = true;
   state.archSelected = null;
   state.archSequenceIndex = 0;
   state.archPathStep = 0;
@@ -712,6 +744,64 @@ function startArchFlowCycle() {
 function scheduleArchResume() {
   clearTimeout(state.archResumeTimeout);
   state.archResumeTimeout = setTimeout(startArchFlowCycle, 4000);
+}
+/* 재생바(Prev/Play·Pause/Next/Replay) — 요약 Scenario Map의 재생바와 같은 조작 관례를 그대로
+   따른다. Prev/Next는 수동 조작이므로 자동 순환을 멈추고, Play는 현재 위치 그대로 순환을 다시
+   시작한다(startArchFlowCycle처럼 위치를 0으로 리셋하지 않는다). */
+function archPauseCycle() { archPlaying = false; stopArchFlowCycle(); renderArchCanvas(); }
+function archResumeCycle() {
+  stopArchFlowCycle();
+  archPlaying = true;
+  state.archSelected = null;
+  state.archFlowTimer = setInterval(archFlowTick, 1350);
+  renderArchCanvas();
+}
+function archStepForward() {
+  const group = archFlowGroups[state.archFlowIndex];
+  const path = group.sequences[state.archSequenceIndex].path;
+  if (state.archPathStep < path.length - 1) {
+    state.archPathStep++;
+  } else if (state.archSequenceIndex < group.sequences.length - 1) {
+    state.archSequenceIndex++; state.archPathStep = 0;
+  } else {
+    state.archFlowIndex = (state.archFlowIndex + 1) % archFlowGroups.length;
+    state.archSequenceIndex = 0; state.archPathStep = 0;
+  }
+  state.archHolding = false;
+  renderArchCanvas();
+}
+function archStepBackward() {
+  if (state.archPathStep > 0) {
+    state.archPathStep--;
+  } else if (state.archSequenceIndex > 0) {
+    state.archSequenceIndex--;
+    state.archPathStep = archFlowGroups[state.archFlowIndex].sequences[state.archSequenceIndex].path.length - 1;
+  } else if (state.archFlowIndex > 0) {
+    state.archFlowIndex--;
+    const prevGroup = archFlowGroups[state.archFlowIndex];
+    state.archSequenceIndex = prevGroup.sequences.length - 1;
+    state.archPathStep = prevGroup.sequences[state.archSequenceIndex].path.length - 1;
+  }
+  state.archHolding = false;
+  renderArchCanvas();
+}
+function archManualStep(stepFn) {
+  state.archSelected = null;
+  archPlaying = false;
+  stopArchFlowCycle();
+  stepFn();
+}
+function archReplayCurrentGroup() {
+  state.archSelected = null;
+  state.archSequenceIndex = 0; state.archPathStep = 0; state.archHolding = false;
+  if (archPlaying) { stopArchFlowCycle(); state.archFlowTimer = setInterval(archFlowTick, 1350); }
+  renderArchCanvas();
+}
+function archGroupProgress(group) {
+  const total = group.sequences.reduce((sum, sequence) => sum + sequence.path.length, 0);
+  let done = 0;
+  for (let i = 0; i < state.archSequenceIndex; i++) done += group.sequences[i].path.length;
+  return `${done + state.archPathStep + 1} / ${total}`;
 }
 function selectArchFlow(idx) {
   state.archFlowIndex = idx;
@@ -875,6 +965,10 @@ $("archFlowButtons").onclick = (event) => {
   const button = event.target.closest("button[data-flow]"); if (!button) return;
   selectArchFlow(Number(button.dataset.flow));
 };
+$("archPrev").onclick = () => archManualStep(archStepBackward);
+$("archNext").onclick = () => archManualStep(archStepForward);
+$("archPlayPause").onclick = () => { archPlaying ? archPauseCycle() : archResumeCycle(); };
+$("archReplay").onclick = archReplayCurrentGroup;
 $("showcaseBackToDocs").onclick = () => {
   const ref = currentShowcase().steps[0];
   if (!ref.chapter) return;
