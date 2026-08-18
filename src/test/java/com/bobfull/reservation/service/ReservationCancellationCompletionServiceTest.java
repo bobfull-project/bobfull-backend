@@ -3,6 +3,7 @@ package com.bobfull.reservation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,10 +17,12 @@ import com.bobfull.common.exception.ReservationErrorCode;
 import com.bobfull.common.monitoring.BusinessMetricRecorder;
 import com.bobfull.reservation.entity.ParticipationStatus;
 import com.bobfull.reservation.entity.Reservation;
+import com.bobfull.reservation.entity.ReservationParticipant;
 import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,10 +41,15 @@ class ReservationCancellationCompletionServiceTest {
     @Mock ReservationCancellationTransactionService transactionService;
     @Mock Reservation reservation;
     @Mock BusinessMetricRecorder businessMetricRecorder;
+    @Mock ReservationCompletionTestHook completionTestHook;
 
     private ReservationCancellationCompletionService service() {
+        return service(Optional.empty());
+    }
+
+    private ReservationCancellationCompletionService service(Optional<ReservationCompletionTestHook> delayHook) {
         return new ReservationCancellationCompletionService(
-                reservationRepository, participantRepository, transactionService, businessMetricRecorder);
+                reservationRepository, participantRepository, transactionService, businessMetricRecorder, delayHook);
     }
 
     @Test
@@ -64,8 +72,8 @@ class ReservationCancellationCompletionServiceTest {
         when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
         when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(1);
         when(reservation.isCancelling()).thenReturn(true);
-        when(participantRepository.existsByReservationIdAndParticipationStatus(
-                1L, ParticipationStatus.CANCEL_REQUESTED)).thenReturn(false);
+        when(participantRepository.findAllWithLockByReservationIdAndParticipationStatus(
+                1L, ParticipationStatus.CANCEL_REQUESTED)).thenReturn(List.of());
 
         service().complete(1L, 2L, now);
 
@@ -79,8 +87,8 @@ class ReservationCancellationCompletionServiceTest {
         when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
         when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(1);
         when(reservation.isCancelling()).thenReturn(true);
-        when(participantRepository.existsByReservationIdAndParticipationStatus(
-                1L, ParticipationStatus.CANCEL_REQUESTED)).thenReturn(true);
+        when(participantRepository.findAllWithLockByReservationIdAndParticipationStatus(
+                1L, ParticipationStatus.CANCEL_REQUESTED)).thenReturn(List.of(mock(ReservationParticipant.class)));
 
         service().complete(1L, 2L, now);
 
@@ -94,8 +102,8 @@ class ReservationCancellationCompletionServiceTest {
         when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
         when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(1);
         when(reservation.isCancelling()).thenReturn(true);
-        when(participantRepository.existsByReservationIdAndParticipationStatus(
-                1L, ParticipationStatus.CANCEL_REQUESTED)).thenReturn(false);
+        when(participantRepository.findAllWithLockByReservationIdAndParticipationStatus(
+                1L, ParticipationStatus.CANCEL_REQUESTED)).thenReturn(List.of());
         when(reservation.getReservationStatus()).thenReturn(ReservationStatus.CANCELLED);
         Logger logger = (Logger) LoggerFactory.getLogger(ReservationCancellationCompletionService.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -135,6 +143,31 @@ class ReservationCancellationCompletionServiceTest {
         service().complete(1L, 2L, now);
 
         verify(transactionService).recalculateAfterCompletion(reservation);
+    }
+
+    @Test
+    void 지연_Hook이_있으면_락_획득_직후_완료_처리_전에_호출한다() {
+        Instant now = Instant.now();
+        when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
+        when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(0);
+
+        service(Optional.of(completionTestHook)).complete(1L, 2L, now);
+
+        InOrder order = inOrder(reservationRepository, completionTestHook, participantRepository);
+        order.verify(reservationRepository).findWithLockById(1L);
+        order.verify(completionTestHook).beforeCompletion(1L);
+        order.verify(participantRepository).completeCancelIfRequested(2L, now);
+    }
+
+    @Test
+    void 지연_Hook이_없으면_아무_영향이_없다() {
+        Instant now = Instant.now();
+        when(reservationRepository.findWithLockById(1L)).thenReturn(Optional.of(reservation));
+        when(participantRepository.completeCancelIfRequested(2L, now)).thenReturn(0);
+
+        service(Optional.empty()).complete(1L, 2L, now);
+
+        verifyNoInteractions(completionTestHook);
     }
 
     @Test

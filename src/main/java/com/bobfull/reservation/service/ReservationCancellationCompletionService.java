@@ -11,6 +11,7 @@ import com.bobfull.reservation.entity.ReservationStatus;
 import com.bobfull.reservation.repository.ReservationParticipantRepository;
 import com.bobfull.reservation.repository.ReservationRepository;
 import java.time.Instant;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -30,17 +31,20 @@ public class ReservationCancellationCompletionService {
     private final ReservationParticipantRepository reservationParticipantRepository;
     private final ReservationCancellationTransactionService transactionService;
     private final BusinessMetricRecorder businessMetricRecorder;
+    private final Optional<ReservationCompletionTestHook> completionTestHook;
 
     public ReservationCancellationCompletionService(
             ReservationRepository reservationRepository,
             ReservationParticipantRepository reservationParticipantRepository,
             ReservationCancellationTransactionService transactionService,
-            BusinessMetricRecorder businessMetricRecorder
+            BusinessMetricRecorder businessMetricRecorder,
+            Optional<ReservationCompletionTestHook> completionTestHook
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationParticipantRepository = reservationParticipantRepository;
         this.transactionService = transactionService;
         this.businessMetricRecorder = businessMetricRecorder;
+        this.completionTestHook = completionTestHook;
     }
 
     /** Reservation을 먼저 잠그고 조건부 UPDATE로 참여자 완료 처리권을 하나만 허용한다. */
@@ -48,6 +52,7 @@ public class ReservationCancellationCompletionService {
     public void complete(Long reservationId, Long reservationParticipantId, Instant completedAt) {
         Reservation reservation = reservationRepository.findWithLockById(reservationId)
                 .orElseThrow(() -> new CustomException(ReservationErrorCode.RESERVATION_ID_NOT_FOUND));
+        completionTestHook.ifPresent(hook -> hook.beforeCompletion(reservationId));
 
         int updatedRows = reservationParticipantRepository.completeCancelIfRequested(
                 reservationParticipantId, completedAt);
@@ -56,9 +61,10 @@ public class ReservationCancellationCompletionService {
         }
 
         if (reservation.isCancelling()) {
-            boolean hasRemainingCancellation = reservationParticipantRepository
-                    .existsByReservationIdAndParticipationStatus(
-                            reservationId, ParticipationStatus.CANCEL_REQUESTED);
+            boolean hasRemainingCancellation = !reservationParticipantRepository
+                    .findAllWithLockByReservationIdAndParticipationStatus(
+                            reservationId, ParticipationStatus.CANCEL_REQUESTED)
+                    .isEmpty();
             if (!hasRemainingCancellation) {
                 reservation.cancel();
             }

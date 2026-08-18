@@ -27,12 +27,19 @@ permissions:
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  BACKEND_EC2_INSTANCE_ID: ${{ vars.BACKEND_EC2_INSTANCE_ID }}
   BACKEND_PARAMETER_PREFIX: ${{ vars.BACKEND_PARAMETER_PREFIX }}
+  BACKEND_ALB_LISTENER_ARN: ${{ vars.BACKEND_ALB_LISTENER_ARN }}
+  BACKEND_BLUE_TARGET_GROUP_ARN: ${{ vars.BACKEND_BLUE_TARGET_GROUP_ARN }}
+  BACKEND_GREEN_TARGET_GROUP_ARN: ${{ vars.BACKEND_GREEN_TARGET_GROUP_ARN }}
+  BACKEND_PUBLIC_READINESS_URL: ${{ vars.BACKEND_PUBLIC_READINESS_URL }}
+  BACKEND_PUBLIC_API_VERIFY_URL: ${{ vars.BACKEND_PUBLIC_API_VERIFY_URL }}
+  BACKEND_MONITORING_EC2_INSTANCE_ID: ${{ vars.BACKEND_MONITORING_EC2_INSTANCE_ID }}
+  BACKEND_MONITORING_COMPOSE_DIR: ${{ vars.BACKEND_MONITORING_COMPOSE_DIR }}
+  BACKEND_MONITORING_ENV_FILE: ${{ vars.BACKEND_MONITORING_ENV_FILE }}
 
 jobs:
   ci:
-    name: Gradle check and Docker build
+    name: Gradle check and bootJar
     runs-on: ubuntu-latest
 
     steps:
@@ -53,10 +60,13 @@ jobs:
           chmod +x ./gradlew
           ./gradlew clean check bootJar --no-daemon
 
-      - name: Docker build
-        run: |
-          set -euo pipefail
-          docker build -t bobfull-backend-ci:${GITHUB_SHA} .
+      - name: Upload bootJar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-boot-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 1
 
   deploy:
     name: Push to ECR and deploy with SSM
@@ -76,8 +86,15 @@ jobs:
           required_values=(
             AWS_REGION
             ECR_REPOSITORY
-            BACKEND_EC2_INSTANCE_ID
             BACKEND_PARAMETER_PREFIX
+            BACKEND_ALB_LISTENER_ARN
+            BACKEND_BLUE_TARGET_GROUP_ARN
+            BACKEND_GREEN_TARGET_GROUP_ARN
+            BACKEND_PUBLIC_READINESS_URL
+            BACKEND_PUBLIC_API_VERIFY_URL
+            BACKEND_MONITORING_EC2_INSTANCE_ID
+            BACKEND_MONITORING_COMPOSE_DIR
+            BACKEND_MONITORING_ENV_FILE
             AWS_ROLE_TO_ASSUME
           )
 
@@ -150,6 +167,13 @@ jobs:
         if: steps.ecr_image.outputs.exists != 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Download bootJar artifact
+        if: steps.ecr_image.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-boot-jar
+          path: build/libs
+
       - name: Build and push Docker image
         if: steps.ecr_image.outputs.exists != 'true'
         run: |
@@ -164,14 +188,35 @@ jobs:
           set -euo pipefail
           echo "Using existing ECR image '${{ steps.image.outputs.image_uri }}' for SSM deployment."
 
-      - name: Deploy on EC2 with SSM Run Command
+      - name: Blue-Green deploy with SSM and ALB
         env:
-          BACKEND_EC2_INSTANCE_ID: ${{ env.BACKEND_EC2_INSTANCE_ID }}
           ECR_IMAGE_URI: ${{ steps.image.outputs.image_uri }}
           PARAMETER_PREFIX: ${{ env.BACKEND_PARAMETER_PREFIX }}
+          BACKEND_TARGET_PORT: ${{ vars.BACKEND_TARGET_PORT }}
+          BACKEND_TG_HEALTH_TIMEOUT_SECONDS: ${{ vars.BACKEND_TG_HEALTH_TIMEOUT_SECONDS }}
+          BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_TG_HEALTH_POLL_INTERVAL_SECONDS }}
+          BACKEND_PUBLIC_VERIFY_ATTEMPTS: ${{ vars.BACKEND_PUBLIC_VERIFY_ATTEMPTS }}
+          BACKEND_PUBLIC_VERIFY_DELAY_SECONDS: ${{ vars.BACKEND_PUBLIC_VERIFY_DELAY_SECONDS }}
+          BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS: ${{ vars.BACKEND_PUBLIC_VERIFY_TIMEOUT_SECONDS }}
+          BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS: ${{ vars.BACKEND_LISTENER_WEIGHT_TIMEOUT_SECONDS }}
+          BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_LISTENER_WEIGHT_POLL_INTERVAL_SECONDS }}
+          BACKEND_EC2_STATE_TIMEOUT_SECONDS: ${{ vars.BACKEND_EC2_STATE_TIMEOUT_SECONDS }}
+          BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_EC2_STATE_POLL_INTERVAL_SECONDS }}
+          BACKEND_SSM_ONLINE_TIMEOUT_SECONDS: ${{ vars.BACKEND_SSM_ONLINE_TIMEOUT_SECONDS }}
+          BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_SSM_ONLINE_POLL_INTERVAL_SECONDS }}
+          BACKEND_PREVIOUS_ENV_KEEP_SECONDS: ${{ vars.BACKEND_PREVIOUS_ENV_KEEP_SECONDS }}
+          BACKEND_MONITORING_ENV_FILE: ${{ env.BACKEND_MONITORING_ENV_FILE }}
+          BACKEND_PROMETHEUS_CONTAINER_NAME: ${{ vars.BACKEND_PROMETHEUS_CONTAINER_NAME }}
+          BACKEND_PROMETHEUS_TARGET_FILE: ${{ vars.BACKEND_PROMETHEUS_TARGET_FILE }}
+          BACKEND_PROMETHEUS_PORT: ${{ vars.BACKEND_PROMETHEUS_PORT }}
+          BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS: ${{ vars.BACKEND_PROMETHEUS_TARGET_UP_TIMEOUT_SECONDS }}
+          BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_PROMETHEUS_TARGET_UP_POLL_INTERVAL_SECONDS }}
+          BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME: ${{ vars.BACKEND_PROMETHEUS_SSM_DOCUMENT_NAME }}
+          BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS: ${{ vars.BACKEND_PROMETHEUS_SSM_TIMEOUT_SECONDS }}
+          BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS: ${{ vars.BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS }}
         run: |
           set -euo pipefail
-          bash scripts/aws/run-ssm-backend-deploy-v1.sh
+          bash scripts/aws/deploy-backend-blue-green-v1.sh
 
       - name: Verify backend deployment
         env:

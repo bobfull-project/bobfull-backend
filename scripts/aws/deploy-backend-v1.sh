@@ -36,6 +36,8 @@ fetch_parameter() {
     --output text
 }
 
+declare -A REQUIRED_PARAMETER_VALUES=()
+
 validate_required_parameters() {
   local missing_parameters=()
   local item
@@ -48,6 +50,8 @@ validate_required_parameters() {
         || [ -z "${parameter_value}" ] \
         || [ "${parameter_value}" = "None" ]; then
       missing_parameters+=("${PARAMETER_PREFIX}/${parameter_name}")
+    else
+      REQUIRED_PARAMETER_VALUES["${parameter_name}"]="${parameter_value}"
     fi
   done
 
@@ -72,6 +76,11 @@ append_parameter() {
 
   if [ -n "${!env_key:-}" ]; then
     append_env_value "${env_key}" "${!env_key}"
+    return
+  fi
+
+  if [ "${required}" = "true" ] && [[ -v "REQUIRED_PARAMETER_VALUES[${parameter_name}]" ]]; then
+    append_env_value "${env_key}" "${REQUIRED_PARAMETER_VALUES[${parameter_name}]}"
     return
   fi
 
@@ -249,6 +258,8 @@ required_parameters=(
 
 optional_parameters=(
   "REDIS_PORT:redis-port"
+  "REDIS_SSL_ENABLED:redis-ssl-enabled"
+  "DB_POOL_MAX_SIZE:db-pool-max-size"
   "AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS:auth-refresh-token-expiration-seconds"
   "JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:jwt-access-token-expiration-seconds"
   "JPA_DDL_AUTO:jpa-ddl-auto"
@@ -295,7 +306,7 @@ for item in "${optional_parameters[@]}"; do
 done
 
 if ! grep -q '^JPA_DDL_AUTO=' "${APP_ENV_FILE}"; then
-  append_env_value JPA_DDL_AUTO update
+  append_env_value JPA_DDL_AUTO validate
 fi
 
 if ! grep -q '^JWT_ACCESS_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
@@ -304,6 +315,10 @@ fi
 
 if ! grep -q '^REDIS_PORT=' "${APP_ENV_FILE}"; then
   append_env_value REDIS_PORT 6379
+fi
+
+if ! grep -q '^REDIS_SSL_ENABLED=' "${APP_ENV_FILE}"; then
+  append_env_value REDIS_SSL_ENABLED true
 fi
 
 if ! grep -q '^AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS=' "${APP_ENV_FILE}"; then
@@ -338,52 +353,63 @@ fi
 
 redis_host="$(awk -F= '$1 == "REDIS_HOST" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
 redis_port="$(awk -F= '$1 == "REDIS_PORT" { print $2 }' "${APP_ENV_FILE}" | tail -n 1)"
+redis_ssl_enabled="$(awk -F= '$1 == "REDIS_SSL_ENABLED" { print tolower($2) }' "${APP_ENV_FILE}" | tail -n 1)"
 
 if [ -z "${redis_host}" ] || [ -z "${redis_port}" ]; then
   echo "Redis host or port is empty after Parameter Store env-file generation." >&2
   exit 1
 fi
 
-ensure_docker_network
-ensure_docker_volume
+if [ "${redis_ssl_enabled}" != "true" ] && [ "${redis_ssl_enabled}" != "false" ]; then
+  echo "REDIS_SSL_ENABLED must be true or false, but was '${redis_ssl_enabled}'." >&2
+  exit 1
+fi
 
-if container_running "${REDIS_CONTAINER_NAME}"; then
-  echo "Redis container '${REDIS_CONTAINER_NAME}' is already running; keeping existing container."
-  ensure_container_network "${REDIS_CONTAINER_NAME}" "${DOCKER_NETWORK}" "${redis_host}"
-else
-  if container_exists "${REDIS_CONTAINER_NAME}"; then
-    docker rm "${REDIS_CONTAINER_NAME}" >/dev/null 2>&1 || true
+ensure_docker_network
+
+if [ "${redis_host}" = "redis" ]; then
+  ensure_docker_volume
+
+  if container_running "${REDIS_CONTAINER_NAME}"; then
+    echo "Redis container '${REDIS_CONTAINER_NAME}' is already running; keeping existing container."
+    ensure_container_network "${REDIS_CONTAINER_NAME}" "${DOCKER_NETWORK}" "${redis_host}"
+  else
+    if container_exists "${REDIS_CONTAINER_NAME}"; then
+      docker rm "${REDIS_CONTAINER_NAME}" >/dev/null 2>&1 || true
+    fi
+
+    if ! docker run -d \
+        --name "${REDIS_CONTAINER_NAME}" \
+        --restart unless-stopped \
+        --network "${DOCKER_NETWORK}" \
+        --network-alias "${redis_host}" \
+        -v "${REDIS_VOLUME}:/data" \
+        "${REDIS_IMAGE}" \
+        redis-server --port "${redis_port}" --appendonly yes; then
+      echo "Failed to run Redis container '${REDIS_CONTAINER_NAME}' with image '${REDIS_IMAGE}'." >&2
+      print_container_logs "${REDIS_CONTAINER_NAME}" 200
+      print_docker_ps_all
+      exit 1
+    fi
+
+    sleep 2
   fi
 
-  if ! docker run -d \
-      --name "${REDIS_CONTAINER_NAME}" \
-      --restart unless-stopped \
-      --network "${DOCKER_NETWORK}" \
-      --network-alias "${redis_host}" \
-      -v "${REDIS_VOLUME}:/data" \
-      "${REDIS_IMAGE}" \
-      redis-server --port "${redis_port}" --appendonly yes; then
-    echo "Failed to run Redis container '${REDIS_CONTAINER_NAME}' with image '${REDIS_IMAGE}'." >&2
+  if ! redis_ping_output="$(docker exec "${REDIS_CONTAINER_NAME}" redis-cli -p "${redis_port}" ping 2>&1)"; then
+    echo "Redis PING command failed for container '${REDIS_CONTAINER_NAME}' on port '${redis_port}'." >&2
+    echo "${redis_ping_output}" >&2
     print_container_logs "${REDIS_CONTAINER_NAME}" 200
-    print_docker_ps_all
     exit 1
   fi
 
-  sleep 2
-fi
-
-if ! redis_ping_output="$(docker exec "${REDIS_CONTAINER_NAME}" redis-cli -p "${redis_port}" ping 2>&1)"; then
-  echo "Redis PING command failed for container '${REDIS_CONTAINER_NAME}' on port '${redis_port}'." >&2
-  echo "${redis_ping_output}" >&2
-  print_container_logs "${REDIS_CONTAINER_NAME}" 200
-  exit 1
-fi
-
-if ! printf '%s\n' "${redis_ping_output}" | grep -Fx PONG >/dev/null; then
-  echo "Redis PING returned unexpected output for container '${REDIS_CONTAINER_NAME}':" >&2
-  echo "${redis_ping_output}" >&2
-  print_container_logs "${REDIS_CONTAINER_NAME}" 200
-  exit 1
+  if ! printf '%s\n' "${redis_ping_output}" | grep -Fx PONG >/dev/null; then
+    echo "Redis PING returned unexpected output for container '${REDIS_CONTAINER_NAME}':" >&2
+    echo "${redis_ping_output}" >&2
+    print_container_logs "${REDIS_CONTAINER_NAME}" 200
+    exit 1
+  fi
+else
+  echo "Redis host '${redis_host}' is external; skipping EC2-local Redis container bootstrap."
 fi
 
 if container_exists "${CONTAINER_NAME}"; then
@@ -409,10 +435,8 @@ if ! docker run -d \
   exit 1
 fi
 
-sleep 10
-
 if ! container_running "${CONTAINER_NAME}"; then
-  echo "Backend container '${CONTAINER_NAME}' exited or did not reach running state within 10 seconds." >&2
+  echo "Backend container '${CONTAINER_NAME}' exited immediately after start." >&2
   print_container_logs "${CONTAINER_NAME}" 200
   print_docker_ps_all
   exit 1
@@ -485,5 +509,9 @@ done
 
 echo "Deployment image URI: ${ECR_IMAGE_URI}"
 echo "Backend container state: $(container_state "${CONTAINER_NAME}")"
-echo "Redis container state: $(container_state "${REDIS_CONTAINER_NAME}")"
+if [ "${redis_host}" = "redis" ]; then
+  echo "Redis container state: $(container_state "${REDIS_CONTAINER_NAME}")"
+else
+  echo "Redis connection mode: external endpoint"
+fi
 echo "Health check result: ${health_check_result}"

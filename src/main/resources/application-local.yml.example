@@ -23,6 +23,8 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
 
   jpa:
     hibernate:
@@ -37,6 +39,8 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       timeout: ${REDIS_TIMEOUT:2000ms}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
 
   mail:
     host: ${MAIL_HOST:localhost}
@@ -49,6 +53,9 @@ spring:
           auth: ${MAIL_SMTP_AUTH:false}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS:false}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:5000}
+          timeout: ${MAIL_SMTP_TIMEOUT:5000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:5000}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -73,10 +80,13 @@ payment:
     fixed-delay: ${PAYMENT_EXPIRATION_FIXED_DELAY:60s}
     batch-size: ${PAYMENT_EXPIRATION_BATCH_SIZE:100}
   refund-reconciliation:
-    enabled: ${PAYMENT_REFUND_RECONCILIATION_ENABLED:true}
+    # 로컬 DB에는 실제 PortOne에 없는 테스트성 결제/환불 데이터가 남기 쉬워, 기본값을 꺼둔다
+    # (Issue #272). 이 스케줄러 동작 자체를 로컬에서 검증하려면 일시적으로 true로 바꾼다.
+    enabled: ${PAYMENT_REFUND_RECONCILIATION_ENABLED:false}
     fixed-delay: ${PAYMENT_REFUND_RECONCILIATION_FIXED_DELAY:5m}
     minimum-age: ${PAYMENT_REFUND_RECONCILIATION_MINIMUM_AGE:10m}
     recheck-delay: ${PAYMENT_REFUND_RECONCILIATION_RECHECK_DELAY:5m}
+    max-age: ${PAYMENT_REFUND_RECONCILIATION_MAX_AGE:24h}
     batch-size: ${PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE:20}
 
 aws:
@@ -99,6 +109,10 @@ outbox:
     enabled: ${OUTBOX_EMAIL_ENABLED:true}
     fixed-delay: ${OUTBOX_EMAIL_FIXED_DELAY:5s}
     batch-size: ${OUTBOX_EMAIL_BATCH_SIZE:100}
+    executor:
+      core-pool-size: ${OUTBOX_EMAIL_EXECUTOR_CORE_POOL_SIZE:2}
+      max-pool-size: ${OUTBOX_EMAIL_EXECUTOR_MAX_POOL_SIZE:2}
+      queue-capacity: ${OUTBOX_EMAIL_EXECUTOR_QUEUE_CAPACITY:100}
   chat-message:
     enabled: ${OUTBOX_CHAT_MESSAGE_ENABLED:true}
     fixed-delay: ${OUTBOX_CHAT_MESSAGE_FIXED_DELAY:5s}
@@ -112,6 +126,9 @@ bobfull:
   ai:
     moderation:
       max-output-tokens: ${OPENAI_MODERATION_MAX_TOKENS:128}
+    # 합성 데이터만 있는 스테이징/로컬에서 명시적으로 true로 바꾼다.
+    restaurant-insight:
+      enabled: ${RESTAURANT_INSIGHT_AI_ENABLED:false}
   kafka:
     chat-message:
       topic: ${KAFKA_CHAT_MESSAGE_TOPIC:bobfull.chat.message-created.v1}
@@ -122,3 +139,9 @@ bobfull:
       consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
       consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
       producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}
+    restaurant-insight:
+      consumer-enabled: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED:false}
+      group-id: ${KAFKA_RESTAURANT_INSIGHT_GROUP_ID:bobfull-restaurant-insight-staging}
+      dlt-topic: ${KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC:bobfull.restaurant-insight.dlt.v1}
+      consumer-max-attempts: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_MAX_ATTEMPTS:3}
+      consumer-retry-backoff-ms: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_RETRY_BACKOFF_MS:1000}

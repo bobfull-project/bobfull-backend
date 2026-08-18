@@ -10,14 +10,39 @@ services:
       - |
         set -eu
         mkdir -p /tmp/prometheus-targets
-        printf -- "- targets:\n  - '%s'\n" "$${BOBFULL_BACKEND_METRICS_TARGET}" \
-          > /tmp/prometheus-targets/bobfull-backend.yml
+        targets="$${BOBFULL_BACKEND_METRICS_TARGETS:-}"
+        if [ -z "$${targets}" ]; then
+          targets="$${BOBFULL_BACKEND_METRICS_TARGET:-}"
+        fi
+        if [ -z "$${targets}" ]; then
+          echo "set BOBFULL_BACKEND_METRICS_TARGETS or BOBFULL_BACKEND_METRICS_TARGET" >&2
+          exit 1
+        fi
+
+        target_file=/tmp/prometheus-targets/bobfull-backend.yml
+        printf -- "- targets:\n" > "$${target_file}"
+        target_count=0
+        old_ifs="$${IFS}"
+        IFS=","
+        for raw_target in $${targets}; do
+          target="$(printf '%s' "$${raw_target}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$$//')"
+          if [ -n "$${target}" ]; then
+            printf "  - '%s'\n" "$${target}" >> "$${target_file}"
+            target_count=$$((target_count + 1))
+          fi
+        done
+        IFS="$${old_ifs}"
+        if [ "$${target_count}" -eq 0 ]; then
+          echo "no valid backend metrics targets configured" >&2
+          exit 1
+        fi
         exec /bin/prometheus \
           --config.file=/etc/prometheus/prometheus.yml \
           --storage.tsdb.path=/prometheus \
           --web.enable-lifecycle
     environment:
-      BOBFULL_BACKEND_METRICS_TARGET: ${BOBFULL_BACKEND_METRICS_TARGET:?set app private target, for example 10.0.0.10:8080}
+      BOBFULL_BACKEND_METRICS_TARGETS: ${BOBFULL_BACKEND_METRICS_TARGETS:-}
+      BOBFULL_BACKEND_METRICS_TARGET: ${BOBFULL_BACKEND_METRICS_TARGET:-}
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:

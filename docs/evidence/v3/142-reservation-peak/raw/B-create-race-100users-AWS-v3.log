@@ -1,0 +1,106 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 100 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 100 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-12T16:02:12+09:00" level=info msg="teardown 검증 성공: 회차 611는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+[32m     ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)[0m
+
+     █ teardown
+
+[32m       ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다[0m
+
+   [32m✓[0m checks[2m.........................:[0m [36m100.00%[0m [36;2m✓ 101[0m       [36;2m✗ 0[0m    
+     data_received[2m..................:[0m [36m192 kB[0m  [36;2m9.3 kB/s[0m
+     data_sent[2m......................:[0m [36m99 kB[0m   [36;2m4.8 kB/s[0m
+     http_req_blocked[2m...............:[0m avg=[36m3.26ms[0m    min=[36m1µs[0m     med=[36m4µs[0m      max=[36m14.25ms[0m  p(90)=[36m10.26ms[0m  p(95)=[36m12.56ms[0m   p(99)=[36m13.54ms[0m  
+     http_req_connecting[2m............:[0m avg=[36m3.25ms[0m    min=[36m0s[0m      med=[36m0s[0m       max=[36m14.23ms[0m  p(90)=[36m10.24ms[0m  p(95)=[36m12.52ms[0m   p(99)=[36m13.35ms[0m  
+     http_req_duration[2m..............:[0m avg=[36m133.93ms[0m  min=[36m13.7ms[0m  med=[36m95.34ms[0m  max=[36m355.14ms[0m p(90)=[36m271.16ms[0m p(95)=[36m311.25ms[0m  p(99)=[36m350.04ms[0m 
+       { expected_response:true }[2m...:[0m avg=[36m96.28ms[0m   min=[36m13.7ms[0m  med=[36m93.34ms[0m  max=[36m262.39ms[0m p(90)=[36m108.88ms[0m p(95)=[36m122.07ms[0m  p(99)=[36m183.95ms[0m 
+     http_req_failed[2m................:[0m [36m32.36%[0m  [36;2m✓ 100[0m       [36;2m✗ 209[0m  
+     http_req_receiving[2m.............:[0m avg=[36m95.58µs[0m   min=[36m25µs[0m    med=[36m64µs[0m     max=[36m2.25ms[0m   p(90)=[36m124µs[0m    p(95)=[36m170.59µs[0m  p(99)=[36m497.55µs[0m 
+     http_req_sending[2m...............:[0m avg=[36m20.58µs[0m   min=[36m5µs[0m     med=[36m15µs[0m     max=[36m157µs[0m    p(90)=[36m38.2µs[0m   p(95)=[36m53.19µs[0m   p(99)=[36m129.84µs[0m 
+     http_req_tls_handshaking[2m.......:[0m avg=[36m0s[0m        min=[36m0s[0m      med=[36m0s[0m       max=[36m0s[0m       p(90)=[36m0s[0m       p(95)=[36m0s[0m        p(99)=[36m0s[0m       
+     http_req_waiting[2m...............:[0m avg=[36m133.81ms[0m  min=[36m13.66ms[0m med=[36m95.18ms[0m  max=[36m354.96ms[0m p(90)=[36m271.06ms[0m p(95)=[36m311.16ms[0m  p(99)=[36m349.56ms[0m 
+     http_reqs[2m......................:[0m [36m309[0m     [36;2m15.032344/s[0m
+     iteration_duration[2m.............:[0m avg=[36m223.03ms[0m  min=[36m38.6ms[0m  med=[36m230.7ms[0m  max=[36m368.71ms[0m p(90)=[36m336.18ms[0m p(95)=[36m353.4ms[0m   p(99)=[36m367.42ms[0m 
+     iterations[2m.....................:[0m [36m100[0m     [36;2m4.864836/s[0m
+   [32m✓[0m peak_create_race_conflict[2m......:[0m [36m99[0m      [36;2m4.816188/s[0m
+     peak_create_race_duration[2m......:[0m avg=[36m212.79966[0m min=[36m32.744[0m  med=[36m220.4175[0m max=[36m355.148[0m  p(90)=[36m326.585[0m  p(95)=[36m342.15995[0m p(99)=[36m353.08583[0m
+   [32m✓[0m peak_create_race_success[2m.......:[0m [36m1[0m       [36;2m0.048648/s[0m
+   [32m✓[0m peak_create_race_unexpected[2m....:[0m [36m0[0m       [36;2m0/s[0m
+     vus[2m............................:[0m [36m0[0m       [36;2mmin=0[0m       [36;2mmax=0[0m  
+     vus_max[2m........................:[0m [36m100[0m     [36;2mmin=100[0m     [36;2mmax=100[0m
+
+running (0m20.6s), 000/100 VUs, 100 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 100 VUs  00.4s/30s  100/100 iters, 1 per VU

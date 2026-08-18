@@ -1,0 +1,80 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 20 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 20 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-12T15:07:44+09:00" level=info msg="teardown 검증 성공: 회차 597는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.0' rate=100.00%
+
+    peak_create_race_conflict
+    ✓ 'count==19' count=19
+
+    peak_create_race_success
+    ✓ 'count==1' count=1
+
+    peak_create_race_unexpected
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 21      4.916671/s
+    checks_succeeded...: 100.00% 21 out of 21
+    checks_failed......: 0.00%   0 out of 21
+
+    ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)
+    ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다
+
+    CUSTOM
+    peak_create_race_conflict......: 19     4.448416/s
+    peak_create_race_success.......: 1      0.234127/s
+    peak_create_race_unexpected....: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=73.42ms min=11.85ms med=89.29ms max=98.32ms p(90)=95.05ms p(95)=96.65ms p(99)=98.02ms
+      { expected_response:true }...: avg=84.4ms  min=13.43ms med=91.43ms max=98.32ms p(90)=95.93ms p(95)=97.04ms p(99)=98.11ms
+    http_req_failed................: 28.98% 20 out of 69
+    http_reqs......................: 69     16.154775/s
+
+    EXECUTION
+    iteration_duration.............: avg=60.69ms min=25.78ms med=62.88ms max=90.77ms p(90)=83.74ms p(95)=88.02ms p(99)=90.22ms
+    iterations.....................: 20     4.682543/s
+    vus............................: 0      min=0        max=0 
+    vus_max........................: 20     min=20       max=20
+
+    NETWORK
+    data_received..................: 43 kB  10 kB/s
+    data_sent......................: 22 kB  5.2 kB/s
+
+
+
+
+running (0m04.3s), 00/20 VUs, 20 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 20 VUs  00.1s/30s  20/20 iters, 1 per VU

@@ -1,0 +1,295 @@
+{
+  "metrics": {
+    "http_req_duration{expected_response:true}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 96.09730612244898,
+        "min": 13.441,
+        "med": 104.611,
+        "max": 110.825,
+        "p(90)": 108.84179999999999,
+        "p(95)": 110.232,
+        "p(99)": 110.64884
+      }
+    },
+    "http_req_blocked": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 9.686,
+        "p(90)": 8.9406,
+        "p(95)": 9.1708,
+        "p(99)": 9.52824,
+        "avg": 2.6827391304347827,
+        "min": 0.001,
+        "med": 0.004
+      }
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 22308,
+        "rate": 4639.71108501603
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 21,
+        "fails": 0,
+        "rate": 1
+      },
+      "thresholds": {
+        "rate==1.0": {
+          "ok": true
+        }
+      }
+    },
+    "peak_create_race_success": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 1,
+        "rate": 0.20798417989134074
+      },
+      "thresholds": {
+        "count==1": {
+          "ok": true
+        }
+      }
+    },
+    "vus_max": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 20,
+        "min": 20,
+        "max": 20
+      }
+    },
+    "http_reqs": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 69,
+        "rate": 14.35090841250251
+      }
+    },
+    "http_req_receiving": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 0.09580000000000001,
+        "p(95)": 0.107,
+        "p(99)": 0.22583999999999982,
+        "avg": 0.056478260869565186,
+        "min": 0.012,
+        "med": 0.045,
+        "max": 0.421
+      }
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 0.013,
+        "max": 0.089,
+        "p(90)": 0.030800000000000022,
+        "p(95)": 0.05619999999999998,
+        "p(99)": 0.07063999999999998,
+        "avg": 0.018275362318840575,
+        "min": 0.007
+      }
+    },
+    "http_req_waiting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 82.9414927536232,
+        "min": 11.552,
+        "med": 102.319,
+        "max": 110.745,
+        "p(90)": 107.99000000000001,
+        "p(95)": 109.6186,
+        "p(99)": 110.49476
+      }
+    },
+    "peak_create_race_duration": {
+      "type": "trend",
+      "contains": "default",
+      "values": {
+        "p(90)": 75.4133,
+        "p(95)": 75.65589999999999,
+        "p(99)": 78.61837999999999,
+        "avg": 51.531349999999996,
+        "min": 22.955,
+        "med": 51.447,
+        "max": 79.359
+      }
+    },
+    "iterations": {
+      "values": {
+        "count": 20,
+        "rate": 4.159683597826815
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "peak_create_race_unexpected": {
+      "contains": "default",
+      "values": {
+        "count": 0,
+        "rate": 0
+      },
+      "thresholds": {
+        "count==0": {
+          "ok": true
+        }
+      },
+      "type": "counter"
+    },
+    "http_req_tls_handshaking": {
+      "contains": "time",
+      "values": {
+        "max": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0,
+        "avg": 0,
+        "min": 0,
+        "med": 0
+      },
+      "type": "trend"
+    },
+    "http_req_duration": {
+      "contains": "time",
+      "values": {
+        "p(99)": 110.57544,
+        "avg": 83.01624637681161,
+        "min": 11.681,
+        "med": 102.405,
+        "max": 110.825,
+        "p(90)": 108.065,
+        "p(95)": 109.7128
+      },
+      "type": "trend"
+    },
+    "http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0.2898550724637681,
+        "passes": 20,
+        "fails": 49
+      }
+    },
+    "iteration_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 30.7325,
+        "med": 60.722646,
+        "max": 88.744584,
+        "p(90)": 84.2636583,
+        "p(95)": 84.61303305,
+        "p(99)": 87.91827381,
+        "avg": 60.4665334
+      }
+    },
+    "http_req_connecting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 0,
+        "max": 9.66,
+        "p(90)": 8.9242,
+        "p(95)": 9.1382,
+        "p(99)": 9.506319999999999,
+        "avg": 2.670202898550725,
+        "min": 0
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 42703,
+        "rate": 8881.548433899923
+      }
+    },
+    "peak_create_race_conflict": {
+      "contains": "default",
+      "values": {
+        "count": 19,
+        "rate": 3.9516994179354743
+      },
+      "thresholds": {
+        "count==19": {
+          "ok": true
+        }
+      },
+      "type": "counter"
+    }
+  },
+  "root_group": {
+    "checks": [
+      {
+        "name": "peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "path": "::peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)",
+        "id": "e932986fb0e444a272fc4b0130cfaf01",
+        "passes": 20,
+        "fails": 0
+      }
+    ],
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [
+      {
+        "name": "teardown",
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229",
+        "groups": [],
+        "checks": [
+            {
+              "fails": 0,
+              "name": "peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+              "path": "::teardown::peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다",
+              "id": "72ee86e493a705c57357954724f8ed6a",
+              "passes": 1
+            }
+          ]
+      }
+    ]
+  },
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "max",
+      "p(90)",
+      "p(95)",
+      "p(99)"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": false
+  },
+  "state": {
+    "isStdOutTTY": false,
+    "isStdErrTTY": false,
+    "testRunDurationMs": 4808.058
+  }
+}

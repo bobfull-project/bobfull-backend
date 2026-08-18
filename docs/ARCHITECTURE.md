@@ -170,6 +170,8 @@ SMTP 호출은 수신자마다 정확히 한 번만 시도한다. 재시도와 �
 
 최초 예약 결제가 완료되면 예약당 `ChatRoom` 하나를 생성한다. `Payment`·`Reservation`·`ReservationParticipant`를 확정하는 핵심 트랜잭션에는 ChatRoom 생성 의도만 `OutboxEvent(PENDING)`으로 함께 저장한다. 커밋 뒤 즉시 signal은 빠른 처리 경로이고, scheduler는 남은 `PENDING`과 5분 이상 고착된 `PROCESSING`을 다시 처리한다. 실제 ChatRoom 저장은 별도 짧은 트랜잭션에서 `createIfAbsent(reservationId)`로 수행하므로 실패가 결제·예약을 롤백시키지 않으며, at-least-once 재처리도 `chat_room.reservation_id` UNIQUE로 한 건을 유지한다(#176, ADR 0008).
 
+ChatMessage는 저장과 동시에 AI 분석용 `CHAT_MESSAGE_CREATED` Outbox를 같은 DB 트랜잭션에 보존한다. 커밋 후 Redis Pub/Sub(`bobfull:chat:messages`)은 실시간 전파만 한 번 수행하고, 모든 인스턴스의 subscriber가 자기 Simple Broker 세션으로 fan-out한다. Controller의 직접 STOMP 발행은 두지 않아 발행 인스턴스도 subscriber 경로로 한 번만 수신한다. Redis는 best-effort·재생 불가이므로 publish/subscribe 실패는 DB 메시지를 되돌리지 않으며 cursor 조회로 복구한다. AI용 Outbox→Kafka와 Redis 경로는 서로 독립적이다(ADR 0010, ADR 0011).
+
 결제 완료 후 취소되지 않은 유효 참여자만 접근할 수 있고 OWNER와 ADMIN은 참여하지 않는다. 예약 또는 참여가 취소되면 해당 참여자의 접근은 종료되며, 예약이 `CANCELLED` 또는 `CLOSED`가 되면 새 메시지 전송을 종료한다. 기존 `ChatMessage`는 DB에 보관하고 cursor 기반으로 조회한다.
 
 STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 참조한다.
@@ -202,6 +204,33 @@ ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
 
 DB→Broker 구간 유실 방지는 Outbox가, Broker 이후 AI 처리 실패의 재시도/격리는 Kafka Retry/DLT가 담당한다. 상세 근거는 [ADR 0010](./adr/0010-chat-message-outbox-kafka-pipeline.md)을 따른다.
 
+### Restaurant Feedback Insight — Event Reuse (#277)
+
+같은 `ChatMessageCreatedEvent`를 Moderation과 서로 다른 독립 Consumer Group이 재사용한다. Producer(Outbox Processor)는 두 번째 소비자의 존재를 알 필요가 없고, Event Schema도 변경하지 않는다(`restaurantId`를 이벤트에 추가하지 않고 `messageId` 기반 DB 조회로 역산).
+
+```text
+ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
+→ 커밋 후 signal
+→ ChatMessageOutboxProcessor → Kafka(bobfull.chat.message-created.v1)
+       │
+       ├─ Group A: bobfull-chat-moderation
+       │   → ChatModerationConsumer → ChatModerationService.analyze(messageId)
+       │   → 실패 시 최대 3회 재시도 → 소진 시 Moderation 전용 DLT + recordFinalFailure
+       │
+       └─ Group B: bobfull-restaurant-insight-{staging|production}
+           → RestaurantFeedbackInsightConsumer → RestaurantFeedbackInsightService.analyze(messageId)
+           → messageId로 ChatRoom→Reservation→TimeSlot→SharedTable→Restaurant 역추적
+           → 입력 PII/Candidate Gate 통과분만 Provider 호출 → items[] Structured Output
+           → normalizedAspect 개인정보·길이·문자 Validation → RestaurantFeedbackAnalysis/Item 저장
+           → 실패 시 최대 2회 재시도(설정값) → 소진 시 Insight 전용 DLT + Metric(Moderation과 완전 분리)
+```
+
+두 Group은 각각 독립된 Offset/Retry/DLT/ErrorHandler/ContainerFactory를 가지므로 한쪽의 장애·적체가 다른 쪽에 전파되지 않는다(Failure Isolation). Insight Consumer가 없던 시점에 쌓인 Event는 retention 범위 안에서 Offset이 없는 신규 Insight groupId로 Backfill할 수 있다(무한 재생은 아니다).
+
+Production 기본값은 `bobfull.kafka.restaurant-insight.consumer-enabled=false`, `bobfull.ai.restaurant-insight.enabled=false`로 Listener/Provider 자체가 비활성이다. 합성 데이터가 있는 스테이징/테스트에서만 명시적으로 활성화한다. OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 최근 7일 + `activePromptVersion` + `category+aspectType+normalizedAspect+opinionType+sentiment` 5-field 동일 그룹에서 distinct 발신자 3명 이상인 결과만 서버 템플릿 문구로 반환하며, 원문·닉네임·`memberId`·`messageId`는 노출하지 않는다.
+
+이 Consumer들은 별도 배포 Microservice가 아니라 같은 애플리케이션 안의 독립 Consumer Group이다. 이 구조는 Kafka가 Async보다 빠르다는 근거가 아니라, Event Reuse·Independent Consumer·Retention 범위 Backfill·Consumer별 실패 격리라는 별도 가치를 검증하기 위한 것이다(#274 대비 근거는 [Evidence](./evidence/v3/277-restaurant-feedback-event-reuse/README.md) 참고).
+
 ## 8. 저장값·계산값과 운영 관찰
 
 ERD에 정의된 엔티티는 관계와 상태 이력을 저장한다. 반면 예약 상세의 `currentParticipantCount`, `availableCapacity`, `confirmationThreshold`와 지급 예정 예약금은 원천 데이터에서 계산해 제공한다. 응답 계산값을 별도 컬럼으로 중복 저장하지 않는다.
@@ -215,7 +244,7 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 다음 항목은 기준 문서에서 확정되지 않았거나 이번 문서 범위가 아니므로 구조를 구체화하지 않는다.
 
 - 배포 구조, 최종 AWS 구성, 프론트엔드 배포 방식, V1·V2·V3별 물리 아키텍처
-- Redis의 배포·클러스터 구성(로컬 단일 인스턴스만 구성됨), 채팅 Pub/Sub
+- Redis Cluster·Replica·자동 장애 전환과 다중 EC2 운영 Evidence
 - Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
 - 구체적인 락 구현체와 트랜잭션 경계
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티

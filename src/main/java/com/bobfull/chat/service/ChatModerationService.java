@@ -11,6 +11,9 @@ import com.bobfull.common.exception.ChatErrorCode;
 import com.bobfull.common.exception.CustomException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.ArrayList;
+import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -21,13 +24,19 @@ import org.springframework.stereotype.Service;
 @Service
 public class ChatModerationService {
     private static final Logger log = LoggerFactory.getLogger(ChatModerationService.class);
+    private static final String RULE_PROVIDER = "BOBFULL_RULE";
+    private static final String RULE_MODEL = "rule-filter-v1";
+    private static final String RULE_PROMPT_VERSION = "NO_LLM";
     private final ChatMessageRepository messages;
     private final ChatModerationRepository moderations;
     private final AiModerationPort aiModerationPort;
+    private final ModerationRuleFilter ruleFilter;
+    private final SplitMessageCandidateGate splitCandidateGate;
     private final Clock clock;
     public ChatModerationService(ChatMessageRepository messages, ChatModerationRepository moderations,
-            AiModerationPort aiModerationPort, Clock clock) {
-        this.messages = messages; this.moderations = moderations; this.aiModerationPort = aiModerationPort; this.clock = clock;
+            AiModerationPort aiModerationPort, ModerationRuleFilter ruleFilter, SplitMessageCandidateGate splitCandidateGate, Clock clock) {
+        this.messages = messages; this.moderations = moderations; this.aiModerationPort = aiModerationPort;
+        this.ruleFilter = ruleFilter; this.splitCandidateGate = splitCandidateGate; this.clock = clock;
     }
     public void analyze(Long messageId) {
         ChatModeration existing = moderations.findByMessageId(messageId).orElse(null);
@@ -39,9 +48,9 @@ public class ChatModerationService {
                 .orElseThrow(() -> new CustomException(ChatErrorCode.CHAT_MESSAGE_ID_NOT_FOUND));
         long startedAt = System.nanoTime();
         try {
-            AiModerationResponse response = aiModerationPort.analyze(message.getContent());
-            ModerationResultValidator.validate(response == null ? null : response.result());
-            persistCompleted(messageId, existing, response, elapsedMillis(startedAt));
+            AnalysisResponse analysis = analyzeMessage(message);
+            ModerationResultValidator.validate(analysis.response() == null ? null : analysis.response().result());
+            persistCompleted(messageId, existing, analysis.response(), analysis.promptVersion(), elapsedMillis(startedAt));
         } catch (ModerationAnalysisException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -49,19 +58,47 @@ public class ChatModerationService {
             throw new ModerationAnalysisException(errorCode, exception);
         }
     }
+    private AnalysisResponse analyzeMessage(ChatMessage message) {
+        var singleMessageRule = ruleFilter.clearFlagged(message.getContent());
+        if (singleMessageRule.isPresent()) return ruleAnalysis(singleMessageRule.get());
+        SplitMessageContext context = recentSplitContext(message);
+        if (context == null) return providerAnalysis(aiModerationPort.analyze(message.getContent()), ModerationPrompt.PROMPT_VERSION);
+        var splitRule = ruleFilter.clearSplitFlagged(context.recentCanonicalCandidates());
+        if (splitRule.isPresent()) return ruleAnalysis(splitRule.get());
+        return providerAnalysis(aiModerationPort.analyze(message.getContent()), ModerationPrompt.PROMPT_VERSION);
+    }
+    private SplitMessageContext recentSplitContext(ChatMessage current) {
+        if (!splitCandidateGate.mayNeedContext(current)) return null;
+        List<ChatMessage> recentDescending = messages.findRecentModerationContext(current.getChatRoomId(), current.getSenderMemberId(),
+                current.getCreatedAt(), current.getId(), current.getCreatedAt().minus(SplitMessageCandidateGate.CONTEXT_WINDOW),
+                PageRequest.of(0, SplitMessageCandidateGate.RECENT_MESSAGE_LIMIT));
+        List<ChatMessage> recent = new ArrayList<>(recentDescending);
+        java.util.Collections.reverse(recent);
+        SplitMessageContext context = SplitMessageContext.from(recent);
+        return splitCandidateGate.isSplitCandidate(recent, context) ? context : null;
+    }
+    private AiModerationResponse ruleResponse(com.bobfull.chat.dto.ModerationResult result) {
+        return new AiModerationResponse(result, RULE_PROVIDER, RULE_MODEL, null, null, null);
+    }
+    private AnalysisResponse ruleAnalysis(com.bobfull.chat.dto.ModerationResult result) {
+        return new AnalysisResponse(ruleResponse(result), RULE_PROMPT_VERSION);
+    }
+    private static AnalysisResponse providerAnalysis(AiModerationResponse response, String promptVersion) {
+        return new AnalysisResponse(response, promptVersion);
+    }
     /** #59가 Kafka Retry를 소진하고 DLT로 보낼 때만 호출하는 최종 실패 기록 진입점이다. */
     public void recordFinalFailure(Long messageId, String errorCode) {
         ChatModeration existing = moderations.findByMessageId(messageId).orElse(null);
         if (existing != null && existing.isCompleted()) return;
         persistFailure(messageId, existing, 0L, errorCode);
     }
-    private void persistCompleted(Long messageId, ChatModeration existing, AiModerationResponse response, long latencyMillis) {
+    private void persistCompleted(Long messageId, ChatModeration existing, AiModerationResponse response, String promptVersion, long latencyMillis) {
         Instant now = clock.instant();
         ChatModeration moderation = existing == null ? ChatModeration.completed(messageId, response.result().result(), response.result().categories(),
-                response.result().riskLevel(), response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis,
+                response.result().riskLevel(), response.provider(), response.model(), promptVersion, ModerationPrompt.POLICY_VERSION, latencyMillis,
                 response.promptTokens(), response.completionTokens(), response.totalTokens(), now) : existing;
         if (existing != null) moderation.complete(response.result().result(), response.result().categories(), response.result().riskLevel(),
-                response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis, response.promptTokens(),
+                response.provider(), response.model(), promptVersion, ModerationPrompt.POLICY_VERSION, latencyMillis, response.promptTokens(),
                 response.completionTokens(), response.totalTokens(), now);
         try {
             moderations.saveAndFlush(moderation);
@@ -69,7 +106,7 @@ public class ChatModerationService {
             ChatModeration latest = moderations.findByMessageId(messageId).orElseThrow(() -> exception);
             if (latest.isCompleted()) return;
             latest.complete(response.result().result(), response.result().categories(), response.result().riskLevel(),
-                    response.provider(), response.model(), ModerationPrompt.PROMPT_VERSION, ModerationPrompt.POLICY_VERSION, latencyMillis,
+                    response.provider(), response.model(), promptVersion, ModerationPrompt.POLICY_VERSION, latencyMillis,
                     response.promptTokens(), response.completionTokens(), response.totalTokens(), now);
             try {
                 moderations.saveAndFlush(latest);
@@ -95,4 +132,5 @@ public class ChatModerationService {
         log.warn("event=CHAT_MODERATION_FAILED messageId={} errorCode={} latencyMillis={}", messageId, errorCode, latencyMillis);
     }
     private static long elapsedMillis(long startedAt) { return (System.nanoTime() - startedAt) / 1_000_000; }
+    private record AnalysisResponse(AiModerationResponse response, String promptVersion) { }
 }

@@ -11,7 +11,10 @@ import com.bobfull.payment.repository.PaymentRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +69,18 @@ public class PaymentService implements ReadyPaymentCreator, PaymentHoldReader {
     public int sumActiveReadyPartySize(Long timeSlotId) {
         return paymentRepository.sumPartySizeByTimeSlotIdAndStatusAndExpiresAtAfter(
                 timeSlotId, PaymentStatus.READY, clock.instant());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> sumActiveReadyPartySizeByTimeSlotIds(Collection<Long> timeSlotIds) {
+        if (timeSlotIds.isEmpty()) {
+            return Map.of();
+        }
+        return paymentRepository
+                .sumPartySizeByTimeSlotIdsAndStatusAndExpiresAtAfter(timeSlotIds, PaymentStatus.READY, clock.instant())
+                .stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> ((Number) row[1]).intValue()));
     }
 
     @Override

@@ -1,0 +1,71 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/peak-reservation-create-race.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 5 max VUs, 1m0s max duration (incl. graceful stop):
+              * peak_create_race: 1 iterations for each of 5 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+Run                [ 100% ] setup()
+peak_create_race   [   0% ]
+time="2026-08-12T10:31:14+09:00" level=info msg="teardown 검증 성공: 회차 98는 경쟁 종료 후에도 CREATE 배타 선점이 유지된다(정합성 위반 없음)." source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.0' rate=100.00%
+
+    peak_create_race_conflict
+    ✓ 'count==4' count=4
+
+    peak_create_race_success
+    ✓ 'count==1' count=1
+
+    peak_create_race_unexpected
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 6       3.047031/s
+    checks_succeeded...: 100.00% 6 out of 6
+    checks_failed......: 0.00%   0 out of 6
+
+    ✓ peak_create_race: 성공(200) 또는 예상된 경쟁 실패(409)
+    ✓ peak_create_race teardown: 경쟁 종료 후에도 CREATE 배타 선점이 유지된다
+
+    CUSTOM
+    peak_create_race_conflict......: 4      2.031354/s
+    peak_create_race_success.......: 1      0.507838/s
+    peak_create_race_unexpected....: 0      0/s
+
+    HTTP
+    http_req_duration..............: avg=88.65ms min=21.91ms med=110.61ms max=136.04ms p(90)=127.41ms p(95)=130.35ms
+      { expected_response:true }...: avg=96.72ms min=21.91ms med=115.53ms max=136.04ms p(90)=128.17ms p(95)=131.37ms
+    http_req_failed................: 20.83% 5 out of 24
+    http_reqs......................: 24     12.188124/s
+
+    EXECUTION
+    iteration_duration.............: avg=74.02ms min=57ms    med=75.15ms  max=89.33ms  p(90)=86.3ms   p(95)=87.81ms 
+    iterations.....................: 5      2.539192/s
+    vus............................: 0      min=0       max=0
+    vus_max........................: 5      min=5       max=5
+
+    NETWORK
+    data_received..................: 15 kB  7.5 kB/s
+    data_sent......................: 7.9 kB 4.0 kB/s
+
+
+
+
+running (0m02.0s), 0/5 VUs, 5 complete and 0 interrupted iterations
+peak_create_race ✓ [ 100% ] 5 VUs  00.1s/30s  5/5 iters, 1 per VU

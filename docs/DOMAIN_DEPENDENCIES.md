@@ -213,7 +213,8 @@ OWNER 인증
 최초 예약 Payment PAID
 → 예약당 ChatRoom 1개 생성
 → 결제 완료·미취소 유효 참여자만 접근
-→ STOMP 전송·구독 또는 cursor 기반 과거 메시지 조회
+→ DB 저장·커밋 후 Redis Pub/Sub으로 각 인스턴스 Simple Broker에 실시간 fan-out
+→ 단절 중 누락은 cursor 기반 과거 메시지 조회로 복구
 → 예약 CANCELLED 또는 CLOSED 시 새 메시지 전송 종료
 → 기존 ChatMessage는 조회 가능
 ```

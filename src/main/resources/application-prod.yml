@@ -15,10 +15,12 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
 
   jpa:
     hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:update}
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     open-in-view: false
     properties:
       hibernate:
@@ -29,6 +31,8 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
       timeout: ${REDIS_TIMEOUT:2000ms}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
 
   mail:
     host: ${MAIL_HOST}
@@ -41,6 +45,9 @@ spring:
           auth: ${MAIL_SMTP_AUTH:true}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS:true}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:5000}
+          timeout: ${MAIL_SMTP_TIMEOUT:5000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:5000}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -69,6 +76,7 @@ payment:
     fixed-delay: ${PAYMENT_REFUND_RECONCILIATION_FIXED_DELAY:5m}
     minimum-age: ${PAYMENT_REFUND_RECONCILIATION_MINIMUM_AGE:10m}
     recheck-delay: ${PAYMENT_REFUND_RECONCILIATION_RECHECK_DELAY:5m}
+    max-age: ${PAYMENT_REFUND_RECONCILIATION_MAX_AGE:24h}
     batch-size: ${PAYMENT_REFUND_RECONCILIATION_BATCH_SIZE:20}
 
 aws:
@@ -100,6 +108,10 @@ outbox:
     enabled: ${OUTBOX_EMAIL_ENABLED:true}
     fixed-delay: ${OUTBOX_EMAIL_FIXED_DELAY:5s}
     batch-size: ${OUTBOX_EMAIL_BATCH_SIZE:100}
+    executor:
+      core-pool-size: ${OUTBOX_EMAIL_EXECUTOR_CORE_POOL_SIZE:2}
+      max-pool-size: ${OUTBOX_EMAIL_EXECUTOR_MAX_POOL_SIZE:2}
+      queue-capacity: ${OUTBOX_EMAIL_EXECUTOR_QUEUE_CAPACITY:100}
   chat-message:
     enabled: ${OUTBOX_CHAT_MESSAGE_ENABLED:true}
     fixed-delay: ${OUTBOX_CHAT_MESSAGE_FIXED_DELAY:5s}
@@ -115,6 +127,8 @@ bobfull:
   ai:
     moderation:
       max-output-tokens: ${OPENAI_MODERATION_MAX_TOKENS:128}
+    restaurant-insight:
+      enabled: ${RESTAURANT_INSIGHT_AI_ENABLED:false}
   kafka:
     chat-message:
       topic: ${KAFKA_CHAT_MESSAGE_TOPIC:bobfull.chat.message-created.v1}
@@ -122,6 +136,13 @@ bobfull:
       partitions: ${KAFKA_CHAT_MESSAGE_PARTITIONS:3}
       replicas: ${KAFKA_CHAT_MESSAGE_REPLICAS:1}
       consumer-enabled: ${KAFKA_CHAT_MESSAGE_CONSUMER_ENABLED:true}
+      consumer-concurrency: ${KAFKA_CHAT_MESSAGE_CONSUMER_CONCURRENCY:1}
       consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
       consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
       producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}
+      partition-key-strategy: ${KAFKA_CHAT_MESSAGE_PARTITION_KEY_STRATEGY:message-id}
+    restaurant-insight:
+      # 실사용 채팅을 새 목적의 Provider로 전송하지 않도록 Production 기본은 listener 자체 OFF다.
+      consumer-enabled: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED:false}
+      group-id: ${KAFKA_RESTAURANT_INSIGHT_GROUP_ID:bobfull-restaurant-insight-production}
+      dlt-topic: ${KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC:bobfull.restaurant-insight.dlt.v1}

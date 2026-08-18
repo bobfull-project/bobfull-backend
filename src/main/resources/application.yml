@@ -42,3 +42,10 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+chat:
+  redis-pubsub:
+    # 실시간 전파 자체의 feature toggle이 아니다. listener container만 제어하며 production에서는 항상 활성화한다.
+    subscriber-enabled: true
+    channel: bobfull:chat:messages
+    reconnect-delay: 5s

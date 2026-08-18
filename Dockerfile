@@ -1,22 +1,23 @@
-FROM eclipse-temurin:17-jdk AS builder
+ARG EXTRACT_IMAGE=eclipse-temurin:17-jdk
+ARG RUNTIME_IMAGE=gcr.io/distroless/java17-debian12
+
+FROM ${EXTRACT_IMAGE} AS extractor
 
 WORKDIR /workspace
 
-COPY gradlew settings.gradle build.gradle ./
-COPY gradle ./gradle
-RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew
+COPY build/libs/*.jar app.jar
 
-COPY src ./src
-COPY lambda ./lambda
+RUN ["java", "-Djarmode=tools", "-jar", "app.jar", "extract", "--launcher", "--destination", "extracted", "--layers", "dependencies,spring-boot-loader,snapshot-dependencies,application"]
 
-RUN ./gradlew bootJar --no-daemon
-
-FROM eclipse-temurin:17-jre
+FROM ${RUNTIME_IMAGE}
 
 WORKDIR /app
 
-COPY --from=builder /workspace/build/libs/*.jar app.jar
+COPY --from=extractor /workspace/extracted/dependencies/ ./
+COPY --from=extractor /workspace/extracted/spring-boot-loader/ ./
+COPY --from=extractor /workspace/extracted/snapshot-dependencies/ ./
+COPY --from=extractor /workspace/extracted/application/ ./
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

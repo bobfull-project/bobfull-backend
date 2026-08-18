@@ -69,10 +69,26 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags 'kafka-evidence'
+	}
+	// #277: 전체 suite가 한 JVM에서 수백 개의 서로 다른 Spring TestContext를 순차 기동하면서
+	// 기본 힙으로는 간헐적으로 메모리 압박(BeanCreationException 등 무작위 실패)이 발생함을
+	// 실측(JAVA_TOOL_OPTIONS=-Xmx2g 재현, -Xmx4g 해소)으로 확인해 명시적으로 늘렸다.
+	maxHeapSize = '4g'
 	if (project.hasProperty('showTestOutput')) {
 		testLogging {
 			showStandardStreams = true
 		}
+	}
+}
+
+tasks.register('kafkaEvidenceTest', Test) {
+	description = 'Runs Kafka/Testcontainers evidence experiments excluded from the default test task.'
+	group = 'verification'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'kafka-evidence'
 	}
 }

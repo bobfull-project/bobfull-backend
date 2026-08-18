@@ -79,3 +79,4 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 - [ADR 0008: ChatRoom 생성 의도의 Transactional Outbox](./0008-chat-room-transactional-outbox.md)
 - [ADR 0009: AI Moderation Provider 및 모델 선택](./0009-ai-moderation-provider-and-model-selection.md)
 - [ADR 0010: ChatMessage → AI Moderation Outbox + Kafka 전달 파이프라인](./0010-chat-message-outbox-kafka-pipeline.md)
+- [ADR 0011: 다중 인스턴스 채팅 실시간 전파에 Redis Pub/Sub 사용](./0011-chat-redis-pubsub.md) (`Proposed`)

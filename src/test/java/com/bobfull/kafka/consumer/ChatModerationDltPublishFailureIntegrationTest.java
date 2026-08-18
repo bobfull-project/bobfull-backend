@@ -8,11 +8,11 @@ import com.bobfull.chat.entity.ChatMessage;
 import com.bobfull.chat.port.AiModerationPort;
 import com.bobfull.chat.repository.ChatMessageRepository;
 import com.bobfull.chat.repository.ChatModerationRepository;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -47,6 +47,7 @@ import org.testcontainers.kafka.ConfluentKafkaContainer;
         "portone.webhook-secret=Y2hhdC1tb2RlcmF0aW9uLWRsdC1mYWlsdXJlLXRlc3Q=",
         "outbox.chat-message.enabled=false",
         "bobfull.kafka.chat-message.consumer-enabled=true",
+        "bobfull.kafka.chat-message.topic-auto-create-enabled=true",
         "bobfull.kafka.chat-message.topic=chat-moderation-dlt-failure-it.v1",
         "bobfull.kafka.chat-message.dlt-topic=chat-moderation-dlt-failure-it.dlt.v1",
         "bobfull.kafka.chat-message.consumer-max-attempts=2",
@@ -81,8 +82,10 @@ class ChatModerationDltPublishFailureIntegrationTest {
         // when: AI는 항상 실패, DLT 발행도 항상 실패하는 상태에서 발행
         kafkaTemplate.send(TOPIC, event.chatRoomId().toString(), event).get(10, TimeUnit.SECONDS);
 
-        // then: 최대 시도(2회) + DLT 시도가 여러 차례 반복될 시간을 준 뒤에도 ANALYSIS_FAILED가 기록되지 않아야 한다
-        Thread.sleep(5000);
+        // then: DLT 발행 실패 지점까지 도달한 뒤에도 ANALYSIS_FAILED가 기록되지 않아야 한다
+        Mockito.verify(kafkaTemplate, Mockito.timeout(5000).atLeastOnce())
+                .send(ArgumentMatchers.<ProducerRecord<Object, Object>>argThat(
+                        record -> record != null && DLT_TOPIC.equals(record.topic())));
         assertThat(chatModerationRepository.findByMessageId(message.getId())).isEmpty();
     }
 

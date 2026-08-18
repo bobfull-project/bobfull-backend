@@ -71,7 +71,9 @@ class PerformanceQueryCountIntegrationTest {
         Statistics statistics = statistics();
         statistics.clear();
         assertThat(timeSlotService.getAvailableDiningSessions(restaurantId, LocalDate.parse("2026-08-10"), null).content()).hasSize(2);
-        assertThat(statistics.getPrepareStatementCount()).isEqualTo(11);
+        // Issue #235: 회차별 반복 조회 4종을 배치 쿼리로 묶어, TimeSlot 건수와 무관한 고정값(7)이
+        // 됐다(외부 조회 3회 + 배치 조회 4회). 이전(Issue #61 이후, #235 이전)에는 3 + 2*4 = 11이었다.
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(7);
         System.out.println("PERF_QUERY_COUNT available-dining-sessions=" + statistics.getPrepareStatementCount());
     }
 

@@ -1,0 +1,948 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: k6/scenarios/restaurant-view-hotpath.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 60 max VUs, 5m30s max duration (incl. graceful stop):
+              * restaurant_view_hotpath: 20.00 iterations/s for 5m0s (maxVUs: 20-60, gracefulStop: 30s)
+
+
+running (0m01.0s), 00/20 VUs, 7 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   0% ] 00/20 VUs  0m00.3s/5m0s  20.00 iters/s
+
+running (0m02.0s), 00/20 VUs, 27 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   0% ] 00/20 VUs  0m01.3s/5m0s  20.00 iters/s
+
+running (0m03.0s), 00/20 VUs, 47 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   1% ] 00/20 VUs  0m02.3s/5m0s  20.00 iters/s
+
+running (0m04.0s), 01/20 VUs, 66 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   1% ] 01/20 VUs  0m03.3s/5m0s  20.00 iters/s
+
+running (0m05.0s), 00/20 VUs, 87 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   1% ] 00/20 VUs  0m04.3s/5m0s  20.00 iters/s
+
+running (0m06.0s), 00/20 VUs, 107 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   2% ] 00/20 VUs  0m05.3s/5m0s  20.00 iters/s
+
+running (0m07.0s), 00/20 VUs, 127 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   2% ] 00/20 VUs  0m06.3s/5m0s  20.00 iters/s
+
+running (0m08.0s), 05/20 VUs, 142 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   2% ] 05/20 VUs  0m07.3s/5m0s  20.00 iters/s
+
+running (0m09.0s), 00/20 VUs, 167 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   3% ] 00/20 VUs  0m08.3s/5m0s  20.00 iters/s
+
+running (0m10.0s), 05/20 VUs, 182 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   3% ] 05/20 VUs  0m09.3s/5m0s  20.00 iters/s
+
+running (0m11.0s), 01/20 VUs, 206 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   3% ] 01/20 VUs  0m10.3s/5m0s  20.00 iters/s
+
+running (0m12.0s), 00/20 VUs, 227 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   4% ] 00/20 VUs  0m11.3s/5m0s  20.00 iters/s
+
+running (0m13.0s), 00/20 VUs, 247 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   4% ] 00/20 VUs  0m12.3s/5m0s  20.00 iters/s
+
+running (0m14.0s), 00/20 VUs, 267 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   4% ] 00/20 VUs  0m13.3s/5m0s  20.00 iters/s
+
+running (0m15.0s), 00/20 VUs, 287 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   5% ] 00/20 VUs  0m14.3s/5m0s  20.00 iters/s
+
+running (0m16.0s), 00/20 VUs, 307 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   5% ] 00/20 VUs  0m15.3s/5m0s  20.00 iters/s
+
+running (0m17.0s), 00/20 VUs, 327 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   5% ] 00/20 VUs  0m16.3s/5m0s  20.00 iters/s
+
+running (0m18.0s), 00/20 VUs, 347 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   6% ] 00/20 VUs  0m17.3s/5m0s  20.00 iters/s
+
+running (0m19.0s), 00/20 VUs, 367 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   6% ] 00/20 VUs  0m18.3s/5m0s  20.00 iters/s
+
+running (0m20.0s), 00/20 VUs, 387 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   6% ] 00/20 VUs  0m19.3s/5m0s  20.00 iters/s
+
+running (0m21.0s), 00/20 VUs, 407 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   7% ] 00/20 VUs  0m20.3s/5m0s  20.00 iters/s
+
+running (0m22.0s), 00/20 VUs, 427 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   7% ] 00/20 VUs  0m21.3s/5m0s  20.00 iters/s
+
+running (0m23.0s), 00/20 VUs, 447 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   7% ] 00/20 VUs  0m22.3s/5m0s  20.00 iters/s
+
+running (0m24.0s), 00/20 VUs, 467 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   8% ] 00/20 VUs  0m23.3s/5m0s  20.00 iters/s
+
+running (0m25.0s), 00/20 VUs, 487 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   8% ] 00/20 VUs  0m24.3s/5m0s  20.00 iters/s
+
+running (0m26.0s), 00/20 VUs, 507 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   8% ] 00/20 VUs  0m25.3s/5m0s  20.00 iters/s
+
+running (0m27.0s), 00/20 VUs, 527 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   9% ] 00/20 VUs  0m26.3s/5m0s  20.00 iters/s
+
+running (0m28.0s), 00/20 VUs, 547 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   9% ] 00/20 VUs  0m27.3s/5m0s  20.00 iters/s
+
+running (0m29.0s), 00/20 VUs, 567 complete and 0 interrupted iterations
+restaurant_view_hotpath   [   9% ] 00/20 VUs  0m28.3s/5m0s  20.00 iters/s
+
+running (0m30.0s), 00/20 VUs, 587 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  10% ] 00/20 VUs  0m29.3s/5m0s  20.00 iters/s
+
+running (0m31.0s), 00/20 VUs, 607 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  10% ] 00/20 VUs  0m30.3s/5m0s  20.00 iters/s
+
+running (0m32.0s), 00/20 VUs, 627 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  10% ] 00/20 VUs  0m31.3s/5m0s  20.00 iters/s
+
+running (0m33.0s), 00/20 VUs, 647 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  11% ] 00/20 VUs  0m32.3s/5m0s  20.00 iters/s
+
+running (0m34.0s), 00/20 VUs, 667 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  11% ] 00/20 VUs  0m33.3s/5m0s  20.00 iters/s
+
+running (0m35.0s), 00/20 VUs, 687 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  11% ] 00/20 VUs  0m34.3s/5m0s  20.00 iters/s
+
+running (0m36.0s), 00/20 VUs, 707 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  12% ] 00/20 VUs  0m35.3s/5m0s  20.00 iters/s
+
+running (0m37.0s), 00/20 VUs, 727 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  12% ] 00/20 VUs  0m36.3s/5m0s  20.00 iters/s
+
+running (0m38.0s), 00/20 VUs, 747 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  12% ] 00/20 VUs  0m37.3s/5m0s  20.00 iters/s
+
+running (0m39.0s), 00/20 VUs, 767 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  13% ] 00/20 VUs  0m38.3s/5m0s  20.00 iters/s
+
+running (0m40.0s), 00/20 VUs, 787 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  13% ] 00/20 VUs  0m39.3s/5m0s  20.00 iters/s
+
+running (0m41.0s), 00/20 VUs, 807 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  13% ] 00/20 VUs  0m40.3s/5m0s  20.00 iters/s
+
+running (0m42.0s), 00/20 VUs, 827 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  14% ] 00/20 VUs  0m41.3s/5m0s  20.00 iters/s
+
+running (0m43.0s), 00/20 VUs, 847 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  14% ] 00/20 VUs  0m42.3s/5m0s  20.00 iters/s
+
+running (0m44.0s), 00/20 VUs, 867 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  14% ] 00/20 VUs  0m43.3s/5m0s  20.00 iters/s
+
+running (0m45.0s), 00/20 VUs, 887 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  15% ] 00/20 VUs  0m44.3s/5m0s  20.00 iters/s
+
+running (0m46.0s), 00/20 VUs, 907 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  15% ] 00/20 VUs  0m45.3s/5m0s  20.00 iters/s
+
+running (0m47.0s), 01/20 VUs, 926 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  15% ] 01/20 VUs  0m46.3s/5m0s  20.00 iters/s
+
+running (0m48.0s), 00/20 VUs, 947 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  16% ] 00/20 VUs  0m47.3s/5m0s  20.00 iters/s
+
+running (0m49.0s), 00/20 VUs, 967 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  16% ] 00/20 VUs  0m48.3s/5m0s  20.00 iters/s
+
+running (0m50.0s), 00/20 VUs, 987 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  16% ] 00/20 VUs  0m49.3s/5m0s  20.00 iters/s
+
+running (0m51.0s), 00/20 VUs, 1007 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  17% ] 00/20 VUs  0m50.3s/5m0s  20.00 iters/s
+
+running (0m52.0s), 00/20 VUs, 1027 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  17% ] 00/20 VUs  0m51.3s/5m0s  20.00 iters/s
+
+running (0m53.0s), 00/20 VUs, 1047 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  17% ] 00/20 VUs  0m52.3s/5m0s  20.00 iters/s
+
+running (0m54.0s), 00/20 VUs, 1067 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  18% ] 00/20 VUs  0m53.3s/5m0s  20.00 iters/s
+
+running (0m55.0s), 02/20 VUs, 1085 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  18% ] 02/20 VUs  0m54.3s/5m0s  20.00 iters/s
+
+running (0m56.0s), 00/20 VUs, 1107 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  18% ] 00/20 VUs  0m55.3s/5m0s  20.00 iters/s
+
+running (0m57.0s), 00/20 VUs, 1127 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  19% ] 00/20 VUs  0m56.3s/5m0s  20.00 iters/s
+
+running (0m58.0s), 00/20 VUs, 1147 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  19% ] 00/20 VUs  0m57.3s/5m0s  20.00 iters/s
+
+running (0m59.0s), 00/20 VUs, 1167 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  19% ] 00/20 VUs  0m58.3s/5m0s  20.00 iters/s
+
+running (1m00.0s), 00/20 VUs, 1187 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  20% ] 00/20 VUs  0m59.3s/5m0s  20.00 iters/s
+
+running (1m01.0s), 00/20 VUs, 1207 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  20% ] 00/20 VUs  1m00.3s/5m0s  20.00 iters/s
+
+running (1m02.0s), 00/20 VUs, 1227 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  20% ] 00/20 VUs  1m01.3s/5m0s  20.00 iters/s
+
+running (1m03.0s), 00/20 VUs, 1247 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  21% ] 00/20 VUs  1m02.3s/5m0s  20.00 iters/s
+
+running (1m04.0s), 00/20 VUs, 1267 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  21% ] 00/20 VUs  1m03.3s/5m0s  20.00 iters/s
+
+running (1m05.0s), 00/20 VUs, 1287 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  21% ] 00/20 VUs  1m04.3s/5m0s  20.00 iters/s
+
+running (1m06.0s), 00/20 VUs, 1307 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  22% ] 00/20 VUs  1m05.3s/5m0s  20.00 iters/s
+
+running (1m07.0s), 00/20 VUs, 1327 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  22% ] 00/20 VUs  1m06.3s/5m0s  20.00 iters/s
+
+running (1m08.0s), 05/20 VUs, 1342 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  22% ] 05/20 VUs  1m07.3s/5m0s  20.00 iters/s
+
+running (1m09.0s), 00/20 VUs, 1367 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  23% ] 00/20 VUs  1m08.3s/5m0s  20.00 iters/s
+
+running (1m10.0s), 01/20 VUs, 1386 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  23% ] 01/20 VUs  1m09.3s/5m0s  20.00 iters/s
+
+running (1m11.0s), 00/20 VUs, 1407 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  23% ] 00/20 VUs  1m10.3s/5m0s  20.00 iters/s
+
+running (1m12.0s), 00/20 VUs, 1427 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  24% ] 00/20 VUs  1m11.3s/5m0s  20.00 iters/s
+
+running (1m13.0s), 00/20 VUs, 1447 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  24% ] 00/20 VUs  1m12.3s/5m0s  20.00 iters/s
+
+running (1m14.0s), 00/20 VUs, 1467 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  24% ] 00/20 VUs  1m13.3s/5m0s  20.00 iters/s
+
+running (1m15.0s), 00/20 VUs, 1487 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  25% ] 00/20 VUs  1m14.3s/5m0s  20.00 iters/s
+
+running (1m16.0s), 01/20 VUs, 1506 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  25% ] 01/20 VUs  1m15.3s/5m0s  20.00 iters/s
+
+running (1m17.0s), 00/20 VUs, 1527 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  25% ] 00/20 VUs  1m16.3s/5m0s  20.00 iters/s
+
+running (1m18.0s), 00/20 VUs, 1547 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  26% ] 00/20 VUs  1m17.3s/5m0s  20.00 iters/s
+
+running (1m19.0s), 00/20 VUs, 1567 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  26% ] 00/20 VUs  1m18.3s/5m0s  20.00 iters/s
+
+running (1m20.0s), 00/20 VUs, 1587 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  26% ] 00/20 VUs  1m19.3s/5m0s  20.00 iters/s
+
+running (1m21.0s), 00/20 VUs, 1607 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  27% ] 00/20 VUs  1m20.3s/5m0s  20.00 iters/s
+
+running (1m22.0s), 00/20 VUs, 1627 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  27% ] 00/20 VUs  1m21.3s/5m0s  20.00 iters/s
+
+running (1m23.0s), 00/20 VUs, 1647 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  27% ] 00/20 VUs  1m22.3s/5m0s  20.00 iters/s
+
+running (1m24.0s), 00/20 VUs, 1667 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  28% ] 00/20 VUs  1m23.3s/5m0s  20.00 iters/s
+
+running (1m25.0s), 00/20 VUs, 1687 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  28% ] 00/20 VUs  1m24.3s/5m0s  20.00 iters/s
+
+running (1m26.0s), 00/20 VUs, 1707 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  28% ] 00/20 VUs  1m25.3s/5m0s  20.00 iters/s
+
+running (1m27.0s), 00/20 VUs, 1727 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  29% ] 00/20 VUs  1m26.3s/5m0s  20.00 iters/s
+
+running (1m28.0s), 00/20 VUs, 1747 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  29% ] 00/20 VUs  1m27.3s/5m0s  20.00 iters/s
+
+running (1m29.0s), 00/20 VUs, 1767 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  29% ] 00/20 VUs  1m28.3s/5m0s  20.00 iters/s
+
+running (1m30.0s), 00/20 VUs, 1787 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  30% ] 00/20 VUs  1m29.3s/5m0s  20.00 iters/s
+
+running (1m31.0s), 00/20 VUs, 1807 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  30% ] 00/20 VUs  1m30.3s/5m0s  20.00 iters/s
+
+running (1m32.0s), 00/20 VUs, 1827 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  30% ] 00/20 VUs  1m31.3s/5m0s  20.00 iters/s
+
+running (1m33.0s), 00/20 VUs, 1847 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  31% ] 00/20 VUs  1m32.3s/5m0s  20.00 iters/s
+
+running (1m34.0s), 00/20 VUs, 1867 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  31% ] 00/20 VUs  1m33.3s/5m0s  20.00 iters/s
+
+running (1m35.0s), 01/20 VUs, 1886 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  31% ] 01/20 VUs  1m34.3s/5m0s  20.00 iters/s
+
+running (1m36.0s), 00/20 VUs, 1907 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  32% ] 00/20 VUs  1m35.3s/5m0s  20.00 iters/s
+
+running (1m37.0s), 00/20 VUs, 1927 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  32% ] 00/20 VUs  1m36.3s/5m0s  20.00 iters/s
+
+running (1m38.0s), 01/20 VUs, 1946 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  32% ] 01/20 VUs  1m37.3s/5m0s  20.00 iters/s
+
+running (1m39.0s), 00/20 VUs, 1967 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  33% ] 00/20 VUs  1m38.3s/5m0s  20.00 iters/s
+
+running (1m40.0s), 00/20 VUs, 1987 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  33% ] 00/20 VUs  1m39.3s/5m0s  20.00 iters/s
+
+running (1m41.0s), 02/20 VUs, 2005 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  33% ] 02/20 VUs  1m40.3s/5m0s  20.00 iters/s
+
+running (1m42.0s), 00/20 VUs, 2027 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  34% ] 00/20 VUs  1m41.3s/5m0s  20.00 iters/s
+
+running (1m43.0s), 00/20 VUs, 2047 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  34% ] 00/20 VUs  1m42.3s/5m0s  20.00 iters/s
+
+running (1m44.0s), 00/20 VUs, 2067 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  34% ] 00/20 VUs  1m43.3s/5m0s  20.00 iters/s
+
+running (1m45.0s), 00/20 VUs, 2087 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  35% ] 00/20 VUs  1m44.3s/5m0s  20.00 iters/s
+
+running (1m46.0s), 00/20 VUs, 2107 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  35% ] 00/20 VUs  1m45.3s/5m0s  20.00 iters/s
+
+running (1m47.0s), 01/20 VUs, 2126 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  35% ] 01/20 VUs  1m46.3s/5m0s  20.00 iters/s
+
+running (1m48.0s), 01/20 VUs, 2146 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  36% ] 01/20 VUs  1m47.3s/5m0s  20.00 iters/s
+
+running (1m49.0s), 00/20 VUs, 2167 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  36% ] 00/20 VUs  1m48.3s/5m0s  20.00 iters/s
+
+running (1m50.0s), 00/20 VUs, 2187 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  36% ] 00/20 VUs  1m49.3s/5m0s  20.00 iters/s
+
+running (1m51.0s), 00/20 VUs, 2207 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  37% ] 00/20 VUs  1m50.3s/5m0s  20.00 iters/s
+
+running (1m52.0s), 00/20 VUs, 2227 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  37% ] 00/20 VUs  1m51.3s/5m0s  20.00 iters/s
+
+running (1m53.0s), 00/20 VUs, 2247 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  37% ] 00/20 VUs  1m52.3s/5m0s  20.00 iters/s
+
+running (1m54.0s), 00/20 VUs, 2267 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  38% ] 00/20 VUs  1m53.3s/5m0s  20.00 iters/s
+
+running (1m55.0s), 00/20 VUs, 2287 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  38% ] 00/20 VUs  1m54.3s/5m0s  20.00 iters/s
+
+running (1m56.0s), 00/20 VUs, 2307 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  38% ] 00/20 VUs  1m55.3s/5m0s  20.00 iters/s
+
+running (1m57.0s), 00/20 VUs, 2327 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  39% ] 00/20 VUs  1m56.3s/5m0s  20.00 iters/s
+
+running (1m58.0s), 00/20 VUs, 2347 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  39% ] 00/20 VUs  1m57.3s/5m0s  20.00 iters/s
+
+running (1m59.0s), 00/20 VUs, 2367 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  39% ] 00/20 VUs  1m58.3s/5m0s  20.00 iters/s
+
+running (2m00.0s), 00/20 VUs, 2387 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  40% ] 00/20 VUs  1m59.3s/5m0s  20.00 iters/s
+
+running (2m01.0s), 00/20 VUs, 2407 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  40% ] 00/20 VUs  2m00.3s/5m0s  20.00 iters/s
+
+running (2m02.0s), 00/20 VUs, 2427 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  40% ] 00/20 VUs  2m01.3s/5m0s  20.00 iters/s
+
+running (2m03.0s), 00/20 VUs, 2447 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  41% ] 00/20 VUs  2m02.3s/5m0s  20.00 iters/s
+
+running (2m04.0s), 00/20 VUs, 2467 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  41% ] 00/20 VUs  2m03.3s/5m0s  20.00 iters/s
+
+running (2m05.0s), 00/20 VUs, 2487 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  41% ] 00/20 VUs  2m04.3s/5m0s  20.00 iters/s
+
+running (2m06.0s), 00/20 VUs, 2507 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  42% ] 00/20 VUs  2m05.3s/5m0s  20.00 iters/s
+
+running (2m07.0s), 00/20 VUs, 2527 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  42% ] 00/20 VUs  2m06.3s/5m0s  20.00 iters/s
+
+running (2m08.0s), 05/20 VUs, 2542 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  42% ] 05/20 VUs  2m07.3s/5m0s  20.00 iters/s
+
+running (2m09.0s), 00/20 VUs, 2567 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  43% ] 00/20 VUs  2m08.3s/5m0s  20.00 iters/s
+
+running (2m10.0s), 07/20 VUs, 2580 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  43% ] 07/20 VUs  2m09.3s/5m0s  20.00 iters/s
+
+running (2m11.0s), 00/20 VUs, 2607 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  43% ] 00/20 VUs  2m10.3s/5m0s  20.00 iters/s
+
+running (2m12.0s), 00/20 VUs, 2627 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  44% ] 00/20 VUs  2m11.3s/5m0s  20.00 iters/s
+
+running (2m13.0s), 00/20 VUs, 2647 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  44% ] 00/20 VUs  2m12.3s/5m0s  20.00 iters/s
+
+running (2m14.0s), 00/20 VUs, 2667 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  44% ] 00/20 VUs  2m13.3s/5m0s  20.00 iters/s
+
+running (2m15.0s), 00/20 VUs, 2687 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  45% ] 00/20 VUs  2m14.3s/5m0s  20.00 iters/s
+
+running (2m16.0s), 00/20 VUs, 2707 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  45% ] 00/20 VUs  2m15.3s/5m0s  20.00 iters/s
+
+running (2m17.0s), 00/20 VUs, 2727 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  45% ] 00/20 VUs  2m16.3s/5m0s  20.00 iters/s
+
+running (2m18.0s), 00/20 VUs, 2747 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  46% ] 00/20 VUs  2m17.3s/5m0s  20.00 iters/s
+
+running (2m19.0s), 00/20 VUs, 2767 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  46% ] 00/20 VUs  2m18.3s/5m0s  20.00 iters/s
+
+running (2m20.0s), 00/20 VUs, 2787 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  46% ] 00/20 VUs  2m19.3s/5m0s  20.00 iters/s
+
+running (2m21.0s), 00/20 VUs, 2807 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  47% ] 00/20 VUs  2m20.3s/5m0s  20.00 iters/s
+
+running (2m22.0s), 00/20 VUs, 2827 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  47% ] 00/20 VUs  2m21.3s/5m0s  20.00 iters/s
+
+running (2m23.0s), 00/20 VUs, 2847 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  47% ] 00/20 VUs  2m22.3s/5m0s  20.00 iters/s
+
+running (2m24.0s), 00/20 VUs, 2867 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  48% ] 00/20 VUs  2m23.3s/5m0s  20.00 iters/s
+
+running (2m25.0s), 00/20 VUs, 2887 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  48% ] 00/20 VUs  2m24.3s/5m0s  20.00 iters/s
+
+running (2m26.0s), 00/20 VUs, 2907 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  48% ] 00/20 VUs  2m25.3s/5m0s  20.00 iters/s
+
+running (2m27.0s), 01/20 VUs, 2926 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  49% ] 01/20 VUs  2m26.3s/5m0s  20.00 iters/s
+
+running (2m28.0s), 00/20 VUs, 2947 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  49% ] 00/20 VUs  2m27.3s/5m0s  20.00 iters/s
+
+running (2m29.0s), 00/20 VUs, 2967 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  49% ] 00/20 VUs  2m28.3s/5m0s  20.00 iters/s
+
+running (2m30.0s), 00/20 VUs, 2987 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  50% ] 00/20 VUs  2m29.3s/5m0s  20.00 iters/s
+
+running (2m31.0s), 00/20 VUs, 3007 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  50% ] 00/20 VUs  2m30.3s/5m0s  20.00 iters/s
+
+running (2m32.0s), 01/20 VUs, 3026 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  50% ] 01/20 VUs  2m31.3s/5m0s  20.00 iters/s
+
+running (2m33.0s), 00/20 VUs, 3047 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  51% ] 00/20 VUs  2m32.3s/5m0s  20.00 iters/s
+
+running (2m34.0s), 00/20 VUs, 3067 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  51% ] 00/20 VUs  2m33.3s/5m0s  20.00 iters/s
+
+running (2m35.0s), 00/20 VUs, 3087 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  51% ] 00/20 VUs  2m34.3s/5m0s  20.00 iters/s
+
+running (2m36.0s), 00/20 VUs, 3107 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  52% ] 00/20 VUs  2m35.3s/5m0s  20.00 iters/s
+
+running (2m37.0s), 00/20 VUs, 3127 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  52% ] 00/20 VUs  2m36.3s/5m0s  20.00 iters/s
+
+running (2m38.0s), 00/20 VUs, 3147 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  52% ] 00/20 VUs  2m37.3s/5m0s  20.00 iters/s
+
+running (2m39.0s), 00/20 VUs, 3167 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  53% ] 00/20 VUs  2m38.3s/5m0s  20.00 iters/s
+
+running (2m40.0s), 00/20 VUs, 3187 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  53% ] 00/20 VUs  2m39.3s/5m0s  20.00 iters/s
+
+running (2m41.0s), 00/20 VUs, 3207 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  53% ] 00/20 VUs  2m40.3s/5m0s  20.00 iters/s
+
+running (2m42.0s), 00/20 VUs, 3227 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  54% ] 00/20 VUs  2m41.3s/5m0s  20.00 iters/s
+
+running (2m43.0s), 00/20 VUs, 3247 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  54% ] 00/20 VUs  2m42.3s/5m0s  20.00 iters/s
+
+running (2m44.0s), 00/20 VUs, 3267 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  54% ] 00/20 VUs  2m43.3s/5m0s  20.00 iters/s
+
+running (2m45.0s), 00/20 VUs, 3287 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  55% ] 00/20 VUs  2m44.3s/5m0s  20.00 iters/s
+
+running (2m46.0s), 00/20 VUs, 3307 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  55% ] 00/20 VUs  2m45.3s/5m0s  20.00 iters/s
+
+running (2m47.0s), 00/20 VUs, 3327 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  55% ] 00/20 VUs  2m46.3s/5m0s  20.00 iters/s
+
+running (2m48.0s), 00/20 VUs, 3347 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  56% ] 00/20 VUs  2m47.3s/5m0s  20.00 iters/s
+
+running (2m49.0s), 00/20 VUs, 3367 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  56% ] 00/20 VUs  2m48.3s/5m0s  20.00 iters/s
+
+running (2m50.0s), 00/20 VUs, 3387 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  56% ] 00/20 VUs  2m49.3s/5m0s  20.00 iters/s
+
+running (2m51.0s), 00/20 VUs, 3407 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  57% ] 00/20 VUs  2m50.3s/5m0s  20.00 iters/s
+
+running (2m52.0s), 00/20 VUs, 3427 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  57% ] 00/20 VUs  2m51.3s/5m0s  20.00 iters/s
+
+running (2m53.0s), 00/20 VUs, 3447 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  57% ] 00/20 VUs  2m52.3s/5m0s  20.00 iters/s
+
+running (2m54.0s), 00/20 VUs, 3467 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  58% ] 00/20 VUs  2m53.3s/5m0s  20.00 iters/s
+
+running (2m55.0s), 00/20 VUs, 3487 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  58% ] 00/20 VUs  2m54.3s/5m0s  20.00 iters/s
+
+running (2m56.0s), 00/20 VUs, 3507 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  58% ] 00/20 VUs  2m55.3s/5m0s  20.00 iters/s
+
+running (2m57.0s), 00/20 VUs, 3527 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  59% ] 00/20 VUs  2m56.3s/5m0s  20.00 iters/s
+
+running (2m58.0s), 00/20 VUs, 3547 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  59% ] 00/20 VUs  2m57.3s/5m0s  20.00 iters/s
+
+running (2m59.0s), 00/20 VUs, 3567 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  59% ] 00/20 VUs  2m58.3s/5m0s  20.00 iters/s
+
+running (3m00.0s), 00/20 VUs, 3587 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  60% ] 00/20 VUs  2m59.3s/5m0s  20.00 iters/s
+
+running (3m01.0s), 00/20 VUs, 3607 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  60% ] 00/20 VUs  3m00.3s/5m0s  20.00 iters/s
+
+running (3m02.0s), 00/20 VUs, 3627 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  60% ] 00/20 VUs  3m01.3s/5m0s  20.00 iters/s
+
+running (3m03.0s), 00/20 VUs, 3647 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  61% ] 00/20 VUs  3m02.3s/5m0s  20.00 iters/s
+
+running (3m04.0s), 00/20 VUs, 3667 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  61% ] 00/20 VUs  3m03.3s/5m0s  20.00 iters/s
+
+running (3m05.0s), 00/20 VUs, 3687 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  61% ] 00/20 VUs  3m04.3s/5m0s  20.00 iters/s
+
+running (3m06.0s), 00/20 VUs, 3707 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  62% ] 00/20 VUs  3m05.3s/5m0s  20.00 iters/s
+
+running (3m07.0s), 00/20 VUs, 3727 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  62% ] 00/20 VUs  3m06.3s/5m0s  20.00 iters/s
+
+running (3m08.0s), 05/20 VUs, 3742 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  62% ] 05/20 VUs  3m07.3s/5m0s  20.00 iters/s
+
+running (3m09.0s), 00/20 VUs, 3767 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  63% ] 00/20 VUs  3m08.3s/5m0s  20.00 iters/s
+
+running (3m10.0s), 02/20 VUs, 3785 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  63% ] 02/20 VUs  3m09.3s/5m0s  20.00 iters/s
+
+running (3m11.0s), 01/20 VUs, 3806 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  63% ] 01/20 VUs  3m10.3s/5m0s  20.00 iters/s
+
+running (3m12.0s), 00/20 VUs, 3827 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  64% ] 00/20 VUs  3m11.3s/5m0s  20.00 iters/s
+
+running (3m13.0s), 00/20 VUs, 3847 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  64% ] 00/20 VUs  3m12.3s/5m0s  20.00 iters/s
+
+running (3m14.0s), 00/20 VUs, 3867 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  64% ] 00/20 VUs  3m13.3s/5m0s  20.00 iters/s
+
+running (3m15.0s), 00/20 VUs, 3887 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  65% ] 00/20 VUs  3m14.3s/5m0s  20.00 iters/s
+
+running (3m16.0s), 00/20 VUs, 3907 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  65% ] 00/20 VUs  3m15.3s/5m0s  20.00 iters/s
+
+running (3m17.0s), 00/20 VUs, 3927 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  65% ] 00/20 VUs  3m16.3s/5m0s  20.00 iters/s
+
+running (3m18.0s), 00/20 VUs, 3947 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  66% ] 00/20 VUs  3m17.3s/5m0s  20.00 iters/s
+
+running (3m19.0s), 00/20 VUs, 3967 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  66% ] 00/20 VUs  3m18.3s/5m0s  20.00 iters/s
+
+running (3m20.0s), 00/20 VUs, 3987 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  66% ] 00/20 VUs  3m19.3s/5m0s  20.00 iters/s
+
+running (3m21.0s), 00/20 VUs, 4007 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  67% ] 00/20 VUs  3m20.3s/5m0s  20.00 iters/s
+
+running (3m22.0s), 00/20 VUs, 4027 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  67% ] 00/20 VUs  3m21.3s/5m0s  20.00 iters/s
+
+running (3m23.0s), 00/20 VUs, 4047 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  67% ] 00/20 VUs  3m22.3s/5m0s  20.00 iters/s
+
+running (3m24.0s), 00/20 VUs, 4067 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  68% ] 00/20 VUs  3m23.3s/5m0s  20.00 iters/s
+
+running (3m25.0s), 00/20 VUs, 4087 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  68% ] 00/20 VUs  3m24.3s/5m0s  20.00 iters/s
+
+running (3m26.0s), 00/20 VUs, 4107 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  68% ] 00/20 VUs  3m25.3s/5m0s  20.00 iters/s
+
+running (3m27.0s), 00/20 VUs, 4127 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  69% ] 00/20 VUs  3m26.3s/5m0s  20.00 iters/s
+
+running (3m28.0s), 00/20 VUs, 4147 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  69% ] 00/20 VUs  3m27.3s/5m0s  20.00 iters/s
+
+running (3m29.0s), 00/20 VUs, 4167 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  69% ] 00/20 VUs  3m28.3s/5m0s  20.00 iters/s
+
+running (3m30.0s), 00/20 VUs, 4187 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  70% ] 00/20 VUs  3m29.3s/5m0s  20.00 iters/s
+
+running (3m31.0s), 00/20 VUs, 4207 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  70% ] 00/20 VUs  3m30.3s/5m0s  20.00 iters/s
+
+running (3m32.0s), 00/20 VUs, 4227 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  70% ] 00/20 VUs  3m31.3s/5m0s  20.00 iters/s
+
+running (3m33.0s), 00/20 VUs, 4247 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  71% ] 00/20 VUs  3m32.3s/5m0s  20.00 iters/s
+
+running (3m34.0s), 00/20 VUs, 4267 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  71% ] 00/20 VUs  3m33.3s/5m0s  20.00 iters/s
+
+running (3m35.0s), 00/20 VUs, 4287 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  71% ] 00/20 VUs  3m34.3s/5m0s  20.00 iters/s
+
+running (3m36.0s), 00/20 VUs, 4307 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  72% ] 00/20 VUs  3m35.3s/5m0s  20.00 iters/s
+
+running (3m37.0s), 00/20 VUs, 4327 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  72% ] 00/20 VUs  3m36.3s/5m0s  20.00 iters/s
+
+running (3m38.0s), 00/20 VUs, 4347 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  72% ] 00/20 VUs  3m37.3s/5m0s  20.00 iters/s
+
+running (3m39.0s), 00/20 VUs, 4367 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  73% ] 00/20 VUs  3m38.3s/5m0s  20.00 iters/s
+
+running (3m40.0s), 00/20 VUs, 4387 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  73% ] 00/20 VUs  3m39.3s/5m0s  20.00 iters/s
+
+running (3m41.0s), 00/20 VUs, 4407 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  73% ] 00/20 VUs  3m40.3s/5m0s  20.00 iters/s
+
+running (3m42.0s), 00/20 VUs, 4427 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  74% ] 00/20 VUs  3m41.3s/5m0s  20.00 iters/s
+
+running (3m43.0s), 00/20 VUs, 4447 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  74% ] 00/20 VUs  3m42.3s/5m0s  20.00 iters/s
+
+running (3m44.0s), 00/20 VUs, 4467 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  74% ] 00/20 VUs  3m43.3s/5m0s  20.00 iters/s
+
+running (3m45.0s), 00/20 VUs, 4487 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  75% ] 00/20 VUs  3m44.3s/5m0s  20.00 iters/s
+
+running (3m46.0s), 00/20 VUs, 4507 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  75% ] 00/20 VUs  3m45.3s/5m0s  20.00 iters/s
+
+running (3m47.0s), 00/20 VUs, 4527 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  75% ] 00/20 VUs  3m46.3s/5m0s  20.00 iters/s
+
+running (3m48.0s), 00/20 VUs, 4547 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  76% ] 00/20 VUs  3m47.3s/5m0s  20.00 iters/s
+
+running (3m49.0s), 00/20 VUs, 4567 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  76% ] 00/20 VUs  3m48.3s/5m0s  20.00 iters/s
+
+running (3m50.0s), 00/20 VUs, 4587 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  76% ] 00/20 VUs  3m49.3s/5m0s  20.00 iters/s
+
+running (3m51.0s), 00/20 VUs, 4607 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  77% ] 00/20 VUs  3m50.3s/5m0s  20.00 iters/s
+
+running (3m52.0s), 01/20 VUs, 4626 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  77% ] 01/20 VUs  3m51.3s/5m0s  20.00 iters/s
+
+running (3m53.0s), 00/20 VUs, 4647 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  77% ] 00/20 VUs  3m52.3s/5m0s  20.00 iters/s
+
+running (3m54.0s), 00/20 VUs, 4667 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  78% ] 00/20 VUs  3m53.3s/5m0s  20.00 iters/s
+
+running (3m55.0s), 00/20 VUs, 4687 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  78% ] 00/20 VUs  3m54.3s/5m0s  20.00 iters/s
+
+running (3m56.0s), 00/20 VUs, 4707 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  78% ] 00/20 VUs  3m55.3s/5m0s  20.00 iters/s
+
+running (3m57.0s), 00/20 VUs, 4727 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  79% ] 00/20 VUs  3m56.3s/5m0s  20.00 iters/s
+
+running (3m58.0s), 00/20 VUs, 4747 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  79% ] 00/20 VUs  3m57.3s/5m0s  20.00 iters/s
+
+running (3m59.0s), 00/20 VUs, 4767 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  79% ] 00/20 VUs  3m58.3s/5m0s  20.00 iters/s
+
+running (4m00.0s), 00/20 VUs, 4787 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  80% ] 00/20 VUs  3m59.3s/5m0s  20.00 iters/s
+
+running (4m01.0s), 00/20 VUs, 4807 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  80% ] 00/20 VUs  4m00.3s/5m0s  20.00 iters/s
+
+running (4m02.0s), 00/20 VUs, 4827 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  80% ] 00/20 VUs  4m01.3s/5m0s  20.00 iters/s
+
+running (4m03.0s), 00/20 VUs, 4847 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  81% ] 00/20 VUs  4m02.3s/5m0s  20.00 iters/s
+
+running (4m04.0s), 00/20 VUs, 4867 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  81% ] 00/20 VUs  4m03.3s/5m0s  20.00 iters/s
+
+running (4m05.0s), 01/20 VUs, 4886 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  81% ] 01/20 VUs  4m04.3s/5m0s  20.00 iters/s
+
+running (4m06.0s), 00/20 VUs, 4907 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  82% ] 00/20 VUs  4m05.3s/5m0s  20.00 iters/s
+
+running (4m07.0s), 00/20 VUs, 4927 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  82% ] 00/20 VUs  4m06.3s/5m0s  20.00 iters/s
+
+running (4m08.0s), 05/20 VUs, 4942 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  82% ] 05/20 VUs  4m07.3s/5m0s  20.00 iters/s
+
+running (4m09.0s), 03/20 VUs, 4964 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  83% ] 03/20 VUs  4m08.3s/5m0s  20.00 iters/s
+
+running (4m10.0s), 18/20 VUs, 4969 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  83% ] 18/20 VUs  4m09.3s/5m0s  20.00 iters/s
+
+running (4m11.0s), 16/23 VUs, 4988 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  83% ] 16/23 VUs  4m10.3s/5m0s  20.00 iters/s
+
+running (4m12.0s), 00/23 VUs, 5024 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  84% ] 00/23 VUs  4m11.3s/5m0s  20.00 iters/s
+
+running (4m13.0s), 01/23 VUs, 5043 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  84% ] 01/23 VUs  4m12.3s/5m0s  20.00 iters/s
+
+running (4m14.0s), 00/23 VUs, 5064 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  84% ] 00/23 VUs  4m13.3s/5m0s  20.00 iters/s
+
+running (4m15.0s), 00/23 VUs, 5084 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  85% ] 00/23 VUs  4m14.3s/5m0s  20.00 iters/s
+
+running (4m16.0s), 00/23 VUs, 5104 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  85% ] 00/23 VUs  4m15.3s/5m0s  20.00 iters/s
+
+running (4m17.0s), 00/23 VUs, 5124 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  85% ] 00/23 VUs  4m16.3s/5m0s  20.00 iters/s
+
+running (4m18.0s), 01/23 VUs, 5143 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  86% ] 01/23 VUs  4m17.3s/5m0s  20.00 iters/s
+
+running (4m19.0s), 01/23 VUs, 5163 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  86% ] 01/23 VUs  4m18.3s/5m0s  20.00 iters/s
+
+running (4m20.0s), 00/23 VUs, 5184 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  86% ] 00/23 VUs  4m19.3s/5m0s  20.00 iters/s
+
+running (4m21.0s), 00/23 VUs, 5204 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  87% ] 00/23 VUs  4m20.3s/5m0s  20.00 iters/s
+
+running (4m22.0s), 00/23 VUs, 5224 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  87% ] 00/23 VUs  4m21.3s/5m0s  20.00 iters/s
+
+running (4m23.0s), 00/23 VUs, 5244 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  87% ] 00/23 VUs  4m22.3s/5m0s  20.00 iters/s
+
+running (4m24.0s), 01/23 VUs, 5263 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  88% ] 01/23 VUs  4m23.3s/5m0s  20.00 iters/s
+
+running (4m25.0s), 01/23 VUs, 5283 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  88% ] 01/23 VUs  4m24.3s/5m0s  20.00 iters/s
+
+running (4m26.0s), 00/23 VUs, 5304 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  88% ] 00/23 VUs  4m25.3s/5m0s  20.00 iters/s
+
+running (4m27.0s), 00/23 VUs, 5324 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  89% ] 00/23 VUs  4m26.3s/5m0s  20.00 iters/s
+
+running (4m28.0s), 00/23 VUs, 5344 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  89% ] 00/23 VUs  4m27.3s/5m0s  20.00 iters/s
+
+running (4m29.0s), 01/23 VUs, 5363 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  89% ] 01/23 VUs  4m28.3s/5m0s  20.00 iters/s
+
+running (4m30.0s), 00/23 VUs, 5384 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  90% ] 00/23 VUs  4m29.3s/5m0s  20.00 iters/s
+
+running (4m31.0s), 00/23 VUs, 5404 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  90% ] 00/23 VUs  4m30.3s/5m0s  20.00 iters/s
+
+running (4m32.0s), 00/23 VUs, 5424 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  90% ] 00/23 VUs  4m31.3s/5m0s  20.00 iters/s
+
+running (4m33.0s), 01/23 VUs, 5443 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  91% ] 01/23 VUs  4m32.3s/5m0s  20.00 iters/s
+
+running (4m34.0s), 00/23 VUs, 5464 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  91% ] 00/23 VUs  4m33.3s/5m0s  20.00 iters/s
+
+running (4m35.0s), 00/23 VUs, 5484 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  91% ] 00/23 VUs  4m34.3s/5m0s  20.00 iters/s
+
+running (4m36.0s), 00/23 VUs, 5504 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  92% ] 00/23 VUs  4m35.3s/5m0s  20.00 iters/s
+
+running (4m37.0s), 00/23 VUs, 5524 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  92% ] 00/23 VUs  4m36.3s/5m0s  20.00 iters/s
+
+running (4m38.0s), 01/23 VUs, 5543 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  92% ] 01/23 VUs  4m37.3s/5m0s  20.00 iters/s
+
+running (4m39.0s), 00/23 VUs, 5564 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  93% ] 00/23 VUs  4m38.3s/5m0s  20.00 iters/s
+
+running (4m40.0s), 00/23 VUs, 5584 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  93% ] 00/23 VUs  4m39.3s/5m0s  20.00 iters/s
+
+running (4m41.0s), 01/23 VUs, 5603 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  93% ] 01/23 VUs  4m40.3s/5m0s  20.00 iters/s
+
+running (4m42.0s), 00/23 VUs, 5624 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  94% ] 00/23 VUs  4m41.3s/5m0s  20.00 iters/s
+
+running (4m43.0s), 00/23 VUs, 5644 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  94% ] 00/23 VUs  4m42.3s/5m0s  20.00 iters/s
+
+running (4m44.0s), 01/23 VUs, 5663 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  94% ] 01/23 VUs  4m43.3s/5m0s  20.00 iters/s
+
+running (4m45.0s), 00/23 VUs, 5684 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  95% ] 00/23 VUs  4m44.3s/5m0s  20.00 iters/s
+
+running (4m46.0s), 00/23 VUs, 5704 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  95% ] 00/23 VUs  4m45.3s/5m0s  20.00 iters/s
+
+running (4m47.0s), 00/23 VUs, 5724 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  95% ] 00/23 VUs  4m46.3s/5m0s  20.00 iters/s
+
+running (4m48.0s), 00/23 VUs, 5744 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  96% ] 00/23 VUs  4m47.3s/5m0s  20.00 iters/s
+
+running (4m49.0s), 00/23 VUs, 5764 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  96% ] 00/23 VUs  4m48.3s/5m0s  20.00 iters/s
+
+running (4m50.0s), 01/23 VUs, 5783 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  96% ] 01/23 VUs  4m49.3s/5m0s  20.00 iters/s
+
+running (4m51.0s), 00/23 VUs, 5804 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  97% ] 00/23 VUs  4m50.3s/5m0s  20.00 iters/s
+
+running (4m52.0s), 01/23 VUs, 5823 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  97% ] 01/23 VUs  4m51.3s/5m0s  20.00 iters/s
+
+running (4m53.0s), 01/23 VUs, 5843 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  97% ] 01/23 VUs  4m52.3s/5m0s  20.00 iters/s
+
+running (4m54.0s), 00/23 VUs, 5864 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  98% ] 00/23 VUs  4m53.3s/5m0s  20.00 iters/s
+
+running (4m55.0s), 01/23 VUs, 5883 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  98% ] 01/23 VUs  4m54.3s/5m0s  20.00 iters/s
+
+running (4m56.0s), 00/23 VUs, 5904 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  98% ] 00/23 VUs  4m55.3s/5m0s  20.00 iters/s
+
+running (4m57.0s), 00/23 VUs, 5924 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  99% ] 00/23 VUs  4m56.3s/5m0s  20.00 iters/s
+
+running (4m58.0s), 00/23 VUs, 5944 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  99% ] 00/23 VUs  4m57.3s/5m0s  20.00 iters/s
+
+running (4m59.0s), 00/23 VUs, 5964 complete and 0 interrupted iterations
+restaurant_view_hotpath   [  99% ] 00/23 VUs  4m58.3s/5m0s  20.00 iters/s
+
+running (5m00.0s), 00/23 VUs, 5984 complete and 0 interrupted iterations
+restaurant_view_hotpath   [ 100% ] 00/23 VUs  4m59.3s/5m0s  20.00 iters/s
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 11996   39.897353/s
+    checks_succeeded...: 100.00% 11996 out of 11996
+    checks_failed......: 0.00%   0 out of 11996
+
+    ✓ hotpath_dining_sessions status is 200
+    ✓ hotpath_dining_sessions body.success is true
+
+    HTTP
+    http_req_duration..............: avg=35.41ms min=16.57ms med=23.21ms max=1.28s p(90)=43.03ms p(95)=60.27ms p(99)=265.54ms
+      { expected_response:true }...: avg=35.41ms min=16.57ms med=23.21ms max=1.28s p(90)=43.03ms p(95)=60.27ms p(99)=265.54ms
+    http_req_failed................: 0.00%  0 out of 6003
+    http_reqs......................: 6003   19.965306/s
+
+    EXECUTION
+    dropped_iterations.............: 3      0.009978/s
+    iteration_duration.............: avg=36.61ms min=17.44ms med=24.5ms  max=1.28s p(90)=44.39ms p(95)=61.57ms p(99)=265.39ms
+    iterations.....................: 5998   19.948676/s
+    vus............................: 0      min=0         max=18
+    vus_max........................: 23     min=20        max=23
+
+    NETWORK
+    data_received..................: 110 MB 366 kB/s
+    data_sent......................: 746 kB 2.5 kB/s
+
+
+
+
+running (5m00.7s), 00/23 VUs, 5998 complete and 0 interrupted iterations
+restaurant_view_hotpath ✓ [ 100% ] 00/23 VUs  5m0s  20.00 iters/s

@@ -37,12 +37,14 @@ public class ChatMessageOutboxProcessor {
     private final Clock clock;
     private final String topic;
     private final long ackTimeoutSeconds;
+    private final String partitionKeyStrategy;
 
     public ChatMessageOutboxProcessor(OutboxEventRepository outboxEventRepository,
             OutboxEventTransactionService transactionService, ChatMessageRepository chatMessageRepository,
             KafkaOperations<Object, Object> kafkaTemplate, Clock clock,
             @Value("${bobfull.kafka.chat-message.topic:bobfull.chat.message-created.v1}") String topic,
-            @Value("${bobfull.kafka.chat-message.producer-ack-timeout-seconds:10}") long ackTimeoutSeconds
+            @Value("${bobfull.kafka.chat-message.producer-ack-timeout-seconds:10}") long ackTimeoutSeconds,
+            @Value("${bobfull.kafka.chat-message.partition-key-strategy:message-id}") String partitionKeyStrategy
     ) {
         this.outboxEventRepository = outboxEventRepository;
         this.transactionService = transactionService;
@@ -51,6 +53,7 @@ public class ChatMessageOutboxProcessor {
         this.clock = clock;
         this.topic = topic;
         this.ackTimeoutSeconds = ackTimeoutSeconds;
+        this.partitionKeyStrategy = partitionKeyStrategy;
     }
 
     public void process(Long eventId) {
@@ -116,6 +119,9 @@ public class ChatMessageOutboxProcessor {
                 .orElseThrow(() -> new IllegalStateException("OutboxEvent를 찾을 수 없습니다: " + event.id()));
         ChatMessageCreatedEvent payload = new ChatMessageCreatedEvent(outboxEvent.getEventId(), 1,
                 message.getId(), message.getChatRoomId(), clock.instant());
-        kafkaTemplate.send(topic, message.getChatRoomId().toString(), payload).get(ackTimeoutSeconds, TimeUnit.SECONDS);
+        String key = "message-id".equals(partitionKeyStrategy)
+                ? message.getId().toString()
+                : message.getChatRoomId().toString();
+        kafkaTemplate.send(topic, key, payload).get(ackTimeoutSeconds, TimeUnit.SECONDS);
     }
 }

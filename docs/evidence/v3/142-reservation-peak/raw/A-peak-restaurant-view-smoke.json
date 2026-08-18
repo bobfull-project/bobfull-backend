@@ -1,0 +1,152 @@
+{
+    "metrics": {
+        "http_req_waiting": {
+            "min": 7.514,
+            "med": 139.87,
+            "max": 369.111,
+            "p(90)": 227.47860000000006,
+            "p(95)": 291.8365999999999,
+            "avg": 108.62
+        },
+        "http_reqs": {
+            "rate": 2.218871778292598,
+            "count": 47
+        },
+        "http_req_duration": {
+            "p(90)": 230.20080000000004,
+            "p(95)": 292.4620999999999,
+            "avg": 109.04246808510642,
+            "min": 7.566,
+            "med": 140.126,
+            "max": 369.621
+        },
+        "iteration_duration": {
+            "p(95)": 274.888791,
+            "avg": 197.6685336190476,
+            "min": 153.728208,
+            "med": 182.987416,
+            "max": 375.987,
+            "p(90)": 224.973833
+        },
+        "iterations": {
+            "count": 21,
+            "rate": 0.9914107945562671
+        },
+        "http_req_blocked": {
+            "min": 0.002,
+            "med": 0.004,
+            "max": 3.234,
+            "p(90)": 0.008400000000000001,
+            "p(95)": 0.21019999999999942,
+            "avg": 0.08961702127659567
+        },
+        "vus": {
+            "value": 0,
+            "min": 0,
+            "max": 0
+        },
+        "http_req_connecting": {
+            "p(90)": 0,
+            "p(95)": 0.1777999999999995,
+            "avg": 0.023936170212765957,
+            "min": 0,
+            "med": 0,
+            "max": 0.452
+        },
+        "http_req_sending": {
+            "p(95)": 0.06669999999999998,
+            "avg": 0.03006382978723402,
+            "min": 0.006,
+            "med": 0.014,
+            "max": 0.537,
+            "p(90)": 0.028400000000000005
+        },
+        "checks": {
+            "passes": 84,
+            "fails": 0,
+            "value": 1
+        },
+        "data_sent": {
+            "count": 6390,
+            "rate": 301.6721417721213
+        },
+        "data_received": {
+            "count": 406958,
+            "rate": 19212.502577668067
+        },
+        "http_req_receiving": {
+            "p(95)": 0.9534999999999991,
+            "avg": 0.39240425531914896,
+            "min": 0.036,
+            "med": 0.269,
+            "max": 5.625,
+            "p(90)": 0.5696000000000001
+        },
+        "vus_max": {
+            "value": 2,
+            "min": 2,
+            "max": 2
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 47,
+            "value": 0
+        },
+        "http_req_tls_handshaking": {
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0
+        },
+        "http_req_duration{expected_response:true}": {
+            "min": 7.566,
+            "med": 140.126,
+            "max": 369.621,
+            "p(90)": 230.20080000000004,
+            "p(95)": 292.4620999999999,
+            "avg": 109.04246808510642
+        }
+    },
+    "setup_data": {
+        "restaurantId": 7,
+        "date": "2026-08-12"
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "peak_restaurant_detail status is 200": {
+                    "name": "peak_restaurant_detail status is 200",
+                    "path": "::peak_restaurant_detail status is 200",
+                    "id": "c3e6eecda259d624d31cadb203a90c35",
+                    "passes": 21,
+                    "fails": 0
+                },
+                "peak_restaurant_detail body.success is true": {
+                    "fails": 0,
+                    "name": "peak_restaurant_detail body.success is true",
+                    "path": "::peak_restaurant_detail body.success is true",
+                    "id": "bfc484a2a67896e6bb40ad7edaaf15e4",
+                    "passes": 21
+                },
+                "peak_dining_sessions status is 200": {
+                    "name": "peak_dining_sessions status is 200",
+                    "path": "::peak_dining_sessions status is 200",
+                    "id": "2ed23084638bf02bf9a601fdc977abd3",
+                    "passes": 21,
+                    "fails": 0
+                },
+                "peak_dining_sessions body.success is true": {
+                    "path": "::peak_dining_sessions body.success is true",
+                    "id": "fb0a3ae0a14fbd88a64d9392afb49b9f",
+                    "passes": 21,
+                    "fails": 0,
+                    "name": "peak_dining_sessions body.success is true"
+                }
+            }
+    }
+}
