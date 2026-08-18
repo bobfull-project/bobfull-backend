@@ -76,6 +76,10 @@ flowchart TB
 | 노쇼 | 식사 종료 후 OWNER의 참여자 단위 처리·해제 이력 | `NoShowHistory` |
 | 채팅 | 예약당 채팅방, 유효 참여자 접근, 메시지 저장·조회 | `ChatRoom`, `ChatMessage` |
 | AI Moderation Core | ChatMessage 원문 분석 orchestration, 결과 검증·저장, Provider 실패 전파 | `ChatModerationService`, `ChatModeration`, `AiModerationPort` |
+| Restaurant Feedback Insight | ChatMessage Event를 재사용한 식당 피드백 분석과 OWNER 익명 집계 조회 | `RestaurantFeedbackInsight`, `RestaurantFeedbackItem`, 독립 Kafka Consumer Group |
+| Transactional Outbox | 핵심 트랜잭션과 후속 처리 의도 보존, Processor/Scheduler 재시도 | `OutboxEvent`, `EmailOutboxDelivery` |
+| Redis | 인증 Refresh Token·Access Token Blacklist, 식당 검색 Cache, 채팅 Pub/Sub fan-out | Redis key prefix 분리, ERD 엔티티 아님 |
+| Kafka | ChatMessage AI Moderation과 Restaurant Feedback Insight 후속 처리 | Outbox 이후 Broker, Consumer Group, Retry/DLT |
 | 알림 | 모집 마감 처리 결과(확정·인원 미달 취소)를 유효 참여자에게 이메일로 안내 | 신규 저장 엔티티 없음, `Reservation`/`ReservationParticipant` 조회 결과만 사용 |
 
 ## 4. 인증·인가와 소유권 검증
@@ -149,8 +153,8 @@ V2의 메모리 `AFTER_COMMIT` + `@Async` 방식은 커밋 직후 프로세스�
 핵심 트랜잭션(결제 완료 확정 또는 모집 마감 처리)
 → OutboxEvent(EMAIL_*, PENDING) + 수신자별 email_outbox_delivery(PENDING)를 같은 트랜잭션에 저장
 → 트랜잭션 COMMIT
-→ 같은 호출 스레드에서 AfterCommit signal (별도 스레드풀·@Async 아님)
-→ EmailOutboxProcessor가 PENDING 수신자만 SMTP에 1회 시도
+→ AfterCommit signal에서 EmailOutboxSignalDispatcher가 전용 bounded Executor에 작업 제출
+→ Executor 스레드의 EmailOutboxProcessor가 PENDING 수신자만 SMTP에 1회 시도
 → 성공한 수신자는 SENT로 보존, 실패한 수신자만 공통 Outbox backoff(5·10·20·40·80초, 5회)로 재시도
 → scheduler(5초 주기)는 signal 유실·재시작 시의 안전망
 ```
@@ -158,6 +162,8 @@ V2의 메모리 `AFTER_COMMIT` + `@Async` 방식은 커밋 직후 프로세스�
 - `ReservationConfirmationService#confirm`이 CREATE·JOIN 모두에서 `EmailOutboxEventService.enqueue(EMAIL_RESERVATION_CREATED|EMAIL_PARTICIPATION_COMPLETED, ...)`를 호출해 접수·참여 완료 안내를 Outbox에 기록한다.
 - `ReservationCancellationTransactionService#acceptRecruitmentDeadline`이 `CLOSED_ONLY`/`CANCELLED` 결과에서 각각 `EmailOutboxEventService.enqueue(EMAIL_RECRUITMENT_CONFIRMED|EMAIL_RECRUITMENT_CANCELLED, ...)`를 호출해 최종 확정·취소 안내를 Outbox에 기록한다.
 - `EmailOutboxEventService.enqueue`는 `Propagation.MANDATORY`라 활성 트랜잭션 밖에서는 호출할 수 없다 — 이메일 발송 의도가 핵심 상태 변경과 항상 같은 커밋에 들어가도록 강제한다.
+- `EmailOutboxSignalDispatcher`는 `emailOutboxExecutor`에 `EmailOutboxProcessor.signal(eventId)` 작업을 직접 제출한다. 현재 구현은 Spring `@Async`가 아니라 명시적 Executor dispatch다.
+- Executor 제출이 거부되면 Outbox를 claim하거나 완료 처리하지 않는다. 해당 이벤트는 `PENDING`으로 남고 기존 scheduler가 재처리한다.
 - `EmailOutboxProcessor`는 예외를 삼키지 않고 전파한다 — 실패는 공통 Outbox의 재시도·`FAILED` 전이만으로 처리하며, 이미 커밋된 예약·결제 상태를 되돌리지 않는다.
 - 환불 요청(`ReservationCancellationRefundPort`)은 `RecruitmentDeadlineCancellationService.process`에서 여전히 직접 호출하며, 이메일 Outbox와는 완전히 독립적으로 실행된다 — 환불 요청이 실패해도 이미 커밋된 이메일 Outbox 처리에는 영향이 없다.
 - 별도 알림 이력 테이블은 두지 않는다. `acceptRecruitmentDeadline`이 같은 예약에 대해 최초 1회만 `CLOSED_ONLY`/`CANCELLED`를 반환하는 기존 멱등 가드와, `email_outbox_delivery`의 `(outbox_event_id, recipient_member_id)` UNIQUE가 함께 중복 발송을 방지한다.
@@ -239,16 +245,28 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 
 외부 결제가 PAID인데 내부 Payment가 `EXPIRED` 또는 만료 READY면 `event=PAYMENT_COMPENSATION_REQUIRED`와 `paymentId`, `externalStatus`, `internalStatus`, `expiresAt`, `reason`을 기록한다. 웹훅은 이 영구 업무 실패를 200으로 확인하지만 PortOne 네트워크·DB·예상하지 못한 오류는 5xx로 둔다. 자동 취소·환불·보상 트랜잭션과 `WebhookEvent` 저장은 이번 범위에서 제외한다.
 
-## 9. 제외·보류 항목
+## 9. 운영 인프라 최종 구조와 보류 항목
 
-다음 항목은 기준 문서에서 확정되지 않았거나 이번 문서 범위가 아니므로 구조를 구체화하지 않는다.
+이 절은 저장소 코드·배포 스크립트·Evidence로 확인 가능한 최종 구조만 연결한다. 현재 AWS live 상태, 최신 배포 SHA, Parameter Store 실제 값은 Repository만 보고 단정하지 않는다.
 
-- 배포 구조, 최종 AWS 구성, 프론트엔드 배포 방식, V1·V2·V3별 물리 아키텍처
-- Redis Cluster·Replica·자동 장애 전환과 다중 EC2 운영 Evidence
-- Access Token Blacklist, Refresh Token 재사용 탐지(§4 인증 세션 참고)
-- 구체적인 락 구현체와 트랜잭션 경계
+| 항목 | 최종 문서 상태 | 근거와 한계 |
+|---|---|---|
+| ALB / Active App EC2 | ALB 뒤 Active App EC2 2대 구조를 App layer HA로 검증 | #169 Evidence. RDS·Redis·Kafka 장애까지 포함한 전체 시스템 HA가 아니다. |
+| Blue-Green | 비활성 Target Group EC2 2대에 배포 후 health/public 검증, ALB weight 전환, rollback guard 유지 | `scripts/aws/deploy-backend-blue-green-v1.sh`, #169/#191 Evidence |
+| Inactive EC2 | 평상시 STOP, 배포 시 START, 검증·rollback window 뒤 guard 조건에서 이전 active STOP | #191 Evidence. API 응답 개선의 단일 원인으로 해석하지 않는다. |
+| Hikari Connection Pool | prod 기본값은 `DB_POOL_MAX_SIZE` 미지정 시 10, #191 검증 기준값은 12 | Pool 12 환경에서 개선 경향이 재현됐지만, 성능 개선의 단일 원인으로 주장하지 않는다. |
+| Redis | 인증 상태, 식당 검색 Cache, 채팅 Pub/Sub 공유 인프라 | Redis Pub/Sub은 best-effort이며 durable/replay 경로가 아니다. |
+| Kafka | ChatMessage AI Moderation과 Restaurant Feedback Insight Event Reuse 후속 처리 | 단일 Kafka EC2/KRaft broker 기준 Evidence이며 Kafka HA 완료 주장이 아니다. |
+| Prometheus/Grafana | Active backend target 갱신과 UP 확인을 Blue-Green 성공 조건에 연결 | 배포 스크립트·운영 문서 기준. 현재 target live 상태는 Human Final QA 대상이다. |
+| App EC2 Auto Scaling | 측정 후 미도입 | #191에서 App CPU/처리량 포화보다 Hikari 대기가 먼저 관측돼 현재 조건에서는 ASG/Scaling Policy를 적용하지 않았다. |
+
+다음 항목은 여전히 보류 또는 비범위다.
+
+- Redis Cluster·Replica·자동 장애 전환, Kafka broker HA, RDS Multi-AZ까지 포함한 전체 시스템 HA
+- Access Token Blacklist 외 Refresh Token 재사용 탐지
+- 기준 문서에 없는 구체적인 락 구현체 변경과 새 트랜잭션 경계 결정
 - `Settlement`, `SeatHold`, `WebhookEvent` 같은 신규 엔티티
-- Kafka를 AI Moderation 외 다른 이벤트로 확대 적용하는 것, 범용 Outbox Framework, Consumer 독립 Worker 분리(#192에서 측정 후 판단) — Chat AI Moderation의 Outbox+Kafka 연결 자체는 #59에서 완료
+- 범용 Outbox Framework, Consumer 독립 Worker 분리, MSA 분리
 - 개별 ADR의 사전 생성, API·ERD 상세 복제, 클래스·패키지 구조
 
 새 기술 선택이나 중요한 구조 변경이 실제로 필요해지면 [ADR 운영 기준](./adr/README.md)에 따라 별도 ADR을 작성한다.

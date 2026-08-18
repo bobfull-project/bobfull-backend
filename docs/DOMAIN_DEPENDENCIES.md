@@ -22,6 +22,8 @@
 → 취소·환불·회차 복구
 → 사장님의 참여자별 노쇼 처리·해제
 → 지급 예정 예약금 조회
+→ 채팅 저장·Redis Pub/Sub 실시간 전파
+→ Outbox 기반 후속 처리와 Kafka AI/Insight Consumer
 ```
 
 | 도메인 | 선행 입력 | 주요 결과 | 직접 영향을 받는 도메인 | 핵심 담당 |
@@ -32,15 +34,32 @@
 | 예약 | 회차, 최초 예약자 | 예약 상태·모집 상태 | 참여, 취소, 노쇼 | 배지현 |
 | 참여자 | 사용자, partySize, 결제 성공 | 참여자 상태·현재 참여 인원 | 좌석, 예약 상태, 환불 | 배지현 |
 | 좌석·동시성 | 테이블 정원, 현재 참여 인원 | 남은 참여 가능 인원과 정원 보호 | 예약, 결제 실패 보상 | 배지현 |
-| 결제 | 사용자, partySize, 예약금 | `READY/PAID/FAILED/CANCELLED` | 예약·참여 등록, 환불, 지급 예정금 | 김현승 |
+| 결제 | 사용자, partySize, 예약금 | `READY/PAID/FAILED/EXPIRED/REFUNDED` | 예약·참여 등록, 환불, 지급 예정금 | 김현승 |
 | 취소·환불 | 예약·참여자·모집 상태, 마감 시각 | 참여자·예약·결제 상태 변경 | 좌석, 회차 복구, 지급 예정금 | 정용태·김현승·배지현 |
 | 노쇼 | 사장님 소유권, `RESERVED` 참여자 | `NO_SHOW/RESERVED`, 처리 이력 | 지급 예정금, 노쇼율 | 정용태·김현승 |
 | 채팅 | 예약, 결제 완료 참여자 | 예약별 채팅방과 접근 권한 | 예약, 인증 | 김현승 |
+| Outbox | 핵심 트랜잭션의 후속 처리 의도 | ChatRoom 생성, 이메일, ChatMessage Kafka 발행 | 예약, 결제, 알림, AI | 김현승 |
+| AI Moderation | ChatMessage Event, Provider 결과 | 메시지별 검수 결과와 관리자 참고 신호 | 채팅, 관리자 Human Review | 김현승 |
+| Restaurant Feedback Insight | ChatMessage Event 재사용, 식당 역추적 | OWNER용 익명 피드백 집계 | 채팅, 식당, Kafka | 정용태·김현승 |
+| Redis Chat Pub/Sub | 커밋된 ChatMessage payload | 다중 App 인스턴스 실시간 fan-out | 채팅, 배포 인프라 | 김현승·김홍기 |
+| Kafka 후속 처리 | Outbox가 발행한 ChatMessageCreatedEvent | AI Moderation과 Restaurant Insight Consumer Group 처리 | 채팅, AI, 운영 재처리 | 김현승 |
 | 지급 예정 예약금 | 결제·환불·취소·노쇼 결과 | 사장님 조회용 예상 금액 | 사장님 권한, 관리자 조회 | 김현승 |
 
-구현 데이터 모델은 `Member`, `Restaurant`, `SharedTable`, `TimeSlot`, `Reservation`, `ReservationParticipant`, `Payment`, `Refund`, `ChatRoom`, `ChatMessage`로 연결한다. `NoShowHistory`는 V2 OWNER의 노쇼 처리·해제 이력을 보존하기 위해 `ReservationParticipant`와 OWNER 처리자를 연결한다. `Settlement`, `SeatHold`, `WebhookEvent`는 현재 확정 엔티티가 아니다.
+구현 데이터 모델은 `Member`, `Restaurant`, `SharedTable`, `TimeSlot`, `Reservation`, `ReservationParticipant`, `Payment`, `Refund`, `ChatRoom`, `ChatMessage`, `ChatModeration`, `ChatRoomMemberReport`, `OutboxEvent`, `EmailOutboxDelivery`, `RestaurantFeedbackInsight`, `RestaurantFeedbackItem`으로 연결한다. `NoShowHistory`는 V2 OWNER의 노쇼 처리·해제 이력을 보존하기 위해 `ReservationParticipant`와 OWNER 처리자를 연결한다. `Settlement`, `SeatHold`, `WebhookEvent`는 현재 확정 엔티티가 아니다.
 
 담당자는 단독 소유권을 뜻하지 않는다. 여러 도메인이 연결되는 Issue는 관련 담당자가 계약과 실패 결과를 함께 확인한다.
+
+### 운영·인프라 책임
+
+아래 표는 Backend 기능 도메인 담당 표와 별개로 운영·인프라 관점의 책임만 정리한다. 김홍기는 배포·인프라·모니터링 전반을, 배지현은 프론트엔드 전반과 Backend API 연동을 담당한다. Redis/Kafka 운영 구성 책임은 해당 인프라의 배포·연결·운영 검증을 뜻하며, 모든 비즈니스 로직 구현 책임을 뜻하지 않는다.
+
+| 영역 | 주요 범위 | 담당 |
+|---|---|---|
+| Deployment / Infrastructure | AWS, EC2/RDS/ALB, Blue-Green, App EC2 다중화, 운영 환경 | 김홍기 |
+| CI/CD | GitHub Actions, Docker/ECR, SSM 배포 및 배포 자동화 | 김홍기 |
+| Monitoring | Prometheus/Grafana, Health Check, 운영 모니터링 | 김홍기 |
+| Infra Troubleshooting | 운영 장애 분석, EC2 메모리 병목, Hikari Pool 병목, Auto Scaling 도입 판단 | 김홍기 |
+| Frontend | 프론트엔드 전반 및 Backend API 연동 | 배지현 |
 
 ## 3. 핵심 공동 작업 경계
 
@@ -220,6 +239,22 @@ OWNER 인증
 ```
 
 - 결제 완료 후 취소되지 않은 참여자만 채팅에 접근하며, 취소된 참여자는 즉시 접근이 종료된다. 상세 접근·전송 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
+- Redis Pub/Sub은 durable/replay 경로가 아니며, 발행 실패는 이미 저장된 ChatMessage를 롤백하지 않는다.
+
+### ChatMessage 후속 처리와 Restaurant Feedback Insight
+
+```text
+ChatMessage 저장
+→ 같은 트랜잭션에 OutboxEvent(CHAT_MESSAGE_CREATED) 저장
+→ 커밋 후 ChatMessageOutboxProcessor가 Kafka에 발행
+→ Moderation Consumer Group은 ChatModerationService를 호출
+→ Restaurant Insight Consumer Group은 messageId로 Restaurant을 역추적해 익명 피드백 Item을 저장
+→ 두 Consumer Group은 offset·Retry·DLT 경계가 분리됨
+```
+
+- AI Moderation은 관리자 Human Review 참고 신호를 만들 뿐 회원 상태를 자동 변경하지 않는다.
+- Restaurant Feedback Insight는 Producer/Event Schema를 바꾸지 않고 같은 ChatMessage Event를 재사용한다. production 기본 설정은 비활성일 수 있으므로, 구현 완료와 운영 enabled 상태를 구분한다.
+- Kafka는 채팅 실시간 fan-out을 담당하지 않는다. Redis Pub/Sub과 Kafka 경로는 ChatMessage 커밋 이후 서로 다른 책임으로 분리된다.
 
 ## 4. 핵심 계산 계약
 
