@@ -33,6 +33,8 @@
 | `ChatRoom` | 예약당 하나의 채팅방 | Reservation 1:0..1 ChatRoom | V2 |
 | `ChatMessage` | DB에 저장되는 채팅 메시지 | ChatRoom 1:N ChatMessage | V2 |
 | `ChatModeration` | 메시지별 AI 분석 결과와 최종 실패 상태 | ChatMessage 1:0..1 ChatModeration | V3 |
+| `RestaurantFeedbackInsight`(테이블 `restaurant_feedback_analysis`) | OWNER에 노출하지 않는 메시지별 식당 피드백 파생 결과 | ChatMessage·Restaurant 값 기반 참조, UNIQUE(chat_message_id, prompt_version) | V3 |
+| `RestaurantFeedbackItem` | Analysis에서 추출된 개별 피드백 의견(0..N) | RestaurantFeedbackInsight 1:N RestaurantFeedbackItem | V3 |
 | `ChatRoomMemberReport` | 채팅방 상대 회원 신고와 Human Review 이력 | ChatRoom·Member·nullable ChatMessage(anchor) 연결 | V3 |
 | `OutboxEvent` | ChatRoom 생성·채팅 메시지 후속 처리·이메일 발송 의도의 공통 영속 이벤트 | `aggregateType`+`aggregateId` 값 기반(Reservation/ChatMessage/ReservationParticipant), 물리 FK 아님 | V2/V3 |
 | `EmailOutboxDelivery` | 이메일 발송 대상 수신자별 성공 여부 이력 | `OutboxEvent`·Reservation·ReservationParticipant·Member 값 기반 연결, 물리 FK 아님 | V3 |
@@ -217,6 +219,29 @@ erDiagram
         bigint chat_moderation_id FK "ChatModeration 컬렉션 소유자"
         enum category "ModerationCategory Enum"
     }
+    RESTAURANT_FEEDBACK_ANALYSIS {
+        bigint restaurant_feedback_analysis_id PK "내부 식별자"
+        bigint chat_message_id "값 기반 참조. ChatMessage.id. 물리 FK 아님"
+        bigint restaurant_id "값 기반 참조. Restaurant.id. 물리 FK 아님"
+        varchar(64) prompt_version "activePromptVersion 등 적용 Prompt 계약"
+        varchar(32) provider "분석 Provider. Gate 제외는 BOBFULL_RULE"
+        varchar(128) model_name "분석 모델. Gate 제외는 normal-exclude"
+        datetime(6) analyzed_at "결과 또는 terminal 제외 기록 시각"
+        enum status "COMPLETED, EXCLUDED_INPUT_PII, EXCLUDED_CANDIDATE, EXCLUDED_OUTPUT_VALIDATION"
+        datetime(6) created_at "생성 시각"
+        datetime(6) updated_at "갱신 시각"
+    }
+    RESTAURANT_FEEDBACK_ITEM {
+        bigint restaurant_feedback_item_id PK "내부 식별자"
+        bigint restaurant_feedback_analysis_id FK "소유 Analysis"
+        enum category "FOOD, SERVICE, PRICE, CLEANLINESS, ETC"
+        enum aspect_type "MENU, SERVICE, PRICE, CLEANLINESS, ETC"
+        varchar(40) normalized_aspect "정규화된 짧은 대상 텍스트. PII/재식별 단서 검증 통과분만 저장"
+        enum opinion_type "TASTE, TEXTURE, SALTINESS, SPICINESS, SWEETNESS, PORTION, FRESHNESS, TEMPERATURE, FRIENDLINESS, SERVICE_SPEED, PRICE_LEVEL, CLEANLINESS, WAITING, ETC"
+        enum sentiment "POSITIVE, NEGATIVE, NEUTRAL"
+        datetime(6) created_at "생성 시각"
+        datetime(6) updated_at "갱신 시각"
+    }
     CHAT_ROOM_MEMBER_REPORT {
         bigint chat_room_member_report_id PK "신고 식별자"
         bigint chat_room_id "대상 채팅방"
@@ -254,6 +279,7 @@ erDiagram
     RESERVATION_PARTICIPANT ||--o{ CHAT_MESSAGE : sends_as
     CHAT_MESSAGE ||--o| CHAT_MODERATION : is_analyzed_as
     CHAT_MODERATION ||--o{ CHAT_MODERATION_CATEGORY : has_categories
+    RESTAURANT_FEEDBACK_ANALYSIS ||--o{ RESTAURANT_FEEDBACK_ITEM : has_items
     CHAT_ROOM ||--o{ CHAT_ROOM_MEMBER_REPORT : has_reports
     CHAT_MESSAGE o|--o{ CHAT_ROOM_MEMBER_REPORT : anchors
     MEMBER ||--o{ CHAT_ROOM_MEMBER_REPORT : reports
@@ -490,6 +516,39 @@ erDiagram
 
 채팅방의 상대 회원에 대한 사용자 신고와 ADMIN Human Review 기록이다. `chat_room_member_report_id`가 PK이며, `chat_room_id`, `reporter_member_id`, `reported_member_id`, nullable `anchor_message_id`, `reason`, nullable `detail`, `status`, nullable `decision`, nullable `reviewed_by_member_id`, nullable `reviewed_at`, `version`, `created_at`, `updated_at`을 저장한다. `chat_room_id`·`reporter_member_id`·`reported_member_id`·`anchor_message_id`·`reviewed_by_member_id`는 물리 FK가 아닌 원본 식별자 값이다. `UNIQUE(reporter_member_id, chat_room_id, reported_member_id)`로 같은 신고자·방·대상 중복을 막는다. `status`는 `PENDING`에서 `REVIEWED`로만 전이하며 `decision`은 `NO_VIOLATION` 또는 `VIOLATION_CONFIRMED`다. 판단은 회원 상태를 자동 변경하지 않는다.
 
+### 4.12.2 `restaurant_feedback_analysis` / `restaurant_feedback_item`
+
+목적: ChatMessage 원문을 OWNER에게 노출하지 않고, 메시지 단위로 식당 피드백을 분류한 파생 결과(0..N개 의견)를 보관한다. #59/#66 Moderation Pipeline과 같은 `ChatMessageCreatedEvent`를 별도 Consumer Group(`bobfull-restaurant-insight-*`)에서 재사용한다.
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---:|---|---|
+| `restaurant_feedback_analysis_id` | BIGINT | N | PK | 내부 식별자 |
+| `chat_message_id` | BIGINT | N | UNIQUE `uk_feedback_analysis_message_prompt`(`chat_message_id`, `prompt_version`)의 선행 컬럼 | 값 참조 → `chat_message.chat_message_id`(물리 FK 아님). `ChatMessage.chatRoomId → ChatRoom.reservationId → Reservation.timeSlotId → TimeSlot.sharedTableId → SharedTable.restaurantId` 경로로 `restaurant_id`를 역산해 저장 |
+| `restaurant_id` | BIGINT | N | INDEX `idx_feedback_analysis_restaurant_prompt`의 선행 컬럼 | 값 참조 → `restaurant.restaurant_id`(물리 FK 아님) |
+| `prompt_version` | VARCHAR(64) | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 | 처리 시점의 `activePromptVersion`. 버전별 결과를 보존하며 OWNER 집계는 현재 `activePromptVersion` 값만 사용 |
+| `provider` | VARCHAR(32) | N |  | 분석 Provider. Gate 제외(`EXCLUDED_INPUT_PII`/`EXCLUDED_CANDIDATE`/`EXCLUDED_OUTPUT_VALIDATION`)는 고정값 `BOBFULL_RULE` |
+| `model_name` | VARCHAR(128) | N |  | 분석 모델. Gate 제외는 고정값 `normal-exclude` |
+| `analyzed_at` | DATETIME(6) | N | INDEX 후행 컬럼 | 완료 또는 terminal 제외 기록 시각. OWNER 최근 7일 집계 기준 컬럼 |
+| `status` | ENUM('COMPLETED', 'EXCLUDED_INPUT_PII', 'EXCLUDED_CANDIDATE', 'EXCLUDED_OUTPUT_VALIDATION') | N |  | `COMPLETED`만 `RestaurantFeedbackItem`을 가진다. 나머지 3개는 Item 0개인 terminal 제외 상태 |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
+
+`UNIQUE(chat_message_id, prompt_version)`는 동일 `(messageId, promptVersion)` 재전달 시 Provider 재호출과 결과 중복 저장을 막는 멱등성 경계다. 서로 다른 `prompt_version`은 같은 `chat_message_id`로 공존할 수 있다(예: `v1`, `v2` 동시 보존).
+
+| 컬럼 | 타입 후보 | NULL | Key·제약 | 설명 |
+|---|---|---|---:|---|
+| `restaurant_feedback_item_id` | BIGINT | N | PK | 내부 식별자 |
+| `restaurant_feedback_analysis_id` | BIGINT | N | 물리 FK(`@JoinColumn`만 선언, `@ForeignKey(name=...)` 미지정으로 Hibernate 자동 생성명) → `restaurant_feedback_analysis.restaurant_feedback_analysis_id`, UNIQUE `uk_feedback_item_analysis_key`(`restaurant_feedback_analysis_id`, `category`, `aspect_type`, `normalized_aspect`, `opinion_type`, `sentiment`)의 선행 컬럼 | 소유 Analysis |
+| `category` | ENUM('FOOD', 'SERVICE', 'PRICE', 'CLEANLINESS', 'ETC') | N | UNIQUE 후행 컬럼, INDEX `idx_feedback_item_aggregation`의 선행 컬럼 |  |
+| `aspect_type` | ENUM('MENU', 'SERVICE', 'PRICE', 'CLEANLINESS', 'ETC') | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 |  |
+| `normalized_aspect` | VARCHAR(40) | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 | NFKC 정규화, 공백 축약, Unicode 40 code point 이하, PII/재식별 단서(전화번호·이메일·예약·주문번호·인물 식별 표현 등) 검증을 통과한 값만 저장 |
+| `opinion_type` | ENUM('TASTE', 'TEXTURE', 'SALTINESS', 'SPICINESS', 'SWEETNESS', 'PORTION', 'FRESHNESS', 'TEMPERATURE', 'FRIENDLINESS', 'SERVICE_SPEED', 'PRICE_LEVEL', 'CLEANLINESS', 'WAITING', 'ETC') | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 |  |
+| `sentiment` | ENUM('POSITIVE', 'NEGATIVE', 'NEUTRAL') | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 |  |
+| `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
+
+`UNIQUE(restaurant_feedback_analysis_id, category, aspect_type, normalized_aspect, opinion_type, sentiment)`는 동일 Analysis 안에서 같은 5-field 조합 Item이 중복 저장되는 것을 막는다. `idx_feedback_item_aggregation(category, aspect_type, normalized_aspect, opinion_type, sentiment)`는 OWNER 5-field 집계(`RestaurantFeedbackInsightRepository.aggregateForOwner`)의 `group by`/`having` 조회를 지원한다.
+
+OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 `restaurant_id`+`prompt_version`(=`activePromptVersion`)+최근 7일(`analyzed_at`)로 필터링한 뒤, `RestaurantFeedbackItem`을 `category+aspect_type+normalized_aspect+opinion_type+sentiment` 5-field로 묶고 `chat_message_id → chat_message.sender_member_id` 조인으로 `distinct sender_member_id`를 계산해 3 이상인 그룹만 반환한다. `sender_member_id`는 `RestaurantFeedbackItem`/`RestaurantFeedbackAnalysis`에 복제 저장하지 않는다.
+
 ### 4.13 `outbox_event`
 
 목적: 핵심 상태 변경과 함께 후속 처리 의도(ChatRoom 생성, 채팅 메시지 후속 처리, 이메일 발송)를 같은 트랜잭션에 영속화해, 커밋 뒤 메모리 signal 유실·재시작 뒤에도 재처리할 근거를 남긴다(#176). V3에서 채팅 메시지 후속 처리(`CHAT_MESSAGE_CREATED`)와 이메일 발송(`EMAIL_*`, #183)이 같은 공통 Outbox를 재사용하도록 확장됐다.
@@ -543,6 +602,7 @@ erDiagram
 - `RESERVATION 1:0..1 CHAT_ROOM`, `CHAT_ROOM 1:N CHAT_MESSAGE`: 예약당 하나의 채팅방과 여러 메시지다.
 - `MEMBER 1:N CHAT_MESSAGE`: 발신 회원을 추적한다. `sender_participant_id`는 해당 예약의 유효 참여자 여부를 검증한다.
 - `CHAT_MESSAGE 1:0..1 CHAT_MODERATION`: 원문 메시지 하나에 분석 결과·최종 실패 기록을 하나만 둔다. 완료 상태를 최종 실패가 덮지 않도록 `chat_moderation.version`으로 낙관적 락을 적용한다.
+- `CHAT_MESSAGE`와 `RESTAURANT_FEEDBACK_ANALYSIS`: 물리 FK가 아닌 값 참조이며 1:N이다(같은 `chat_message_id`가 서로 다른 `prompt_version`으로 여러 건 공존 가능). `RESTAURANT_FEEDBACK_ANALYSIS 1:N RESTAURANT_FEEDBACK_ITEM`: 메시지 하나에서 0..N개의 의견이 나올 수 있다.
 
 ## 6. UNIQUE 및 정합성 제약
 
@@ -558,6 +618,8 @@ erDiagram
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
 | `chat_room.reservation_id` | 예약당 채팅방 1개 | DB UNIQUE |
 | `chat_moderation.chat_message_id` | 메시지당 분석 기록 1건 | DB UNIQUE는 INSERT 멱등성, JPA `@Version`은 stale UPDATE 방지 |
+| `restaurant_feedback_analysis(chat_message_id, prompt_version)` | 동일 메시지·동일 Prompt 버전 결과 1건, 버전별 결과는 공존 | DB UNIQUE `uk_feedback_analysis_message_prompt`는 동일 Kafka Event 재전달·동시 처리 경쟁 시 INSERT 멱등성만 보장(Provider 동시 중복 호출 자체는 보장하지 않음) |
+| `restaurant_feedback_item(restaurant_feedback_analysis_id, category, aspect_type, normalized_aspect, opinion_type, sentiment)` | 동일 Analysis 안에서 5-field 조합 Item 중복 저장 금지 | DB UNIQUE `uk_feedback_item_analysis_key` |
 | `payment.payment_id` | Payment 내부 식별자 | PK, AUTO_INCREMENT |
 | `payment.portone_payment_id` | PortOne 외부 결제 식별자 중복 금지 | DB UNIQUE + 상태 전이 멱등 처리 |
 | `payment.reservation_participant_id` | 참여자와 결제의 1:1 연결 | NULL 허용 UNIQUE |
@@ -607,6 +669,11 @@ erDiagram
 | 참여자 상태 | `RESERVED`, `NO_SHOW`, `CANCEL_REQUESTED`, `CANCELLED` | `reservation_participant.participation_status`; `CANCEL_REQUESTED`는 취소 접수 후 본인 환불 완료를 기다리는 중간 상태(#44) |
 | 결제 상태 | `READY`, `PAID`, `FAILED`, `EXPIRED`, `REFUNDED` | `payment.payment_status`; `REFUNDED`는 Payment 전체 환불 완료 |
 | 환불 상태 | `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED` | `refund.refund_status`; 결과 불명확은 `REQUESTED` 유지로 표현하며 `UNKNOWN`은 도입하지 않는다(2026-08-05 Human 확정, #44) |
+| 식당 피드백 Analysis 상태 | `COMPLETED`, `EXCLUDED_INPUT_PII`, `EXCLUDED_CANDIDATE`, `EXCLUDED_OUTPUT_VALIDATION` | `restaurant_feedback_analysis.status`; `COMPLETED`만 Item을 가지며 나머지 3개는 Item 0개인 terminal 제외 상태(#277) |
+| 식당 피드백 category | `FOOD`, `SERVICE`, `PRICE`, `CLEANLINESS`, `ETC` | `restaurant_feedback_item.category` |
+| 식당 피드백 aspectType | `MENU`, `SERVICE`, `PRICE`, `CLEANLINESS`, `ETC` | `restaurant_feedback_item.aspect_type` |
+| 식당 피드백 opinionType | `TASTE`, `TEXTURE`, `SALTINESS`, `SPICINESS`, `SWEETNESS`, `PORTION`, `FRESHNESS`, `TEMPERATURE`, `FRIENDLINESS`, `SERVICE_SPEED`, `PRICE_LEVEL`, `CLEANLINESS`, `WAITING`, `ETC` | `restaurant_feedback_item.opinion_type` |
+| 식당 피드백 sentiment | `POSITIVE`, `NEGATIVE`, `NEUTRAL` | `restaurant_feedback_item.sentiment` |
 
 `no_show_history.is_marked`는 상태 Enum이 아니라 처리·해제 이력을 구분하는 boolean 값이다. `TRUE`는 노쇼 처리, `FALSE`는 노쇼 해제를 뜻한다.
 
@@ -659,6 +726,8 @@ OWNER 소유권을 확인한 뒤 참여자 상태를 변경하고 `no_show_histo
 | `chat_message` | `idx_chat_message_room_id(chat_room_id, chat_message_id)` | `ChatMessage.@Table`; room별 messageId cursor 조회 |
 | `outbox_event` | `idx_outbox_event_status_next_attempt(status, next_attempt_at, outbox_event_id)` | `OutboxEvent.@Table`; 처리 가능·stale Outbox 후보 조회 |
 | `email_outbox_delivery` | `idx_email_outbox_delivery_event_status(outbox_event_id, status)` | `EmailOutboxDelivery.@Table`; 이벤트별 미발송 수신자 조회 |
+| `restaurant_feedback_analysis` | `idx_feedback_analysis_restaurant_prompt(restaurant_id, prompt_version, analyzed_at)` | `RestaurantFeedbackInsight.@Table`; OWNER 최근 7일·`activePromptVersion` 필터 조회 |
+| `restaurant_feedback_item` | `idx_feedback_item_aggregation(category, aspect_type, normalized_aspect, opinion_type, sentiment)` | `RestaurantFeedbackItem.@Table`; OWNER 5-field 집계 `group by`/`having` 조회 |
 
 아래 표는 실제 정의가 아닌 **후보**다. UNIQUE 제약으로 생성되는 인덱스는 각 엔티티 상세 표와 섹션 6을 기준으로 한다.
 

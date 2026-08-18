@@ -2,7 +2,7 @@
 
 > Source of Truth: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
 
-현재 BobFull의 Application HTTP API는 **70개**, 운영 Actuator Endpoint는 **2개**다.
+현재 BobFull의 Application HTTP API는 **71개**, 운영 Actuator Endpoint는 **2개**다.
 
 이 폴더는 브로셔와 GitHub에서 사람이 읽기 편하도록 도메인별 상세 명세를 분리한다.
 각 도메인 문서는 **Endpoint 요약 → API별 권한 → Request/Query/Path → Response JSON → Error → 주요 계약** 순서로 구성한다.
@@ -13,15 +13,15 @@
 |---|---:|---|
 | 인증 (Auth) | 5 | [auth-api.md](auth-api.md) |
 | 회원 (Member) | 2 | [member-api.md](member-api.md) |
-| 식당 (Restaurant) | 8 | [restaurant-api.md](restaurant-api.md) |
+| 식당 (Restaurant) | 9 | [restaurant-api.md](restaurant-api.md) |
 | 합석 테이블 / 회차 | 12 | [table-session-api.md](table-session-api.md) |
 | 예약 (Reservation) | 10 | [reservation-api.md](reservation-api.md) |
 | 결제 / 환불 / 정산 | 8 | [payment-api.md](payment-api.md) |
 | 노쇼 (No-show) | 5 | [no-show-api.md](no-show-api.md) |
 | 채팅 / 신고 | 3 | [chat-api.md](chat-api.md) |
 | 관리자 / Moderation | 16 | [admin-api.md](admin-api.md) |
-| 운영 Endpoint / Webhook | 3 | [operations-api.md](operations-api.md) |
-| **합계** | **72** | Application 70 + Actuator 2 |
+| 운영 Endpoint / Webhook | 1 | [operations-api.md](operations-api.md) |
+| **합계** | **73** | Application 71 + Actuator 2 |
 
 ## 공통 응답
 

@@ -126,6 +126,8 @@ bobfull:
   ai:
     moderation:
       max-output-tokens: ${OPENAI_MODERATION_MAX_TOKENS:128}
+    restaurant-insight:
+      enabled: ${RESTAURANT_INSIGHT_AI_ENABLED:false}
   kafka:
     chat-message:
       topic: ${KAFKA_CHAT_MESSAGE_TOPIC:bobfull.chat.message-created.v1}
@@ -138,3 +140,8 @@ bobfull:
       consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
       producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}
       partition-key-strategy: ${KAFKA_CHAT_MESSAGE_PARTITION_KEY_STRATEGY:message-id}
+    restaurant-insight:
+      # 실사용 채팅을 새 목적의 Provider로 전송하지 않도록 Production 기본은 listener 자체 OFF다.
+      consumer-enabled: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED:false}
+      group-id: ${KAFKA_RESTAURANT_INSIGHT_GROUP_ID:bobfull-restaurant-insight-production}
+      dlt-topic: ${KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC:bobfull.restaurant-insight.dlt.v1}

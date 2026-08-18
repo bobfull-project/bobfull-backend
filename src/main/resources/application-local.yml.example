@@ -123,6 +123,9 @@ bobfull:
   ai:
     moderation:
       max-output-tokens: ${OPENAI_MODERATION_MAX_TOKENS:128}
+    # 합성 데이터만 있는 스테이징/로컬에서 명시적으로 true로 바꾼다.
+    restaurant-insight:
+      enabled: ${RESTAURANT_INSIGHT_AI_ENABLED:false}
   kafka:
     chat-message:
       topic: ${KAFKA_CHAT_MESSAGE_TOPIC:bobfull.chat.message-created.v1}
@@ -133,3 +136,9 @@ bobfull:
       consumer-max-attempts: ${KAFKA_CHAT_MESSAGE_CONSUMER_MAX_ATTEMPTS:3}
       consumer-retry-backoff-ms: ${KAFKA_CHAT_MESSAGE_CONSUMER_RETRY_BACKOFF_MS:1000}
       producer-ack-timeout-seconds: ${KAFKA_CHAT_MESSAGE_PRODUCER_ACK_TIMEOUT_SECONDS:10}
+    restaurant-insight:
+      consumer-enabled: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED:false}
+      group-id: ${KAFKA_RESTAURANT_INSIGHT_GROUP_ID:bobfull-restaurant-insight-staging}
+      dlt-topic: ${KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC:bobfull.restaurant-insight.dlt.v1}
+      consumer-max-attempts: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_MAX_ATTEMPTS:3}
+      consumer-retry-backoff-ms: ${KAFKA_RESTAURANT_INSIGHT_CONSUMER_RETRY_BACKOFF_MS:1000}
