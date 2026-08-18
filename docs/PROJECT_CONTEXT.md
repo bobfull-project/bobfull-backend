@@ -1,6 +1,6 @@
 # 밥풀(BobFull) 프로젝트 컨텍스트
 
-> 기준일: 2026-08-04
+> 기준일: 2026-08-18 Final QA 기준
 > API 계약의 최우선 기준은 [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md)다. 이 문서가 API 명세와 충돌하면 API 명세를 따른다.
 
 ## 1. 프로젝트 개요
@@ -187,9 +187,13 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 
 - Actuator 모니터링·헬스 체크
 - 실패 결제·환불 재처리, 정산 데이터 재집계
-- 부하 테스트, 검색 성능·이벤트 처리·모니터링·배포 고도화
+- 부하 테스트, 검색 성능·이벤트 처리·AI Moderation·Restaurant Feedback Insight·모니터링·배포 고도화
 
-Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 fan-out만 수행하고, 영속·재처리·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Redis Pub/Sub과 서로 대체하지 않는다.
+Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 fan-out만 수행하고, 영속·재처리·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Restaurant Feedback Insight는 같은 ChatMessage Event를 별도 Consumer Group으로 재사용한다. Redis Pub/Sub과 Kafka는 서로 대체하지 않는다.
+
+Restaurant Feedback Insight는 코드·테스트·Evidence 기준으로 구현됐지만 production 기본 설정은 `bobfull.kafka.restaurant-insight.consumer-enabled=false`, `bobfull.ai.restaurant-insight.enabled=false`다. 배포 스크립트의 환경변수 주입 경로가 존재하더라도 실제 운영에서 enabled 상태라고 단정하지 않는다.
+
+V3 인프라 판단은 Evidence 기준으로 구분한다. ALB 뒤 Active App EC2 2대, Blue-Green 전환, Inactive App EC2 평상시 STOP, Prometheus target 갱신은 저장소 Evidence로 검증된 구조다. App EC2 Auto Scaling은 #191에서 측정했으나 현재 부하 기준으로 App CPU/처리량 포화 근거가 부족해 미도입으로 정리한다.
 
 ## 9. API 공통 계약
 

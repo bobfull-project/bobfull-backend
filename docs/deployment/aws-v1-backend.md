@@ -34,6 +34,12 @@
 | `REDIS_SSL_ENABLED` | Redis SSL/TLS 사용 여부. prod 기본값은 `true`이며 EC2-local/Docker Redis에서는 `false`로 둔다. | 선택 |
 | `DB_POOL_MAX_SIZE` | Hikari maximumPoolSize. prod 기본값은 `10`이며 #191 검증 기준값은 `12`이다. | 선택 |
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | 필수 |
+| `RESTAURANT_INSIGHT_AI_ENABLED` | Restaurant Feedback Insight Provider 활성화 여부. prod 기본값은 `false`다. | 선택 |
+| `KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED` | Restaurant Feedback Insight Kafka Consumer 활성화 여부. prod 기본값은 `false`다. | 선택 |
+| `KAFKA_RESTAURANT_INSIGHT_GROUP_ID` | Restaurant Feedback Insight Consumer Group ID | 선택 |
+| `KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC` | Restaurant Feedback Insight 전용 DLT Topic | 선택 |
+| `KAFKA_RESTAURANT_INSIGHT_CONSUMER_MAX_ATTEMPTS` | Restaurant Feedback Insight Consumer Retry 최대 시도 수 | 선택 |
+| `KAFKA_RESTAURANT_INSIGHT_CONSUMER_RETRY_BACKOFF_MS` | Restaurant Feedback Insight Consumer Retry backoff ms | 선택 |
 | `JWT_SECRET` | JWT 서명 Secret | 필수 |
 | `JWT_ACCESS_TOKEN_EXPIRATION_SECONDS` | Access Token 만료 초 | 선택 |
 | `AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS` | Refresh Token 만료 초 | 선택 |
@@ -92,6 +98,12 @@
 /bobfull/prod/redis-port
 /bobfull/prod/redis-ssl-enabled
 /bobfull/prod/db-pool-max-size
+/bobfull/prod/restaurant-insight-ai-enabled
+/bobfull/prod/kafka-restaurant-insight-consumer-enabled
+/bobfull/prod/kafka-restaurant-insight-group-id
+/bobfull/prod/kafka-restaurant-insight-dlt-topic
+/bobfull/prod/kafka-restaurant-insight-consumer-max-attempts
+/bobfull/prod/kafka-restaurant-insight-consumer-retry-backoff-ms
 /bobfull/prod/jwt-access-token-expiration-seconds
 /bobfull/prod/auth-refresh-token-expiration-seconds
 /bobfull/prod/jpa-ddl-auto
@@ -117,13 +129,14 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 
 비밀번호, JWT Secret, PortOne Secret, SMTP 비밀번호처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
 
-## 채팅 WebSocket 배포 참고 (#50)
+## 채팅 WebSocket 배포 참고 (#50, #170, #169)
 
-예약 채팅은 `/ws` STOMP 엔드포인트와 단일 서버 In-memory SimpleBroker(`registry.enableSimpleBroker`)를 사용한다. 배포 관점에서 다음을 반영한다.
+예약 채팅은 `/ws` STOMP 엔드포인트와 각 애플리케이션 인스턴스의 In-memory SimpleBroker(`registry.enableSimpleBroker`)를 사용한다. #50 당시에는 단일 App EC2 기준이라 인스턴스 간 세션 공유가 없었지만, #170에서 DB 저장 후 Redis Pub/Sub으로 모든 App 인스턴스에 신호를 전파하고 각 인스턴스가 자기 SimpleBroker 세션으로 fan-out하는 구조를 구현했다. #169에서는 다중 App EC2와 공용 ElastiCache Redis 환경의 cross-instance 전달을 확인했다.
 
 - 신규 GitHub Variables·Secrets, 신규 SSM Parameter Store 값은 없다. 채팅은 STOMP CONNECT 인증에 기존 `JWT_SECRET`을, STOMP Endpoint `setAllowedOrigins`에 기존 `CORS_ALLOWED_ORIGINS`를 그대로 재사용한다. `CORS_ALLOWED_ORIGINS`를 변경하면 REST CORS와 WebSocket 허용 Origin에 동시에 반영되므로, Origin 값을 다룰 때는 두 용도를 함께 고려한다.
 - `build.gradle`에 `spring-boot-starter-websocket` 의존성이 추가되었을 뿐, 별도 배포 스크립트·포트 변경은 없다. `/ws`는 기존 애플리케이션 포트(`8080`)를 공유한다.
-- 브로커가 단일 인스턴스 In-memory SimpleBroker이므로 채팅 세션은 인스턴스 간 공유되지 않는다. EC2를 다중 인스턴스·Auto Scaling으로 확장하는 시점(§ 제외 범위의 ALB·Auto Scaling)에는 sticky session 또는 Redis·RabbitMQ 기반 STOMP broker relay 도입이 먼저 필요하다. 이 범위는 [ARCHITECTURE.md](../ARCHITECTURE.md) §8의 "채팅 Pub/Sub 미확정" 범위와 동일하다.
+- WebSocket 세션 자체는 여전히 각 App 인스턴스의 local SimpleBroker에 붙어 있지만, ChatMessage 커밋 뒤 Redis Pub/Sub(`bobfull:chat:messages`)이 모든 인스턴스에 payload를 전달한다. Redis Pub/Sub은 best-effort 실시간 fan-out 전용이며, durable/replay는 제공하지 않는다. 단절 중 놓친 메시지는 DB cursor 조회로 복구한다.
+- Kafka는 채팅 실시간 전파가 아니라 AI Moderation과 Restaurant Feedback Insight 후속 처리에 사용한다. Redis Pub/Sub과 Kafka의 책임을 섞지 않는다.
 - 배포 후 검증(`verify-backend-v1.sh`)은 REST `GET /api/restaurants`만 확인하며 WebSocket 연결 자체는 검증하지 않는다. 컨테이너 기동 여부 확인이 목적이므로 현재 범위에서는 별도 확인을 추가하지 않는다.
 
 ## Prometheus/Grafana 모니터링 배포 참고 (#64)

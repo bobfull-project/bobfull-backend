@@ -107,5 +107,8 @@ v1에서는 한 사용자가 신청한 인원을 하나의 예약 참여 단위�
 - 성능 수치 없이 성능 개선을 주장하지 않습니다.
 - v1 핵심 예약 거래 흐름을 부가 기술보다 우선합니다.
 - 예약금 결제는 PortOne 실제 PG 연동으로 구현합니다. 식사대금 결제·POS 연동·계좌 송금은 구현하지 않습니다.
-- V1은 예약·결제·환불 조회와 지급 예정 금액, V2는 취소·노쇼·채팅·관리자 조회, V3는 운영 재처리·모니터링 고도화를 다룹니다.
-- Redis와 Kafka는 현재 확정된 예약·결제·채팅 핵심 계약이나 ERD 선행 범위에 포함하지 않습니다.
+- V1은 예약·결제·환불 조회와 지급 예정 금액, V2는 취소·노쇼·채팅·관리자 조회, V3는 운영 재처리·모니터링·AI 후속 처리·배포 고도화를 다룹니다.
+- Redis는 인증 상태, 식당 검색 Cache, 다중 App EC2 채팅 Pub/Sub에 사용합니다. Redis Pub/Sub은 실시간 fan-out 전용 best-effort 경로이며, 놓친 메시지 복구는 DB cursor 조회가 담당합니다.
+- Kafka는 ChatMessage AI Moderation 후속 처리와 Restaurant Feedback Insight Event Reuse에 사용합니다. Kafka를 채팅 실시간 전파나 무조건적인 성능 개선 근거로 표현하지 않습니다.
+- Transactional Outbox는 ChatRoom 생성, 이메일 발송, ChatMessage Kafka 발행 의도를 핵심 트랜잭션과 함께 보존하는 경계로 사용합니다.
+- Auto Scaling은 #191에서 측정 후 현재 조건에서는 미도입으로 판단했으며, 운영 live 상태 확인은 최종 Human QA 대상입니다.

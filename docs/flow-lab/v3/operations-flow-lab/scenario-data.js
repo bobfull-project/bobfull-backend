@@ -347,7 +347,7 @@ const infraSteps = {
         evidenceReferences: [evidence.appHa] }),
     step("api-3", "Green EC2", "RDS MySQL", "✓ 애플리케이션이 필요한 데이터를 RDS MySQL에서 조회하거나 저장합니다", "App EC2가 요청을 처리하며 RDS MySQL(Single-AZ)에 접근합니다 — RDS는 Blue·Green 어느 쪽이 활성이든 항상 같은 하나의 인스턴스입니다. Redis·Kafka·S3·LLM도 Application과 항상 연결된 구조지만(회색 선), 이번 요청에서는 쓰이지 않아 흐리게 남습니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "rds"], ["ec2Green1-appPool", "appPool-rds"], "commit", "completed", "core", ["client", "route53", "alb", "tgGreen", "ec2Green2"]),
-        limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 아직 미구현(#191, future). 이 Scenario는 캐시를 쓰지 않는 일반 API 기준이다 — 캐시를 쓰는 요청(#62 검색)만 Redis가 강조된다.",
+        limits: "RDS는 Single-AZ다(Multi-AZ 아님). Auto Scaling은 #191에서 실제 부하와 병목을 측정했으나, 현재 조건에서는 App capacity보다 Hikari Pool 대기가 먼저 관측돼 도입하지 않았다. 이 Scenario는 캐시를 쓰지 않는 일반 API 기준이다 — 캐시를 쓰는 요청(#62 검색)만 Redis가 강조된다.",
         evidenceReferences: [evidence.appHa] })
   ],
   chat: [
@@ -389,7 +389,7 @@ const infraSteps = {
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2"], ["client-route53", "route53-alb", "alb-tgBlue", "tgBlue-ec2Blue1", "tgBlue-ec2Blue2"], "request", "completed", "core", ["tgGreen", "ec2Green1", "ec2Green2", "gha", "ecr", "ssm"], null, null, { tgGreen: "STANDBY · 0%", tgBlue: "ACTIVE · 100%" }) }),
     step("deploy-7", "Green EC2 #1/#2", "Standby", "◆ 기존 Green은 Standby로 남아 다음 배포를 기다립니다", "Green EC2를 자동으로 종료하거나 Drain시키는 스크립트는 확인되지 않았습니다 — Green은 그대로 남아 있다가, 다음 배포에서 다시 STANDBY 그룹으로 새 이미지를 받는 대상이 됩니다(다음 배포는 반대로 Green Deploy가 됩니다).",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["tgGreen", "ec2Green1", "ec2Green2"], [], "commit", null, "core", ["client", "route53", "alb", "tgBlue", "ec2Blue1", "ec2Blue2", "gha", "ecr", "ssm"], null, null, { tgGreen: "STANDBY · 0%", tgBlue: "ACTIVE · 100%" }),
-        limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 아직 없다(#191). 이전 색을 자동 종료·Drain하는 로직은 이번 조사에서 확인되지 않았다.",
+        limits: "Blue-Green weight flip과 rollback은 scripts/aws/deploy-backend-blue-green-v1.sh 기준이다. Auto Scaling은 #191 측정 결과 현재 조건에서 미도입으로 정리됐다. 이전 색을 자동 종료·Drain하는 로직은 이번 조사에서 확인되지 않았다.",
         evidenceReferences: [evidence.appHa] })
   ]
 };

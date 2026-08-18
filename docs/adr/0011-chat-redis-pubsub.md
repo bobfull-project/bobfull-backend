@@ -1,8 +1,10 @@
 # ADR 0011: 다중 인스턴스 채팅 실시간 전파에 Redis Pub/Sub 사용
 
-- 상태: `Proposed`
+- 상태: `Accepted`
 - 작성일: `2026-08-12`
 - 관련 Issue·PR: #170
+
+> 상태 갱신: #170 구현 Evidence와 #169 다중 App EC2 + 공용 ElastiCache Redis cross-instance 검증으로 2026-08-18 Final QA에서 Accepted로 정리했다. 아래 본문은 최초 제안 당시의 문제·대안·검증 계획을 보존한다.
 
 ## 배경
 
@@ -39,4 +41,4 @@ Redis 발행·구독 실패는 이미 저장된 메시지를 롤백하거나 재
 
 ## 후속 작업
 
-Human이 Redis 장애 응답·공용 Redis 재사용·best-effort 복구 계약을 최종 확인하고, #169 환경의 다중 인스턴스 Evidence가 기록되면 상태를 `Accepted`로 갱신한다.
+#170 구현 Evidence와 #169 환경의 다중 인스턴스 Evidence가 기록되어 상태를 `Accepted`로 갱신했다. Redis Pub/Sub의 best-effort 한계와 DB cursor 복구 경로는 유지한다.

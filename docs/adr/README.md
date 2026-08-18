@@ -65,7 +65,7 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 
 ## 6. 현재 범위
 
-이 디렉터리는 운영 기준과 템플릿만 제공한다. 현재 확정되지 않은 배포·AWS·구체적인 락·트랜잭션 방식에 대한 개별 ADR은 생성하지 않는다. Redis는 Refresh Token 저장 용도로 확정돼 ADR 0006이 있으며, 그 외 검색 캐시·채팅 Pub/Sub 등 미확정 Redis 활용은 여전히 개별 ADR을 만들지 않는다. Kafka는 V3 확정 기술이며, 동기 트랜잭션 경계와 트랜잭션 완료 후 비동기 후속 처리 원칙은 [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md)와 [API 명세](../BOBFULL_API_SPEC_COMPLETE.md)를 따른다. 토픽·파티션·재시도·DLQ·전달 보장 등 구체 도입 구조가 결정되면 별도 ADR을 작성한다.
+이 디렉터리는 운영 기준과 템플릿을 제공한다. 아직 결정하지 않은 배포·AWS·구체적인 락·트랜잭션 방식에 대한 개별 ADR은 생성하지 않는다. Redis는 Refresh Token 저장소(ADR 0006), 검색 Cache(#62), 채팅 Pub/Sub(ADR 0011, #170/#169 Evidence) 범위에서 사용한다. Kafka는 ChatMessage AI Moderation Outbox 파이프라인(ADR 0010)과 같은 Event를 재사용하는 Restaurant Feedback Insight Consumer Group(#277) 범위에서 사용한다. Kafka를 채팅 실시간 fan-out이나 근거 없는 성능 개선 Claim으로 표현하지 않는다. 새 토픽·전달 보장·Retry/DLT·운영 HA 같은 구조를 추가로 결정해야 할 때만 별도 ADR을 작성한다.
 
 ## 7. 현재 ADR
 
@@ -79,4 +79,4 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 - [ADR 0008: ChatRoom 생성 의도의 Transactional Outbox](./0008-chat-room-transactional-outbox.md)
 - [ADR 0009: AI Moderation Provider 및 모델 선택](./0009-ai-moderation-provider-and-model-selection.md)
 - [ADR 0010: ChatMessage → AI Moderation Outbox + Kafka 전달 파이프라인](./0010-chat-message-outbox-kafka-pipeline.md)
-- [ADR 0011: 다중 인스턴스 채팅 실시간 전파에 Redis Pub/Sub 사용](./0011-chat-redis-pubsub.md) (`Proposed`)
+- [ADR 0011: 다중 인스턴스 채팅 실시간 전파에 Redis Pub/Sub 사용](./0011-chat-redis-pubsub.md) (`Accepted by #170/#169 Evidence; 본문은 최초 제안 맥락 보존`)
