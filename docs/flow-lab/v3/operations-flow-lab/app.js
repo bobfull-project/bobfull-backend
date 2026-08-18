@@ -90,10 +90,14 @@ function regionBgSvg(t) {
   return t.regions.map((region) => {
     const laneCls = region.emphasis ? " lane" : "";
     const roleCls = region.role ? ` role-${region.role}` : "";
+    /* region.tint(opt-in) — 실제 트랜잭션·인프라 경계(예: 핵심 TX vs AFTER_COMMIT, App vs Shared
+       Infra)를 점선 테두리 + 옅은 카테고리 배경색으로 구분한다. nodeCategories와 같은 user/sync/
+       async/external 색만 재사용해 새 색을 늘리지 않는다. 이 필드를 안 쓰는 기존 region은 그대로다. */
+    const tintCls = region.tint ? ` tint-${region.tint}` : "";
     const labelY = region.y + (region.emphasis ? 24 : 16);
     const textX = region.role ? region.x + 34 : region.x + 14;
     const icon = region.role ? `<g class="lane-icon role-${region.role}">${laneIconSvg(region.role, region.x + 22, labelY - 4)}</g>` : "";
-    return `<g class="region"><rect class="region-bg${laneCls}${roleCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/>${icon}<text class="region-label${laneCls}${roleCls}" x="${textX}" y="${labelY}">${region.label}</text></g>`;
+    return `<g class="region"><rect class="region-bg${laneCls}${roleCls}${tintCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/>${icon}<text class="region-label${laneCls}${roleCls}" x="${textX}" y="${labelY}">${region.label}</text></g>`;
   }).join("");
 }
 /* Ch0는 발표·GIF용 Showcase이므로, 학습용 Step 데이터의 구어체 자막만 이 화면에서 발표체로
@@ -156,7 +160,10 @@ function renderCanvas(data) {
     /* secondaryNodes(opt-in) — Scheduler처럼 "reliability 보조 장치"로만 표시할 node는 항상
        점선 테두리를 준다(baseline과 같은 방식이지만 임의 topology에서 재사용 가능하게 일반화). */
     const secondaryCls = t.secondaryNodes && t.secondaryNodes.includes(id) ? " secondary" : "";
-    const cls = (active ? "active" : committed ? "committed" : "dim") + secondaryCls;
+    /* nodeCategories(opt-in, Ch0 핵심 시스템 흐름 전용) — 실제 트랜잭션 경계에 따라 user/sync/async
+       tint을 추가한다. 이 맵이 없는 topology는 카테고리 class가 안 붙으므로 기존 렌더링과 동일하다. */
+    const categoryCls = t.nodeCategories && t.nodeCategories[id] ? ` cat-${t.nodeCategories[id]}` : "";
+    const cls = (active ? "active" : committed ? "committed" : "dim") + secondaryCls + categoryCls;
     const text = committed ? `${label} ✓` : label;
     /* async(Async Queue)는 실제 운영 경로가 아니라 Ch5 실험 비교용 baseline이므로, 활성 상태여도
        점선 테두리와 보조 라벨로 "이건 비교 기준선이다"를 항상 구분해서 보여준다. */
@@ -181,7 +188,9 @@ function renderCanvas(data) {
   const badgeSvg = badgeSvgFor(t, v.badge);
   /* animateNodes(AI 채팅 검수 unified topology만 씀) — 활성화되는 순간 살짝 커졌다 제자리로
      돌아오는 pop-in을 준다. 이 topology 안에서만 켜지므로 다른 Chapter 렌더링은 그대로다. */
-  const topologyClass = `${t.animateNodes ? " zoom-topology" : ""}${isServiceShowcase ? " service-topology" : ""}`;
+  /* categorized(opt-in, Ch0 전용 신규 topology만 씀) — nodeCategories/region.tint를 쓰는 topology에만
+     .categorized-topology CSS scope를 붙인다. 기존 Ch1~6 topology는 이 플래그가 없어 그대로다. */
+  const topologyClass = `${t.animateNodes ? " zoom-topology" : ""}${isServiceShowcase ? " service-topology" : ""}${t.categorized ? " categorized-topology" : ""}`;
   const caption = state.mode === "showcase" ? showcaseCaption(data.action) : data.action;
   $("canvas").innerHTML = `<svg class="topology${topologyClass}" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${caption}` : ""}</div>`;
   $("flowCaption").textContent = caption.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
@@ -487,6 +496,25 @@ function renderDecisionHighlights() {
    인프라 흐름 — scenario-data.js). 렌더링은 어느 경우든 findStep()/renderCanvas()를 그대로 재사용한다 —
    Showcase 전용 시각화 로직을 새로 만들지 않는다. problem/solution/outcomes 문구는 각 Step의
    factStatus/Evidence 범위를 벗어나지 않게 작성했다(과장 금지). */
+/* categorized topology를 쓰는 Ch0 Scenario마다, 실제 그 topology의 nodeCategories/region.tint에
+   쓴 key만 legend로 보여준다 — 색은 4개(user/sync/async/external)로 고정하고 Scenario마다 그
+   색이 실제로 무엇을 뜻하는지 label만 다르게 설명한다. */
+const SHOWCASE_CATEGORY_LEGEND = {
+  "payment-followup": [["user", "사용자 진입"], ["sync", "동기 백엔드"], ["async", "비동기 처리"]],
+  "service-unified": [["user", "일반 사용자"], ["owner", "사장님"], ["auto", "자동 관리"]],
+  "ai-moderation": [["user", "사용자 진입"], ["sync", "동기 백엔드"], ["async", "비동기 처리"], ["external", "외부 시스템"]],
+  "infra-api": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]],
+  "infra-chat": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]],
+  "infra-moderation": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]],
+  "infra-deploy": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]]
+};
+function categoryLegendHtml(entries) {
+  return entries.map(([cat, label]) => `<span><i class="dot cat-${cat}"></i>${label}</span>`).join("");
+}
+/* 전체 인프라 구성도(fullArchitectureTopology) 전용 범례 — 요약 인프라 흐름과 같은 4색을 쓰되,
+   여기는 Shared Data/Image Pipeline/AI External Services 3개 region이 전부 external이라 label을
+   그 실제 뜻대로 조금 더 구체적으로 적는다. */
+const ARCH_CATEGORY_LEGEND = [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·외부 시스템"], ["async", "배포·운영 채널"]];
 const SHOWCASE_TABS = [
   { id: "service", label: "서비스 흐름", question: "BobFull은 어떻게 사용하는 서비스인가?" },
   { id: "core", label: "핵심 시스템 흐름", question: "복잡한 기능을 백엔드에서 어떻게 안전하게 처리했는가?" },
@@ -580,7 +608,10 @@ function archNodeSvg(t, id, label, cls) {
   const sublabelSvg = sublabel ? `<text x="50" y="58" class="node-sublabel">${sublabel}</text>` : "";
   const mainY = sublabel ? 38 : 42;
   const compress = label.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
-  return `<g class="canvas-node${cls ? ` ${cls}` : ""}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
+  /* nodeCategories(opt-in) — 요약 인프라 흐름과 같은 user/sync/async/external tint를 전체 인프라
+     구성도의 Node에도 붙인다. fullArchitectureTopology에만 있으므로 다른 topology는 그대로다. */
+  const categoryCls = t.nodeCategories && t.nodeCategories[id] ? ` cat-${t.nodeCategories[id]}` : "";
+  return `<g class="canvas-node${cls ? ` ${cls}` : ""}${categoryCls}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
 }
 /* 전체 인프라 구성도의 흐름 강조 — Edge는 항상 구조적 배경(회색, pool 기반 fan-out 그대로)만
    보여주고 절대 강조하지 않는다. 실행 순서를 보여주는 것은 오직 Node 자체의 반짝임뿐이다 —
@@ -618,7 +649,10 @@ function renderArchCanvas() {
       : toId && fromId && fromId !== toId
         ? `현재 연결: ${nodeLabel(fromId)} → ${nodeLabel(toId)}`
         : `시작 지점: ${nodeLabel(toId) || flow.label}`;
-  $("archCanvas").innerHTML = `<svg class="topology arch-topology" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g></svg><p class="arch-progress">${progress}</p>`;
+  const archTopologyClass = t.categorized ? " categorized-topology" : "";
+  $("archCanvas").innerHTML = `<svg class="topology arch-topology${archTopologyClass}" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g></svg><p class="arch-progress">${progress}</p>`;
+  $("archLegend").innerHTML = t.nodeCategories ? categoryLegendHtml(ARCH_CATEGORY_LEGEND) : "";
+  $("archLegend").hidden = !t.nodeCategories;
   renderArchFlowButtons();
 }
 function renderArchFlowButtons() {
@@ -722,6 +756,12 @@ function renderShowcaseStep() {
   $("showcaseProblem").hidden = !scenario.problem;
   $("showcaseProblem").textContent = scenario.problem;
   $("showcaseSolution").textContent = scenario.solution;
+  /* categorized topology(nodeCategories/region.tint)를 쓰는 Scenario만 범례를 보여준다 — 매핑이
+     없는 Scenario(AI 장애 대응·다중 서버 채팅처럼 기존 Ch1~6 topology를 그대로 재사용하는 경우)는
+     legend 없이 그대로다. */
+  const legendEntries = SHOWCASE_CATEGORY_LEGEND[scenario.id];
+  $("showcaseLegend").hidden = !legendEntries;
+  if (legendEntries) $("showcaseLegend").innerHTML = categoryLegendHtml(legendEntries);
   renderCanvas(data);
   $("showcaseStepCounter").textContent = `Step ${state.showcaseStep + 1} / ${steps.length}`;
   $("showcaseOutcomes").innerHTML = scenario.outcomes.map((text) => `<span class="showcase-outcome">${text} ✓</span>`).join("");

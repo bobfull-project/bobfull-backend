@@ -6,7 +6,11 @@
   --code-bg:#12100c;--annot:#b98552;
   /* 서비스 흐름 Swimlane 전용 "역할 색" — 상태 색(주황=현재/초록=완료)과 절대 안 겹치도록
      Blue/Gold/Violet만 쓴다. Node에는 안 쓰고 Lane 배경·제목·아이콘에만 쓴다. */
-  --role-user:#7fa8d9;--role-owner:#c9a25f;--role-auto:#a58ce0
+  --role-user:#7fa8d9;--role-owner:#c9a25f;--role-auto:#a58ce0;
+  /* Ch0 categorized topology(payment-followup·인프라 흐름·AI 채팅 검수 등) 전용 색. user/async는
+     기존 role-user/role-auto를 그대로 재사용해 색을 새로 늘리지 않는다. sync(동기 백엔드)·
+     external(외부 시스템·공유 Infra)만 새로 추가한다. */
+  --cat-sync:#8b96a8;--cat-external:#d1a13f
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Malgun Gothic",sans-serif}
@@ -119,12 +123,48 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 .zoom-topology .canvas-node.active .node-inner{transform-box:fill-box;transform-origin:center;animation:canvasNodePopIn .45s ease}
 @keyframes canvasNodePopIn{0%{opacity:.35;transform:scale(.9)}100%{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.zoom-topology .canvas-node.active .node-inner{animation:none}}
+/* categorized-topology(Ch0 · payment-followup/service-unified/infra/ai-moderation-journey 전용) —
+   nodeCategories(user/sync/async/external, service-unified만 owner/auto도 씀)로 실제 트랜잭션·
+   인프라 경계를 색으로도 구분한다. 이 class는 그 topology를 그릴 때만 붙으므로 다른 Chapter의
+   canvas-node 렌더링은 전혀 바뀌지 않는다. */
+.categorized-topology .canvas-node.dim{opacity:.32}
+/* :not(.committed)로 막아둔다 — 전체 인프라 구성도(archNodeSvg)는 dim class 없이 idle 상태를
+   빈 class로 표현하므로, 이 규칙이 dim 여부와 무관하게 idle 상태의 테두리 색을 맡는다. committed는
+   기존 관례대로 계속 초록(success)이어야 하므로 category색이 못 덮어쓰게 제외한다. */
+.categorized-topology .canvas-node.cat-user:not(.committed) rect{stroke:var(--role-user);stroke-opacity:.5}
+.categorized-topology .canvas-node.cat-sync:not(.committed) rect{stroke:var(--cat-sync);stroke-opacity:.5}
+.categorized-topology .canvas-node.cat-async:not(.committed) rect{stroke:var(--role-auto);stroke-opacity:.5}
+.categorized-topology .canvas-node.cat-external:not(.committed) rect{stroke:var(--cat-external);stroke-opacity:.5}
+.categorized-topology .canvas-node.cat-owner:not(.committed) rect{stroke:var(--role-owner);stroke-opacity:.5}
+.categorized-topology .canvas-node.cat-auto:not(.committed) rect{stroke:var(--role-auto);stroke-opacity:.5}
+.categorized-topology .canvas-node.active rect{stroke-width:2.4}
+.categorized-topology .canvas-node.active.cat-user rect{fill:#182233;stroke:var(--role-user)}
+.categorized-topology .canvas-node.active.cat-sync rect{fill:#1e2126;stroke:var(--cat-sync)}
+.categorized-topology .canvas-node.active.cat-async rect{fill:#241f33;stroke:var(--role-auto)}
+.categorized-topology .canvas-node.active.cat-external rect{fill:#26200f;stroke:var(--cat-external)}
+.categorized-topology .canvas-node.active.cat-owner rect{fill:#241d10;stroke:var(--role-owner)}
+.categorized-topology .canvas-node.active.cat-auto rect{fill:#241f33;stroke:var(--role-auto)}
+.categorized-topology .canvas-node.active .node-inner{transform-box:fill-box;transform-origin:center;transform:scale(1.06)}
+.categorized-topology .canvas-node.active.cat-user .node-inner{filter:drop-shadow(0 0 7px rgba(127,168,217,.65))}
+.categorized-topology .canvas-node.active.cat-sync .node-inner{filter:drop-shadow(0 0 7px rgba(139,150,168,.55))}
+.categorized-topology .canvas-node.active.cat-async .node-inner{filter:drop-shadow(0 0 8px rgba(165,140,224,.7))}
+.categorized-topology .canvas-node.active.cat-external .node-inner{filter:drop-shadow(0 0 7px rgba(209,161,63,.6))}
+.categorized-topology .canvas-node.active.cat-owner .node-inner{filter:drop-shadow(0 0 7px rgba(201,162,95,.6))}
+.categorized-topology .canvas-node.active.cat-auto .node-inner{filter:drop-shadow(0 0 8px rgba(165,140,224,.7))}
+@media (prefers-reduced-motion:reduce){.categorized-topology .canvas-node.active .node-inner{transform:none}}
 /* 모든 메시지가 Outbox/Kafka/Redis를 전부 순서대로 지나간다는 오해를 막기 위한, 아주 옅은 영역 구분.
    active/dim 강조 위계를 방해하지 않도록 배경만 다르고 테두리는 거의 보이지 않게 한다. */
 .region-bg{fill:var(--panel);opacity:.4;stroke:var(--line);stroke-opacity:.5}
 .region-label{fill:var(--muted);font:600 9.5px system-ui,"Malgun Gothic",sans-serif;letter-spacing:.04em}
 /* Swimlane처럼 region 자체가 "누구의 흐름인지" 나타내야 하는 경우(region.emphasis) 전용 — 훨씬
    크고 굵게, 브랜드 Orange로 강조한다. emphasis를 안 쓰는 기존 region은 위 기본 스타일 그대로다. */
+/* region.tint(opt-in) — 트랜잭션·인프라 경계처럼 "안과 밖이 서로 다른 실행 컨텍스트"임을 점선
+   테두리 + 옅은 카테고리 배경색으로 구분한다. fill-opacity를 낮게 유지해 node를 가리지 않으면서도
+   "박스가 나뉘어 있다"는 확실히 보이게 한다. */
+.region-bg.tint-user{fill:var(--role-user);fill-opacity:.12;stroke:var(--role-user);stroke-opacity:.55;stroke-dasharray:7 5}
+.region-bg.tint-sync{fill:var(--cat-sync);fill-opacity:.12;stroke:var(--cat-sync);stroke-opacity:.55;stroke-dasharray:7 5}
+.region-bg.tint-async{fill:var(--role-auto);fill-opacity:.12;stroke:var(--role-auto);stroke-opacity:.55;stroke-dasharray:7 5}
+.region-bg.tint-external{fill:var(--cat-external);fill-opacity:.12;stroke:var(--cat-external);stroke-opacity:.55;stroke-dasharray:7 5}
 .region-bg.lane{opacity:.5;stroke-opacity:.7}
 .region-label.lane{fill:var(--accent-strong);font:800 16px system-ui,"Malgun Gothic",sans-serif;letter-spacing:.02em}
 /* region.role(opt-in, 서비스 흐름 3개 Lane만 씀) — Lane 배경에 아주 옅은 역할 색 tint, 제목은
@@ -342,8 +382,20 @@ button.primary:hover{background:var(--accent-strong);color:#1c1006}
 /* max-height 안전장치 — Showcase는 Chapter 모드의 .canvas-slot(max-height:400px)과 달리 높이 상한이
    없어서, 세로로 긴 topology(예: 인프라 흐름의 Layer 구조)가 뷰포트를 거의 다 채워 아래 설명·배지가
    화면 밖으로 밀려나는 문제가 있었다. flex:1은 유지하되 상한만 둔다. */
-.showcase-stage{flex:1;min-height:280px;max-height:520px;display:flex;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px}
-#showcaseCanvasSlot{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow:hidden}
+.showcase-stage{flex:1;min-height:280px;max-height:520px;display:flex;flex-direction:column;background:var(--stage);border:1px solid var(--line);border-radius:12px;padding:14px}
+/* 결제 확정 후속 처리 Scenario 전용 범례(showCoreLegend) — 다른 Scenario는 hidden이라 자리를
+   차지하지 않는다. */
+.showcase-legend{display:flex;gap:16px;flex-wrap:wrap;flex:none;padding-bottom:10px;color:var(--muted);font-size:11.5px}
+.showcase-legend[hidden]{display:none}
+.showcase-legend span{display:inline-flex;align-items:center;gap:6px}
+.showcase-legend .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.showcase-legend .dot.cat-user{background:var(--role-user)}
+.showcase-legend .dot.cat-sync{background:var(--cat-sync)}
+.showcase-legend .dot.cat-async{background:var(--role-auto)}
+.showcase-legend .dot.cat-external{background:var(--cat-external)}
+.showcase-legend .dot.cat-owner{background:var(--role-owner)}
+.showcase-legend .dot.cat-auto{background:var(--role-auto)}
+#showcaseCanvasSlot{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow:hidden}
 #showcaseCanvasSlot .canvas{width:100%;flex:1;min-height:0}
 #showcaseCanvasSlot .flow-caption{flex:none;width:100%;margin:0;text-align:center}
 .showcase-outcomes{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
