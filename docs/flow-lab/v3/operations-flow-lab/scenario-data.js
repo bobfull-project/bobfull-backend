@@ -449,11 +449,11 @@ const infraSteps = {
 const fullArchitectureTopology = {
   viewBox: "0 0 1400 830",
   nodes: [
-    ["users", "Users / Browser"], ["route53", "Route 53"], ["alb", "ALB (HTTPS)"],
+    ["users", "Users / Browser"], ["route53", "Route 53"], ["alb", "ALB"],
     ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
     ["blue1", "Blue EC2 #1"], ["blue2", "Blue EC2 #2"], ["green1", "Green EC2 #1"], ["green2", "Green EC2 #2"],
     ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"],
-    ["s3", "S3(식당 이미지)"], ["lambda", "Lambda"],
+    ["s3", "S3"], ["lambda", "Lambda"],
     ["openai", "OpenAI(LLM)"], ["portone", "PortOne"], ["smtp", "SMTP/Mail"],
     ["developer", "Developer / GitHub"], ["ghaction", "GitHub Actions"], ["ecr", "ECR"],
     ["ssm", "SSM Run Command"], ["paramstore", "Parameter Store"],
@@ -469,11 +469,9 @@ const fullArchitectureTopology = {
     developer: [1130, 40], ghaction: [1130, 150], ecr: [1130, 260], ssm: [1130, 370], paramstore: [1130, 480],
     prometheus: [260, 630], grafana: [430, 630], slack: [600, 630], cloudwatch: [770, 630]
   },
-  nodeSublabels: {
-    blue1: "AI Consumer 포함", blue2: "AI Consumer 포함", green1: "AI Consumer 포함", green2: "AI Consumer 포함",
-    rds: "Single-AZ", redis: "Cache / Pub-Sub", kafka: "단일 KRaft Broker",
-    s3: "식당 이미지", slack: "Grafana Alert 전용", cloudwatch: "Logs(메트릭 아님)"
-  },
+  /* Node 안에는 기술명만 남긴다 — "AI Consumer 포함"/"Single-AZ"/"Grafana Alert 전용" 같은 부연
+     설명은 전체 인프라 구성도를 처음 보는 사람에게는 잡음이라, Node 클릭 시 열리는 상세 패널
+     (fullArchitectureNodeDetails)에서만 설명한다. */
   edges: {
     "users-route53": "M140 75 V140", "route53-alb": "M140 210 V240",
     "alb-tgBlue": "M140 275 H190 V125 H300",
