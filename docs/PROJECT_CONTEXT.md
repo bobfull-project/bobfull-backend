@@ -204,12 +204,16 @@ V3 인프라 판단은 Evidence 기준으로 구분한다. ALB 뒤 Active App EC
 
 ## 10. 역할 분배
 
-| 이름 | 핵심 도메인 | 공통·도전 기술 |
+| 이름 | 핵심 도메인 | 프로젝트 책임 범위 |
 |---|---|---|
 | 김현승 | 예약금 결제·환불·지급 예정 예약금 | AI·채팅 |
-| 김홍기 | 합석 테이블·예약 시간·검색 | AWS·CI/CD·로그·모니터링 |
-| 배지현 | 예약·참여·좌석 재고·동시성 | 프론트엔드·Kafka |
+| 김홍기 | 합석 테이블·예약 시간·검색 | 배포·인프라·모니터링 전반 |
+| 배지현 | 예약·참여·좌석 재고·동시성 | 프론트엔드 전반 |
 | 정용태 | 회원·인증·사장님·식당·관리자 | 캐시·조회 성능·K6 |
+
+배지현은 BobFull Frontend 전반과 Backend API 연동 영역을 담당한다. 이 Backend 저장소에서 세부 Frontend 구현 내역을 확인할 수 없는 항목은 기능별로 임의 확정하지 않는다.
+
+김홍기는 AWS 운영 환경, EC2/RDS/ALB 기반 인프라, Docker/ECR, GitHub Actions CI/CD, SSM 기반 배포, Blue-Green 배포, App EC2 다중화, Redis/Kafka 운영 인프라 구성·연결, Prometheus/Grafana, Health Check와 운영 모니터링, 운영 장애 분석, EC2 메모리 병목·Hikari Connection Pool 병목 검증, Auto Scaling 필요성 측정과 미도입 판단, 배포/인프라 Evidence 정리를 담당한다. 이는 운영 인프라 관점의 책임이며 Redis/Kafka의 모든 비즈니스 로직 구현 책임을 뜻하지 않는다.
 
 ## 11. 관련 문서
 

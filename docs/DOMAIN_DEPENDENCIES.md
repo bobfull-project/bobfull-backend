@@ -49,6 +49,18 @@
 
 담당자는 단독 소유권을 뜻하지 않는다. 여러 도메인이 연결되는 Issue는 관련 담당자가 계약과 실패 결과를 함께 확인한다.
 
+### 운영·인프라 책임
+
+아래 표는 Backend 기능 도메인 담당 표와 별개로 운영·인프라 관점의 책임만 정리한다. 김홍기는 배포·인프라·모니터링 전반을, 배지현은 프론트엔드 전반과 Backend API 연동을 담당한다. Redis/Kafka 운영 구성 책임은 해당 인프라의 배포·연결·운영 검증을 뜻하며, 모든 비즈니스 로직 구현 책임을 뜻하지 않는다.
+
+| 영역 | 주요 범위 | 담당 |
+|---|---|---|
+| Deployment / Infrastructure | AWS, EC2/RDS/ALB, Blue-Green, App EC2 다중화, 운영 환경 | 김홍기 |
+| CI/CD | GitHub Actions, Docker/ECR, SSM 배포 및 배포 자동화 | 김홍기 |
+| Monitoring | Prometheus/Grafana, Health Check, 운영 모니터링 | 김홍기 |
+| Infra Troubleshooting | 운영 장애 분석, EC2 메모리 병목, Hikari Pool 병목, Auto Scaling 도입 판단 | 김홍기 |
+| Frontend | 프론트엔드 전반 및 Backend API 연동 | 배지현 |
+
 ## 3. 핵심 공동 작업 경계
 
 아래 흐름은 공동 검토가 필요한 도메인 연결을 나타낸다. 상태 전이, 결제·환불, 좌석 정합성의 상세 정책은 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md), [프로젝트 컨텍스트](./PROJECT_CONTEXT.md), [ERD](./ERD.md)를 따른다.

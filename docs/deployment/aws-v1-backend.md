@@ -36,10 +36,6 @@
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | 필수 |
 | `RESTAURANT_INSIGHT_AI_ENABLED` | Restaurant Feedback Insight Provider 활성화 여부. prod 기본값은 `false`다. | 선택 |
 | `KAFKA_RESTAURANT_INSIGHT_CONSUMER_ENABLED` | Restaurant Feedback Insight Kafka Consumer 활성화 여부. prod 기본값은 `false`다. | 선택 |
-| `KAFKA_RESTAURANT_INSIGHT_GROUP_ID` | Restaurant Feedback Insight Consumer Group ID | 선택 |
-| `KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC` | Restaurant Feedback Insight 전용 DLT Topic | 선택 |
-| `KAFKA_RESTAURANT_INSIGHT_CONSUMER_MAX_ATTEMPTS` | Restaurant Feedback Insight Consumer Retry 최대 시도 수 | 선택 |
-| `KAFKA_RESTAURANT_INSIGHT_CONSUMER_RETRY_BACKOFF_MS` | Restaurant Feedback Insight Consumer Retry backoff ms | 선택 |
 | `JWT_SECRET` | JWT 서명 Secret | 필수 |
 | `JWT_ACCESS_TOKEN_EXPIRATION_SECONDS` | Access Token 만료 초 | 선택 |
 | `AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS` | Refresh Token 만료 초 | 선택 |
@@ -100,10 +96,6 @@
 /bobfull/prod/db-pool-max-size
 /bobfull/prod/restaurant-insight-ai-enabled
 /bobfull/prod/kafka-restaurant-insight-consumer-enabled
-/bobfull/prod/kafka-restaurant-insight-group-id
-/bobfull/prod/kafka-restaurant-insight-dlt-topic
-/bobfull/prod/kafka-restaurant-insight-consumer-max-attempts
-/bobfull/prod/kafka-restaurant-insight-consumer-retry-backoff-ms
 /bobfull/prod/jwt-access-token-expiration-seconds
 /bobfull/prod/auth-refresh-token-expiration-seconds
 /bobfull/prod/jpa-ddl-auto
@@ -125,7 +117,9 @@
 /bobfull/prod/s3-image-get-url-expiration
 ```
 
-Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backend-v1.sh`가 컨테이너 실행 시 `DB_URL`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `S3_IMAGE_BUCKET` 같은 대문자 환경변수 이름으로 변환한다.
+Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backend-v1.sh`가 컨테이너 실행 시 `DB_URL`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `S3_IMAGE_BUCKET` 같은 대문자 환경변수 이름으로 변환한다. Restaurant Feedback Insight의 Parameter Store 자동 주입은 현재 `restaurant-insight-ai-enabled`와 `kafka-restaurant-insight-consumer-enabled` 두 개만 지원한다.
+
+`application-prod.yml`에는 `KAFKA_RESTAURANT_INSIGHT_GROUP_ID`, `KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC` placeholder가 있어 직접 컨테이너 환경변수로 주입하면 override할 수 있지만, 현재 배포 스크립트의 `/bobfull/prod/...` Parameter Store 자동 주입 항목은 아니다. Restaurant Insight retry는 현재 `RestaurantInsightConsumerConfig`의 application property 기본값(max attempts `3`, retry backoff `1000ms`)을 사용하며, 별도 prod Parameter Store mapping은 제공하지 않는다.
 
 비밀번호, JWT Secret, PortOne Secret, SMTP 비밀번호처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
 

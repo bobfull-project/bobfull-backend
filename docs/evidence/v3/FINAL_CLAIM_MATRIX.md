@@ -30,6 +30,7 @@ Issue #67 Final Claim Gate를 이 문서의 최종 상태 기준으로 사용한
 
 - `MERGED`: 실제 구현이 develop에 Merge 완료됨
 - `MEASURED_AND_REJECTED`: 측정 결과 기술 도입 필요성이 없어 미채택
+- `OPERATIONAL_BOUNDARY_ADOPTED`: 성능 우위 가설은 채택하지 않았지만, 운영·복구·격리 경계를 근거로 해당 기술 구조를 채택 또는 유지함
 - `DEFERRED`: 프로젝트 범위에서 의도적으로 보류
 - `NOT_VERIFIED`: 구현 또는 측정 일부는 존재하지만 최종 검증 근거 부족
 
@@ -65,7 +66,7 @@ Evidence 수준은 구현·채택 상태가 아니라, 최종 주장에 연결�
 | #192 AI Worker Split | Kafka AI Consumer를 별도 Worker/MSA로 분리하지 않고 통합 모놀리스를 유지했다. | `MEASURED_AND_REJECTED` | `MEASURED` | AI 지연 100ms→3s에도 send service p95 12~18ms, Consumer 중단 15/15 복구·유실 0, 실패 5/5 DLT | Worker/MSA 분리 후보 | 같은 애플리케이션 안의 Kafka Consumer 유지 | `192-ai-worker-scaling/README.md` | Fake AI·경량 부하; 실제 HTTP/STOMP p95와 Provider 429는 운영 지표에서 재검토 |
 | #198 Schema Migration | 최종 production은 `ddl-auto=validate`로 Entity mapping과 DB schema를 검증하고, additive schema 호환성을 확인했다. | `MERGED` | `VERIFIED` | production schema snapshot, empty DB reproducibility, Blue/Green same RDS read/write, nullable additive rollback compatibility PASS | prod `ddl-auto=update` | prod `ddl-auto=validate`, additive-first schema policy | `db-schema-migration/README.md` | destructive migration rollback safety와 cleanup 일부는 별도 확인 필요 |
 | #256 Email Outbox Async | Email Outbox signal은 전용 bounded executor로 요청 스레드 밖에서 Processor를 호출한다. | `MERGED` | `VERIFIED` | dispatch <500ms 단위 검증, executor 제출 거부 시 PENDING 유지·scheduler 복구 | AfterCommit 경로가 같은 요청 스레드에서 Processor 호출 | `EmailOutboxSignalDispatcher` → `emailOutboxExecutor` → `EmailOutboxProcessor.signal` | `256-email-outbox-async/README.md` | AWS/K6/SMTP protocol 재측정 없음; 성능 개선 수치 주장 금지 |
-| #274 Outbox+Async vs Kafka | Kafka는 속도 개선이 아니라 broker backlog·Consumer Group·Retry/DLT·운영 경계를 위해 유지한다. | `MEASURED_AND_REJECTED` | `MEASURED` | 30건 drain Async 5.394s, Kafka 7.210s; 같은 Outbox 조건 lost 0·duplicate 0 | 속도 개선 가정 | 속도 주장은 기각, 운영 경계 근거만 유지 | `274-outbox-async-vs-kafka/README.md` | Retry/DLT failure injection 효과는 이 비교 실험으로 검증하지 않음 |
+| #274 Outbox+Async vs Kafka | Kafka는 속도 개선이 아니라 broker backlog·Consumer Group·Retry/DLT·독립 consumer 운영 경계를 위해 유지한다. | `OPERATIONAL_BOUNDARY_ADOPTED` | `MEASURED` | 30건 drain Async 5.394s, Kafka 7.210s; 같은 Outbox 조건 lost 0·duplicate 0 | Kafka 성능 우위와 Kafka 단독 유실 방지 가정 | 속도·독점 유실 방지 주장은 기각, broker backlog·Consumer Group·Consumer Lag·Retry/DLT·failure isolation 경계 근거로 Kafka 유지 | `274-outbox-async-vs-kafka/README.md` | Retry/DLT failure injection 효과는 이 비교 실험으로 검증하지 않음 |
 | #277 Restaurant Feedback Insight | 같은 ChatMessageCreatedEvent를 독립 Consumer Group이 재사용해 OWNER용 익명 집계 Insight를 만든다. | `MERGED` | `VERIFIED` | Moderation/Insight 각자 소비, Insight 실패가 Moderation에 영향 없음, 전용 Retry/DLT, retained event raw backfill 59건 | 신규 이벤트/API 추가 후보 | 기존 Kafka topic/schema 유지, 독립 group으로 Event Reuse | `277-restaurant-feedback-event-reuse/README.md` | production 기본 disabled; retained raw backfill은 Kafka 레벨 검증이며 실제 운영 enable/Provider 품질 아님 |
 
 ## 최종 발표 문구 변환 규칙
@@ -83,7 +84,7 @@ Evidence 수준은 구현·채택 상태가 아니라, 최종 주장에 연결�
 ### 금지 예
 
 ```text
-Kafka만으로 처리량 문제를 해결했다.
+Kafka 도입 자체로 처리량 문제가 해결됐다고 주장했다.
 ```
 
 실제 처리량 측정이 없다면 이런 표현을 사용하지 않는다.
