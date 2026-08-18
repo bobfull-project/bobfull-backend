@@ -32,6 +32,7 @@
 | `REDIS_HOST` | Redis Host | 필수 |
 | `REDIS_PORT` | Redis Port | 선택 |
 | `REDIS_SSL_ENABLED` | Redis SSL/TLS 사용 여부. prod 기본값은 `true`이며 EC2-local/Docker Redis에서는 `false`로 둔다. | 선택 |
+| `DB_POOL_MAX_SIZE` | Hikari maximumPoolSize. prod 기본값은 `10`이며 #191 검증 기준값은 `12`이다. | 선택 |
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | 필수 |
 | `JWT_SECRET` | JWT 서명 Secret | 필수 |
 | `JWT_ACCESS_TOKEN_EXPIRATION_SECONDS` | Access Token 만료 초 | 선택 |
@@ -90,6 +91,7 @@
 ```text
 /bobfull/prod/redis-port
 /bobfull/prod/redis-ssl-enabled
+/bobfull/prod/db-pool-max-size
 /bobfull/prod/jwt-access-token-expiration-seconds
 /bobfull/prod/auth-refresh-token-expiration-seconds
 /bobfull/prod/jpa-ddl-auto
@@ -177,7 +179,7 @@ main push
 → 신규 Active Target Group의 EC2 2대 private IP 조회
 → Monitoring EC2에 SSM Run Command로 Prometheus `bobfull-backend` target 갱신
 → Prometheus `up{job="bobfull-backend"}`에서 신규 Active target 2대가 모두 UP인지 확인
-→ public 검증 성공 후 기존 활성 EC2 2대를 rollback window 동안 running 유지
+→ 기존 활성 EC2 2대를 rollback window 동안 running 유지
 → rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 stop-instances 실행
 → ECR, Parameter Store, S3, CloudWatch 확인
 ```
@@ -289,7 +291,7 @@ s3:ListBucket
 logs:DescribeLogStreams
 ```
 
-Prometheus target 자동 갱신은 새 AWS action 이름을 추가로 요구하지 않는다. 다만 기존 `ssm:SendCommand`, `ssm:GetCommandInvocation`, `ssm:DescribeInstanceInformation` 권한의 Resource 범위에 Monitoring EC2 instance ARN과 `AWS-RunShellScript` 문서 ARN이 포함되어야 한다. 새 Active EC2 private IP 조회는 이미 필요한 `ec2:DescribeInstances`를 사용한다.
+Prometheus target 자동 갱신은 새 AWS action 이름을 추가로 요구하지 않는다. 다만 기존 `ssm:SendCommand`, `ssm:GetCommandInvocation`, `ssm:DescribeInstanceInformation` 권한의 Resource 범위에 Monitoring EC2 instance ARN과 `AWS-RunShellScript` 문서 ARN이 포함되어야 한다. 새 Active EC2 private IP 조회는 이미 필요한 `ec2:DescribeInstances`를 사용한다. Hikari Pool Size 검증에 사용하는 `/bobfull/prod/db-pool-max-size`는 기존 `ssm:GetParameter` 권한으로 조회하며, 값이 없으면 컨테이너 env에 `DB_POOL_MAX_SIZE`를 쓰지 않아 애플리케이션 기본값 `10`이 적용된다.
 
 대상 EC2는 SSM managed instance로 등록되어 있어야 하며, EC2 instance profile에는 SSM Agent 동작과 EC2 내부 배포 스크립트 실행에 필요한 권한이 필요하다.
 

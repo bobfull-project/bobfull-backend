@@ -42,7 +42,7 @@ GRAFANA_SLACK_RECIPIENT=<slack-channel-name>
 
 ALB DNS를 Prometheus target으로 사용하지 않는다. Prometheus target은 App EC2 private IP 또는 private DNS와 `8080` 포트를 직접 지정해야 instance별 지표를 분리할 수 있다.
 
-Monitoring EC2 최초 구성 때는 env 파일에 현재 Active 2대의 초기값을 한 번 입력한다. 실제 운영 구조에서 env 파일과 compose/config 경로가 분리되어 있으면 env 파일은 `BACKEND_MONITORING_ENV_FILE`, compose/config 위치는 `BACKEND_MONITORING_COMPOSE_DIR`로 각각 지정한다.
+Monitoring EC2 최초 구성 때는 env 파일에 현재 Active 2대의 초기값을 한 번 입력한다. 이후 Blue-Green 배포에서는 배포 스크립트가 Prometheus target을 자동 전환하므로, 평상시 운영 절차로 사람이 env 파일의 target을 직접 바꾸지 않는다. 실제 운영 구조에서 env 파일과 compose/config 경로가 분리되어 있으면 env 파일은 `BACKEND_MONITORING_ENV_FILE`, compose/config 위치는 `BACKEND_MONITORING_COMPOSE_DIR`로 각각 지정한다.
 
 운영 경로 예시:
 
@@ -96,7 +96,7 @@ BACKEND_PROMETHEUS_SSM_POLL_INTERVAL_SECONDS
 
 로그에는 `BOBFULL_BACKEND_METRICS_TARGETS` 갱신 결과만 출력하고, Grafana 비밀번호·Slack Webhook 같은 다른 env 값은 출력하지 않는다.
 
-수동으로 현재 Active target을 확인해야 할 때는 다음 순서를 사용한다.
+자동 전환 실패 시 현재 Active target을 확인하거나 복구해야 할 때는 다음 순서를 사용한다.
 
 1. GitHub Variables 또는 운영 기록에서 Blue/Green Listener와 Target Group ARN을 확인한다.
 
@@ -132,13 +132,13 @@ aws ec2 describe-instances \
   --output text
 ```
 
-5. Monitoring EC2의 `BACKEND_MONITORING_ENV_FILE` 또는 Prometheus UI에서 Active App 2대가 comma-separated target으로 반영됐는지 확인한다. env 파일에는 Grafana 비밀번호와 Slack Webhook 같은 secret이 포함될 수 있으므로 전체 파일 내용을 로그나 PR에 붙이지 않는다.
+5. Monitoring EC2의 `BACKEND_MONITORING_ENV_FILE` 또는 Prometheus UI에서 Active App 2대가 comma-separated target으로 반영됐는지 확인한다. 자동 전환이 실패해 복구가 필요할 때만 해당 env 파일의 `BOBFULL_BACKEND_METRICS_TARGETS`를 현재 Active 2대로 수정한다. env 파일에는 Grafana 비밀번호와 Slack Webhook 같은 secret이 포함될 수 있으므로 전체 파일 내용을 로그나 PR에 붙이지 않는다.
 
 ```text
 BOBFULL_BACKEND_METRICS_TARGETS=10.0.1.10:8080,10.0.1.11:8080
 ```
 
-6. Prometheus UI `Status -> Targets`에서 `bobfull-backend` target 2개가 모두 `UP`인지 확인한다. 평상시 Blue-Green 배포 후 갱신은 `/-/reload`로 처리하므로 Prometheus/Grafana 재기동을 우선하지 않는다.
+6. 복구 수정이 필요했다면 Prometheus 컨테이너 내부 file_sd target 파일을 같은 target 값으로 맞춘 뒤 `/-/reload`를 호출한다. Prometheus UI `Status -> Targets`에서 `bobfull-backend` target 2개가 모두 `UP`인지 확인한다. 평상시 Blue-Green 배포 후 갱신은 `/-/reload`로 처리하므로 Prometheus/Grafana 재기동을 우선하지 않는다.
 
 ## 확인 순서
 

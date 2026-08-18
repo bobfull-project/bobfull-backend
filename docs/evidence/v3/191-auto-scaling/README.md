@@ -2,210 +2,216 @@
 
 ## 검증 대상
 
-#191은 App EC2 Auto Scaling을 바로 적용하는 작업이 아니라, 현재 활성 App EC2 2대의 실제 병목을 먼저 확인한 뒤 Auto Scaling 필요 여부를 판단하는 작업이다.
+#191은 App EC2 Auto Scaling을 바로 적용하는 작업이 아니라, 현재 Active App EC2 2대가 실제 운영 부하에서 어디서 먼저 병목을 만드는지 확인한 뒤 Auto Scaling 필요 여부를 판단하는 작업이다.
 
-이번 PR은 Stress Test에서 첫 병목이 App CPU가 아니라 Hikari Connection Pool 대기로 관측된 상태를 기록하고, 평상시 inactive Blue/Green EC2가 RDS Connection을 점유하지 않도록 Blue-Green 운영 구조를 개선한다.
+이번 PR은 다음 세 가지 흐름을 함께 검증했다.
+
+- Active App EC2 2대의 App CPU, RDS CPU, ALB 분산, Hikari Connection Pool 병목 확인
+- 평상시 Inactive Blue-Green App EC2가 점유하던 불필요한 RDS Connection 제거
+- Hikari `maximumPoolSize=12` 적용 후 동일 Stress Test 개선 경향 재현 확인
 
 ## 측정 계약
 
-- Primary KPI: 평상시 inactive EC2 STOP으로 inactive Hikari Connection 제거, 동일 Stress Test 재측정 시 Hikari Pending과 Connection Acquire Latency 변화 확인
-- Secondary KPI: `Threads_connected`, Hikari Active, App CPU, RDS CPU, RDS ReadLatency, avg, p95, p99, max, HTTP 실패율, dropped iterations
-- Guardrail: Blue-Green 배포의 SSM deploy, Target Group health, ALB traffic switch, public readiness/API 검증, Prometheus Active target 갱신/UP 확인, rollback fail-safe 유지
+- Primary KPI: Hikari Active/Pending, Connection Acquire Latency, Stress Test latency와 dropped iterations
+- Secondary KPI: App CPU, RDS CPU, RDS `Threads_connected`, DatabaseConnections, ALB 요청 분산
+- Guardrail: Blue-Green 배포의 START/STOP, Target Group health, ALB traffic switch, public API 검증, Prometheus Active target 갱신/UP 확인, rollback fail-safe 유지
 
 ## 기준 코드
 
 - Before SHA: `cdc7f5b1008cb8ac5987d9c8dbebf900f2efdb07`
-- After SHA: 코드 변경 및 배포 검증 후 갱신 예정
+- 구현 검증 기준 SHA: `90e9d096593ecf26be9167200898baa6f5bb2309`
+- PR: #276
 
 ## 환경·데이터·실행 조건
-
-### Load Test
-
-```text
-20 iterations/s
-5분
-```
-
-### Stress Test
-
-```text
-최대 부하 320 iterations/s
-```
-
-### RDS / App 구조
 
 | 항목 | 값 |
 |---|---:|
 | RDS `max_connections` | 60 |
-| RDS `Threads_connected` | 약 45 |
-| Hikari `maximumPoolSize` | 10 |
 | Active App EC2 | 2대 |
-| Inactive App EC2 | 2대 |
-| App 최대 Connection 계산 | 4대 x 10 = 약 40 |
+| Inactive App EC2 | 평상시 STOPPED |
+| 기존 Hikari `maximumPoolSize` | 10 |
+| 최종 Hikari `maximumPoolSize` | 12 |
+| Parameter Store | `/bobfull/prod/db-pool-max-size=12` |
 
-## Before 결과
+`scripts/aws/deploy-backend-v1.sh`는 `DB_POOL_MAX_SIZE:db-pool-max-size`를 optional parameter로 주입한다. Parameter Store 값이 없으면 env에 쓰지 않고 `application-prod.yml`의 `${DB_POOL_MAX_SIZE:10}` 기본값을 사용한다.
 
-### Load Test 결과
+## Pool 10 기준 검증
 
-| 지표 | 결과 |
-|---|---:|
-| iterations | 6,001 |
-| HTTP requests | 6,006 |
-| failure rate | 0% |
-| avg | 18.83ms |
-| p95 | 23.24ms |
-| p99 | 64.44ms |
-| max | 448.51ms |
+ALB 뒤 Active App EC2 2대를 대상으로 k6 Stress Test를 수행했다.
 
-일반 부하에서는 Hikari Active Connection이 대부분 0~1 수준으로 유지되어 병목이 확인되지 않았다.
+- App CPU는 약 20~40% 수준으로 여유가 있었다.
+- RDS CPU는 약 20%대 수준으로 여유가 있었다.
+- ALB 요청 분산은 두 App에서 비슷하게 확인됐다.
+- Hikari Active가 10/10까지 도달했다.
+- Hikari Pending이 약 40~60까지 증가했다.
+- Connection Acquire 지연이 발생했다.
 
-### Stress Test 결과
-
-| 지표 | 결과 |
-|---|---:|
-| iterations | 82,092 |
-| HTTP requests | 82,097 |
-| http_req_failed | 0% |
-| avg | 32.35ms |
-| p95 | 77.82ms |
-| p99 | 310.05ms |
-| max | 1.22s |
-| dropped_iterations | 107 |
-
-### 병목 지표
+Pool 10 Stress Test 결과:
 
 | 지표 | 결과 |
 |---|---:|
-| App CPU | 약 38~42% |
-| RDS CPU | 피크 약 20.6% |
-| RDS ReadLatency | 피크 약 2.5ms |
-| Hikari Active | 최대 10/10 |
-| Hikari Pending | 약 40~50+ |
-| Connection Acquire Latency | 순간 최대 약 180ms |
-| Hikari Connection Timeout | 0 |
+| HTTP 실패율 | 0% |
+| avg | 35.87ms |
+| p95 | 35.4ms |
+| p99 | 358.79ms |
+| max | 5.36s |
+| Dropped Iterations | 417 |
+| max VU | 300 |
 
-현재까지 App CPU 포화, RDS CPU 포화, ALB 요청 편중보다 Hikari Pool 최대치 도달과 Pending 증가가 먼저 확인됐다.
+현재 부하에서 먼저 관측된 병목은 App CPU 부족이 아니라 Hikari Connection Pool 대기였다.
 
-### PROCESSLIST 해석
+## Inactive Blue-Green Connection 제거 검증
 
-PROCESSLIST에서 Active Green 2대와 Inactive Blue 2대가 각각 약 10 Connection을 유지했다.
+기존 PROCESSLIST에서는 Active App 2대뿐 아니라 Inactive Blue-Green App 2대도 각각 Hikari Connection을 유지했다.
 
 ```text
-Active Green 2대 x Hikari 10 = 최대 20
-Inactive Blue 2대 x Hikari 10 = 최대 20
+Active App 2대 x Hikari 10 = 최대 20
+Inactive App 2대 x Hikari 10 = 최대 20
 App 최대 Connection = 약 40
 ```
 
-Inactive Blue 환경은 사용자 트래픽을 받지 않지만 Spring Boot/Hikari가 실행 중이면 DB Connection을 유지한다. 따라서 RDS `max_connections=60` 상태에서 Auto Scaling으로 App을 추가하기 전에 inactive 환경의 불필요한 Connection 점유를 먼저 제거한다.
+Inactive 환경은 사용자 트래픽을 받지 않지만 Spring Boot/Hikari가 실행 중이면 DB Connection을 유지한다. 따라서 RDS `max_connections=60` 상태에서 Auto Scaling으로 App을 늘리기 전에 Inactive 환경의 불필요한 Connection 점유를 먼저 제거했다.
 
-## 변경 내용
+확인 결과:
 
-- `scripts/aws/deploy-backend-blue-green-v1.sh`
-  - ALB Listener weight 기준 active/inactive Target Group 판별 유지
-  - 배포 시작 시점의 active instance id를 별도로 저장
-  - inactive Target Group EC2가 `stopped`이면 START
-  - inactive Target Group EC2가 `pending`이면 running까지 대기
-  - inactive Target Group EC2가 `stopping`이면 stopped까지 대기 후 START
-  - 기타 상태는 오류로 실패
-  - EC2 running 이후 SSM `PingStatus=Online`까지 polling
-  - public 검증 성공 후 rollback window 동안 기존 active EC2 유지
-  - 새 Active Target Group의 EC2 private IP 2개 조회
-  - Monitoring EC2에 SSM 명령으로 `BACKEND_MONITORING_ENV_FILE`의 `BOBFULL_BACKEND_METRICS_TARGETS`와 Prometheus `bobfull-backend` scrape target 갱신
-  - Prometheus `/-/reload` 호출
-  - 새 Active target 2대가 모두 `up=1`일 때만 기존 active STOP 단계 진행
-  - Prometheus target 갱신 또는 UP 확인 실패 시 기존 active EC2 STOP 금지
-  - rollback window 종료 후 배포 시작 시점에 저장한 active instance id만 STOP
-  - rollback 발생 또는 rollback 시도 시 기존 active EC2 STOP 금지
-- `.github/workflows/deploy-backend-v1.yml`
-  - EC2 상태 대기, SSM Online 대기, 이전 active 유지 시간, Monitoring EC2/Prometheus 갱신 변수를 전달
-- `docs/deployment/aws-v1-backend.md`
-  - 운영 흐름, GitHub Variables, IAM 권한, 성공 조건 업데이트
-- `docs/operations/monitoring-runbook.md`
-  - 수동 target 재기동 기준을 Blue-Green 자동 target 갱신과 reload 기준으로 업데이트
+- RDS `Threads_connected` 약 45 -> 26
+- Inactive App Connection 약 20 -> 0
+- 직접 확인된 효과는 불필요한 DB Connection 제거와 EC2 비용 절감이다.
 
-## After 결과
+Inactive EC2 STOP이 API 응답시간을 개선했다고 단정하지 않는다. 동일 Stress Test에서 Active Hikari 10/10 및 Pending 증가가 다시 발생했으므로, Inactive Connection 문제와 Active App Pool 병목은 별개로 해석한다.
 
-코드 변경 후 실제 AWS 배포와 동일 Stress Test 재측정이 필요하다. 이 문서에서는 아직 After 성능 개선을 PASS로 기록하지 않는다.
+## Blue-Green 운영 Guardrail
 
-확인할 항목:
+최종 Blue-Green 흐름은 다음과 같다.
 
 ```text
-Threads_connected
-Hikari Active
-Hikari Pending
-Connection Acquire Latency
-App CPU
-RDS CPU
-RDS ReadLatency
-avg
-p95
-p99
-max
-HTTP 실패율
-Dropped Iterations
+Inactive START
+-> EC2 Running 확인
+-> SSM Online 확인
+-> Backend 배포
+-> Readiness 확인
+-> Target Group Healthy
+-> ALB Traffic 전환
+-> Public API 검증
+-> 신규 Active EC2 확인
+-> Prometheus Target 변경
+-> 신규 Active 2대 UP 확인
+-> 600초 Rollback Window
+-> 기존 Active STOP
 ```
 
-## 정합성 회귀 검증
+Fail-safe 기준:
 
-이번 PR에서 확인할 Guardrail:
+- Inactive EC2 START, EC2 running 대기, SSM Online 대기, 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다.
+- ALB 전환 확인, public readiness 또는 public API 검증이 실패하면 기존 Listener default action으로 rollback한다.
+- Public 검증 실패 시점에는 Prometheus target을 아직 변경하지 않으므로 이전 Active target이 유지된다.
+- Prometheus target 전환 또는 신규 Active 2대의 UP 검증에 실패하면 기존 Active EC2를 STOP하지 않는다.
+- Stop 대상은 ALB 전환 이후 다시 계산하지 않고 배포 시작 시점에 저장한 기존 Active instance id만 사용한다.
 
-- inactive EC2 START 실패 시 Listener traffic 전환 없음
-- EC2 running 대기 실패 시 Listener traffic 전환 없음
-- SSM Online 실패 시 Listener traffic 전환 없음
-- SSM deploy 실패 시 Listener traffic 전환 없음
-- Target Group health 실패 시 Listener traffic 전환 없음
-- ALB 전환 확인 실패 시 rollback 시도
-- public readiness/API 검증 실패 시 rollback 시도
-- public 검증 실패 rollback 시 Prometheus target 변경 전이므로 이전 Active target 유지
-- Prometheus target 갱신 실패 시 기존 active EC2 STOP 금지
-- Prometheus 신규 Active target 2대 중 하나라도 UP 확인 실패 시 기존 active EC2 STOP 금지
-- rollback 발생 또는 rollback 시도 시 기존 active EC2 STOP 금지
-- 정상 검증 후 stop 대상은 배포 시작 시점의 active instance id로 고정
+## Active Hikari 병목 분석
 
-## 구조화 로그·메트릭
+Pool 10 환경에서 Hikari Usage 최대 약 710~780ms가 확인됐다. RDS Slow Query Log를 활성화한 뒤 고부하에서 여러 Query 지연도 확인했다.
 
-이번 스크립트는 GitHub Actions 로그에 다음을 남긴다.
+대표 Payment / TimeSlot Query를 `EXPLAIN ANALYZE`로 확인한 결과:
 
-- Blue/Green Target Group weight
-- 배포 시작 시점 active/inactive Target Group
-- 배포 시작 시점 active instance ids
-- inactive instance ids
-- inactive EC2 state summary
-- SSM Online status summary
-- Target Group health summary
-- Listener weight 확인 summary
-- 새 Active EC2 private IP
-- Prometheus target 갱신 대상과 file_sd target preview
-- Prometheus target별 `UP`/`DOWN` 확인 결과
-- 이전 active EC2 유지 시간
-- 이전 active EC2 stop 대상과 stopped 확인 summary
+- Payment Query 단독 실행 약 0.17ms
+- TimeSlot Query 단독 실행 약 1.6ms
+- 기존 Index 사용 확인
 
-## 결과 해석
+이번 검증에서는 대표 Query에서 명확한 Full Scan 또는 Index 누락 같은 구조적 병목을 확인하지 못했다. 따라서 큰 Query 리팩터링은 하지 않고 Hikari Pool Size 자체를 먼저 검증했다.
 
-현재 수치만으로는 App EC2 Auto Scaling을 바로 적용할 근거가 부족하다. Stress Test에서 첫 병목은 App CPU가 아니라 Hikari Connection Pool 대기로 관측됐다.
+## Pool 12 검증
 
-따라서 평상시 inactive EC2를 STOP해 RDS Connection Budget을 확보한 뒤 동일 조건 Stress Test를 재측정한다. 재측정 후 판단 기준은 다음과 같다.
+Hikari `maximumPoolSize`를 10에서 12로 조정했다.
 
-```text
-Hikari 병목 지속
-→ Connection Pool / DB 구조 추가 검토
+- Parameter Store: `/bobfull/prod/db-pool-max-size=12`
+- `deploy-backend-v1.sh`: `DB_POOL_MAX_SIZE:db-pool-max-size` optional parameter 주입
+- 실제 컨테이너: `DB_POOL_MAX_SIZE=12` 적용 확인
 
-Hikari 안정
-+
-App 자체 병목 발생
-→ Auto Scaling 적용 검토
+Pool 12 1차 Stress Test 결과:
 
-Hikari 안정
-+
-App CPU/처리량에도 여유
-→ 현재 단계에서는 Auto Scaling 미적용
-```
+| 지표 | 결과 |
+|---|---:|
+| HTTP 실패율 | 0% |
+| avg | 19.2ms |
+| p95 | 29.8ms |
+| p99 | 111.85ms |
+| max | 646.19ms |
+| Dropped Iterations | 18 |
+| max VU | 68 |
+
+Pool 12 재현 Stress Test 결과:
+
+| 지표 | 결과 |
+|---|---:|
+| HTTP 실패율 | 0% |
+| avg | 18.2ms |
+| p95 | 22.42ms |
+| p99 | 94.55ms |
+| max | 635.24ms |
+| Dropped Iterations | 40 |
+| max VU | 90 |
+
+Pool 12 모니터링:
+
+- Hikari Pending 거의 0
+- Acquire max 약 380ms
+- Usage max 약 600~610ms
+- RDS CPU 최대 약 29.4%
+- DatabaseConnections 최대 약 44 / `max_connections=60`
+
+## 주요 측정 결과 비교
+
+| 항목 | Pool 10 | Pool 12 1차 | Pool 12 재현 |
+|---|---:|---:|---:|
+| HTTP 실패율 | 0% | 0% | 0% |
+| avg | 35.87ms | 19.2ms | 18.2ms |
+| p95 | 35.4ms | 29.8ms | 22.42ms |
+| p99 | 358.79ms | 111.85ms | 94.55ms |
+| max | 5.36s | 646.19ms | 635.24ms |
+| Dropped Iterations | 417 | 18 | 40 |
+| max VU | 300 | 68 | 90 |
+| Hikari Pending | 약 40~60 증가 | 거의 0 | 거의 0 |
+
+Inactive STOP의 직접 효과는 별도로 확인했다.
+
+- RDS `Threads_connected` 약 45 -> 26
+- Inactive App Connection 약 20 -> 0
+- 이 변화는 불필요한 DB Connection 제거와 EC2 비용 절감 효과로 해석한다.
+- Pool 12 응답시간 개선과 Inactive STOP을 하나의 원인으로 묶어 해석하지 않는다.
+
+Pool Size가 10에서 12로 2개 증가한 것에 비해 성능 변화가 크게 나타났으므로, 전체 개선 효과를 Pool Size 변경 하나만의 영향이라고 단정하지 않는다. 대신 Pool 12 환경에서 두 차례 동일 테스트 결과 개선 경향이 재현됐다고 정리한다.
+
+Hikari Active가 Pool 10의 10/10에서 Pool 12의 최대 약 2로 나타난 것도 Pool Size 변경만의 효과라고 단정하지 않는다.
+
+## Auto Scaling 판단
+
+현재 측정 결과만으로는 App EC2 Auto Scaling 적용 근거가 부족하다.
+
+- Active App EC2 2대의 CPU는 약 20~40% 수준으로 여유가 있었다.
+- RDS CPU와 Connection 사용량은 현재 테스트 부하 기준으로 한도에 도달하지 않았다.
+- ALB 요청 분산은 정상적으로 확인됐다.
+- 먼저 관측된 병목은 App CPU가 아니라 Hikari Connection Pool 대기였다.
+- Inactive EC2의 불필요한 Connection 제거 후에도 Active App Pool 병목은 별도로 재현됐다.
+- Pool 12 환경에서는 Pending이 거의 0에 가깝고 응답 지표 개선 경향이 두 차례 확인됐다.
+
+따라서 Auto Scaling은 적용 실패나 취소가 아니라, 현재 부하 기준으로 App CPU/처리량 포화 근거가 부족해 보류한다.
+
+## 최종 운영 방향
+
+- Active App EC2 2대 구조를 유지한다.
+- Hikari `maximumPoolSize=12`를 유지한다.
+- Inactive Blue-Green EC2는 평상시 STOP 상태로 유지한다.
+- 배포 시 Inactive EC2를 START하고, ALB 전환 및 Prometheus target UP 확인 후 기존 Active를 600초 Rollback Window 뒤 STOP한다.
+- Prometheus target 전환 또는 신규 Active 2대의 UP 검증에 실패하면 기존 Active EC2를 STOP하지 않아, 모니터링 공백 상태에서 Rollback 대상을 제거하지 않도록 한다.
+- 향후 App CPU 또는 처리량 포화가 실제 지표로 확인될 때 Auto Scaling을 재검토한다.
 
 ## 검증 한계
 
-- 현재 문서는 Before 측정값과 개선 계획을 기록한다.
-- After 배포 검증과 동일 Stress Test는 아직 수행하지 않았다.
-- Hikari `maximumPoolSize=10` 자체는 이번 PR에서 변경하지 않는다.
+- Pool 10 -> 12만으로 전체 성능 개선이 발생했다고 단정하지 않는다.
+- Hikari Active 10/10 -> 최대 약 2 변화 역시 Pool Size 변경만의 효과라고 단정하지 않는다.
+- Inactive STOP이 API 응답시간을 개선했다고 단정하지 않는다.
+- 대표 Query에서 명확한 구조적 병목을 확인하지 못했지만, 모든 고부하 Query 문제가 없다고 단정하지 않는다.
 - Auto Scaling 정책, ASG, Launch Template, Scheduled Scaling은 이번 PR 범위가 아니다.
 - 실제 Secret, DB 비밀번호, 토큰, 계정 Key는 기록하지 않는다.
 
