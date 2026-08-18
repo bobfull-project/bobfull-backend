@@ -122,10 +122,25 @@ const paymentFollowupTopology = {
     "emailExecutor-emailProcessor": "M1000 210 V235", "emailProcessor-email": "M1000 305 V330"
   },
   labels: {},
+  /* region.tint(opt-in) — 배경에 카테고리 색을 옅게 채우고 점선 테두리를 준다. 핵심 TX(sync)와
+     COMMIT 이후 독립 처리(async)가 서로 다른 실행 컨텍스트라는 게 옅은 배경만으로는 잘 안 보인다는
+     피드백을 반영해, region-bg 자체에 카테고리 fill을 넣어 "박스가 나뉘어 있다"가 한눈에 보이게 한다. */
   regions: [
-    { label: "핵심 거래 TX · Outbox PENDING 기록", x: 10, y: 20, w: 710, h: 180 },
-    { label: "COMMIT 이후 · 독립 후속 처리", x: 740, y: 20, w: 350, h: 390 }
-  ]
+    { label: "핵심 거래 TX · Outbox PENDING 기록", x: 10, y: 20, w: 710, h: 180, tint: "sync" },
+    { label: "COMMIT 이후 · 독립 후속 처리", x: 740, y: 20, w: 350, h: 390, tint: "async" }
+  ],
+  /* Ch0 Showcase 전용 카테고리 tint(opt-in) — 실제 트랜잭션 경계(핵심 TX vs COMMIT 이후 독립 처리)를
+     그대로 따라간다. user는 결제한 사용자 요청이 만드는 도메인 엔티티, sync는 같은 핵심 TX 안의
+     Outbox 기록·COMMIT, async는 AFTER_COMMIT 이후 독립 처리다. 다른 topology는 nodeCategories가
+     없으므로 이 tint의 영향을 받지 않는다. categorized:true는 renderCanvas가 이 topology를 그릴 때만
+     .categorized-topology CSS scope를 붙이게 하는 opt-in 플래그다. */
+  categorized: true,
+  nodeCategories: {
+    payment: "user", reservation: "user", participant: "user",
+    chatOutbox: "sync", emailOutbox: "sync", commit: "sync",
+    afterCommit: "async", chatProcessor: "async", chatroom: "async",
+    emailExecutor: "async", emailProcessor: "async", email: "async"
+  }
 };
 const paymentFollowupSteps = [
   step("payment-success", "PortOne", "Payment", "● PortOne 외부 결제 검증을 통과해 결제가 완료됩니다", "사용자가 결제를 마쳤고, PortOne 외부 결제 검증까지 확인됐습니다.",
@@ -222,7 +237,16 @@ const serviceUnifiedTopology = {
     { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100, emphasis: true, role: "user" },
     { label: "사장님", x: 10, y: 185, w: 1180, h: 90, emphasis: true, role: "owner" },
     { label: "자동 관리", x: 10, y: 333, w: 1180, h: 177, emphasis: true, role: "auto" }
-  ]
+  ],
+  /* Lane 배경(region.role)은 이미 있던 구분이고, 여기 nodeCategories는 각 node 테두리·active 강조에도
+     같은 Lane 색을 입혀 "이 node가 어느 주체 소관인가"를 Lane뿐 아니라 node 자체에서도 보이게 한다.
+     cat-owner/cat-auto는 category CSS에서 role-owner/role-auto를 그대로 재사용한다(새 색 추가 없음). */
+  categorized: true,
+  nodeCategories: {
+    "o-register": "owner", "o-setup": "owner", "o-reservation": "owner", "o-payout": "owner", "o-noshow": "owner",
+    "u-explore": "user", "u-select": "user", "u-pay": "user", "u-confirm": "user", "u-chat": "user", "u-meal": "user", "u-done": "user",
+    "a-paid": "auto", "a-accumulate": "auto", "a-judge": "auto", "a-close": "auto", "a-mealend": "auto", "a-chatroom": "auto", "a-email": "auto"
+  }
 };
 const serviceUnifiedSteps = [
   step("register", "사장님", "식당 등록", "1. 식당 정보를 새로 등록해요", "사장님이 BobFull에 식당 정보를 등록합니다.",
@@ -330,12 +354,21 @@ const infraTopology = {
     "gha-ecr": [795, 217], "ecr-ssm": [795, 317]
   },
   regions: [
-    { label: "Entry / Routing", x: 10, y: 5, w: 445, h: 100 },
-    { label: "Application (Blue/Green)", x: 130, y: 115, w: 540, h: 195 },
-    { label: "Shared Data / Messaging", x: 120, y: 340, w: 445, h: 90 },
-    { label: "AI", x: 565, y: 340, w: 115, h: 90 },
-    { label: "Deployment Control Plane", x: 730, y: 115, w: 120, h: 300 }
-  ]
+    { label: "Entry / Routing", x: 10, y: 5, w: 445, h: 100, tint: "user" },
+    { label: "Application (Blue/Green)", x: 130, y: 115, w: 540, h: 195, tint: "sync" },
+    { label: "Shared Data / Messaging", x: 120, y: 340, w: 445, h: 90, tint: "external" },
+    { label: "AI", x: 565, y: 340, w: 115, h: 90, tint: "external" },
+    { label: "Deployment Control Plane", x: 730, y: 115, w: 120, h: 300, tint: "async" }
+  ],
+  /* Ch0 인프라 흐름 전용 카테고리 — 진입(user)/App EC2(sync)/공유 Data·Messaging·LLM(external)/
+     배포 제어(async) 4개로, region.tint과 1:1로 맞춘다. */
+  categorized: true,
+  nodeCategories: {
+    client: "user", route53: "user", alb: "user",
+    tgBlue: "sync", tgGreen: "sync", ec2Blue1: "sync", ec2Blue2: "sync", ec2Green1: "sync", ec2Green2: "sync",
+    rds: "external", redis: "external", kafka: "external", s3: "external", llm: "external",
+    gha: "async", ecr: "async", ssm: "async"
+  }
 };
 const infraSteps = {
   api: [
@@ -474,15 +507,30 @@ const fullArchitectureTopology = {
     "ssm-green1": "M1130 405 H1080 V25 H590 V220", "ssm-green2": "M1130 405 H1080 V25 H740 V220"
   },
   regions: [
+    /* AWS VPC는 안쪽 Application/Shared Data를 감싸는 바깥 wrapper라 따로 tint를 주지 않는다 —
+       안쪽 region과 겹쳐 칠하면 오히려 더 탁해진다. 안쪽 7개 region만 카테고리별로 tint한다. */
     { label: "AWS VPC", x: 200, y: 20, w: 640, h: 560 },
-    { label: "Client / Entry", x: 20, y: 20, w: 160, h: 290 },
-    { label: "Application (Blue/Green)", x: 220, y: 60, w: 600, h: 280 },
-    { label: "Shared Data / Messaging", x: 220, y: 400, w: 600, h: 160 },
-    { label: "Image Pipeline", x: 860, y: 400, w: 200, h: 200 },
-    { label: "AI / External Services", x: 860, y: 20, w: 200, h: 310 },
-    { label: "Deployment Control Plane", x: 1100, y: 20, w: 260, h: 560 },
-    { label: "Monitoring / Observability", x: 220, y: 600, w: 900, h: 140 }
-  ]
+    { label: "Client / Entry", x: 20, y: 20, w: 160, h: 290, tint: "user" },
+    { label: "Application (Blue/Green)", x: 220, y: 60, w: 600, h: 280, tint: "sync" },
+    { label: "Shared Data / Messaging", x: 220, y: 400, w: 600, h: 160, tint: "external" },
+    { label: "Image Pipeline", x: 860, y: 400, w: 200, h: 200, tint: "external" },
+    { label: "AI / External Services", x: 860, y: 20, w: 200, h: 310, tint: "external" },
+    { label: "Deployment Control Plane", x: 1100, y: 20, w: 260, h: 560, tint: "async" },
+    { label: "Monitoring / Observability", x: 220, y: 600, w: 900, h: 140, tint: "async" }
+  ],
+  /* 요약 인프라 흐름(infraTopology)과 같은 4개 카테고리를 그대로 재사용한다 — 여기는 Node 수가
+     많아 Shared Data/Image Pipeline/AI External Services 3개 region 전부가 external, Deployment
+     Control Plane과 Monitoring 둘 다 "요청 경로와 독립적으로 도는 운영 채널"이라는 의미로 async를
+     공유한다. */
+  categorized: true,
+  nodeCategories: {
+    users: "user", route53: "user", alb: "user",
+    tgBlue: "sync", tgGreen: "sync", blue1: "sync", blue2: "sync", green1: "sync", green2: "sync",
+    rds: "external", redis: "external", kafka: "external", s3: "external", lambda: "external",
+    openai: "external", portone: "external", smtp: "external",
+    developer: "async", ghaction: "async", ecr: "async", ssm: "async", paramstore: "async",
+    prometheus: "async", grafana: "async", slack: "async", cloudwatch: "async"
+  }
 };
 /* Node 클릭 시 Detail Panel에 그대로 뿌리는 짧은 구조화 설명 — Role/Runtime/Connected To/Network/
    Evidence 5개 필드로 고정한다(길게 쓰지 않는다, Diagram 안 설명은 sublabel 1~2단어로 충분).
@@ -626,9 +674,18 @@ const aiModerationJourneyTopology = {
     /* emphasis 없이 기본(작은) 라벨로 줄였는데도 라벨 y가 node 상단(190)과 거의 붙어 있어 여전히
        ChatMessage 글자와 겹쳐 보였다 — region을 위로 늘려(y:150,h:125, 바닥은 그대로 275) 라벨이
        node 위 24px 여백에서 시작하게 했다. node/좌표는 그대로다. */
-    { label: "DB Transaction", x: 480, y: 150, w: 260, h: 125 },
+    { label: "DB Transaction", x: 480, y: 150, w: 260, h: 125, tint: "sync" },
+    /* AI 검수 파이프라인 region은 Kafka/Consumer(external)부터 Rule/LLM/Validator(async)까지 섞여
+       있어 region 전체를 하나의 카테고리로 tint하지 않는다 — 기존 emphasis(굵은 Orange 라벨)만
+       그대로 유지하고, 색 구분은 이 안의 개별 node(nodeCategories)에 맡긴다. */
     { label: "AI 검수 파이프라인", x: 655, y: 10, w: 825, h: 440, emphasis: true }
-  ]
+  ],
+  categorized: true,
+  nodeCategories: {
+    app: "user", db: "sync", outbox: "sync", processor: "sync", scheduler: "sync",
+    kafka: "external", "ai-llm": "external",
+    consumer: "async", insightConsumer: "async", "ai-rule": "async", "ai-fast": "async", "ai-context": "async", "ai-validator": "async", "ai-modDb": "async"
+  }
 };
 const aiModerationJourneySteps = [
   step("send", "Client", "ChatMessageCommandService", "● 사용자가 채팅 메시지를 전송합니다", "사용자가 채팅 메시지를 보내면 서버가 저장할 준비를 시작합니다 — 메시지 저장과 Outbox 이벤트 기록을 같은 트랜잭션으로 묶습니다.",
