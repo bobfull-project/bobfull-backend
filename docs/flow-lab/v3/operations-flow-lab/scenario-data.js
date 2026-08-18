@@ -453,7 +453,7 @@ const fullArchitectureTopology = {
     ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
     ["blue1", "Blue EC2 #1"], ["blue2", "Blue EC2 #2"], ["green1", "Green EC2 #1"], ["green2", "Green EC2 #2"],
     ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"],
-    ["s3", "S3(식당 이미지)"], ["lambda", "Image Validator Lambda"],
+    ["s3", "S3(식당 이미지)"], ["lambda", "Lambda"],
     ["openai", "OpenAI(LLM)"], ["portone", "PortOne"], ["smtp", "SMTP/Mail"],
     ["developer", "Developer / GitHub"], ["ghaction", "GitHub Actions"], ["ecr", "ECR"],
     ["ssm", "SSM Run Command"], ["paramstore", "Parameter Store"],
@@ -472,7 +472,7 @@ const fullArchitectureTopology = {
   nodeSublabels: {
     blue1: "AI Consumer 포함", blue2: "AI Consumer 포함", green1: "AI Consumer 포함", green2: "AI Consumer 포함",
     rds: "Single-AZ", redis: "Cache / Pub-Sub", kafka: "단일 KRaft Broker",
-    s3: "식당 이미지", lambda: "업로드 검증", slack: "Grafana Alert 전용", cloudwatch: "Logs(메트릭 아님)"
+    s3: "식당 이미지", slack: "Grafana Alert 전용", cloudwatch: "Logs(메트릭 아님)"
   },
   edges: {
     "users-route53": "M140 75 V140", "route53-alb": "M140 210 V240",
@@ -576,27 +576,48 @@ const fullArchitectureNodeDetails = {
    모니터링만 예외로 Client에서 시작하지 않는다(사용자 요청이 아니라 Application이 스스로
    내보내는 지표/로그이므로). */
 const archPathClientToApp = ["users", "route53", "alb", "tgGreen", "green1"];
+/* Client→App 공통 진입 4단계 자막 — 이 경로를 재사용하는 모든 sequence(식당 등록/결제 승인/Kafka
+   발행)가 그대로 공유한다. 마지막(green1) 자막은 sequence마다 실제로 무슨 요청을 처리하는지가
+   달라서 여기 포함하지 않고 각 sequence.captions에서 따로 쓴다. */
+const archEntryCaptions = [
+  "사용자가 브라우저에서 요청을 보냅니다",
+  "Route 53이 도메인 요청을 ALB로 연결합니다",
+  "ALB(HTTPS)가 요청을 현재 활성 Target Group으로 전달합니다",
+  "활성 Target Group(Green)이 요청을 뒤쪽 EC2로 라우팅합니다"
+];
 /* 전체 구성도는 App에서 여러 외부 자원으로 fan-out하는 구조다. 이를 한 줄 path로 연결하면
    RDS→Redis나 Slack→CloudWatch처럼 실제로 없는 관계를 만들어 버린다. 각 버튼은 실제 실행
-   단위별 sequence를 차례로 재생하며, 매 sequence는 독립적으로 App 또는 Kafka에서 시작한다. */
+   단위별 sequence를 차례로 재생하며, 매 sequence는 독립적으로 App 또는 Kafka에서 시작한다.
+   captions는 path와 길이가 같은 1:1 자막 배열이다 — "현재 연결: A → B"라는 기계적인 문구 대신
+   그 hop에서 실제로 무슨 일이 일어나는지 한 문장으로 설명한다(Human 이해도 리뷰 피드백 반영). */
 const archFlowGroups = [
   { id: "restaurant", label: "① 사장님 식당 등록", sequences: [
-    { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, "s3", "lambda"] }
+    { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, "s3", "lambda"],
+      captions: [...archEntryCaptions, "사장님이 식당 이미지 업로드를 요청합니다", "검증을 통과한 이미지를 S3에 저장합니다", "S3에 저장된 이미지를 Lambda가 검증합니다"] }
   ] },
   { id: "reservation", label: "② 예약·결제·채팅방·이메일", sequences: [
-    { label: "결제 승인", path: [...archPathClientToApp, "portone"] },
-    { label: "예약 상태 저장", path: ["green1", "rds"] },
-    { label: "채팅방 실시간 준비", path: ["green1", "redis"] },
-    { label: "확정 이메일 발송", path: ["green1", "smtp"] }
+    { label: "결제 승인", path: [...archPathClientToApp, "portone"],
+      captions: [...archEntryCaptions, "애플리케이션이 결제 승인 요청을 처리합니다", "PortOne(외부 PG)에 결제 승인을 요청하고 결과를 확인합니다"] },
+    { label: "예약 상태 저장", path: ["green1", "rds"],
+      captions: ["결제 승인 결과를 반영해 예약 상태를 갱신합니다", "갱신된 예약 상태를 RDS MySQL에 저장합니다"] },
+    { label: "채팅방 실시간 준비", path: ["green1", "redis"],
+      captions: ["예약이 확정되면 채팅방 참여자에게 알릴 준비를 합니다", "Redis Pub/Sub 채널에 신호를 발행해 다른 서버에 접속한 사용자에게도 전달합니다"] },
+    { label: "확정 이메일 발송", path: ["green1", "smtp"],
+      captions: ["예약 확정 이메일 발송을 요청합니다", "SMTP를 통해 사용자에게 확정 이메일을 발송합니다"] }
   ] },
   { id: "chat-ai", label: "③ 채팅 AI 분석", sequences: [
-    { label: "Kafka 발행", path: [...archPathClientToApp, "kafka"] },
-    { label: "AI Consumer가 소비 후 LLM 호출", path: ["kafka", "green1", "openai"] },
-    { label: "검수 결과 저장", path: ["green1", "rds"] }
+    { label: "Kafka 발행", path: [...archPathClientToApp, "kafka"],
+      captions: [...archEntryCaptions, "채팅 메시지를 저장한 뒤 \"AI 검수 필요\" 이벤트를 기록합니다", "기록된 이벤트를 Kafka에 발행합니다"] },
+    { label: "AI Consumer가 소비 후 LLM 호출", path: ["kafka", "green1", "openai"],
+      captions: ["Kafka에 검수 필요 이벤트가 발행되어 있습니다", "같은 EC2 안의 AI Consumer가 이 이벤트를 소비합니다", "규칙만으로 판단하기 애매한 메시지만 OpenAI에 판정을 요청합니다"] },
+    { label: "검수 결과 저장", path: ["green1", "rds"],
+      captions: ["LLM/Rule 판정 결과를 검증합니다", "검증된 검수 결과를 RDS MySQL에 저장합니다"] }
   ] },
   { id: "monitoring", label: "④ 모니터링·알람", sequences: [
-    { label: "메트릭 수집·알림", path: ["green1", "prometheus", "grafana", "slack"] },
-    { label: "애플리케이션 로그 기록", path: ["green1", "cloudwatch"] }
+    { label: "메트릭 수집·알림", path: ["green1", "prometheus", "grafana", "slack"],
+      captions: ["애플리케이션이 Actuator로 메트릭을 노출합니다", "Prometheus가 주기적으로 메트릭을 수집합니다", "Grafana가 수집된 메트릭을 대시보드로 보여주고 알림 규칙을 평가합니다", "알림 규칙에 걸리면 Grafana가 Slack으로 알림을 보냅니다"] },
+    { label: "애플리케이션 로그 기록", path: ["green1", "cloudwatch"],
+      captions: ["애플리케이션이 로그를 표준출력으로 남깁니다", "awslogs 드라이버가 로그를 CloudWatch Logs에 저장합니다(메트릭 아님)"] }
   ] }
 ];
 archFlowGroups.forEach((group) => { group.nodes = [...new Set(group.sequences.flatMap((sequence) => sequence.path))]; });
