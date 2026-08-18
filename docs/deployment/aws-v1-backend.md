@@ -180,6 +180,8 @@ main push
 → Monitoring EC2에 SSM Run Command로 Prometheus `bobfull-backend` target 갱신
 → Prometheus `up{job="bobfull-backend"}`에서 신규 Active target 2대가 모두 UP인지 확인
 → 기존 활성 EC2 2대를 rollback window 동안 running 유지
+→ STOP 직전 ALB Listener의 Blue/Green Target Group weight 재조회
+→ 신규 Active Target Group weight 100, 기존 Target Group weight 0일 때만 STOP 허용
 → rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 stop-instances 실행
 → ECR, Parameter Store, S3, CloudWatch 확인
 ```
@@ -333,11 +335,13 @@ CD 배포 성공 여부는 다음을 모두 통과해야 한다.
 - Prometheus `/-/reload` 성공
 - Prometheus API 기준 신규 Active target 2대의 `up{job="bobfull-backend"}`가 모두 `1`
 - public 검증 성공 후 rollback window 동안 기존 활성 EC2 2대 running 유지
-- rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 `stopped`
+- 기존 활성 EC2 STOP 직전 ALB Listener weight 재조회 결과 신규 Active Target Group weight가 `100`, 기존 Target Group weight가 `0`
+- STOP guard 조건을 만족하면 rollback window 종료 후 배포 시작 시점에 저장한 기존 활성 EC2 2대만 `stopped`
+- STOP guard 조건을 만족하지 않으면 기존 활성 EC2를 STOP하지 않고 workflow를 안전하게 종료
 - Parameter Store 경로 조회, S3 이미지 버킷 접근, CloudWatch Log Group 접근 확인
 - 비활성 EC2에서 실행 중인 컨테이너 image가 이번 workflow에서 push한 image URI와 일치
 
-비활성 EC2 START, EC2 running 대기, SSM Online 대기, 비활성 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다. Traffic 전환 후 Listener 확인 또는 public 검증이 실패하면 전환 직전에 저장한 Listener default action으로 rollback하며, 이 시점에는 Prometheus target을 아직 바꾸지 않았으므로 이전 Active target이 유지된다. rollback이 발생했거나 rollback을 시도한 경우 기존 활성 EC2는 절대 stop하지 않는다. public 검증 성공 후 Prometheus target 갱신, reload 또는 신규 Active target 2대 UP 확인이 실패해도 기존 활성 EC2는 stop하지 않는다. stop 대상은 ALB 전환 이후 다시 계산하지 않고 배포 시작 시점에 저장한 active Target Group의 EC2 instance id만 사용한다. EC2 배포 실패 원인은 EC2 Docker/CloudWatch Logs에서 확인한다.
+비활성 EC2 START, EC2 running 대기, SSM Online 대기, 비활성 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다. Traffic 전환 후 Listener 확인 또는 public 검증이 실패하면 전환 직전에 저장한 Listener default action으로 rollback하며, 이 시점에는 Prometheus target을 아직 바꾸지 않았으므로 이전 Active target이 유지된다. rollback이 발생했거나 rollback을 시도한 경우 기존 활성 EC2는 절대 stop하지 않는다. public 검증 성공 후 Prometheus target 갱신, reload 또는 신규 Active target 2대 UP 확인이 실패해도 기존 활성 EC2는 stop하지 않는다. rollback window 종료 후 기존 활성 EC2를 STOP하기 직전에는 ALB Listener의 Blue/Green Target Group weight를 다시 조회하고, 신규 Active Target Group weight가 `100`이고 기존 Target Group weight가 `0`인 경우에만 stop을 허용한다. 수동 rollback 등으로 Listener 상태가 바뀌어 조건을 만족하지 않으면 현재 Blue/Green weight, STOP 허용 여부, skip reason을 로그에 남기고 기존 활성 EC2 STOP을 건너뛴 채 workflow를 안전하게 종료한다. stop 대상은 ALB 전환 이후 다시 계산하지 않고 배포 시작 시점에 저장한 active Target Group의 EC2 instance id만 사용한다. EC2 배포 실패 원인은 EC2 Docker/CloudWatch Logs에서 확인한다.
 
 ## CORS와 S3 프론트엔드 Origin
 

@@ -933,6 +933,97 @@ wait_listener_weights() {
   done
 }
 
+verify_previous_active_stop_allowed() {
+  local load_output
+  local guard_output
+
+  if ! load_output="$(load_listener_actions "${current_listener_actions_file}" 2>&1)"; then
+    echo "Current Blue/Green Listener weight: unavailable"
+    echo "Previous active EC2 STOP allowed: false"
+    echo "STOP skip reason: failed to reload ALB Listener state before previous active STOP. ${load_output}"
+    return 1
+  fi
+
+  if guard_output="$(
+      python3 - "${current_listener_actions_file}" \
+          "${BACKEND_BLUE_TARGET_GROUP_ARN}" "${BACKEND_GREEN_TARGET_GROUP_ARN}" \
+          "${active_target_group_arn}" "${inactive_target_group_arn}" \
+          "${active_color}" "${inactive_color}" <<'PY'
+import json
+import sys
+
+(
+    actions_path,
+    blue_arn,
+    green_arn,
+    previous_active_arn,
+    new_active_arn,
+    previous_active_color,
+    new_active_color,
+) = sys.argv[1:8]
+
+with open(actions_path, encoding="utf-8") as source:
+    actions = json.load(source)
+
+forward_actions = [action for action in actions if action.get("Type") == "forward"]
+if len(forward_actions) != 1:
+    print("Current Blue/Green Listener weight: unavailable")
+    print("Previous active EC2 STOP allowed: false")
+    raise SystemExit("STOP skip reason: Listener must have exactly one forward default action.")
+
+target_groups = forward_actions[0].get("ForwardConfig", {}).get("TargetGroups", [])
+weights = {
+    target_group.get("TargetGroupArn"): int(target_group.get("Weight", 1))
+    for target_group in target_groups
+}
+
+missing = [
+    name
+    for name, arn in (
+        ("blue", blue_arn),
+        ("green", green_arn),
+        ("previous active", previous_active_arn),
+        ("new active", new_active_arn),
+    )
+    if arn not in weights
+]
+if missing:
+    print("Current Blue/Green Listener weight: unavailable")
+    print("Previous active EC2 STOP allowed: false")
+    raise SystemExit("STOP skip reason: Listener ForwardConfig is missing " + ", ".join(missing) + " target group.")
+
+blue_weight = weights[blue_arn]
+green_weight = weights[green_arn]
+previous_active_weight = weights[previous_active_arn]
+new_active_weight = weights[new_active_arn]
+
+print(f"Current Blue/Green Listener weight: blue={blue_weight} green={green_weight}")
+print(
+    "Previous/New active Listener weight: "
+    f"previous_{previous_active_color}={previous_active_weight} "
+    f"new_{new_active_color}={new_active_weight}"
+)
+
+if new_active_weight == 100 and previous_active_weight == 0:
+    print("Previous active EC2 STOP allowed: true")
+    raise SystemExit(0)
+
+print("Previous active EC2 STOP allowed: false")
+raise SystemExit(
+    "STOP skip reason: expected new active target group weight 100 "
+    f"and previous active target group weight 0, actual new={new_active_weight} previous={previous_active_weight}."
+)
+PY
+    2>&1)"; then
+    printf '%s\n' "${guard_output}"
+    return 0
+  fi
+
+  printf '%s\n' "${guard_output}"
+  echo "Skipping previous active EC2 STOP because Listener weight revalidation did not allow STOP."
+  return 1
+}
+
 rollback_listener() {
   echo "Rolling back ALB listener to the previous default actions." >&2
   aws elbv2 modify-listener \
@@ -1163,6 +1254,11 @@ if ! update_prometheus_targets "${new_active_metric_targets_csv}" "${new_active_
 fi
 
 keep_previous_active_environment
-stop_previous_active_instances "${active_instance_ids[@]}"
+if verify_previous_active_stop_allowed; then
+  stop_previous_active_instances "${active_instance_ids[@]}"
+else
+  echo "Previous active EC2 STOP skipped. Workflow completed safely without stopping cleanup targets."
+  exit 0
+fi
 
 echo "Blue-Green deployment completed. New active target group: ${inactive_color} ${inactive_target_group_arn}"
