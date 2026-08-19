@@ -68,6 +68,39 @@ v1에서는 한 사용자가 신청한 인원을 하나의 예약 참여 단위�
 - 부분 노쇼 처리 미지원
 - 취소 또는 노쇼 처리 시 해당 사용자의 신청 인원 전체에 동일하게 적용
 
+## Architecture
+
+백엔드 관점의 운영 구조를 요약합니다. 전체 Frontend·CI/CD·이미지 업로드·모니터링까지 포함한 상세 구성은 [Technical Docs System Architecture](https://github.com/bobfull-project/bobfull-docs/blob/main/architecture/system-architecture.md)에서 확인할 수 있습니다.
+
+```mermaid
+flowchart LR
+    U[Client] --> ALB[ALB]
+    ALB --> B[Blue EC2 x2]
+    ALB --> G[Green EC2 x2]
+
+    B --> RDS[(RDS MySQL)]
+    G --> RDS
+    B --> REDIS[(ElastiCache Valkey)]
+    G --> REDIS
+    B --> K[Kafka]
+    G --> K
+
+    B --> EXT[PortOne / OpenAI / SMTP]
+    G --> EXT
+
+    MON[Prometheus / Grafana] --> B
+    MON --> G
+
+    CI[GitHub Actions] --> ECR[ECR]
+    CI --> SSM[SSM / Parameter Store]
+    ECR --> B
+    ECR --> G
+    SSM --> B
+    SSM --> G
+```
+
+> 평시에는 Blue/Green 중 **Active 환경의 App EC2 2대만 서비스**하고, 배포 시 Inactive 환경을 기동·검증한 뒤 ALB Traffic Weight를 전환합니다.
+
 ## 대표 구현·검증 현황
 
 문서에 존재하는 설계와 실제 구현·검증·실측을 같은 의미로 사용하지 않습니다. 아래 표는 최종 발표·README에서 사용하는 대표 기술 Claim의 현재 상태를 요약하며, 상세 조건과 한계는 [V3 Final Claim Matrix](./docs/evidence/v3/FINAL_CLAIM_MATRIX.md)를 기준으로 합니다.
