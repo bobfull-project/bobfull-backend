@@ -68,6 +68,62 @@ v1에서는 한 사용자가 신청한 인원을 하나의 예약 참여 단위�
 - 부분 노쇼 처리 미지원
 - 취소 또는 노쇼 처리 시 해당 사용자의 신청 인원 전체에 동일하게 적용
 
+## Architecture
+
+백엔드 관점의 운영 구조를 요약합니다. 전체 Frontend·CI/CD·이미지 업로드·모니터링까지 포함한 상세 구성은 [Technical Docs System Architecture](https://github.com/bobfull-project/bobfull-docs/blob/main/architecture/system-architecture.md)에서 확인할 수 있습니다.
+
+```mermaid
+flowchart LR
+    U[Client] --> ALB[ALB]
+    ALB --> B[Blue EC2 x2]
+    ALB --> G[Green EC2 x2]
+
+    B --> RDS[(RDS MySQL)]
+    G --> RDS
+    B --> REDIS[(ElastiCache Valkey)]
+    G --> REDIS
+    B --> K[Kafka]
+    G --> K
+
+    B --> EXT[PortOne / OpenAI / SMTP]
+    G --> EXT
+
+    MON[Prometheus / Grafana] --> B
+    MON --> G
+
+    CI[GitHub Actions] --> ECR[ECR]
+    CI --> SSM[SSM / Parameter Store]
+    ECR --> B
+    ECR --> G
+    SSM --> B
+    SSM --> G
+```
+
+> 평시에는 Blue/Green 중 **Active 환경의 App EC2 2대만 서비스**하고, 배포 시 Inactive 환경을 기동·검증한 뒤 ALB Traffic Weight를 전환합니다.
+
+## 대표 구현·검증 현황
+
+문서에 존재하는 설계와 실제 구현·검증·실측을 같은 의미로 사용하지 않습니다. 아래 표는 최종 발표·README에서 사용하는 대표 기술 Claim의 현재 상태를 요약하며, 상세 조건과 한계는 [V3 Final Claim Matrix](./docs/evidence/v3/FINAL_CLAIM_MATRIX.md)를 기준으로 합니다.
+
+| 영역 | 현재 상태 | 검증·판단 근거 |
+|---|---|---|
+| 예약·환불·AI·Outbox 동시성 전략 | ✅ 구현·검증 | 기존 비관적 락·조건부 UPDATE·낙관락·Outbox claim을 유지하고 보호장치 제거 시 실패를 재현했습니다. [Evidence](./docs/evidence/v3/60-concurrency-strategy/README.md) |
+| Redis 식당 검색 Cache | 📊 구현·실측 | Warm hit에서 DB 조회를 우회하고 동시 요청의 Hikari Pool 점유 감소를 측정했습니다. [Evidence](./docs/evidence/v3/62-search-cache/README.md) |
+| Transactional Outbox | ✅ 구현·복구 검증 | ChatRoom·이메일 후속 작업의 실패 상태 보존, 재처리, 중복 방어를 검증했습니다. [ChatRoom](./docs/evidence/v3/176-chatroom-outbox/README.md) · [Email](./docs/evidence/v3/183-email-outbox/README.md) |
+| Kafka AI 후속 처리 | ✅ 구현·복구 검증 | Outbox → Kafka → Consumer로 AI Moderation을 분리하고 발행 실패 복구·Retry/DLT·중복 방어를 검증했습니다. [Evidence](./docs/evidence/v3/59-kafka-ai-pipeline/README.md) |
+| AI Moderation | 📊 구현·실측 | Prompt 회귀 세트를 통해 품질을 재측정하고 production 기본 모델과 적용 범위를 결정했습니다. [Evidence](./docs/evidence/v3/66-ai-moderation/README.md) |
+| App HA / Blue-Green 배포 | 📊 구현·실측 | ALB 뒤 Active App EC2 2대와 Blue-Green traffic switch·rollback을 검증하고 전환 구간의 실패·downtime을 측정했습니다. [Evidence](./docs/evidence/v3/169-app-ha/README.md) |
+| App EC2 Auto Scaling | ⚪ 실측 후 미도입 | 실제 부하에서 App CPU보다 Hikari 대기가 먼저 나타나 현재 조건에서는 ASG/Scaling Policy를 도입하지 않았습니다. [Evidence](./docs/evidence/v3/191-auto-scaling/README.md) |
+| Kafka AI Worker / MSA 분리 | ⚪ 실측 후 미도입 | AI 지연·Consumer 중단/복구를 측정한 뒤 별도 Worker로 분리하지 않고 현재 모놀리스 내부 Consumer 구조를 유지했습니다. [Evidence](./docs/evidence/v3/192-ai-worker-scaling/README.md) |
+
+상태 표기는 다음 기준으로 사용합니다.
+
+- `✅ 구현·검증`: 생산 코드가 반영됐고 기능·장애·정합성·복구 등 검증 근거가 있음
+- `📊 구현·실측`: 생산 코드가 반영됐고 정량 측정 Evidence가 있음
+- `🟡 구현·실측 미완료`: 구현은 완료됐지만 최종 실측 근거가 아직 부족함
+- `⚪ 실측 후 미도입`: 후보 기술을 직접 측정·검토한 뒤 현재 조건에서는 채택하지 않음
+- `🔵 Future`: 후속 확장으로만 정의됐으며 현재 구현 기능으로 주장하지 않음
+
 ## 주요 문서
 
 | 문서 | 역할 |
