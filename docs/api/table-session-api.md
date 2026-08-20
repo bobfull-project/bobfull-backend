@@ -1,6 +1,6 @@
 # 합석 테이블 / 회차 API
 
-> Source of Truth: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
+> 최종 기준: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
 
 이 문서는 현재 `develop`의 실제 HTTP 계약을 사람이 읽기 쉬운 상세 명세 형태로 풀어쓴 문서다.
 수정 전 전체 API 명세의 상세 설명·JSON 예시를 참고하되, 최신 코드에 존재하지 않는 API는 제외하고 현재 도메인 문서 계약을 우선 반영했다.

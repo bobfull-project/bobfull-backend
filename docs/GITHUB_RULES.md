@@ -49,7 +49,7 @@ Draft PR 생성 또는 담당 구현 AI의 새 Push
 → 없으면 담당 Human의 최종 Merge 대기
 ```
 
-- 별도 GitHub Human Approve 1개 이상이나 다른 팀원의 형식적 Approve 대기는 필수 Merge Gate가 아니다.
+- 별도 GitHub Human Approve 1개 이상이나 다른 팀원의 형식적 Approve 대기는 필수 Merge 조건이 아니다.
 - `PR #번호 검토하라`는 자동 Review의 선행 조건이 아니라, Human이 재검토·외부 Review 반영·추가 수정 검토를 명시적으로 요청할 때 쓰는 수동 진입점이다.
 - BLOCKER와 MAJOR만 Merge를 차단한다. MINOR와 SUGGESTION은 기록하되 단독으로 Merge를 막지 않는다.
 - 자동 AI Review는 정책·API 계약·DB/상태 모델·권한/보안·트랜잭션 경계의 Human 판단이나 최종 Merge를 대체하지 않는다.
@@ -145,7 +145,7 @@ asdfasdf
 
 - 리뷰 코멘트는 건설적으로 작성한다.
 - 최소 2명 이상의 Approve를 받은 후 PR 작성자가 직접 Merge한다.
-- 단, V3 Sprint Mode 대상 PR은 위 Approve 수 대신 `V3 Sprint Mode 예외와 현재 운영 정책`의 자동 독립 Review와 BLOCKER/MAJOR Gate를 적용한다.
+- 단, V3 Sprint Mode 대상 PR은 위 Approve 수 대신 `V3 Sprint Mode 예외와 현재 운영 정책`의 자동 독립 Review와 BLOCKER/MAJOR 차단 기준을 적용한다.
 - 리뷰 의견이 있으면 반영하거나 답변한 후 Merge한다.
 - 하나의 PR은 하나의 기능 또는 하나의 버그 수정에 집중한다.
 - 서로 관련 없는 여러 도메인의 변경을 하나의 PR에 포함하지 않는다.

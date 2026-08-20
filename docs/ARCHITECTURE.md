@@ -75,7 +75,7 @@ flowchart TB
 | 결제·환불 | 임시 선점, PortOne 검증, 결제·환불 상태 반영 | `Payment`, `Refund` |
 | 노쇼 | 식사 종료 후 OWNER의 참여자 단위 처리·해제 이력 | `NoShowHistory` |
 | 채팅 | 예약당 채팅방, 유효 참여자 접근, 메시지 저장·조회 | `ChatRoom`, `ChatMessage` |
-| AI Moderation Core | ChatMessage 원문 분석 orchestration, 결과 검증·저장, Provider 실패 전파 | `ChatModerationService`, `ChatModeration`, `AiModerationPort` |
+| AI Moderation Core | ChatMessage 원문 분석 흐름 제어, 결과 검증·저장, Provider 실패 전파 | `ChatModerationService`, `ChatModeration`, `AiModerationPort` |
 | Restaurant Feedback Insight | ChatMessage Event를 재사용한 식당 피드백 분석과 OWNER 익명 집계 조회 | `RestaurantFeedbackInsight`, `RestaurantFeedbackItem`, 독립 Kafka Consumer Group |
 | Transactional Outbox | 핵심 트랜잭션과 후속 처리 의도 보존, Processor/Scheduler 재시도 | `OutboxEvent`, `EmailOutboxDelivery` |
 | Redis | 인증 Refresh Token·Access Token Blacklist, 식당 검색 Cache, 채팅 Pub/Sub fan-out | Redis key prefix 분리, ERD 엔티티 아님 |
@@ -96,11 +96,11 @@ OWNER는 백엔드에서 Presigned PUT URL을 발급받아 `temp/restaurants/{ow
 
 ### 인증 세션(Access·Refresh Token)
 
-Access Token은 HS256 JWT로 서명·만료를 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. 다만 발급 시 부여하는 `jti` Claim으로 로그아웃된 토큰만 예외적으로 즉시 폐기할 수 있다(Access Token Blacklist, Issue #186). Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제하고, 그 Access Token의 `jti`를 남은 유효시간만큼 Blacklist에 등록한다. 인증 필터는 서명·만료 검증을 통과한 모든 요청마다 이 Blacklist를 조회해 로그아웃된 토큰을 차단한다. Redis 조회 실패는 재발급을 401로 거부하고(fail-closed), 로그아웃 자체(Blacklist 등록·Refresh Token 삭제)의 Redis 실패는 감추지 않고 그대로 전파한다. 반면 Blacklist *조회*는 인증 필터를 거치는 모든 요청에 실행돼 Redis 장애가 곧 전체 API 장애로 번지므로 Fail-open으로 처리한다 — Redis 예외 시 요청을 막지 않고 인증을 허용하며, 노출되는 위험은 직전 로그아웃한 토큰이 만료 시각까지 잠시 재사용되는 좁은 범위로 한정한다. 이 기능 배포 이전에 발급돼 `jti`가 없는 토큰은 Blacklist 조회를 건너뛰고 인증만 정상 처리한다. Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)는 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
+Access Token은 HS256 JWT로 서명·만료를 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. 다만 발급 시 부여하는 `jti` Claim으로 로그아웃된 토큰만 예외적으로 즉시 폐기할 수 있다(Access Token Blacklist, Issue #186). Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제하고, 그 Access Token의 `jti`를 남은 유효시간만큼 Blacklist에 등록한다. 인증 필터는 서명·만료 검증을 통과한 모든 요청마다 이 Blacklist를 조회해 로그아웃된 토큰을 차단한다. Redis 조회 실패 시 재발급은 새 토큰을 내주지 않고 401로 거부한다(fail-closed). 로그아웃 자체(Blacklist 등록·Refresh Token 삭제)의 Redis 실패는 감추지 않고 그대로 전파한다. 반면 Blacklist *조회*는 인증 필터를 거치는 모든 요청에 실행되므로, Redis 장애가 전체 API 장애로 번지지 않게 요청을 막지 않는다(Fail-open). 이때 노출되는 위험은 직전 로그아웃한 토큰이 만료 시각까지 잠시 재사용되는 범위로 제한된다. 이 기능 배포 이전에 발급돼 `jti`가 없는 토큰은 Blacklist 조회를 건너뛰고 인증만 정상 처리한다. Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)는 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
 
 ### 식당 검색 Cache
 
-`GET /api/restaurants`의 `date`/`time`이 없는 검색(기본/keyword/category/정렬/pagination)만 Redis에 캐시한다(Issue #62). 인증 세션과 같은 Redis 인스턴스를 재사용하되 key prefix(`bobfull:search:`, 인증은 `auth:`)로 책임을 분리한다. TTL은 60초이며, 식당 등록·수정·삭제 시 개별 key를 지우지 않고 버전 번호를 올려 무효화한다(해시된 key는 역추적이 불가능하므로 namespace 방식). Redis 조회·저장 실패는 예외를 전파하지 않고 DB 경로로 항상 대체한다(Fail-open) — 인증 Redis의 Refresh Token(Fail-closed)과는 독립적인 정책이다. `date`/`time`이 있는 검색과 예약 가능 회차 조회(`availableCapacity` 등)는 캐시 대상이 아니다. 상세: `docs/evidence/v3/62-search-cache/README.md`.
+`GET /api/restaurants`의 `date`/`time`이 없는 검색(기본/keyword/category/정렬/pagination)만 Redis에 캐시한다(Issue #62). 인증 세션과 같은 Redis 인스턴스를 재사용하되 key prefix(`bobfull:search:`, 인증은 `auth:`)로 책임을 분리한다. TTL은 60초이며, 식당 등록·수정·삭제 시 개별 key를 지우지 않고 버전 번호를 올려 이후 조회가 새 key를 쓰게 한다(해시된 key는 역추적이 불가능하므로 namespace 방식). Redis 조회·저장 실패는 예외를 전파하지 않고 DB 조회로 대체한다(Fail-open). 이는 Redis 조회 실패 시 재발급을 거부하는 Refresh Token 정책과 독립적이다. `date`/`time`이 있는 검색과 예약 가능 회차 조회(`availableCapacity` 등)는 캐시 대상이 아니다. 상세: `docs/evidence/v3/62-search-cache/README.md`.
 
 ## 5. 예약·좌석·결제 처리
 
@@ -176,7 +176,7 @@ SMTP 호출은 수신자마다 정확히 한 번만 시도한다. 재시도와 �
 
 최초 예약 결제가 완료되면 예약당 `ChatRoom` 하나를 생성한다. `Payment`·`Reservation`·`ReservationParticipant`를 확정하는 핵심 트랜잭션에는 ChatRoom 생성 의도만 `OutboxEvent(PENDING)`으로 함께 저장한다. 커밋 뒤 즉시 signal은 빠른 처리 경로이고, scheduler는 남은 `PENDING`과 5분 이상 고착된 `PROCESSING`을 다시 처리한다. 실제 ChatRoom 저장은 별도 짧은 트랜잭션에서 `createIfAbsent(reservationId)`로 수행하므로 실패가 결제·예약을 롤백시키지 않으며, at-least-once 재처리도 `chat_room.reservation_id` UNIQUE로 한 건을 유지한다(#176, ADR 0008).
 
-ChatMessage는 저장과 동시에 AI 분석용 `CHAT_MESSAGE_CREATED` Outbox를 같은 DB 트랜잭션에 보존한다. 커밋 후 Redis Pub/Sub(`bobfull:chat:messages`)은 실시간 전파만 한 번 수행하고, 모든 인스턴스의 subscriber가 자기 Simple Broker 세션으로 fan-out한다. Controller의 직접 STOMP 발행은 두지 않아 발행 인스턴스도 subscriber 경로로 한 번만 수신한다. Redis는 best-effort·재생 불가이므로 publish/subscribe 실패는 DB 메시지를 되돌리지 않으며 cursor 조회로 복구한다. AI용 Outbox→Kafka와 Redis 경로는 서로 독립적이다(ADR 0010, ADR 0011).
+ChatMessage는 저장과 동시에 AI 분석용 `CHAT_MESSAGE_CREATED` Outbox를 같은 DB 트랜잭션에 보존한다. 커밋 후 Redis Pub/Sub(`bobfull:chat:messages`)은 실시간 전파만 한 번 수행하고, 모든 인스턴스의 subscriber가 자기 Simple Broker 세션으로 전달한다. Controller의 직접 STOMP 발행은 두지 않아 발행 인스턴스도 subscriber 경로로 한 번만 수신한다. Redis Pub/Sub은 메시지를 저장하거나 재생하지 않으므로 publish/subscribe 실패는 DB 메시지를 되돌리지 않는다. 놓친 메시지는 cursor 조회로 DB에서 다시 가져온다. AI용 Outbox→Kafka와 Redis 경로는 서로 독립적이다(ADR 0010, ADR 0011).
 
 결제 완료 후 취소되지 않은 유효 참여자만 접근할 수 있고 OWNER와 ADMIN은 참여하지 않는다. 예약 또는 참여가 취소되면 해당 참여자의 접근은 종료되며, 예약이 `CANCELLED` 또는 `CLOSED`가 되면 새 메시지 전송을 종료한다. 기존 `ChatMessage`는 DB에 보관하고 cursor 기반으로 조회한다.
 
@@ -184,7 +184,7 @@ STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API �
 
 ### AI Moderation Core
 
-`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 Application Validation을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider Native Structured Output을 사용하며, Provider 의존성과 Prompt/Policy metadata는 Port 뒤에 격리한다. AI 실패를 SAFE로 바꾸지 않고 retry 가능한 예외로 전달한다. `ChatModeration`의 `@Version`은 저장 구간의 stale UPDATE를 거절하며, 완료 결과가 최종 실패 기록에 덮이지 않게 한다.
+`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 애플리케이션 검증을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider가 정해진 JSON 형식으로 응답하도록 Structured Output을 사용하며, Provider 의존성과 Prompt/Policy 정보는 Port 뒤에 둔다. AI 실패를 SAFE로 바꾸지 않고 재시도 가능한 예외로 전달한다. `ChatModeration`의 `@Version`은 오래된 저장 시도를 거절해, 이미 완료된 결과가 뒤늦은 최종 실패 기록에 덮이지 않게 한다.
 
 ```text
 ChatMessage
@@ -208,7 +208,7 @@ ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
 → 실패 시 최대 3회 재시도 → 소진 시 DLT(bobfull.chat.message-created.dlt.v1) + recordFinalFailure
 ```
 
-DB→Broker 구간 유실 방지는 Outbox가, Broker 이후 AI 처리 실패의 재시도/격리는 Kafka Retry/DLT가 담당한다. 상세 근거는 [ADR 0010](./adr/0010-chat-message-outbox-kafka-pipeline.md)을 따른다.
+DB 커밋 뒤 Kafka 발행 전에 프로세스가 죽어도 다시 발행할 근거는 Outbox가 남긴다. Kafka에 들어간 뒤 AI 처리에서 실패한 이벤트는 Kafka Retry/DLT가 다시 시도하거나 격리한다. 상세 근거는 [ADR 0010](./adr/0010-chat-message-outbox-kafka-pipeline.md)을 따른다.
 
 ### Restaurant Feedback Insight — Event Reuse (#277)
 
@@ -226,16 +226,16 @@ ChatMessage 저장 + OutboxEvent 저장 (같은 트랜잭션)
        └─ Group B: bobfull-restaurant-insight-{staging|production}
            → RestaurantFeedbackInsightConsumer → RestaurantFeedbackInsightService.analyze(messageId)
            → messageId로 ChatRoom→Reservation→TimeSlot→SharedTable→Restaurant 역추적
-           → 입력 PII/Candidate Gate 통과분만 Provider 호출 → items[] Structured Output
-           → normalizedAspect 개인정보·길이·문자 Validation → RestaurantFeedbackAnalysis/Item 저장
+           → 입력 PII/Provider 호출 후보 필터 통과분만 Provider 호출 → 정해진 items[] 형식으로 응답 수신
+           → normalizedAspect 개인정보·길이·문자 검증 → RestaurantFeedbackAnalysis/Item 저장
            → 실패 시 최대 2회 재시도(설정값) → 소진 시 Insight 전용 DLT + Metric(Moderation과 완전 분리)
 ```
 
-두 Group은 각각 독립된 Offset/Retry/DLT/ErrorHandler/ContainerFactory를 가지므로 한쪽의 장애·적체가 다른 쪽에 전파되지 않는다(Failure Isolation). Insight Consumer가 없던 시점에 쌓인 Event는 retention 범위 안에서 Offset이 없는 신규 Insight groupId로 Backfill할 수 있다(무한 재생은 아니다).
+두 Group은 각각 독립된 Offset/Retry/DLT/ErrorHandler/ContainerFactory를 가지므로 한쪽의 장애·적체가 다른 쪽 처리에 전파되지 않는다. Insight Consumer가 없던 시점에 쌓인 Event는 retention 범위 안에서 Offset이 없는 신규 Insight groupId가 처음부터 다시 읽어 처리할 수 있다(무한 재생은 아니다).
 
 Production 기본값은 `bobfull.kafka.restaurant-insight.consumer-enabled=false`, `bobfull.ai.restaurant-insight.enabled=false`로 Listener/Provider 자체가 비활성이다. 합성 데이터가 있는 스테이징/테스트에서만 명시적으로 활성화한다. OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 최근 7일 + `activePromptVersion` + `category+aspectType+normalizedAspect+opinionType+sentiment` 5-field 동일 그룹에서 distinct 발신자 3명 이상인 결과만 서버 템플릿 문구로 반환하며, 원문·닉네임·`memberId`·`messageId`는 노출하지 않는다.
 
-이 Consumer들은 별도 배포 Microservice가 아니라 같은 애플리케이션 안의 독립 Consumer Group이다. 이 구조는 Kafka가 Async보다 빠르다는 근거가 아니라, Event Reuse·Independent Consumer·Retention 범위 Backfill·Consumer별 실패 격리라는 별도 가치를 검증하기 위한 것이다(#274 대비 근거는 [Evidence](./evidence/v3/277-restaurant-feedback-event-reuse/README.md) 참고).
+이 Consumer들은 별도 배포 서비스가 아니라 같은 애플리케이션 안의 독립 Consumer Group이다. 이 구조는 Kafka가 Async보다 빠르다는 근거가 아니라, 같은 Event 재사용, Consumer별 독립 처리, retention 범위 안의 과거 Event 재처리, Consumer별 실패 영향 분리라는 가치를 확인하기 위한 것이다(#274 대비 근거는 [Evidence](./evidence/v3/277-restaurant-feedback-event-reuse/README.md) 참고).
 
 ## 8. 저장값·계산값과 운영 관찰
 
@@ -251,11 +251,11 @@ API 명세의 운영 요구사항은 요청 ID(MDC), 인증 사용자 ID, API �
 
 | 항목 | 최종 문서 상태 | 근거와 한계 |
 |---|---|---|
-| ALB / Active App EC2 | ALB 뒤 Active App EC2 2대 구조를 App layer HA로 검증 | #169 Evidence. RDS·Redis·Kafka 장애까지 포함한 전체 시스템 HA가 아니다. |
-| Blue-Green | 비활성 Target Group EC2 2대에 배포 후 health/public 검증, ALB weight 전환, rollback guard 유지 | `scripts/aws/deploy-backend-blue-green-v1.sh`, #169/#191 Evidence |
+| ALB / Active App EC2 | ALB 뒤 Active App EC2 2대에서 한 App 장애 시 다른 App이 요청을 처리하는 구조를 검증 | #169 Evidence. RDS·Redis·Kafka 장애까지 포함한 전체 시스템 HA가 아니다. |
+| Blue-Green | 비활성 Target Group EC2 2대에 배포 후 health/public 검증, ALB weight 전환, 실패 시 이전 Target Group으로 되돌리는 조건 유지 | `scripts/aws/deploy-backend-blue-green-v1.sh`, #169/#191 Evidence |
 | Inactive EC2 | 평상시 STOP, 배포 시 START, 검증·rollback window 뒤 guard 조건에서 이전 active STOP | #191 Evidence. API 응답 개선의 단일 원인으로 해석하지 않는다. |
 | Hikari Connection Pool | prod 기본값은 `DB_POOL_MAX_SIZE` 미지정 시 10, #191 검증 기준값은 12 | Pool 12 환경에서 개선 경향이 재현됐지만, 성능 개선의 단일 원인으로 주장하지 않는다. |
-| Redis | 인증 상태, 식당 검색 Cache, 채팅 Pub/Sub 공유 인프라 | Redis Pub/Sub은 best-effort이며 durable/replay 경로가 아니다. |
+| Redis | 인증 상태, 식당 검색 Cache, 채팅 Pub/Sub 공유 인프라 | Redis Pub/Sub은 실시간 전달만 담당하며 메시지를 저장하거나 다시 보내주지 않는다. |
 | Kafka | ChatMessage AI Moderation과 Restaurant Feedback Insight Event Reuse 후속 처리 | 단일 Kafka EC2/KRaft broker 기준 Evidence이며 Kafka HA 완료 주장이 아니다. |
 | Prometheus/Grafana | Active backend target 갱신과 UP 확인을 Blue-Green 성공 조건에 연결 | 배포 스크립트·운영 문서 기준. 현재 target live 상태는 Human Final QA 대상이다. |
 | App EC2 Auto Scaling | 측정 후 미도입 | #191에서 App CPU/처리량 포화보다 Hikari 대기가 먼저 관측돼 현재 조건에서는 ASG/Scaling Policy를 적용하지 않았다. |

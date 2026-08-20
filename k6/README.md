@@ -19,7 +19,7 @@ k6/
 │  ├─ restaurant-search.js               P0-A. GET /api/restaurants
 │  ├─ dining-session-availability.js     P0-B. GET /api/restaurants/{id}/dining-sessions
 │  ├─ reservation-prepare.js             P0-C. POST /api/reservations/prepare (CREATE)
-│  ├─ peak-restaurant-view.js            #142 시나리오 A. 같은 식당·날짜 hot-key 조회 폭주
+│  ├─ peak-restaurant-view.js            #142 시나리오 A. 같은 식당·날짜로 조회가 몰리는 상황
 │  └─ peak-reservation-create-race.js    #142 시나리오 B. 같은 회차 동시 CREATE 경쟁
 ├─ data/
 │  └─ SEED_CONTRACT.md   Fixture seed·cleanup 계약(Issue #63 "테스트 데이터 계약")
@@ -73,7 +73,7 @@ k6 run -e STAGE=stress -e BASE_URL=http://<test-ec2-public-ip>:8080 k6/scenarios
 절대 VU/RPS 숫자를 미리 성공 기준으로 고정하지 않는다.
 
 - **Smoke**: 기능 검증용. 매우 작은 VU/rate, 짧은 duration.
-- **Load**: 조회형(`restaurant-search`, `dining-session-availability`)은 `constant-arrival-rate`로 일정 rate를 유지하며 안정 구간(5분)을 확인한다. 상태 변경형(`reservation-prepare`)은 `constant-vus`로 동일하게 확인한다.
+- **Load**: 조회형(`restaurant-search`, `dining-session-availability`)은 `constant-arrival-rate`로 일정 요청 속도를 유지하며 안정 구간(5분)을 확인한다. 상태 변경형(`reservation-prepare`)은 `constant-vus`로 동일하게 확인한다.
 - **Stress**: 조회형은 `ramping-arrival-rate`, 상태 변경형은 `ramping-vus`로 3~5분 간격 계단식(staircase)으로 올리다 첫 병목 전환점(p95/p99 급증, 오류율 증가, Hikari pending, CPU 포화, lock wait, timeout/deadlock 중 하나)이 보이면 그 시점에 중단한다.
 - 각 시나리오의 기본 rate/VU 값은 시작값일 뿐이다. 실제 값은 최초 Smoke/Load 실행 결과를 보고 `-e`로 조정한 뒤 Evidence에 실제 실행 값을 기록한다(Issue #63 "성공 기준 원칙" — 실제 트래픽·SLA 없이 임의 숫자를 성공 사실로 만들지 않는다).
 

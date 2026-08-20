@@ -10,11 +10,11 @@
 
 ## 고려한 대안
 
-1. 동기 AI 호출: 채팅 전송 지연·장애 격리 실패.
+1. 동기 AI 호출: AI가 느리거나 실패하면 채팅 전송도 같이 느려지거나 실패한다.
 2. `AFTER_COMMIT` + Kafka 직접 발행: DB→Broker 사이 유실 구간이 남는다.
 3. Transactional Outbox만 사용(#176/#183 방식): AI 분석은 외부 API 실패 가능성·독립 Consumer·Retry/DLT·재처리 요구가 이메일/ChatRoom 생성보다 크다.
 4. Kafka만 사용(Outbox 없음): 대안 2와 동일한 유실 구간이 남는다.
-5. **Transactional Outbox + Kafka(채택)**: DB→Broker 구간은 Outbox가, Broker 이후 AI 처리 실패는 Kafka Retry/DLT가 각각 책임진다.
+5. **Transactional Outbox + Kafka(채택)**: DB 커밋 뒤 Kafka 발행 전 장애는 Outbox가 다시 발행할 근거를 남기고, Kafka에 들어간 뒤 AI 처리 실패는 Kafka Retry/DLT가 다시 시도하거나 격리한다.
 
 ## 결정
 
@@ -22,7 +22,7 @@
 
 ## 선택 이유 — 두 개의 서로 다른 실패 구간
 
-- **Outbox**: DB 커밋 ↔ Kafka 발행 사이의 실패를 책임진다. 발행 실패는 기존 Outbox backoff(최대 5회)로 재시도하고, 채팅 저장·실시간 전달은 전혀 영향받지 않는다.
+- **Outbox**: DB 커밋 ↔ Kafka 발행 사이의 실패를 책임진다. 발행 실패는 기존 Outbox backoff(최대 5회)로 다시 시도하고, 채팅 저장·실시간 전달은 이 실패 때문에 되돌리지 않는다.
 - **Kafka Retry/DLT**: 이미 Broker에 들어간 이벤트를 Consumer가 처리(AI 호출)하다 실패하는 구간을 책임진다. 최초 처리 포함 최대 3회(Human 결정 Q1) 재시도 후 DLT로 격리한다.
 
 이 둘을 하나로 합치지 않는 이유는, Outbox 발행 실패는 "아직 Kafka에 들어가지도 못한 실패"라 Kafka DLT로 보낼 수 없고, Consumer 실패는 "이미 들어간 이벤트의 처리 실패"라 Outbox 재시도로 되돌릴 대상이 아니기 때문이다.
@@ -33,11 +33,11 @@ AI 분석 timeout은 "이번 시도가 실패했다"는 의미가 명확해 그�
 
 ## ChatRoom/Email Outbox-only와의 차이
 
-ChatRoom 생성, 이메일 발송은 내부 DB Processor만으로 충분하다(독립 Consumer·Retry/DLT·확장 요구가 크지 않음). AI 분석은 느리고 실패 가능성이 높은 외부 API 호출이라 장애 격리·재처리·향후 독립 Worker 확장(#192) 요구가 추가되므로 Kafka까지 더한다.
+ChatRoom 생성, 이메일 발송은 내부 DB Processor만으로 충분하다(독립 Consumer·Retry/DLT·확장 요구가 크지 않음). AI 분석은 느리고 실패 가능성이 높은 외부 API 호출이라, 실패한 이벤트를 따로 재시도하고 나중에 독립 Worker로 분리할 수 있는 경계(#192)가 필요해 Kafka까지 더한다.
 
 ## 장점
 
-- DB→Broker 유실 구간 제거, 기존 Outbox 투자 재사용(신규 컬럼 없음).
+- DB 커밋 뒤 Kafka 발행 전 장애가 나도 다시 발행할 근거를 남기며, 기존 Outbox 구조를 재사용한다(신규 컬럼 없음).
 - Kafka Consumer 장애가 채팅 저장·실시간 전달에 영향을 주지 않는다.
 - `ChatModerationService`의 `isCompleted()` 단락과 `chat_moderation` UNIQUE 제약으로 at-least-once 중복 수신에도 AI 중복 호출·중복 결과가 생기지 않는다(Testcontainers 통합 테스트로 확인).
 - Spring AI 내부 `max-attempts=1`(#66)과 Kafka Retry(3회)를 분리해 재시도가 곱해지는 숨은 증폭을 막는다.
@@ -45,7 +45,7 @@ ChatRoom 생성, 이메일 발송은 내부 DB Processor만으로 충분하다(�
 ## 단점과 위험
 
 - 로컬/CI에 Kafka 운영 부담이 추가된다(docker-compose Kafka 서비스, Testcontainers).
-- at-least-once 전제이므로 완전한 exactly-once는 보장하지 않는다(설계상 인정, Consumer 멱등성으로 보완).
+- 같은 이벤트가 한 번 이상 전달될 수 있는 구조(at-least-once)이므로, 외부 시스템까지 포함해 정확히 한 번만 처리된다고 말하지 않는다. 대신 Consumer가 `messageId` 기준으로 중복 결과를 만들지 않게 보완한다.
 - Partition 수·Consumer 확장은 #192에서 별도로 측정한다(이번 범위 아님).
 
 ## 검증 방법

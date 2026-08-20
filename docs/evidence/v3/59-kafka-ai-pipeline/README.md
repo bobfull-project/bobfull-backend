@@ -12,7 +12,7 @@ ChatMessage 생성 → `OutboxEvent(CHAT_MESSAGE_CREATED)` → Kafka → `ChatMo
 
 - Primary KPI: Kafka/AI 장애 상황에서 ChatMessage·Outbox 보존 여부, 복구 후 처리 성공 여부, 중복 소비 시 결과 중복 생성 여부(N건 발생 → 몇 건 보존/복구/최종 처리됐는가)
 - Secondary KPI: Chat SEND 지연시간(Kafka 상태와 무관하게 빨라야 함)
-- Guardrail: ChatMessage+Outbox 원자 저장, DLT 발행 실패 시 최종 실패를 확정하지 않음, payload/DLT에 채팅 원문 미포함
+- 안전 확인: ChatMessage+Outbox 원자 저장, DLT 발행 실패 시 최종 실패를 확정하지 않음, payload/DLT에 채팅 원문 미포함
 
 ## 장애 주입 결과 (실제 테스트 실행, 임의 수치 없음)
 

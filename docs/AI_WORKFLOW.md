@@ -32,7 +32,7 @@ V3 마무리 기간에는 **속도를 우선하되 치명적인 결함은 담당
 V3 Sprint Mode에서는 **필수 Human Approve 인원은 0명**으로 운영한다.
 
 - 별도 리뷰어 승인을 기다리지 않는다.
-- Human Review는 가능하면 수행하지만 Merge 필수 Gate로 두지 않는다.
+- Human Review는 가능하면 수행하지만 Merge 필수 조건으로 두지 않는다.
 - Merge는 담당 Human이 필수 검증과 담당 구현 AI Review 결과를 확인한 뒤 수행한다.
 - 스퍼트 종료 후 승인 정책은 다시 평가한다.
 
@@ -64,7 +64,7 @@ Sprint Mode에서 바뀌는 것은 **Human 대기와 리뷰 깊이, Merge 차단
 
 - 구현 담당 AI: Issue 계약에 따라 Before 재현·기준값 확보, 구현·테스트·After 재검증, Evidence 기록, PR 설명 작성·독립 리뷰 패스·리뷰 반영
 - 담당자 Human: 실제 정책 판단, 강화 PR 이해도 답변, 최종 Merge 판단
-- Human 리뷰어: 선택적 추가 리뷰. V3 Sprint Mode에서는 승인 대기 Gate가 아님
+- Human 리뷰어: 선택적 추가 리뷰. V3 Sprint Mode에서는 승인 대기 조건이 아님
 
 GitHub Copilot Code Review나 별도 외부 리뷰 서비스는 필수 구성요소가 아니다.
 
@@ -92,7 +92,7 @@ Issue 분석
 → 같은 담당 구현 AI가 최신 Head 즉시 재리뷰
 → 기본 PR: Human 이해도 0개
 → 강화 PR: Human 이해도 정확히 3개
-→ Sprint Merge Gate 확인
+→ Sprint Merge 전 확인 단계 수행
 → 담당 Human Merge
 ```
 
@@ -101,7 +101,7 @@ Draft PR 생성이 담당 구현 AI의 리뷰 단계 시작점이다.
 
 ## 5. Issue 단계 — 질문 병목 최소화
 
-V3 Sprint Mode에서는 Issue 단계의 **학습용 Human 질문을 구현 착수 Gate로 사용하지 않는다.**
+V3 Sprint Mode에서는 Issue 단계의 **학습용 Human 질문을 구현 착수 조건으로 사용하지 않는다.**
 
 AI가 Issue·코드·확정 문서를 읽고 구현 가능한 수준이면 바로 계약을 정리하고 진행한다.
 
@@ -135,7 +135,7 @@ status:final-human-review
 
 - Human 결정 필요 → `status:human-answer-required`
 - 구현·수정 진행 → `status:in-progress`
-- Sprint Merge Gate 확인 단계 → `status:final-human-review`
+- Sprint Merge 전 확인 단계 → `status:final-human-review`
 
 ## 6. 구현과 Draft PR
 
@@ -190,7 +190,7 @@ V3에서 `개선했다`, `유실을 막았다`, `안정성이 높아졌다`, `�
 | 동시성 | 초과 처리, 중복 생성, 락 대기, deadlock/timeout |
 | 인프라 | 장애 전환, 실패 요청, Target 상태, 배포 중 요청 연속성 |
 | 캐시 | 응답시간·DB 부하 + stale/무효화/최종 DB 검증 |
-| Kafka/Outbox | Lag·backlog·처리량·Retry/DLT·멱등·장애 격리 |
+| Kafka/Outbox | Lag·backlog·처리량·Retry/DLT·멱등·장애가 다른 처리로 번지는지 |
 | AI | 고정 입력셋 결과 + timeout/5xx 시 기본 서비스 영향 |
 | 보안/제약 | 우회 재현 Before → 차단 After |
 | 단순 기능 | 정상·실패·경계 계약 검증. 의미 없는 성능 측정은 하지 않음 |
@@ -284,7 +284,7 @@ Human 이해도 질문: 정확히 3개
 
 수정 Push 뒤에는 같은 담당 구현 AI가 최신 Head를 다시 리뷰하고 새 댓글을 남긴다.
 
-## 11. V3 Sprint Merge Gate
+## 11. V3 Sprint Merge 전 확인
 
 다음만 모두 만족하면 Merge 가능하다.
 

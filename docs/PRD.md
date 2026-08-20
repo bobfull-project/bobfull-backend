@@ -44,7 +44,7 @@ MVP는 회원·인증, 식당·테이블·회차 관리와 사용자 조회, 예
 - 식사대금 결제, POS 연동, 실제 계좌 송금
 - 채팅의 읽음 처리, 이미지·파일, 메시지 수정·삭제, 차단. 사용자 신고는 V3 #218에서 채팅방 상대 회원 기준으로 제공하며 AI Moderation·신고 이력은 관리자 Human Review 참고 신호일 뿐 자동 제재 점수나 자동 BAN에 사용하지 않는다.
 - Redis Pub/Sub은 다중 서버 채팅 실시간 전파 경로로 사용한다. 다만 Redis Streams·Redis Pub/Sub 재전송 Outbox·durable replay는 범위 밖이며, 놓친 메시지는 DB cursor 조회로 복구한다.
-- Kafka는 채팅 실시간 전파가 아니라 ChatMessage AI Moderation과 Restaurant Feedback Insight 후속 처리에 사용한다. Kafka 기반 실시간 채팅 fan-out과 Kafka 도입 자체를 성능 개선으로 주장하는 표현은 범위 밖이다.
+- Kafka는 채팅 실시간 전파가 아니라 ChatMessage AI Moderation과 Restaurant Feedback Insight 후속 처리에 사용한다. Kafka 기반 실시간 채팅 전달과 Kafka 도입 자체를 성능 개선으로 주장하는 표현은 범위 밖이다.
 
 ## 8. 현재 제품 결정 요약
 

@@ -9,7 +9,7 @@
 
 - Primary KPI: 느린 SMTP를 모사한 `processor.signal()`이 있어도 `dispatch()`가 500ms 미만에 반환한다.
 - Secondary KPI: executor 제출 거부 시 `processor.signal()`이 호출되지 않는다.
-- Guardrail: 이메일 발송 실패에도 결제·예약·참여자 트랜잭션은 커밋되고 이메일 Outbox는 `PENDING`으로 재시도된다.
+- 안전 확인: 이메일 발송 실패에도 결제·예약·참여자 트랜잭션은 커밋되고 이메일 Outbox는 `PENDING`으로 재시도된다.
 
 ## 기준 코드
 

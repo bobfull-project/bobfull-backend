@@ -9,7 +9,7 @@
 
 - Primary KPI: 반복 검색 시 요청당 DB Query 수(0으로 감소하는지), 동시 요청 시 DB Connection Pool active/awaiting.
 - Secondary KPI: HTTP 왕복 지연시간(p50/p95/max, 단일 요청/JDK HttpClient 기준), Cache Hit/Miss 여부.
-- Guardrail: `availableCapacity`·결제·예약 정합성 핵심 값은 캐시하지 않는다. Redis 장애가 검색 API 자체를 막지 않는다(Fail-open). Restaurant 변경 후 캐시된 검색 결과가 갱신된다(무효화).
+- 안전 확인: `availableCapacity`·결제·예약 정합성 핵심 값은 캐시하지 않는다. Redis 장애 시 검색 API는 캐시 대신 DB 조회로 넘어간다(Fail-open). Restaurant 변경 후 캐시된 검색 결과가 갱신된다(무효화).
 - 이번 Issue는 #61에서 이미 낮춘 SQL 실행 계획 자체를 다시 검증하지 않는다 — DB Query/Connection Pool 수준의 반복 부하만 본다.
 
 ## 기준 코드
@@ -59,12 +59,12 @@
 
 - 기존 인증 Redis(`RefreshTokenStore`, `AccessTokenBlacklistStore`, key prefix `auth:`)와 같은 Redis 인스턴스를 재사용한다.
 - 검색 캐시는 `bobfull:search:` prefix로 완전히 분리했다. serializer는 `StringRedisTemplate` + `tools.jackson.databind.ObjectMapper`(JSON), 인증 쪽과 동일한 `StringRedisTemplate` 계열이라 별도 serializer 충돌이 없다.
-- 장애 영향 분리: `RestaurantSearchCacheStore`는 Redis 예외(연결 실패 등)를 전부 삼키고 로그만 남긴다(Fail-open, Human 결정 Q2). 인증 Redis(`AccessTokenBlacklistStore` 조회는 Fail-open, `RefreshTokenStore`는 Fail-closed로 예외 전파)와는 독립적으로 동작하며, 검색 캐시 장애가 로그인·토큰 기능에 영향을 주지 않고 반대로도 마찬가지다 — 각자 다른 클래스, 다른 key prefix, 별도 예외 처리라 서로 결합돼 있지 않다.
+- 장애 영향 분리: `RestaurantSearchCacheStore`는 Redis 예외(연결 실패 등)를 전부 삼키고 로그만 남긴다. 그래서 검색 캐시가 실패해도 요청은 DB 조회로 계속 처리된다(Fail-open, Human 결정 Q2). 인증 Redis(`AccessTokenBlacklistStore` 조회는 Fail-open, `RefreshTokenStore`는 Fail-closed로 예외 전파)와는 독립적으로 동작하며, 검색 캐시 장애가 로그인·토큰 기능에 영향을 주지 않고 반대로도 마찬가지다 — 각자 다른 클래스, 다른 key prefix, 별도 예외 처리라 서로 결합돼 있지 않다.
 
 ### 성능 관련 부수 발견과 수정
 
 - **`@Transactional` 제거**: `RestaurantService.searchRestaurants`에 `@Transactional(readOnly = true)`가 있으면, 캐시 Hit이라 DB를 전혀 조회하지 않아도 메서드에 진입하는 순간 Hikari Connection을 열고 닫는 것을 실측으로 확인했다(아래 "핵심 트러블슈팅" 참고). 제거 후 동시 Warm Hit 시나리오의 Pool 점유가 0으로 떨어졌다.
-- **`RestaurantSearchRepositoryImpl.search()`에 명시적 `@Transactional(readOnly = true)` 추가(PR #202 리뷰 반영)**: 처음에는 "Spring Data JPA 저장소 프록시가 자체적으로 트랜잭션을 연다"고 판단해 바깥 메서드의 트랜잭션만 제거했는데, 리뷰에서 이 커스텀 fragment 구현(`RestaurantSearchRepositoryImpl`)은 `SimpleJpaRepository`를 상속하지 않아 그 기본 트랜잭션 advice가 자동으로 적용되지 않는다는 지적을 받았다. 이 경로가 실제로 트랜잭션 없이 실행되면 `contentQuery`와 `countQuery`가 서로 다른 시점의 데이터를 볼 수 있다(동시 쓰기 개입 시). 이를 막기 위해 `search()` 메서드 자체에 `@Transactional(readOnly = true)`를 명시적으로 추가해, 두 쿼리가 항상 하나의 읽기 전용 트랜잭션 안에서 실행되도록 보장했다. 이 트랜잭션은 캐시 Hit 경로와는 무관하다(Hit이면 이 메서드 자체를 호출하지 않는다) — 그래서 Warm Hit의 Pool 미점유(0/0)는 그대로 유지된다.
+- **`RestaurantSearchRepositoryImpl.search()`에 명시적 `@Transactional(readOnly = true)` 추가(PR #202 리뷰 반영)**: 처음에는 "Spring Data JPA 저장소 프록시가 자체적으로 트랜잭션을 연다"고 판단해 바깥 메서드의 트랜잭션만 제거했는데, 리뷰에서 이 커스텀 fragment 구현(`RestaurantSearchRepositoryImpl`)은 `SimpleJpaRepository`를 상속하지 않아 그 기본 트랜잭션 advice가 자동으로 적용되지 않는다는 지적을 받았다. 이 경로가 실제로 트랜잭션 없이 실행되면 `contentQuery`와 `countQuery`가 서로 다른 시점의 데이터를 볼 수 있다(동시 쓰기 개입 시). 이를 막기 위해 `search()` 메서드 자체에 `@Transactional(readOnly = true)`를 명시적으로 추가해, 두 쿼리가 하나의 읽기 전용 트랜잭션 안에서 실행되도록 했다. 이 트랜잭션은 캐시 Hit 경로와는 무관하다(Hit이면 이 메서드 자체를 호출하지 않는다) — 그래서 Warm Hit의 Pool 미점유(0/0)는 그대로 유지된다.
 - **검색 캐시 버전 무효화 경쟁 제거(PR #202 리뷰 2라운드 반영)**: (1) `register/update/delete`의 `bumpVersion()` 호출을 DB 트랜잭션 커밋 후로 이동(`TransactionSynchronization.afterCommit`), (2) `find()`가 조회 시점의 버전을 함께 반환하고 `put()`이 그 버전을 그대로 재사용하도록 API를 바꿔, DB 조회와 캐시 저장 사이에 버전이 바뀌어도 옛 값이 새 버전에 다시 저장되지 않게 했다. 자세한 시나리오와 2단계 수정 과정은 아래 "핵심 트러블슈팅 2" 참고.
 
 ## After 결과 — 시나리오 B/C/D: Cold/Warm/Mixed
@@ -99,7 +99,7 @@
 
 원본: `RestaurantSearchCacheStoreIntegrationTest`(5개 테스트 모두 PASS)
 
-- 존재하지 않는 포트(연결 자체가 실패하는 상황)로 `find`/`put`/`bumpVersion`을 호출해도 예외가 전파되지 않고 각각 빈 결과/no-op으로 처리됐다(Fail-open, Human 결정 Q2). 이 컴포넌트는 실제 HTTP 경로(`RestaurantService.searchRestaurants`)가 그대로 사용하는 클래스이므로, Redis 전체 장애 시에도 검색 API는 항상 DB 경로로 정상 응답한다(추가로 HTTP 레벨 전체 장애 재현은 하지 않았다 — 아래 "검증 한계" 참고).
+- 존재하지 않는 포트(연결 자체가 실패하는 상황)로 `find`/`put`/`bumpVersion`을 호출해도 예외가 전파되지 않고 각각 빈 결과/no-op으로 처리됐다(Fail-open, Human 결정 Q2). 이 컴포넌트는 실제 HTTP 경로(`RestaurantService.searchRestaurants`)가 그대로 사용하는 클래스이므로, Redis 장애 시 검색 로직은 캐시를 비운 것처럼 보고 DB 조회로 넘어가도록 동작한다. 추가로 HTTP 레벨 전체 장애 재현은 하지 않았다(아래 "검증 한계" 참고).
 - **Redis 명령 timeout 설정(PR #202 리뷰 반영)**: 처음에는 `spring.data.redis.timeout`을 설정하지 않아 Lettuce 기본값(command timeout 60초)을 그대로 썼다 — Redis가 연결은 받아주지만 응답하지 않는 상황(네트워크 블랙홀)에서는 요청이 최대 60초까지 걸릴 수 있어, "Redis timeout 때문에 DB보다 더 오래 대기하지 않는다"(Issue #62 Q2)는 계약을 실제로는 지키지 못하는 경로였다. `application-prod.yml`/`application-local.yml.example`에 `spring.data.redis.timeout: 2000ms`(환경변수 `REDIS_TIMEOUT`로 재정의 가능)를 명시했다. `RestaurantSearchCacheStoreIntegrationTest`에 연결은 받아주되 응답은 절대 보내지 않는 소켓(블랙홀)을 만들어 재현한 결과, 설정한 2초 근처에서 실제로 실패함을 확인했다(5초 이내 완료를 assert, PASS). 이 timeout은 인증 Redis(`RefreshTokenStore`/`AccessTokenBlacklistStore`)와 같은 `RedisConnectionFactory`를 공유해 전체 Redis 사용에 적용된다.
 
 ## 핵심 트러블슈팅
@@ -169,9 +169,9 @@
 근거:
 
 - #61 이후에도 동일 검색이 동시에 반복되는 상황에서 DB Connection Pool이 실제로 포화됨을 실측으로 확인했다(No Cache: 최대 active 10/10, awaiting 20).
-- Cache 적용 후 그 포화가 완전히 사라졌고(0/0) latency도 p50 기준 약 69% 감소했다.
+- Cache 적용 후 같은 측정 조건에서는 Pool active/awaiting이 0/0으로 관측됐고 latency도 p50 기준 약 69% 감소했다.
 - Cold/Warm/Mixed/무효화/Redis 장애 시나리오 모두 실제로 재현·검증했고 정합성 회귀가 없다.
-- 좌석·결제 정합성 핵심 값은 캐시 대상에서 제외했고, Redis 장애가 검색 API 자체를 막지 않는다(Fail-open).
+- 좌석·결제 정합성 핵심 값은 캐시 대상에서 제외했고, Redis 장애 시 검색 API는 캐시 대신 DB 조회로 넘어가도록 했다(Fail-open).
 
 ## 검증 한계
 
@@ -179,7 +179,7 @@
 - 데이터 규모는 Restaurant 5,000건 1종만 측정했다(#61과 동일 규모 재사용). 더 큰 규모에서 Hit Ratio·메모리 사용량이 어떻게 달라지는지는 확인하지 않았다.
 - 실제 운영 트래픽의 "반복 조회 비율"(동일 조건이 실제로 얼마나 자주 반복되는지)은 측정하지 못했다 — 이번 측정은 인위적으로 100% 동일 조건(Warm)과 완전히 다른 조건(Mixed 1차)의 두 극단만 봤다. 실제 반복률이 낮으면 Hit Ratio도 낮아 이번에 관측한 개선이 그대로 나타나지 않을 수 있다.
 - TTL 60초는 근사값이다 — 실제 운영에서 식당 정보 변경 빈도·검색 반복 빈도를 지켜본 뒤 조정이 필요할 수 있다.
-- Stampede(동일 hot key 만료 직후 동시 요청 몰림) 시나리오는 별도로 재현하지 않았다. 이번 규모(5,000건, 30 동시 요청)에서는 Cold Miss 자체도 12ms 수준으로 빨라(#61 개선 덕분) 만료 순간 동시 Miss가 몰려도 DB가 감당 못할 정도로 커지지 않을 것으로 판단하지만, 실제로 재현해 확인하지는 않았다. single-flight·TTL jitter 등은 도입하지 않았다.
+- 동일한 캐시 key가 만료된 직후 요청이 한꺼번에 몰리는 상황(Stampede)은 별도로 재현하지 않았다. 이번 규모(5,000건, 30 동시 요청)에서는 Cold Miss 자체도 12ms 수준으로 빨라(#61 개선 덕분) 만료 순간 동시 Miss가 몰려도 DB가 감당 못할 정도로 커지지 않을 것으로 판단하지만, 실제로 재현해 확인하지는 않았다. 같은 key의 동시 Miss를 하나로 합치는 single-flight나 TTL에 난수를 섞는 TTL jitter는 도입하지 않았다.
 - Redis 장애는 컴포넌트 단위(`RestaurantSearchCacheStore`)로 확인했고(연결 실패·명령 timeout 둘 다), 실제 HTTP 요청이 Redis 전체 장애 상황에서 어느 정도의 latency로 응답하는지는 end-to-end(전체 Spring 컨텍스트+실제 HTTP)로 재현하지 않았다. 컴포넌트 단위 결과(연결 실패는 즉시, 명령 timeout은 설정한 2초 근처)가 HTTP 경로에서도 그대로 유지될 것으로 판단하지만, HTTP 레벨에서 직접 측정하지는 않았다.
 - Cache Hit/Miss를 Prometheus 메트릭으로 노출하지 않았다 — 운영 중 실제 Hit Ratio 관측은 로그 기반 분석이나 후속 Issue가 필요하다.
 - date/time이 있는 검색의 캐시는 이번 Issue에서 다루지 않았다(TimeSlot 변경 무효화 추적 필요, 별도 후속 검토).

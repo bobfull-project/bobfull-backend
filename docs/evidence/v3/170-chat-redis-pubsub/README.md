@@ -8,7 +8,7 @@
 
 - Primary KPI: 서로 다른 인스턴스 A↔B의 N건 실시간 수신·누락·중복 수.
 - Secondary KPI: DB commit→Redis publish→원격 STOMP 수신 latency, Redis publish 실패 수, subscriber 재연결 시간, messages/sec.
-- Guardrail: ChatMessage DB 저장 1건, Redis subscriber의 DB 재저장·재발행 0건, 로컬 직접 STOMP+Redis 이중 전달 0건, 기존 참여 권한 유지.
+- 안전 확인: ChatMessage DB 저장 1건, Redis subscriber의 DB 재저장·재발행 0건, 로컬 직접 STOMP+Redis 이중 전달 0건, 기존 참여 권한 유지.
 
 ## 기준 코드
 
@@ -59,7 +59,7 @@
   --rerun-tasks
 ```
 
-결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. Human이 아래 단일 실행 명령으로 전체 build exit code 0을 확인했다. 이전 `NoSuchFileException`의 원인은 확정하지 않았으며, 아래 격리 실행에서는 재현되지 않았다.
+결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local STOMP 전달, Redis 장애가 요청 처리 전체로 번지지 않는지, Controller 직접 발행 제거를 확인한다. Human이 아래 단일 실행 명령으로 전체 build exit code 0을 확인했다. 이전 `NoSuchFileException`의 원인은 확정하지 않았으며, 아래 격리 실행에서는 재현되지 않았다.
 
 ```bash
 ./gradlew --stop

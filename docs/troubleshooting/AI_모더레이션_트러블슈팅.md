@@ -12,7 +12,7 @@ sandbox의 실제 Prompt v2 기준선은 동일 40건에서 Review Actionability
 
 ### 해결
 
-`ModerationPrompt`를 SYSTEM_PROMPT, `PROMPT_VERSION`, `POLICY_VERSION`의 Single Source of Truth로 두고, Adapter·저장 metadata가 같은 상수를 참조하게 했다. user message도 sandbox와 같이 접두어 없이 ChatMessage raw content만 전달하며, Prompt 전문과 version을 고정하는 회귀 테스트를 추가했다.
+`ModerationPrompt`를 SYSTEM_PROMPT, `PROMPT_VERSION`, `POLICY_VERSION`의 단일 기준으로 두고, Adapter·저장 metadata가 같은 상수를 참조하게 했다. user message도 sandbox와 같이 접두어 없이 ChatMessage raw content만 전달하며, Prompt 전문과 version을 고정하는 회귀 테스트를 추가했다.
 
 복구 후 같은 Dataset에서 Review Actionability는 39/40(97.5%), Risk/Exact는 35/40으로 돌아왔다. 이후 Prompt v3나 고정 Dataset 맞춤 튜닝은 하지 않는다. 전체 Before/After와 한계는 [#66 Evidence](../evidence/v3/66-ai-moderation/README.md)를 기준으로 한다.
 

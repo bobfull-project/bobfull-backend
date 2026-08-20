@@ -65,7 +65,7 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 
 ## 6. 현재 범위
 
-이 디렉터리는 운영 기준과 템플릿을 제공한다. 아직 결정하지 않은 배포·AWS·구체적인 락·트랜잭션 방식에 대한 개별 ADR은 생성하지 않는다. Redis는 Refresh Token 저장소(ADR 0006), 검색 Cache(#62), 채팅 Pub/Sub(ADR 0011, #170/#169 Evidence) 범위에서 사용한다. Kafka는 ChatMessage AI Moderation Outbox 파이프라인(ADR 0010)과 같은 Event를 재사용하는 Restaurant Feedback Insight Consumer Group(#277) 범위에서 사용한다. Kafka를 채팅 실시간 fan-out이나 근거 없는 성능 개선 Claim으로 표현하지 않는다. 새 토픽·전달 보장·Retry/DLT·운영 HA 같은 구조를 추가로 결정해야 할 때만 별도 ADR을 작성한다.
+이 디렉터리는 운영 기준과 템플릿을 제공한다. 아직 결정하지 않은 배포·AWS·구체적인 락·트랜잭션 방식에 대한 개별 ADR은 생성하지 않는다. Redis는 Refresh Token 저장소(ADR 0006), 검색 Cache(#62), 채팅 Pub/Sub(ADR 0011, #170/#169 Evidence) 범위에서 사용한다. Kafka는 ChatMessage AI Moderation Outbox 파이프라인(ADR 0010)과 같은 Event를 재사용하는 Restaurant Feedback Insight Consumer Group(#277) 범위에서 사용한다. Kafka를 채팅 실시간 전달이나 근거 없는 성능 개선 주장으로 표현하지 않는다. 새 토픽·전달 방식·Retry/DLT·운영 HA 같은 구조를 추가로 결정해야 할 때만 별도 ADR을 작성한다.
 
 ## 7. 현재 ADR
 

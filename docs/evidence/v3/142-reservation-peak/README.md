@@ -37,7 +37,7 @@ DB Pool 병목 신호가 관측되지 않아 이 재검토 조건도 트리거�
 
 ## 시나리오 A — 예약 페이지 조회 폭주 (`peak-restaurant-view.js`)
 
-같은 식당·같은 날짜를 반복 조회하는 hot-key 패턴을 모사한다(#63의 `restaurant-search.js`는
+같은 식당·같은 날짜를 반복 조회해 한 key에 요청이 몰리는 패턴을 모사한다(#63의 `restaurant-search.js`는
 무작위 키워드로 여러 식당에 걸친 균등 부하를 모사하는 것과 대조적).
 
 | 실행 | 결과 | Raw |
@@ -95,7 +95,7 @@ Stress 시작 시각(`05:49:44Z`) 기준 경과 시간별 관측값(`query_range
 **거의 동시에 포화**되고, 이후 160·320 iter/s 단계까지도 그 상태가 그대로 유지된다(더 나빠지지도
 않음 — 이미 최대치라 더 나빠질 여지가 없다). Tomcat 스레드도 232에서 고정돼 요청이 스레드
 단계에서부터 쌓이고 있음을 보여준다. 즉 **"어느 시점 이후 갑자기 무너진 병목"이 아니라
-"t3.small(2 vCPU) 인스턴스 자체의 CPU·커넥션 풀 용량이 hot-key 조회 40 iter/s(약 80 req/s)
+"t3.small(2 vCPU) 인스턴스 자체의 CPU·커넥션 풀 용량이 같은 식당·날짜 반복 조회 40 iter/s(약 80 req/s)
 수준에서 이미 한계"**라는 게 이번 기록의 근거 있는 결론이다. `hikaricp_connections_pending`이 약 190건으로
 안정된 것도 "더 큰 장애로 확산"되지 않고 일정한 대기 상태로 버티는 것으로 해석된다(요청이
 실패하지 않고 느려지기만 하는 이유).
@@ -122,7 +122,7 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 
 ### 결과 — 로컬 (Issue #142 "초기 후보 단계": 2 → 5 → 10 → 20 → 50)
 
-| 동시 사용자 수 | 성공(200) | 충돌(409 ACTIVE_RESERVATION_ALREADY_EXISTS) | 예상 밖 응답 | threshold Gate | teardown 독립 검증 | Raw |
+| 동시 사용자 수 | 성공(200) | 충돌(409 ACTIVE_RESERVATION_ALREADY_EXISTS) | 예상 밖 응답 | 실패 기준 | teardown 독립 검증 | Raw |
 |---:|---:|---:|---:|---|---|---|
 | 2 | 1 | 1 | 0 | PASS | PASS(배타 선점 유지 확인) | `raw/B-create-race-2users.*` |
 | 5 | 1 | 4 | 0 | PASS | PASS | `raw/B-create-race-5users.*` |
@@ -139,7 +139,7 @@ CREATE 경쟁은 결제 완료 없이도 완전히 검증 가능하고, "인기 
 `peak-reservation-create-race.js`에 CREATE 요청 하나만 기록하는 별도 Trend를 추가해
 재실행했다(`-AWS-v3.*`).
 
-| 동시 사용자 수 | 성공(200) | 충돌(409) | 예상 밖 응답 | p95(`peak_create_race_duration`, 경쟁 요청만) | p99 | threshold Gate | teardown 독립 검증 | Raw |
+| 동시 사용자 수 | 성공(200) | 충돌(409) | 예상 밖 응답 | p95(`peak_create_race_duration`, 경쟁 요청만) | p99 | 실패 기준 | teardown 독립 검증 | Raw |
 |---:|---:|---:|---:|---:|---:|---|---|---|
 | 2 | 1 | 1 | 0 | 24.74ms | 24.98ms | PASS | PASS | `raw/B-create-race-2users-AWS-v3.*` |
 | 5 | 1 | 4 | 0 | 37.81ms | 38.30ms | PASS | PASS | `raw/B-create-race-5users-AWS-v3.*` |
@@ -247,26 +247,26 @@ CREATE는 `TimeSlotRepository.findWithLockByIdAndDeletedAtIsNull`로 비관적 �
 처음 구현은 `peak_create_race_success`/`conflict`/`unexpected` Counter만 기록하고
 `options.thresholds`로 묶지 않았다. 그래서 예를 들어 경쟁 버그로 2명이 200을 받아도 Counter
 값만 달라질 뿐 k6는 종료 코드 0으로 끝날 수 있었다 — "정확히 1명만 성공"이라는 이 시나리오의
-핵심 불변식을 자동으로 검증하는 Gate가 없었다. `teardown()`의 배타 선점 재검증도 `console.error`
+핵심 불변식을 자동으로 실패 처리하는 기준이 없었다. `teardown()`의 배타 선점 재검증도 `console.error`
 로그만 남겨 사람이 로그를 읽어야만 위반을 발견할 수 있었다.
 
 `options.thresholds`에 `peak_create_race_success: ['count==1']`,
 `peak_create_race_conflict: ['count==CONCURRENT_USERS-1']`, `peak_create_race_unexpected: ['count==0']`,
-`checks: ['rate==1.0']`를 추가하고, `teardown()`도 `check()`로 바꿔 같은 Gate에 걸리게 했다.
-실제로 Gate가 동작하는지 별도 실험(threshold를 `count==0`으로 일부러 깨뜨림)으로 확인했다 —
+`checks: ['rate==1.0']`를 추가하고, `teardown()`도 `check()`로 바꿔 같은 실패 기준에 걸리게 했다.
+실제로 실패 기준이 동작하는지 별도 실험(threshold를 `count==0`으로 일부러 깨뜨림)으로 확인했다 —
 정상 조건에서는 종료 코드 0, 불변식을 강제로 깨면 종료 코드 99(k6 표준 threshold 실패 코드)로
 끝난다. 2/5/10/20/50 전 단계를 재실행해 모든 threshold가 PASS임을 다시 확인했다(위 결과 표).
 
-### 트러블슈팅 — Gate가 실제로 잡아낸 네트워크 타임아웃 (지표 분리 재실행 중 발생)
+### 트러블슈팅 — 실패 기준이 실제로 잡아낸 네트워크 타임아웃 (지표 분리 재실행 중 발생)
 
-지표 분리 재실행(위 "결과 — AWS" 참고) 중 `CONCURRENT_USERS=10` 1차 시도에서 threshold Gate가
+지표 분리 재실행(위 "결과 — AWS" 참고) 중 `CONCURRENT_USERS=10` 1차 시도에서 실패 기준이
 실제로 실패했다(`checks 90.90%`, `peak_create_race_unexpected=1`, 종료 코드 99). 로그에서 원인을
 확인하니 서버 응답이 아니라 `Post "http://.../api/reservations/prepare": dial: i/o timeout` —
 10개 동시 연결 중 1개가 클라이언트→서버 연결 수립 단계에서 타임아웃난 것으로, 애플리케이션
 로직이나 락 처리와는 무관한 **일시적 네트워크 오류**다(같은 요청이 서버에 도달해 처리됐다는
 증거가 없다 — dial 단계 실패이므로 서버 로그 쪽에는 아예 안 남을 수 있다). Counter만 있었다면
-이 1건이 조용히 `peak_create_race_unexpected`에 1로 기록되고 넘어갔을 것을 Gate가 종료 코드
-99로 확실히 실패시켰다 — 이 트러블슈팅 항목 자체가 threshold Gate(바로 위 항목)가 설계대로
+이 1건이 조용히 `peak_create_race_unexpected`에 1로 기록되고 넘어갔을 것을 실패 기준이 종료 코드
+99로 확실히 실패시켰다 — 이 트러블슈팅 항목 자체가 실패 기준(바로 위 항목)이 설계대로
 동작한다는 방증이다. 즉시 재시도했을 때는 10명 전원 정상(성공 1·충돌 9·예상 밖 0)으로 끝났고, 위 결과 표의 10명
 행은 이 재시도 결과다. 1차(실패) 시도의 콘솔 로그는 `raw/B-create-race-10users-AWS-v3.log`에
 그대로 남겼고, 재시도(성공) 로그는 `raw/B-create-race-10users-AWS-v3-retry.log`다 — summary

@@ -17,7 +17,7 @@
 
 - Primary KPI: Consumer `1 → 2 → 3` 단계별 consume rate / peak Lag / Lag 회복 시간, Web/AI Worker 분리 전후 HTTP p95/Consumer Lag 비교
 - Secondary KPI: AI 처리 p95/p99, Provider 429/5xx/timeout, Retry/DLT 건수, token/cost, Worker/Web CPU·Heap·Thread, DB Pool
-- Guardrail: Retry/DLT·messageId 멱등 계약 유지(중복 저장 0), Kafka/AI 장애 시 Web 채팅·Outbox 보존 계약 유지, Outbox Kafka Publisher는 항상 Web/Core에 유지
+- 안전 확인: Retry/DLT·messageId 멱등 계약 유지(중복 저장 0), Kafka/AI 장애 시 Web 채팅·Outbox 보존 계약 유지, Outbox Kafka Publisher는 항상 Web/Core에 유지
 
 ## Human 결정 반영 (2026-08-12)
 
@@ -180,7 +180,7 @@ Async Baseline에는 이 중 어느 것도 기본으로 없다(재시도 없음,
 
 판정: **1→2에서는 거의 개선이 없었고 2→3에서만 뚜렷하게 개선됐다.** 3개 채팅방 key가 Partition 3개에 반드시 고르게 분산되는 게 아니라서(해시 충돌 가능), Consumer 2개 구간에서는 한쪽 Consumer가 여전히 대부분의 메시지를 떠안은 것으로 보인다. **"Consumer 수를 늘리면 늘리는 만큼 처리량이 오른다"는 가정은 이번 실측에서 기각됐다** — Partition key(`chatRoomId`) 분산도가 함께 맞아야 실제 병렬 처리 효과가 난다. Provider 429/timeout·token/cost는 Fake AI라 측정 대상이 아님(실제 Provider 대상 재실측 필요).
 
-## 실험 E — AI 장애 격리 (실험 A·C 결과로 합성 판단, 별도 신규 테스트 없음)
+## 실험 E — AI 장애 영향 분리 (실험 A·C 결과로 합성 판단, 별도 신규 테스트 없음)
 
 전용 테스트를 새로 만들지 않고, 실험 A(Web은 AI 지연과 무관하게 항상 빠름)와 실험 C(강제 실패 5건이 정상 15건에 영향 없음, 재시도·DLT로 격리)를 합치면 "AI 장애가 Web/API 정상 동작을 막지 않는다"는 이슈의 요구 조건을 실측으로 충족한다. 다만 실제 OpenAI timeout/5xx/429 응답 코드별 세분화된 거동(예: 429만 별도로 급증하는 상황)은 Fake Adapter로 재현하지 않았으므로 검증 예정으로 남긴다.
 
@@ -213,7 +213,7 @@ Consumer 1→2→3 확장 시 drain time 15.4초→15.5초→10.4초 — 2에서
 근거(2026-08-13 리뷰 반영 — 실측 범위에 정확히 맞춘 표현): Human 결정 Q1의 분리 착수 기준 중 "AI 처리 p99 3초 반복 초과"는 이번 실측 범위에서 관찰되지 않았다. "Lag 미회복 5분+"와 "HTTP p95 20%+ 동반 악화"는 각각 아래처럼 실측 범위를 구분해서 읽어야 한다.
 
 - **이번 실험에서는 Chat SEND application service p95 악화가 관찰되지 않았다**(AI 지연 100ms→3s에도 12~18ms 유지). 실제 HTTP/STOMP p95는 실험 대상이 아니었으므로 #64 운영 지표에서 재검토한다.
-- **이번 실험에서는 미처리 backlog·drain time·recovery time으로 적체·복구 능력을 확인했다**(15건 적체 → 유실 0, 7.8초 복구). Kafka offset 기준 Consumer Lag 자체는 직접 측정하지 않았으므로, 실제 Lag 추이는 #64 운영 지표에서 재검토한다.
+- **이번 실험에서는 미처리 대기 건수·전체 처리 시간·복구 시간으로 적체·복구 능력을 확인했다**(15건 적체 → 유실 0, 7.8초 복구). Kafka offset 기준 Consumer Lag 자체는 직접 측정하지 않았으므로, 실제 Lag 추이는 #64 운영 지표에서 재검토한다.
 
 Kafka를 채택한 근거는 단건 latency 개선이 아니라, AI처럼 느리고 실패할 수 있는 후속 작업을 Web 요청 경로와 분리하고 미처리 작업을 broker에 보존하면서 적체·재시도·실패 격리·복구·Consumer 확장이 가능한 처리 경계를 Transactional Outbox와 함께 만들었다는 점이다(실험 0 결론 참고). Retry 증폭 우려도 현재 설정(3×1=3회)에서 해당하지 않음을 재확인했다. B안(Web/AI Worker 실행 역할 분리)과 C안(MSA)은 필요성이 확인되지 않아 이번 V3 범위에서 도입하지 않는다.
 

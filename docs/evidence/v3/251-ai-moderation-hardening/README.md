@@ -1,6 +1,6 @@
 # Issue #251 STEP 0 — AI Moderation Before 공격 실험 Evidence
 
-## Final Summary — Source of Truth
+## Final Summary — 최종 기준
 
 | Decision | Result |
 |---|---|
@@ -177,7 +177,7 @@ Context 및 기존 #213/#218 Evidence도 변경하지 않았다.
 5. 따라서 #251의 가장 강한 구현 근거는 동일 sender·동일 room의 Recent Context 도입이다.
 6. Normalization, Prompt Hardening, Rule은 이후 Frozen Dataset 측정 결과를 본 뒤에만 채택 여부를 결정한다.
 
-## 다음 Human Gate
+## 다음 Human 확인 단계
 
 HUMAN CHECKPOINT 0은 완료됐다. STEP 1은 Human의 명시적 다음 진행 승인 전까지 시작하지 않는다.
 

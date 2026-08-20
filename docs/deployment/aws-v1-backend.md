@@ -11,7 +11,7 @@
 - 로컬 Docker app 검증용 Compose 설정
 - ECR push, EC2 bootstrap, EC2 deploy, 배포 verify 스크립트
 - GitHub Actions 기반 백엔드 CI workflow와 자동 배포 workflow 파일
-- ALB Target Group weight 기반 Blue-Green 배포 orchestration
+- ALB Target Group weight 기반 Blue-Green 배포 실행 순서 제어
 - 평상시 비활성 Blue/Green App EC2 STOP, 배포 시작 시 START, 배포 검증 후 기존 Active EC2 STOP 기준
 - Blue-Green ALB 전환 후 Monitoring EC2의 Prometheus backend scrape target 자동 갱신과 UP 확인 기준
 - 운영 환경변수 이름과 Parameter Store 이름 기준
@@ -119,7 +119,7 @@
 
 Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backend-v1.sh`가 컨테이너 실행 시 `DB_URL`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`, `S3_IMAGE_BUCKET` 같은 대문자 환경변수 이름으로 변환한다. Restaurant Feedback Insight의 Parameter Store 자동 주입은 현재 `restaurant-insight-ai-enabled`와 `kafka-restaurant-insight-consumer-enabled` 두 개만 지원한다.
 
-`application-prod.yml`에는 `KAFKA_RESTAURANT_INSIGHT_GROUP_ID`, `KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC` placeholder가 있어 직접 컨테이너 환경변수로 주입하면 override할 수 있지만, 현재 배포 스크립트의 `/bobfull/prod/...` Parameter Store 자동 주입 항목은 아니다. Restaurant Insight retry는 현재 `RestaurantInsightConsumerConfig`의 application property 기본값(max attempts `3`, retry backoff `1000ms`)을 사용하며, 별도 prod Parameter Store mapping은 제공하지 않는다.
+`application-prod.yml`에는 `KAFKA_RESTAURANT_INSIGHT_GROUP_ID`, `KAFKA_RESTAURANT_INSIGHT_DLT_TOPIC` 자리표시자가 있어 직접 컨테이너 환경변수로 주입하면 값을 바꿀 수 있다. 다만 현재 배포 스크립트의 `/bobfull/prod/...` Parameter Store 자동 주입 항목은 아니다. Restaurant Insight retry는 현재 `RestaurantInsightConsumerConfig`의 application property 기본값(max attempts `3`, retry backoff `1000ms`)을 사용하며, 별도 prod Parameter Store 매핑은 제공하지 않는다.
 
 비밀번호, JWT Secret, PortOne Secret, SMTP 비밀번호처럼 노출되면 안 되는 값은 `SecureString`으로 저장한다.
 
@@ -129,7 +129,7 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 
 - 신규 GitHub Variables·Secrets, 신규 SSM Parameter Store 값은 없다. 채팅은 STOMP CONNECT 인증에 기존 `JWT_SECRET`을, STOMP Endpoint `setAllowedOrigins`에 기존 `CORS_ALLOWED_ORIGINS`를 그대로 재사용한다. `CORS_ALLOWED_ORIGINS`를 변경하면 REST CORS와 WebSocket 허용 Origin에 동시에 반영되므로, Origin 값을 다룰 때는 두 용도를 함께 고려한다.
 - `build.gradle`에 `spring-boot-starter-websocket` 의존성이 추가되었을 뿐, 별도 배포 스크립트·포트 변경은 없다. `/ws`는 기존 애플리케이션 포트(`8080`)를 공유한다.
-- WebSocket 세션 자체는 여전히 각 App 인스턴스의 local SimpleBroker에 붙어 있지만, ChatMessage 커밋 뒤 Redis Pub/Sub(`bobfull:chat:messages`)이 모든 인스턴스에 payload를 전달한다. Redis Pub/Sub은 best-effort 실시간 fan-out 전용이며, durable/replay는 제공하지 않는다. 단절 중 놓친 메시지는 DB cursor 조회로 복구한다.
+- WebSocket 세션 자체는 여전히 각 App 인스턴스의 local SimpleBroker에 붙어 있지만, ChatMessage 커밋 뒤 Redis Pub/Sub(`bobfull:chat:messages`)이 모든 인스턴스에 payload를 전달한다. Redis Pub/Sub은 실시간 전달만 담당하며 메시지를 저장하거나 다시 보내주지 않는다. 단절 중 놓친 메시지는 DB cursor 조회로 복구한다.
 - Kafka는 채팅 실시간 전파가 아니라 AI Moderation과 Restaurant Feedback Insight 후속 처리에 사용한다. Redis Pub/Sub과 Kafka의 책임을 섞지 않는다.
 - 배포 후 검증(`verify-backend-v1.sh`)은 REST `GET /api/restaurants`만 확인하며 WebSocket 연결 자체는 검증하지 않는다. 컨테이너 기동 여부 확인이 목적이므로 현재 범위에서는 별도 확인을 추가하지 않는다.
 
@@ -262,7 +262,7 @@ BACKEND_MONITORING_ENV_FILE=/opt/bobfull-monitoring/.env
 BACKEND_MONITORING_COMPOSE_DIR=/opt/bobfull-monitoring/repo/monitoring
 ```
 
-현재 구현은 `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` 동안 GitHub Actions job 안에서 bounded `sleep`으로 대기한다. 구조가 단순하고 배포 직후 rollback window가 한 workflow 로그에 남는 장점이 있다. 다만 workflow 점유 시간이 운영상 부담되면 후속으로 EventBridge Scheduler 또는 별도 수동 cleanup workflow를 검토한다.
+현재 구현은 `BACKEND_PREVIOUS_ENV_KEEP_SECONDS` 동안 GitHub Actions job 안에서 정해진 시간만큼 `sleep`으로 대기한다. 구조가 단순하고 배포 직후 롤백 가능한 시간이 한 workflow 로그에 남는 장점이 있다. 다만 workflow 점유 시간이 운영상 부담되면 후속으로 EventBridge Scheduler 또는 별도 수동 cleanup workflow를 검토한다.
 
 필수 GitHub Secrets:
 

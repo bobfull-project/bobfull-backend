@@ -2,11 +2,11 @@
 
 ## 결론
 
-Issue #169의 보장 범위는 **HTTP API App 계층 HA**다.
+Issue #169의 검증 범위는 **HTTP API App 계층에서 한 App 장애 시 다른 App이 요청을 처리하는 구조**다.
 
 이번 검증으로 ALB 뒤 App EC2 2대 구성, Target Group health 기반 장애 우회, Blue/Green Target Group weight 전환, GitHub Actions 기반 Blue-Green 배포 자동화, public endpoint 기준 배포/rollback 중 요청 연속성을 실제 AWS 환경에서 확인했다.
 
-다만 전체 시스템 HA로 표현하지 않는다. 현재 RDS는 Single-AZ이고, Kafka는 단일 EC2의 단일 KRaft broker 구성이다. 따라서 DB 계층과 메시징 계층 장애까지 포함한 전체 서비스 고가용성은 이번 범위가 아니다.
+다만 전체 시스템 고가용성으로 표현하지 않는다. 현재 RDS는 Single-AZ이고, Kafka는 단일 EC2의 단일 KRaft broker 구성이다. 따라서 DB 계층과 메시징 계층 장애까지 포함한 전체 서비스 고가용성은 이번 범위가 아니다.
 
 ## 1. 실제 AWS 구성
 
@@ -43,7 +43,7 @@ Issue #169의 보장 범위는 **HTTP API App 계층 HA**다.
 
 | 파일 | 역할 |
 |---|---|
-| `.github/workflows/deploy-backend-v1.yml` | 단일 EC2 변수 제거, Blue-Green orchestrator 호출, 신규 ALB/TG/public 검증 변수 검증 |
+| `.github/workflows/deploy-backend-v1.yml` | 단일 EC2 변수 제거, Blue-Green 배포 스크립트 호출, 신규 ALB/TG/public 검증 변수 검증 |
 | `scripts/aws/deploy-backend-blue-green-v1.sh` | Listener weight 판정, inactive TG EC2 조회, SSM 배포, TG health 대기, traffic switch, public 검증, rollback |
 | `scripts/aws/run-ssm-backend-deploy-v1.sh` | 단일 instance ID 대신 다중 EC2 instance ID에 같은 SSM command 실행, 모든 결과 확인 |
 | `docs/deployment/aws-v1-backend.md` | Blue-Green 배포 기준, GitHub Variables, IAM 권한, 성공 조건 문서화 |
@@ -298,7 +298,7 @@ Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connectio
 | Reservation Closing | 있음 | 후보 조건 `ReservationStatus.CONFIRMED`, `findWithLockById()` `PESSIMISTIC_WRITE`, `Reservation.close()` 상태 가드 | 이번 #169 AWS 수동 검증 대상은 아님. 코드 근거로 중복 close 방어 확인 | 낮음 |
 | Chat Moderation Kafka Retry | 있음 | 같은 consumer group의 partition 단위 분산, `chat_moderation.chat_message_id` unique, `@Version` optimistic lock, 완료 상태 skip, retry/DLT | 이번 #169 AWS 수동 검증 대상은 아님. Kafka 단일 broker 장애 HA는 이번 범위가 아님 | 중간 |
 
-위 결과는 대표 시나리오의 실제 확인과 코드 근거를 함께 기록한 것이다. 모든 scheduler/external side effect의 완전한 exactly-once 보장을 주장하지 않는다.
+위 결과는 대표 시나리오의 실제 확인과 코드 근거를 함께 기록한 것이다. 모든 scheduler와 외부 I/O가 언제나 정확히 한 번만 실행된다고 말하지 않는다.
 
 ## 7. WSS / STOMP 검증
 
@@ -361,7 +361,7 @@ Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connectio
 - DB Schema Blue-Green 호환성 완료
 - Redis/Valkey 장애 HA
 - Kafka broker 장애 HA
-- 모든 scheduler/external side effect의 완전한 exactly-once 보장
+- 모든 scheduler와 외부 I/O가 정확히 한 번만 실행된다는 주장
 
 후속 범위:
 
@@ -375,9 +375,9 @@ Auto Scaling으로 인스턴스 수를 늘리는 경우에는 RDS `max_connectio
 - [배포 #13 - 단일 EC2 한계 분석과 다중 EC2 전환 결정](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-13-%EB%8B%A8%EC%9D%BC-EC2-%ED%95%9C%EA%B3%84-%EB%B6%84%EC%84%9D%EA%B3%BC-%EB%8B%A4%EC%A4%91-EC2-%EC%A0%84%ED%99%98-%EA%B2%B0%EC%A0%95)
 - [배포 #14 - ElastiCache Valkey 기반 공용 Redis 구성](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-14-ElastiCache-Valkey-%EA%B8%B0%EB%B0%98-%EA%B3%B5%EC%9A%A9-Redis-%EA%B5%AC%EC%84%B1)
 - [배포 #15 - Kafka 전용 EC2 구성 및 애플리케이션 연결](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-15-Kafka-%EC%A0%84%EC%9A%A9-EC2-%EA%B5%AC%EC%84%B1-%EB%B0%8F-%EC%95%A0%ED%94%8C%EB%A6%AC%EC%BC%80%EC%9D%B4%EC%85%98-%EC%97%B0%EA%B2%B0)
-- [배포 #16 - ALB 기반 다중 EC2 고가용성 구성](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-16-ALB-%EA%B8%B0%EB%B0%98-%EB%8B%A4%EC%A4%91-EC2-%EA%B3%A0%EA%B0%80%EC%9A%A9%EC%84%B1-%EA%B5%AC%EC%84%B1)
-- [배포 #17 - ALB 기반 Blue-Green 무중단 배포 환경 구성](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-17-ALB-%EA%B8%B0%EB%B0%98-Blue-Green-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC-%ED%99%98%EA%B2%BD-%EA%B5%AC%EC%84%B1)
-- [배포 #18 - Blue-Green 무중단 배포 시간 실측](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%EB%B0%B0%ED%8F%AC-18-Blue-Green-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC-%EC%8B%9C%EA%B0%84-%EC%8B%A4%EC%B8%A1)
+- [배포 #16 - ALB 기반 다중 EC2 구성 기록](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-16-ALB-%EA%B8%B0%EB%B0%98-%EB%8B%A4%EC%A4%91-EC2-%EA%B3%A0%EA%B0%80%EC%9A%A9%EC%84%B1-%EA%B5%AC%EC%84%B1)
+- [배포 #17 - ALB 기반 Blue-Green 배포 환경 구성 기록](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EB%B0%B0%ED%8F%AC-17-ALB-%EA%B8%B0%EB%B0%98-Blue-Green-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC-%ED%99%98%EA%B2%BD-%EA%B5%AC%EC%84%B1)
+- [배포 #18 - Blue-Green 배포 중 요청 연속성 실측](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%EB%B0%B0%ED%8F%AC-18-Blue-Green-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC-%EC%8B%9C%EA%B0%84-%EC%8B%A4%EC%B8%A1)
 - [트러블슈팅 - 다중 EC2 전환 후 DB Connection Budget 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-%EB%8B%A4%EC%A4%91-EC2-%EC%A0%84%ED%99%98-%ED%9B%84-DB-Connection-Budget-%EA%B2%80%EC%A6%9D)
 - [트러블슈팅 - Blue-Green 배포 실패 시 자동 Rollback 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-Blue-Green-%EB%B0%B0%ED%8F%AC-%EC%8B%A4%ED%8C%A8-%EC%8B%9C-%EC%9E%90%EB%8F%99-Rollback-%EA%B2%80%EC%A6%9D)
 - [트러블슈팅 - 다중 EC2 환경 Scheduler / Outbox 중복 실행 및 Redis Pub/Sub cross-instance 검증](https://velog.io/@gpekd5/%EC%B5%9C%EC%A2%85-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%ED%8A%B8%EB%9F%AC%EB%B8%94%EC%8A%88%ED%8C%85-%EB%8B%A4%EC%A4%91-EC2-%ED%99%98%EA%B2%BD%EC%97%90%EC%84%9C-Scheduler-Outbox-%EC%A4%91%EB%B3%B5-%EC%8B%A4%ED%96%89-%EA%B2%80%EC%A6%9D)

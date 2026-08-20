@@ -22,7 +22,7 @@ OpenAI를 단일 Provider로, production 기본 모델은 `gpt-4o-mini`로 유�
 
 ## 선택 이유
 
-동일 Prompt v2와 Human-labeled 40건 Dataset에서 gpt-4o-mini와 gpt-5.4-nano는 Result/Category 100%, Review Actionability 95% 이상이라는 Primary Gate를 모두 통과했다. gpt-5.4-nano의 Actionability는 1건 높았으나 Risk/Exact는 1건 낮았고, 단일 외부 LLM run의 차이를 결정적 품질 우위로 해석하지 않았다.
+동일 Prompt v2와 Human-labeled 40건 Dataset에서 gpt-4o-mini와 gpt-5.4-nano는 Result/Category 100%, Review Actionability 95% 이상이라는 핵심 통과 기준을 모두 만족했다. gpt-5.4-nano의 Actionability는 1건 높았으나 Risk/Exact는 1건 낮았고, 단일 외부 LLM 실행의 차이를 결정적 품질 우위로 해석하지 않았다.
 
 이번 실측에서 gpt-4o-mini는 더 낮은 공개 가격 기반 추정 비용과 더 낮게 관측된 avg/p95/p99 latency를 보였다. gpt-4o-mini의 `maxTokens(128)` production option 계약도 이미 실제 Structured Output으로 검증됐다. 상세 수치·한계는 [#66 Evidence](../evidence/v3/66-ai-moderation/README.md)를 기준으로 한다.
 
@@ -30,7 +30,7 @@ OpenAI를 단일 Provider로, production 기본 모델은 `gpt-4o-mini`로 유�
 
 ## 장점
 
-- 현재 요구사항에서 Primary Gate를 충족한다.
+- 현재 요구사항의 핵심 통과 기준을 만족한다.
 - 이번 실측 token 기준 추정 비용이 낮다.
 - 이번 BobFull 평가 환경에서 latency가 낮게 관측됐다.
 - 검증된 Structured Output 및 단순한 production option 계약을 유지한다.

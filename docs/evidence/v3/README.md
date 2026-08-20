@@ -29,8 +29,8 @@ Primary KPI
 Secondary KPI
 → 병목 원인과 부작용을 해석하기 위한 보조 지표
 
-Guardrail
-→ 빨라지거나 안정화되는 과정에서 기존 기능·정합성·멱등성·오류율이 깨지지 않았는지 확인하는 보호 지표
+Guardrail(안전 확인)
+→ 빨라지거나 안정화되는 과정에서 기존 기능·정합성·멱등성·오류율이 깨지지 않았는지 확인하는 지표
 ```
 
 예시:
@@ -39,12 +39,12 @@ Guardrail
 SQL/Index
 Primary KPI: 조회 API p95
 Secondary KPI: query time, rows examined, DB Pool
-Guardrail: 응답 데이터 동일, 오류율 증가 없음
+Guardrail(안전 확인): 응답 데이터 동일, 오류율 증가 없음
 
 Kafka AI
 Primary KPI: Kafka 장애 중 Outbox 보존·복구 성공 건수와 Consumer Lag 회복
 Secondary KPI: Chat SEND p95, AI 처리 p95, consume rate, Retry/DLT, token/cost
-Guardrail: ChatMessage 유실 0, Moderation 중복 저장 0
+Guardrail(안전 확인): ChatMessage 유실 0, Moderation 중복 저장 0
 ```
 
 모든 Issue에 세 항목을 억지로 채우지 않는다. 정량 KPI보다 정상·실패·경계 현상이 더 중요한 신뢰성 문제는 `PENDING 보존`, `재시작 복구`, `중복 side effect 0건`처럼 검증 가능한 현상을 Primary KPI로 둘 수 있다.
@@ -58,7 +58,7 @@ Guardrail: ChatMessage 유실 0, Moderation 중복 저장 0
 | 동시성 | 초과 처리, 중복 생성, 락 대기, deadlock, timeout |
 | 인프라 | 장애 전환, 실패 요청, Target Health, 배포 중 요청 연속성 |
 | 캐시 | 응답시간·DB 부하 + stale/TTL/무효화/최종 DB 검증 |
-| Kafka/Outbox | Consumer Lag, backlog, 처리량, Retry/DLT, 멱등성, 장애 격리 |
+| Kafka/Outbox | Consumer Lag, 처리 대기량, 처리량, Retry/DLT, 멱등성, 장애가 다른 처리로 번지는지 |
 | AI | 고정 입력셋 결과 + timeout/5xx/잘못된 응답 시 기본 서비스 영향 |
 | 보안/제약 | 우회 재현 Before → 차단 After |
 | 단순 기능 | 정상·실패·경계 계약. 정량 Before/After는 N/A 가능 |
@@ -119,7 +119,7 @@ docs/evidence/v3/191-auto-scaling/README.md
 ## 측정 계약
 - Primary KPI:
 - Secondary KPI:
-- Guardrail:
+- Guardrail(안전 확인):
 
 ## 기준 코드
 - Before SHA:
@@ -193,7 +193,7 @@ Before/After SHA
 동일 조건 여부
 Primary KPI 핵심 Before/After
 필요한 Secondary KPI
-정합성 Guardrail 결과
+정합성 안전 지표 결과
 검증 한계
 ```
 

@@ -1,7 +1,7 @@
 # BobFull 전체 API 통합 요약
 
 > 이 문서는 BobFull HTTP API의 **통합 요약 및 상세 명세 진입점**이다.
-> Request/Response DTO, Validation, 응답 예시, Endpoint별 Error 계약은 [API 상세 명세 목차](api/API.md) 및 각 도메인 상세 문서를 **Source of Truth**로 관리한다.
+> Request/Response DTO, Validation, 응답 예시, Endpoint별 Error 계약은 [API 상세 명세 목차](api/API.md) 및 각 도메인 상세 문서를 **최종 기준**으로 관리한다.
 
 현재 문서화 대상은 Application HTTP API **71개**와 Actuator Endpoint **2개**, 총 **73개**다. 실제 코드의 `Controller / DTO / Validation / SecurityConfig / ErrorCode`를 최종 기준으로 하며, 이 문서는 상세 계약을 중복하지 않는다.
 
@@ -12,7 +12,7 @@
 - 대조: Controller의 Method + Path, Request DTO와 Validation, Response DTO의 중첩·nullable 구조, `SecurityConfig` 인가 경계, 성공 Status, 실제 실행 경로의 ErrorCode, Webhook·Actuator의 비-`ApiResponse` 계약
 - 결과: 코드 전용·문서 전용 HTTP endpoint와 API Spec ↔ ERD 간 명백한 정적 계약 모순을 확인하지 못했다. BLOCKER / MAJOR / MINOR는 0건이다.
 
-이 기준선은 현재 구현의 정적 계약만 대상으로 하며, 성능·신뢰성·AWS·Kafka·K6 Evidence 및 최종 Claim Gate는 #67에서 별도로 관리한다.
+이 기준선은 현재 구현의 정적 계약만 대상으로 하며, 성능·신뢰성·AWS·Kafka·K6 검증 자료와 최종 주장 검토는 #67에서 별도로 관리한다.
 
 ## 상세 명세로 이동
 

@@ -9,7 +9,7 @@ Kafka Consumer와 Retry/DLT는 Issue #59 범위이므로 이 Evidence에서 구�
 
 - Primary KPI: 고정 Human-labeled 40건의 Review Actionability 정확도(LOW 제외, MEDIUM/HIGH 포함)
 - Secondary KPI: OpenAI 호출 latency(avg/p95/p99), token usage, 오류 유형, messageId당 외부 호출 수
-- Guardrail: AI 실패가 ChatMessage 저장·전달을 변경하지 않고, 완료된 messageId의 재호출과 결과 중복 생성이 없어야 한다.
+- 안전 확인: AI 실패가 ChatMessage 저장·전달을 변경하지 않고, 완료된 messageId의 재호출과 결과 중복 생성이 없어야 한다.
 
 ## 기준 코드
 
@@ -45,7 +45,7 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 
 ## BobFull 40건 Dataset 동기화
 
-- Source of Truth: `demo2/src/test/java/com/example/demo/ModerationEvaluationTest.java`의 `testCases()`
+- 최종 기준: `demo2/src/test/java/com/example/demo/ModerationEvaluationTest.java`의 `testCases()`
 - 추출 항목: case id, message content, expected result/categories/riskLevel
 - BobFull 위치: `SpringAiModerationAdapterOpenAiEvaluationTest`
 - 계약 검증: 별도 `SpringAiModerationEvaluationDatasetTest`가 총 40건과 SAFE/PROFANITY/PI/SPAM 각 10건을 확인한다.
@@ -62,7 +62,7 @@ Prompt v2는 Risk Exact Match를 위해 v3로 과적합하지 않고 현재 기�
 | Prompt v2 복구 baseline Provider 관측 | OpenAI Calls 40, latency avg 869.6ms / p95 1292ms / p99 1569ms, prompt/completion/total token 30,897 / 687 / 31,584, total elapsed 34,804ms | BASELINE (Human 실행 결과) |
 | Prompt v2 + 128 token guard 40건 | Result 40/40, Category 40/40, Risk 34/40, Exact 34/40, Review Actionability 38/40 | GUARD (Human 실행 결과) |
 | Prompt v2 + 128 token guard Provider 관측 | Provider/Structured Output failure 0, OpenAI Calls 40, latency avg 1037.1ms / p95 1748ms / p99 1904ms, prompt/completion/total token 30,897 / 686 / 31,583, total elapsed 41,503ms | GUARD (Human 실행 결과) |
-| Core 정상·검증실패·멱등성·AI 장애 격리 | `./gradlew :test --tests com.bobfull.chat.service.ChatModerationServiceTest` 성공 | PASS |
+| Core 정상·검증실패·멱등성·AI 장애가 채팅 저장으로 번지지 않는지 | `./gradlew :test --tests com.bobfull.chat.service.ChatModerationServiceTest` 성공 | PASS |
 | 전체 build 및 테스트 | `./gradlew test` 성공 | PASS |
 
 실제 단건 검증은 `OPENAI_API_KEY`가 있는 local 환경에서 다음처럼 별도로 실행한다. 이 테스트는 키가 없는 일반 build에서는 JUnit 조건으로 건너뛴다.
@@ -140,7 +140,7 @@ Guard run mismatch는 `PROFANITY-07` MEDIUM→LOW, `PI-09` MEDIUM→LOW, `SPAM-0
 - 같은 Prompt/Dataset/모델 계열의 단일 외부 LLM 실행 간 차이를 128 token guard의 인과적 품질 저하로 해석하지 않는다. latency 차이도 guard에 의한 성능 저하라고 주장하지 않는다.
 - Prompt v2는 고정한다. 동일 Dataset에 맞춘 Prompt v3, PI-09/PROFANITY-07/SPAM case 맞춤 few-shot, expected 변경을 하지 않는다. 향후 품질 개선은 별도 신규 Human-labeled·versioned held-out Dataset에서 재평가한다.
 
-## 정합성·장애 격리
+## 정합성·장애 영향 분리
 
 - `chat_moderation.chat_message_id`는 UNIQUE다.
 - UNIQUE는 중복 INSERT만 막으므로 `ChatModeration.version`의 JPA 낙관적 락으로 stale UPDATE도 막는다. 충돌 시 완료 상태가 최신이면 종료하고, 최신이 `ANALYSIS_FAILED`일 때만 이미 받은 AI 응답으로 DB 저장을 1회 재시도한다.
@@ -168,7 +168,7 @@ Guard run mismatch는 `PROFANITY-07` MEDIUM→LOW, `PI-09` MEDIUM→LOW, `SPAM-0
 
 Human은 실제 Provider metadata에서 `gpt-4o-mini-2024-07-18` snapshot을 확인한 뒤, 2026년 기준 더 적합한 소형 모델이 있는지 재검토했다. 최신 모델이라는 이유만으로 교체하지 않고, frozen `moderation-prompt-v2` / `moderation-policy-v1`과 같은 Human-labeled 40건 Dataset으로 비교했다. Dataset·expected와 Prompt는 이 비교를 보고 변경하지 않았다.
 
-Primary Gate는 Result Accuracy 100%, Category Accuracy 100%, Review Actionability 95% 이상, Provider failure 0, Structured Output/parse failure 0이다. Risk/Exact, 공개 가격 기반 추정 비용, latency, token usage는 Secondary 지표다. LOW와 MEDIUM/HIGH의 관리자 검토 분기가 실제 운영 행동이므로 Exact Risk보다 Review Actionability를 우선한다.
+Primary Gate(핵심 통과 기준)는 Result Accuracy 100%, Category Accuracy 100%, Review Actionability 95% 이상, Provider failure 0, Structured Output/parse failure 0이다. Risk/Exact, 공개 가격 기반 추정 비용, latency, token usage는 Secondary 지표다. LOW와 MEDIUM/HIGH의 관리자 검토 분기가 실제 운영 행동이므로 Exact Risk보다 Review Actionability를 우선한다.
 
 ### 후보와 API option compatibility
 
@@ -187,7 +187,7 @@ Primary Gate는 Result Accuracy 100%, Category Accuracy 100%, Review Actionabili
 | gpt-4o-mini | 128 guard | 40/40 | 40/40 | 34/40 | 38/40 (95.0%) | 0 / 0 | 1037.1 / 1748 / 1904ms | 30,897 / 686 / 31,583 | $0.005046 |
 | gpt-5.4-nano | evaluation | 40/40 | 40/40 | 33/40 | 39/40 (97.5%) | 0 / 0 | 1686.6 / 5360 / 5838ms | 30,817 / 969 / 31,786 | $0.007375 |
 
-gpt-5.4-nano mismatch는 `PROFANITY-07` MEDIUM→LOW 및 `SPAM-02`, `SPAM-03`, `SPAM-05`, `SPAM-07`, `SPAM-09`, `SPAM-10` HIGH→MEDIUM이다. 두 모델 모두 Primary Gate를 통과했다.
+gpt-5.4-nano mismatch는 `PROFANITY-07` MEDIUM→LOW 및 `SPAM-02`, `SPAM-03`, `SPAM-05`, `SPAM-07`, `SPAM-09`, `SPAM-10` HIGH→MEDIUM이다. 두 모델 모두 핵심 통과 기준을 만족했다.
 
 ### 가격과 해석
 
@@ -204,7 +204,7 @@ gpt-5.4-nano의 Review Actionability는 1건 높았지만 Risk/Exact는 gpt-4o-m
 
 ### 최종 Human 결정
 
-두 모델은 모두 Primary Gate를 통과했다. Human은 gpt-5.4-nano의 결정적 품질 우위가 확인되지 않았고, 이번 실측에서 gpt-4o-mini가 더 낮은 공개 단가와 latency를 보였으므로 production 기본 모델을 `gpt-4o-mini`로 유지하기로 결정했다. 최신 모델이라는 이유만으로 교체하지 않았으며, 향후 재평가는 신규 Human-labeled/versioned held-out Dataset에서 수행한다.
+두 모델은 모두 핵심 통과 기준을 만족했다. Human은 gpt-5.4-nano의 결정적 품질 우위가 확인되지 않았고, 이번 실측에서 gpt-4o-mini가 더 낮은 공개 단가와 latency를 보였으므로 production 기본 모델을 `gpt-4o-mini`로 유지하기로 결정했다. 최신 모델이라는 이유만으로 교체하지 않았으며, 향후 재평가는 신규 Human-labeled/versioned held-out Dataset에서 수행한다.
 
 Kafka Consumer가 구현된 뒤 #59는 `ChatMessage COMMIT → Outbox → Kafka → Consumer → OpenAI → ChatModeration 저장`의 E2E latency, OpenAI latency, throughput, Consumer Lag, Retry/DLT, backlog recovery를 별도 측정한다. 이는 아직 측정·구현 완료가 아니다.
 

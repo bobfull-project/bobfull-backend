@@ -85,7 +85,7 @@ Provider failure 0, Structured Output failure 0, Application Validation failure 
 외부 Provider latency 변동을 성능 개선으로 과장하지 않는다. Rule Fast Path의 구조적 이점은 외부 호출 0회이며,
 전체 workload latency는 해당 단일 측정값이다.
 
-## Attribution / Gate 후보
+## Attribution / 통과 기준 후보
 
 - Rule attributable regression: 없음. Fast Path 16/16 정확, Fast Path FP 0, 신규 category/result 오류 0.
 - LLM_REQUIRED Provider variation: Result Accuracy 62/66 → 61/66, FP/FN 3/1 → 3/2, Injection Moderation Exact 9/10 → 9/10이 관측됐다.
