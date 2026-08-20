@@ -9,7 +9,7 @@
 
 - Primary KPI: 반복 검색 시 요청당 DB Query 수(0으로 감소하는지), 동시 요청 시 DB Connection Pool active/awaiting.
 - Secondary KPI: HTTP 왕복 지연시간(p50/p95/max, 단일 요청/JDK HttpClient 기준), Cache Hit/Miss 여부.
-- 안전 확인: `availableCapacity`·결제·예약 정합성 핵심 값은 캐시하지 않는다. Redis 장애 시 검색 API는 캐시 대신 DB 조회로 넘어간다(Fail-open). Restaurant 변경 후 캐시된 검색 결과가 갱신된다(무효화).
+- 안전 확인: `availableCapacity`·결제·예약 정합성 핵심 값은 캐시하지 않는다. Redis 장애 시 검색 API는 캐시 대신 DB 조회로 넘어간다. Restaurant 변경 후 캐시된 검색 결과가 갱신된다(무효화).
 - 이번 Issue는 #61에서 이미 낮춘 SQL 실행 계획 자체를 다시 검증하지 않는다 — DB Query/Connection Pool 수준의 반복 부하만 본다.
 
 ## 기준 코드
@@ -59,7 +59,7 @@
 
 - 기존 인증 Redis(`RefreshTokenStore`, `AccessTokenBlacklistStore`, key prefix `auth:`)와 같은 Redis 인스턴스를 재사용한다.
 - 검색 캐시는 `bobfull:search:` prefix로 완전히 분리했다. serializer는 `StringRedisTemplate` + `tools.jackson.databind.ObjectMapper`(JSON), 인증 쪽과 동일한 `StringRedisTemplate` 계열이라 별도 serializer 충돌이 없다.
-- 장애 영향 분리: `RestaurantSearchCacheStore`는 Redis 예외(연결 실패 등)를 전부 삼키고 로그만 남긴다. 그래서 검색 캐시가 실패해도 요청은 DB 조회로 계속 처리된다(Fail-open, Human 결정 Q2). 인증 Redis(`AccessTokenBlacklistStore` 조회는 Fail-open, `RefreshTokenStore`는 Fail-closed로 예외 전파)와는 독립적으로 동작하며, 검색 캐시 장애가 로그인·토큰 기능에 영향을 주지 않고 반대로도 마찬가지다 — 각자 다른 클래스, 다른 key prefix, 별도 예외 처리라 서로 결합돼 있지 않다.
+- 장애 영향 분리: `RestaurantSearchCacheStore`는 Redis 예외(연결 실패 등)를 전부 삼키고 로그만 남긴다. 그래서 검색 캐시가 실패해도 요청은 DB 조회로 계속 처리된다(Human 결정 Q2). 인증 Redis는 Blacklist 조회 실패 시 요청을 막지 않고, Refresh Token 조회 실패 시 재발급을 거부한다. 검색 캐시와 인증 기능은 각자 다른 클래스, 다른 key prefix, 별도 예외 처리를 사용하므로 서로의 장애가 영향을 주지 않는다.
 
 ### 성능 관련 부수 발견과 수정
 
@@ -99,7 +99,7 @@
 
 원본: `RestaurantSearchCacheStoreIntegrationTest`(5개 테스트 모두 PASS)
 
-- 존재하지 않는 포트(연결 자체가 실패하는 상황)로 `find`/`put`/`bumpVersion`을 호출해도 예외가 전파되지 않고 각각 빈 결과/no-op으로 처리됐다(Fail-open, Human 결정 Q2). 이 컴포넌트는 실제 HTTP 경로(`RestaurantService.searchRestaurants`)가 그대로 사용하는 클래스이므로, Redis 장애 시 검색 로직은 캐시를 비운 것처럼 보고 DB 조회로 넘어가도록 동작한다. 추가로 HTTP 레벨 전체 장애 재현은 하지 않았다(아래 "검증 한계" 참고).
+- 존재하지 않는 포트(연결 자체가 실패하는 상황)로 `find`/`put`/`bumpVersion`을 호출해도 예외가 전파되지 않고 각각 빈 결과 또는 아무 작업도 하지 않는 결과로 처리됐다(Human 결정 Q2). 이 컴포넌트는 실제 HTTP 경로(`RestaurantService.searchRestaurants`)가 그대로 사용하는 클래스이므로, Redis 장애 시 검색 로직은 캐시를 비운 것처럼 보고 DB 조회로 넘어가도록 동작한다. 추가로 HTTP 레벨 전체 장애 재현은 하지 않았다(아래 "검증 한계" 참고).
 - **Redis 명령 timeout 설정(PR #202 리뷰 반영)**: 처음에는 `spring.data.redis.timeout`을 설정하지 않아 Lettuce 기본값(command timeout 60초)을 그대로 썼다 — Redis가 연결은 받아주지만 응답하지 않는 상황(네트워크 블랙홀)에서는 요청이 최대 60초까지 걸릴 수 있어, "Redis timeout 때문에 DB보다 더 오래 대기하지 않는다"(Issue #62 Q2)는 계약을 실제로는 지키지 못하는 경로였다. `application-prod.yml`/`application-local.yml.example`에 `spring.data.redis.timeout: 2000ms`(환경변수 `REDIS_TIMEOUT`로 재정의 가능)를 명시했다. `RestaurantSearchCacheStoreIntegrationTest`에 연결은 받아주되 응답은 절대 보내지 않는 소켓(블랙홀)을 만들어 재현한 결과, 설정한 2초 근처에서 실제로 실패함을 확인했다(5초 이내 완료를 assert, PASS). 이 timeout은 인증 Redis(`RefreshTokenStore`/`AccessTokenBlacklistStore`)와 같은 `RedisConnectionFactory`를 공유해 전체 Redis 사용에 적용된다.
 
 ## 핵심 트러블슈팅
@@ -171,7 +171,7 @@
 - #61 이후에도 동일 검색이 동시에 반복되는 상황에서 DB Connection Pool이 실제로 포화됨을 실측으로 확인했다(No Cache: 최대 active 10/10, awaiting 20).
 - Cache 적용 후 같은 측정 조건에서는 Pool active/awaiting이 0/0으로 관측됐고 latency도 p50 기준 약 69% 감소했다.
 - Cold/Warm/Mixed/무효화/Redis 장애 시나리오 모두 실제로 재현·검증했고 정합성 회귀가 없다.
-- 좌석·결제 정합성 핵심 값은 캐시 대상에서 제외했고, Redis 장애 시 검색 API는 캐시 대신 DB 조회로 넘어가도록 했다(Fail-open).
+- 좌석·결제 정합성 핵심 값은 캐시 대상에서 제외했고, Redis 장애 시 검색 API는 캐시 대신 DB 조회로 넘어가도록 했다.
 
 ## 검증 한계
 

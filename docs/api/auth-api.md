@@ -244,7 +244,7 @@
 
 ### 개요
 
-- 설명: Refresh Token을 검증하고 회전(rotation)한다. 기존 Refresh Token은 즉시 삭제되고 새 Access·Refresh Token을 발급한다. Redis 조회 실패를 포함해 유효하지 않은 모든 경우는 새 토큰을 내주지 않고 401로 거부한다(fail-closed).
+- 설명: Refresh Token을 검증하고 회전(rotation)한다. 기존 Refresh Token은 즉시 삭제되고 새 Access·Refresh Token을 발급한다. Redis 조회 실패를 포함해 유효하지 않은 모든 경우는 새 토큰을 내주지 않고 401로 거부한다.
 
 ### Request
 

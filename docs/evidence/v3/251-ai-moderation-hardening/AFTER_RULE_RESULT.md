@@ -73,7 +73,7 @@
 | Application Validation | PASS |
 | 저장 | `FLAGGED / [PROFANITY] / MEDIUM` |
 
-Provider failure 0, Structured Output failure 0, Application Validation failure 0이다. BEFORE의 빈 category 응답은
+Provider 오류 0, 응답 형식 오류 0, 애플리케이션 검증 실패 0이다. BEFORE의 빈 category 응답은
 과거 관측으로 유지하며, AFTER raw output의 변화는 LLM_REQUIRED Provider variation 후보로 분리한다.
 
 ## Latency

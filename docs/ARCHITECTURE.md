@@ -78,7 +78,7 @@ flowchart TB
 | AI Moderation Core | ChatMessage 원문 분석 흐름 제어, 결과 검증·저장, Provider 실패 전파 | `ChatModerationService`, `ChatModeration`, `AiModerationPort` |
 | Restaurant Feedback Insight | ChatMessage Event를 재사용한 식당 피드백 분석과 OWNER 익명 집계 조회 | `RestaurantFeedbackInsight`, `RestaurantFeedbackItem`, 독립 Kafka Consumer Group |
 | Transactional Outbox | 핵심 트랜잭션과 후속 처리 의도 보존, Processor/Scheduler 재시도 | `OutboxEvent`, `EmailOutboxDelivery` |
-| Redis | 인증 Refresh Token·Access Token Blacklist, 식당 검색 Cache, 채팅 Pub/Sub fan-out | Redis key prefix 분리, ERD 엔티티 아님 |
+| Redis | 인증 Refresh Token·Access Token Blacklist, 식당 검색 Cache, 채팅 Pub/Sub 실시간 전달 | Redis key prefix 분리, ERD 엔티티 아님 |
 | Kafka | ChatMessage AI Moderation과 Restaurant Feedback Insight 후속 처리 | Outbox 이후 Broker, Consumer Group, Retry/DLT |
 | 알림 | 모집 마감 처리 결과(확정·인원 미달 취소)를 유효 참여자에게 이메일로 안내 | 신규 저장 엔티티 없음, `Reservation`/`ReservationParticipant` 조회 결과만 사용 |
 
@@ -96,11 +96,11 @@ OWNER는 백엔드에서 Presigned PUT URL을 발급받아 `temp/restaurants/{ow
 
 ### 인증 세션(Access·Refresh Token)
 
-Access Token은 HS256 JWT로 서명·만료를 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. 다만 발급 시 부여하는 `jti` Claim으로 로그아웃된 토큰만 예외적으로 즉시 폐기할 수 있다(Access Token Blacklist, Issue #186). Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제하고, 그 Access Token의 `jti`를 남은 유효시간만큼 Blacklist에 등록한다. 인증 필터는 서명·만료 검증을 통과한 모든 요청마다 이 Blacklist를 조회해 로그아웃된 토큰을 차단한다. Redis 조회 실패 시 재발급은 새 토큰을 내주지 않고 401로 거부한다(fail-closed). 로그아웃 자체(Blacklist 등록·Refresh Token 삭제)의 Redis 실패는 감추지 않고 그대로 전파한다. 반면 Blacklist *조회*는 인증 필터를 거치는 모든 요청에 실행되므로, Redis 장애가 전체 API 장애로 번지지 않게 요청을 막지 않는다(Fail-open). 이때 노출되는 위험은 직전 로그아웃한 토큰이 만료 시각까지 잠시 재사용되는 범위로 제한된다. 이 기능 배포 이전에 발급돼 `jti`가 없는 토큰은 Blacklist 조회를 건너뛰고 인증만 정상 처리한다. Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)는 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
+Access Token은 HS256 JWT로 서명·만료를 검증하는 무상태 토큰이며 서버에 상태를 저장하지 않는다. 다만 발급 시 부여하는 `jti` Claim으로 로그아웃된 토큰만 예외적으로 즉시 폐기할 수 있다(Access Token Blacklist, Issue #186). Refresh Token은 발급·재발급·로그아웃의 폐기가 가능해야 하므로 Redis에만 저장한다(DB 테이블 아님, `docs/CODE_CONVENTION.md` 기준). 회원당 Refresh Token은 항상 1건이며, 로그인·재발급마다 기존 키를 지우고 새로 발급한다(회전). 로그아웃은 인증된 memberId로 그 회원의 Refresh Token 키를 즉시 삭제하고, 그 Access Token의 `jti`를 남은 유효시간만큼 Blacklist에 등록한다. 인증 필터는 서명·만료 검증을 통과한 모든 요청마다 이 Blacklist를 조회해 로그아웃된 토큰을 차단한다. Redis 조회 실패 시 재발급은 새 토큰을 내주지 않고 401로 거부한다. 로그아웃 자체(Blacklist 등록·Refresh Token 삭제)의 Redis 실패는 감추지 않고 그대로 전파한다. 반면 Blacklist 조회는 인증 필터를 거치는 모든 요청에 실행되므로, Redis 장애가 전체 API 장애로 번지지 않게 요청을 막지 않는다. 이때 노출되는 위험은 직전 로그아웃한 토큰이 만료 시각까지 잠시 재사용되는 범위로 제한된다. 이 기능 배포 이전에 발급돼 `jti`가 없는 토큰은 Blacklist 조회를 건너뛰고 인증만 정상 처리한다. Refresh Token 재사용 탐지(탈취 시 전체 세션 무효화)는 아직 도입하지 않는다 — ADMIN 역할처럼 탈취 시 위험도가 높은 대상이 추가되면 별도 Issue로 재검토한다(`docs/adr/0006-refresh-token-redis.md`).
 
 ### 식당 검색 Cache
 
-`GET /api/restaurants`의 `date`/`time`이 없는 검색(기본/keyword/category/정렬/pagination)만 Redis에 캐시한다(Issue #62). 인증 세션과 같은 Redis 인스턴스를 재사용하되 key prefix(`bobfull:search:`, 인증은 `auth:`)로 책임을 분리한다. TTL은 60초이며, 식당 등록·수정·삭제 시 개별 key를 지우지 않고 버전 번호를 올려 이후 조회가 새 key를 쓰게 한다(해시된 key는 역추적이 불가능하므로 namespace 방식). Redis 조회·저장 실패는 예외를 전파하지 않고 DB 조회로 대체한다(Fail-open). 이는 Redis 조회 실패 시 재발급을 거부하는 Refresh Token 정책과 독립적이다. `date`/`time`이 있는 검색과 예약 가능 회차 조회(`availableCapacity` 등)는 캐시 대상이 아니다. 상세: `docs/evidence/v3/62-search-cache/README.md`.
+`GET /api/restaurants`의 `date`/`time`이 없는 검색(기본/keyword/category/정렬/pagination)만 Redis에 캐시한다(Issue #62). 인증 세션과 같은 Redis 인스턴스를 재사용하되 key prefix(`bobfull:search:`, 인증은 `auth:`)로 책임을 분리한다. TTL은 60초이며, 식당 등록·수정·삭제 시 개별 key를 지우지 않고 버전 번호를 올려 이후 조회가 새 key를 쓰게 한다(해시된 key는 역추적이 불가능하므로 namespace 방식). Redis 조회·저장 실패는 예외를 전파하지 않고 DB 조회로 대체한다. 이는 Redis 조회 실패 시 재발급을 거부하는 Refresh Token 정책과 독립적이다. `date`/`time`이 있는 검색과 예약 가능 회차 조회(`availableCapacity` 등)는 캐시 대상이 아니다. 상세: `docs/evidence/v3/62-search-cache/README.md`.
 
 ## 5. 예약·좌석·결제 처리
 
@@ -184,7 +184,7 @@ STOMP 전송·구독 경로와 HTTP 메시지 조회의 상세 계약은 [API �
 
 ### AI Moderation Core
 
-`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 애플리케이션 검증을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider가 정해진 JSON 형식으로 응답하도록 Structured Output을 사용하며, Provider 의존성과 Prompt/Policy 정보는 Port 뒤에 둔다. AI 실패를 SAFE로 바꾸지 않고 재시도 가능한 예외로 전달한다. `ChatModeration`의 `@Version`은 오래된 저장 시도를 거절해, 이미 완료된 결과가 뒤늦은 최종 실패 기록에 덮이지 않게 한다.
+`ChatModerationService`는 `messageId` 기준 완료 결과를 재호출하지 않고, `AiModerationPort`에 ChatMessage 원문 분석을 요청한 뒤 애플리케이션 검증을 통과한 `ChatModeration`만 저장한다. OpenAI Adapter는 Provider가 정해진 JSON 형식으로 응답하도록 요청하며, Provider 의존성과 Prompt/Policy 정보는 Port 뒤에 둔다. AI 실패를 SAFE로 바꾸지 않고 재시도 가능한 예외로 전달한다. `ChatModeration`의 `@Version`은 오래된 저장 시도를 거절해, 이미 완료된 결과가 뒤늦은 최종 실패 기록에 덮이지 않게 한다.
 
 ```text
 ChatMessage

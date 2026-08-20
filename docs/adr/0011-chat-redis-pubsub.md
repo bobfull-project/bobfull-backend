@@ -15,7 +15,7 @@ Spring STOMP Simple Broker는 현재 애플리케이션 인스턴스의 WebSocke
 1. Sticky Session만 유지: 연결 고정일 뿐 다른 참여자가 다른 인스턴스에 연결되는 문제를 해결하지 못한다.
 2. Redis Pub/Sub: 공용 채널을 모든 인스턴스가 구독해 각자의 Simple Broker로 전달한다.
 3. Redis Streams 또는 실시간 전파용 Transactional Outbox: 재생·재처리 요구가 있으나, 현재 실시간 채팅 목적에는 복잡도가 과도하다.
-4. Kafka로 WebSocket fan-out: AI Moderation의 Outbox→Kafka 책임과 실시간 전파 책임을 불필요하게 결합한다.
+4. Kafka로 WebSocket 실시간 전달: AI Moderation의 Outbox→Kafka 책임과 실시간 전파 책임을 불필요하게 결합한다.
 
 ## 결정
 
@@ -27,7 +27,7 @@ Redis 발행·구독 실패는 이미 저장된 메시지를 롤백하거나 재
 
 - 여러 인스턴스의 로컬 Simple Broker 세션에 동일 payload를 전달한다.
 - DB 영속성과 AI용 Outbox→Kafka의 재처리 계약을 바꾸지 않는다.
-- 발행 서버의 이중 로컬 fan-out을 제거해 중복 수신을 피한다.
+- 발행 서버가 로컬 STOMP로 직접 한 번 더 보내지 않게 해 중복 수신을 피한다.
 
 ## 단점과 위험
 

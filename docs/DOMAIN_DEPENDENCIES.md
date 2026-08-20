@@ -41,7 +41,7 @@
 | Outbox | 핵심 트랜잭션의 후속 처리 의도 | ChatRoom 생성, 이메일, ChatMessage Kafka 발행 | 예약, 결제, 알림, AI | 김현승 |
 | AI Moderation | ChatMessage Event, Provider 결과 | 메시지별 검수 결과와 관리자 참고 신호 | 채팅, 관리자 Human Review | 김현승 |
 | Restaurant Feedback Insight | ChatMessage Event 재사용, 식당 역추적 | OWNER용 익명 피드백 집계 | 채팅, 식당, Kafka | 정용태·김현승 |
-| Redis Chat Pub/Sub | 커밋된 ChatMessage payload | 다중 App 인스턴스 실시간 fan-out | 채팅, 배포 인프라 | 김현승·김홍기 |
+| Redis Chat Pub/Sub | 커밋된 ChatMessage payload | 다중 App 인스턴스 실시간 전달 | 채팅, 배포 인프라 | 김현승·김홍기 |
 | Kafka 후속 처리 | Outbox가 발행한 ChatMessageCreatedEvent | AI Moderation과 Restaurant Insight Consumer Group 처리 | 채팅, AI, 운영 재처리 | 김현승 |
 | 지급 예정 예약금 | 결제·환불·취소·노쇼 결과 | 사장님 조회용 예상 금액 | 사장님 권한, 관리자 조회 | 김현승 |
 
@@ -232,14 +232,14 @@ OWNER 인증
 최초 예약 Payment PAID
 → 예약당 ChatRoom 1개 생성
 → 결제 완료·미취소 유효 참여자만 접근
-→ DB 저장·커밋 후 Redis Pub/Sub으로 각 인스턴스 Simple Broker에 실시간 fan-out
+→ DB 저장·커밋 후 Redis Pub/Sub으로 각 인스턴스 Simple Broker에 실시간 전달
 → 단절 중 누락은 cursor 기반 과거 메시지 조회로 복구
 → 예약 CANCELLED 또는 CLOSED 시 새 메시지 전송 종료
 → 기존 ChatMessage는 조회 가능
 ```
 
 - 결제 완료 후 취소되지 않은 참여자만 채팅에 접근하며, 취소된 참여자는 즉시 접근이 종료된다. 상세 접근·전송 조건은 [프로젝트 컨텍스트](./PROJECT_CONTEXT.md)와 [API 명세](./BOBFULL_API_SPEC_COMPLETE.md)를 따른다.
-- Redis Pub/Sub은 durable/replay 경로가 아니며, 발행 실패는 이미 저장된 ChatMessage를 롤백하지 않는다.
+- Redis Pub/Sub은 메시지를 저장하거나 다시 보내주는 경로가 아니며, 발행 실패는 이미 저장된 ChatMessage를 롤백하지 않는다.
 
 ### ChatMessage 후속 처리와 Restaurant Feedback Insight
 
@@ -254,7 +254,7 @@ ChatMessage 저장
 
 - AI Moderation은 관리자 Human Review 참고 신호를 만들 뿐 회원 상태를 자동 변경하지 않는다.
 - Restaurant Feedback Insight는 Producer/Event Schema를 바꾸지 않고 같은 ChatMessage Event를 재사용한다. production 기본 설정은 비활성일 수 있으므로, 구현 완료와 운영 enabled 상태를 구분한다.
-- Kafka는 채팅 실시간 fan-out을 담당하지 않는다. Redis Pub/Sub과 Kafka 경로는 ChatMessage 커밋 이후 서로 다른 책임으로 분리된다.
+- Kafka는 채팅 실시간 전달을 담당하지 않는다. Redis Pub/Sub과 Kafka 경로는 ChatMessage 커밋 이후 서로 다른 책임으로 분리된다.
 
 ## 4. 핵심 계산 계약
 

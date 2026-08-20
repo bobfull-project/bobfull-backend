@@ -189,7 +189,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - 실패 결제·환불 재처리, 정산 데이터 재집계
 - 부하 테스트, 검색 성능·이벤트 처리·AI Moderation·Restaurant Feedback Insight·모니터링·배포 고도화
 
-Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 fan-out만 수행하고, 영속·재처리·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Restaurant Feedback Insight는 같은 ChatMessage Event를 별도 Consumer Group으로 재사용한다. Redis Pub/Sub과 Kafka는 서로 대체하지 않는다.
+Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 전달만 수행하고, 메시지 저장·재전송·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Restaurant Feedback Insight는 같은 ChatMessage Event를 별도 Consumer Group으로 재사용한다. Redis Pub/Sub과 Kafka는 서로 대체하지 않는다.
 
 Restaurant Feedback Insight는 코드·테스트·Evidence 기준으로 구현됐지만 production 기본 설정은 `bobfull.kafka.restaurant-insight.consumer-enabled=false`, `bobfull.ai.restaurant-insight.enabled=false`다. 배포 스크립트의 환경변수 주입 경로가 존재하더라도 실제 운영에서 enabled 상태라고 단정하지 않는다.
 

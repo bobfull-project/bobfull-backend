@@ -29,7 +29,7 @@ Primary KPI
 Secondary KPI
 → 병목 원인과 부작용을 해석하기 위한 보조 지표
 
-Guardrail(안전 확인)
+안전 확인
 → 빨라지거나 안정화되는 과정에서 기존 기능·정합성·멱등성·오류율이 깨지지 않았는지 확인하는 지표
 ```
 
@@ -39,12 +39,12 @@ Guardrail(안전 확인)
 SQL/Index
 Primary KPI: 조회 API p95
 Secondary KPI: query time, rows examined, DB Pool
-Guardrail(안전 확인): 응답 데이터 동일, 오류율 증가 없음
+안전 확인: 응답 데이터 동일, 오류율 증가 없음
 
 Kafka AI
 Primary KPI: Kafka 장애 중 Outbox 보존·복구 성공 건수와 Consumer Lag 회복
 Secondary KPI: Chat SEND p95, AI 처리 p95, consume rate, Retry/DLT, token/cost
-Guardrail(안전 확인): ChatMessage 유실 0, Moderation 중복 저장 0
+안전 확인: ChatMessage 유실 0, Moderation 중복 저장 0
 ```
 
 모든 Issue에 세 항목을 억지로 채우지 않는다. 정량 KPI보다 정상·실패·경계 현상이 더 중요한 신뢰성 문제는 `PENDING 보존`, `재시작 복구`, `중복 side effect 0건`처럼 검증 가능한 현상을 Primary KPI로 둘 수 있다.
@@ -119,7 +119,7 @@ docs/evidence/v3/191-auto-scaling/README.md
 ## 측정 계약
 - Primary KPI:
 - Secondary KPI:
-- Guardrail(안전 확인):
+- 안전 확인:
 
 ## 기준 코드
 - Before SHA:

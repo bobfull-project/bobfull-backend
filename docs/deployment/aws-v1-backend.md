@@ -125,7 +125,7 @@ Parameter Store 이름은 kebab-case로 저장하고, `scripts/aws/deploy-backen
 
 ## 채팅 WebSocket 배포 참고 (#50, #170, #169)
 
-예약 채팅은 `/ws` STOMP 엔드포인트와 각 애플리케이션 인스턴스의 In-memory SimpleBroker(`registry.enableSimpleBroker`)를 사용한다. #50 당시에는 단일 App EC2 기준이라 인스턴스 간 세션 공유가 없었지만, #170에서 DB 저장 후 Redis Pub/Sub으로 모든 App 인스턴스에 신호를 전파하고 각 인스턴스가 자기 SimpleBroker 세션으로 fan-out하는 구조를 구현했다. #169에서는 다중 App EC2와 공용 ElastiCache Redis 환경의 cross-instance 전달을 확인했다.
+예약 채팅은 `/ws` STOMP 엔드포인트와 각 애플리케이션 인스턴스의 In-memory SimpleBroker(`registry.enableSimpleBroker`)를 사용한다. #50 당시에는 단일 App EC2 기준이라 인스턴스 간 세션 공유가 없었지만, #170에서 DB 저장 후 Redis Pub/Sub으로 모든 App 인스턴스에 신호를 전파하고 각 인스턴스가 자기 SimpleBroker 세션으로 전달하는 구조를 구현했다. #169에서는 다중 App EC2와 공용 ElastiCache Redis 환경의 인스턴스 간 전달을 확인했다.
 
 - 신규 GitHub Variables·Secrets, 신규 SSM Parameter Store 값은 없다. 채팅은 STOMP CONNECT 인증에 기존 `JWT_SECRET`을, STOMP Endpoint `setAllowedOrigins`에 기존 `CORS_ALLOWED_ORIGINS`를 그대로 재사용한다. `CORS_ALLOWED_ORIGINS`를 변경하면 REST CORS와 WebSocket 허용 Origin에 동시에 반영되므로, Origin 값을 다룰 때는 두 용도를 함께 고려한다.
 - `build.gradle`에 `spring-boot-starter-websocket` 의존성이 추가되었을 뿐, 별도 배포 스크립트·포트 변경은 없다. `/ws`는 기존 애플리케이션 포트(`8080`)를 공유한다.
