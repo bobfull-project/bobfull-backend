@@ -42,7 +42,7 @@ Issue #63 "테스트 데이터 계약"에 따라, 시나리오별로 필요한 F
 
 ## 시나리오 D(#142 A). 예약 페이지 조회 폭주 (`peak-restaurant-view.js`)
 
-- `setup()`에서 Owner 1명 + Restaurant 1개 + SharedTable 1개 + `BASE_DATE` 하루치 회차를 만든다. 시나리오 B(`dining-session-availability.js`)와 구조는 같지만, 목적이 "여러 식당에 걸친 균등 부하"가 아니라 "단 하나의 인기 식당·날짜에 조회가 집중되는" hot-key 패턴이라 별도 시나리오로 분리했다.
+- `setup()`에서 Owner 1명 + Restaurant 1개 + SharedTable 1개 + `BASE_DATE` 하루치 회차를 만든다. 시나리오 B(`dining-session-availability.js`)와 구조는 같지만, 목적이 "여러 식당에 걸친 균등 부하"가 아니라 "단 하나의 인기 식당·날짜에 조회가 집중되는" 패턴이라 별도 시나리오로 분리했다.
 - 조회만 반복하므로 상태 소비가 없다.
 
 ## 시나리오 E(#142 B). 예약 버튼 동시 클릭 — CREATE 경쟁 (`peak-reservation-create-race.js`)

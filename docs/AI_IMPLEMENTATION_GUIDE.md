@@ -191,7 +191,7 @@ PR 설명은 팀원이 빠르게 이해할 수 있게 작성한다.
 → 상세 변경 및 검증
 → Before/After Evidence 요약
 → Human 이해 확인
-→ V3 Sprint Merge Gate
+→ V3 Sprint Merge 전 확인
 ```
 
 필수:
@@ -289,7 +289,7 @@ PR 설명은 팀원이 빠르게 이해할 수 있게 작성한다.
 V3 Sprint Mode의 필수 Human Approve 수는 `0`이다.
 
 별도 리뷰어의 Approve를 기다리지 않는다.
-Human 리뷰는 도움이 되면 수행하지만 필수 Gate가 아니다.
+Human 리뷰는 도움이 되면 수행하지만 필수 조건이 아니다.
 
 담당 Human은 다음을 확인하고 직접 Merge한다.
 

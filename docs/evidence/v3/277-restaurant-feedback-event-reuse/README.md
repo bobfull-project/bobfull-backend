@@ -16,7 +16,7 @@
   `localhost:9092`, PLAINTEXT)로 각각 실제 실행까지 완료했다.**
 - E/F/G와 DB 레벨 멱등성은 이전과 동일하게 H2 기반 `@SpringBootTest`로 실제 실행했다(재확인 완료).
 
-## A. Event Reuse / Fan-out — EXECUTED (실제 실행, Testcontainers)
+## A. Event 재사용 / 각 Consumer Group 전달 — EXECUTED (실제 실행, Testcontainers)
 
 `RestaurantInsightKafkaIntegrationTest#동일_Event를_Moderation과_Insight가_서로_다른_Group으로_각각_전부_소비한다`
 
@@ -28,13 +28,13 @@
   댓글대로 `messageId` 기반 DB 조회로 Restaurant을 역산).
 - 실행: `./gradlew :test --tests "com.bobfull.kafka.consumer.RestaurantInsightKafkaIntegrationTest"` → PASS(0.182s)
 
-## B. Failure Isolation — EXECUTED (실제 실행, Testcontainers)
+## B. 실패 영향 분리 — EXECUTED (실제 실행, Testcontainers)
 
 `RestaurantInsightKafkaIntegrationTest#Insight가_실패해도_Moderation은_영향받지_않는다`
 
 - Insight Provider를 강제로 항상 실패시킨 상태에서 Event 발행
 - Moderation: 정상 처리 확인(`ChatModeration` 상태가 `ANALYSIS_FAILED`가 아님, 즉 Moderation은
-  자기 흐름대로 완료됨) — Insight 실패의 영향 **0**
+  자기 흐름대로 완료됨) — Insight 실패가 Moderation 결과에 영향을 주지 않음
 - Insight: 재시도(설정값 `consumer-max-attempts=2`) 소진 후 Insight 전용 DLT
   (`restaurant-insight-it.insight.dlt.v1`)에서 실패 레코드 확인, `RestaurantFeedbackAnalysis` row 생성 **0건**
 - Moderation 상태·DLT·Metric에 대한 접근 자체가 코드 구조상 없음(`RestaurantInsightDltRecoverer`는
@@ -57,7 +57,7 @@ DLT 발행 시도(mock 캡처로 확인)는 발생하지만 `RestaurantFeedbackA
 동일) — `RestaurantInsightDltRecoverer.accept()`가 `delegate.accept()`(DLT 발행) 성공 이후에만
 metric을 증가시키는 순서가 실제로 지켜짐을 확인. PASS(0.721s)
 
-## C. Retained Event Backfill — EXECUTED (실제 실행, 로컬 Docker Kafka broker — Testcontainers 아님)
+## C. 보존된 Event를 새 그룹이 다시 읽기 — EXECUTED (실제 실행, 로컬 Docker Kafka broker — Testcontainers 아님)
 
 **실행 환경**: 이 프로젝트 `docker-compose.yml`의 `kafka` 서비스로 이미 기동 중이던 실제 컨테이너
 (`bobfull-kafka`, `apache/kafka:3.9.0`, `localhost:9092`, PLAINTEXT, `KAFKA_AUTO_CREATE_TOPICS_ENABLE=true`).
@@ -76,7 +76,7 @@ docker exec bobfull-kafka /opt/kafka/bin/kafka-configs.sh --bootstrap-server loc
 결과(발췌): `log.retention.hours=168`(7일, `DEFAULT_CONFIG`). `application-*.yml`의 값이 아니라
 브로커가 실제로 보고하는 설정값이다.
 
-### C-2. 기존에 이미 쌓여 있던 실제 retained Event로 신규 group backfill 확인(raw 소비)
+### C-2. 기존에 이미 쌓여 있던 실제 retained Event를 신규 group이 읽을 수 있는지 확인(원본 소비)
 
 기동 시점부터 이 broker에는 이전 로컬 개발 세션이 실제로 발행한 `bobfull.chat.message-created.v1`
 Event가 이미 남아 있었다(합성 테스트 데이터, 실사용 채팅 아님 — payload에 메시지 원문이 없고
@@ -90,12 +90,12 @@ Event가 이미 남아 있었다(합성 테스트 데이터, 실사용 채팅 �
   - 가장 오래된 Event 시각: `2026-08-11T13:04:12.089Z`(`messageId=5`)
   - 가장 최근 Event 시각: `2026-08-14T05:29:18.088Z`(`messageId=63`)
   - 실측 span: 약 64.4시간(2일 이상) — retention 168시간 안쪽의 실제 과거 Event
-- 이 단계는 Kafka 레벨(신규 group + earliest + 실제 오래된 Event 재생) 메커니즘만 확인하는 raw 소비이며,
+- 이 단계는 Kafka 레벨(신규 group + earliest + 실제 오래된 Event 재생) 메커니즘만 확인하는 원본 소비이며,
   이 messageId들은 이번 세션의 격리된 H2 테스트 DB에는 없으므로 Analysis/Item 생성까지는 연결하지 않았다
   (§한계 참고). probe 종료 후 `kafka-consumer-groups.sh --delete --group bobfull-evidence-c-probe-1`로
   정리해 공유 broker에 흔적을 남기지 않았다.
 
-### C-3. 합성 Fixture로 신규 group → Insight 소비 → DB Analysis/Item 생성까지 전체 파이프라인 확인
+### C-3. 합성 Fixture로 신규 group → Insight 소비 → DB Analysis/Item 생성까지 전체 흐름 확인
 
 `RestaurantInsightRealBrokerBackfillEvidenceTest`(신규 작성, Testcontainers 아님 —
 `spring.kafka.bootstrap-servers=localhost:9092`로 위 실제 broker에 직접 연결):
@@ -121,8 +121,8 @@ Event가 이미 남아 있었다(합성 테스트 데이터, 실사용 채팅 �
 
 **PASS.** 단, C-2와 C-3은 **서로 다른 별개의 검증이며 하나로 합쳐서 과장하지 않는다.**
 
-- **C-2(raw 소비)가 실제로 증명하는 것**: 신규 groupId + `earliest` offset으로 **실제로 며칠 전(약
-  64.4시간 전)에 쌓인 진짜 retained Event 59건**을 온전히 읽어올 수 있음(Kafka 레벨 backfill 메커니즘).
+- **C-2(원본 소비)가 실제로 증명하는 것**: 신규 groupId + `earliest` offset으로 **실제로 며칠 전(약
+  64.4시간 전)에 쌓인 진짜 retained Event 59건**을 온전히 읽어올 수 있음(Kafka 레벨에서 과거 Event를 다시 읽는 메커니즘).
   이 실행에서는 Analysis/Item 생성을 확인하지 않았다(messageId가 이번 세션 DB에 없어 연결하지 않음).
 - **C-3(합성 Fixture)이 실제로 증명하는 것**: Consumer가 없던 시점을 재현한 뒤 신규 group을 시작하면
   Insight 파이프라인이 실제로 동작해 **Analysis 5 row / Item 5 row**까지 생성됨(엔드투엔드 파이프라인).
@@ -135,7 +135,7 @@ Event가 이미 남아 있었다(합성 테스트 데이터, 실사용 채팅 �
   확인된 신규 groupId, 신규 group의 실제 소비를 확인했다. Staging/운영 broker는 아니며, Kafka
   retention이 지난 Event까지 무한 재생 가능하다고 주장하지 않는다(§금지 Claim).
 
-## D. Idempotent Reprocessing
+## D. 같은 이벤트 재처리
 
 ### D-Kafka(실broker, Testcontainers): 동일 Event 재전달
 
@@ -161,22 +161,22 @@ PASS(3.161s)
 | v1 terminal 후 activePromptVersion=v2 재처리 | v2만 신규 1회 호출 | v1/v2 **공존**(각 1건, 합계 2) | v1/v2 각각 독립 유지 |
 
 DB UNIQUE(`chat_message_id, prompt_version`)로 동시 경쟁 시에도 최종 저장 결과가 정상 수렴함을
-확인했다. **Concurrent Provider exactly-once는 이번 검증 대상이 아니며 보장하지 않는다.**
+확인했다. **동시에 들어온 Provider 호출이 정확히 한 번만 일어난다는 것은 이번 검증 대상이 아니며, 그렇게 주장하지 않는다.**
 
-## E. Candidate Gate — EXECUTED (실제 실행)
+## E. Provider 호출 후보 필터 — EXECUTED (실제 실행)
 
 `RestaurantInsightCandidateGateFrozenDatasetTest`, 합성 Frozen Dataset(실사용 채팅 미사용) 16건 기준.
 
 | 항목 | 값 |
 |---|---|
 | 전체 메시지 | 16 |
-| Gate 통과(Provider 호출 필요) | 8 |
-| Gate 차단(Provider 호출 절감) | 8 |
+| 필터 통과(Provider 호출 필요) | 8 |
+| 필터 차단(Provider 호출 절감) | 8 |
 | 절감율 | 50% |
 
-Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개선은 주장하지 않는다.
+Human이 정답으로 확정한 기준 데이터가 없으므로 accuracy/precision/recall/FP/FN 개선은 주장하지 않는다.
 
-## F. Structured Output / Privacy — EXECUTED (실제 실행)
+## F. 정해진 응답 형식 / 개인정보 보호 — EXECUTED (실제 실행)
 
 `RestaurantFeedbackInsightServiceIntegrationTest`, `RestaurantInsightPrivacyValidatorTest`.
 
@@ -184,7 +184,7 @@ Human-labeled Ground Truth가 없으므로 accuracy/precision/recall/FP/FN 개�
   전부 저장값 일치 확인.
 - `normalizedAspect` NFKC 정규화 + 공백 축약 확인, 40 Unicode code point 초과 시 거부 확인.
 - PII(전화번호) 포함 aspect Item만 개별 제외 + 나머지 유효 Item 저장 확인.
-- 입력 자체 PII(`EXCLUDED_INPUT_PII`) / Candidate Gate 미통과(`EXCLUDED_CANDIDATE`) 시 Provider
+- 입력 자체 PII(`EXCLUDED_INPUT_PII`) / Provider 호출 후보 필터 미통과(`EXCLUDED_CANDIDATE`) 시 Provider
   호출 **0회** 확인.
 - `relevant=false` 또는 `items=[]` 또는 전체 Item invalid(`EXCLUDED_OUTPUT_VALIDATION`) 시 저장
   Item **0개**, 재전달 시 Provider 재호출 **0회** 확인.
@@ -324,12 +324,12 @@ PR 재리뷰 반영 후 실제 로컬 서버(local profile, 실제 OpenAI Provid
 
 ## 한계
 
-- Concurrent Provider exactly-once는 검증 대상이 아니며 보장하지 않는다. DB 최종 결과 수렴(UNIQUE
-  경쟁 후 단일 row)만 보장 범위다.
-- Evidence C의 §C-2(기존 retained 59건 raw 소비)는 Kafka 레벨 backfill 메커니즘만 증명하며, 그
+- 동시에 들어온 Provider 호출이 정확히 한 번만 일어난다는 것은 검증 대상이 아니며 그렇게 주장하지 않는다. DB 최종 결과가 UNIQUE
+  경쟁 후 단일 row로 수렴하는지만 검증 범위다.
+- Evidence C의 §C-2(기존 retained 59건 원본 소비)는 Kafka 레벨에서 과거 Event를 다시 읽는 메커니즘만 증명하며, 그
   messageId들이 이번 세션 격리 H2 DB에 없어 Analysis/Item 생성까지 연결하지 않았다. Analysis/Item
   생성까지 포함한 전체 파이프라인 증명은 §C-3(합성 Fixture)에서 별도로 수행했다.
-- Candidate Gate의 Frozen Dataset은 16건 규모의 합성 데이터이며 accuracy/precision/recall을
+- Provider 호출 후보 필터의 Frozen Dataset은 16건 규모의 합성 데이터이며 accuracy/precision/recall을
   주장하지 않는다.
 - Production에서 Restaurant Insight는 여전히 비활성 상태이며, 이 Evidence는 이 상태를 바꾸지 않는다.
 - 실제 OpenAI Provider 호출 품질은 검증 대상이 아니다. `RestaurantFeedbackInsightPort`를 Fake로

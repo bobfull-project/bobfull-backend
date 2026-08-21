@@ -11,7 +11,7 @@
   - Track A: date/time 검색의 `shared_table` 전체 스캔 제거 여부와 실제 사용 Index
   - Track B: TimeSlot 20건 예약 가능 회차 조회의 SQL PreparedStatement 수
 - Secondary KPI: `EXPLAIN ANALYZE` actual time/actual rows, join 순서, filesort/temporary 여부, TimeSlot당 Query 수
-- Guardrail: 검색 결과·정렬·페이지 계약 유지, `availableCapacity`와 READY Payment 임시 선점 의미 유지, 관련 회귀 테스트 PASS
+- 안전 확인: 검색 결과·정렬·페이지 계약 유지, `availableCapacity`와 READY Payment 임시 선점 의미 유지, 관련 회귀 테스트 PASS
 - HTTP p50/p95/p99는 이번 Issue의 Primary KPI로 확정하지 않고 #63 K6 Harness에서 별도 측정한다.
 
 ## 기준 코드

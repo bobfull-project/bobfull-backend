@@ -49,10 +49,10 @@ Moderation False Negative로 기록하거나, 이 simulation의 `0`을 전체 Mo
 나머지 49건은 `LLM_REQUIRED`다. 특히 모든 `INJ-01`~`10`, `SAFE-02` 음식 비유, `SAFE-03` 사업장 번호,
 `SAFE-11`~`13` 중의적 fragment, `SPLIT-01`~`14`는 Fast Path에 넣지 않았다.
 
-## Hard Gate
+## 반드시 통과해야 하는 기준
 
-`CLEAR_FLAGGED False Positive = 0`으로 Hard Gate를 통과했다. 이는 production 적용 결정이 아니며,
-실제 Fast Path 저장·LLM fallback·Provider 전체 After 측정은 다음 Human 승인 전까지 수행하지 않는다.
+`CLEAR_FLAGGED False Positive = 0`으로 반드시 통과해야 하는 기준을 만족했다. 이는 production 적용 결정이 아니며,
+실제 Fast Path 저장·LLM 대체 경로·Provider 전체 After 측정은 다음 Human 승인 전까지 수행하지 않는다.
 
 ## 검증 명령
 

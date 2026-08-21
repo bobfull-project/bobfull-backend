@@ -17,7 +17,7 @@
 | 개인 연락처 Split | FLAGGED / PERSONAL_INFORMATION / MEDIUM |
 | 공개 사업장 연락처 Split | FLAGGED / PERSONAL_INFORMATION / MEDIUM (FP) |
 
-핵심 Split Result/Category 탐지는 2/2이며, 정상 공개 사업장 연락처에서 신규 FP 1건이므로 DB Context LLM 품질 Gate는 실패했다. Rule Fast Path는 Provider 호출 없이 `시발`, `병신`을 FLAGGED한다. 애매한 Context는 기존 단건 Provider 입력으로 처리한다.
+핵심 Split Result/Category 탐지는 2/2이며, 정상 공개 사업장 연락처에서 신규 FP 1건이므로 DB Context LLM 품질 기준은 통과하지 못했다. Rule Fast Path는 Provider 호출 없이 `시발`, `병신`을 FLAGGED한다. 애매한 Context는 기존 단건 Provider 입력으로 처리한다.
 
 ## DB Context 계약
 
@@ -27,7 +27,7 @@
 
 ## Trade-off
 
-`chatRoomId` key는 방 순서를 보장하지만 Hot-Key를 만든다. `messageId` key는 병렬성을 확보하지만 방 순서를 포기한다. #266은 Kafka 순서가 아닌 DB 이력으로 명백한 Split Rule 입력을 복원한다.
+`chatRoomId` key는 방 순서를 유지하지만 특정 채팅방에 메시지가 몰리면 한 partition에 부하가 집중된다. `messageId` key는 병렬 처리를 늘릴 수 있지만 방 순서를 포기한다. #266은 Kafka 순서가 아닌 DB 이력으로 명백한 Split Rule 입력을 복원한다.
 
 ## 검증
 

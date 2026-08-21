@@ -16,4 +16,4 @@ V3는 실제 Spring·MySQL 실행기가 아닌 정적 의사결정 시뮬레이�
 - 활성 회차 중복 방지: 김홍기 (gpekd5), PR #99, Issue #33. 실제 `TimeSlot`의 generated `active_start_at`과 UNIQUE, `TimeSlotRepositoryTest` 근거를 사용한다.
 - 라우팅 충돌: 정용태 (sighingpotato, GitHub 표시명 배려하는마음), PR #90, Issue #31. 당시 Docker MySQL local clean build와 79개 테스트 통과는 역사적 PR 기록이며 현재 테스트 수가 아니다.
 
-실제 측정 수치·성능 개선율·JVM 실행 결과를 임의로 만들지 않는다. 검색 실행 계획과 인덱스 후보는 동일 데이터·동일 쿼리에서 실제 측정 예정이며, Redis는 DB 병목 확인 후 TTL·무효화·장애 fallback을 검증한 경우에만 도입을 검토한다.
+실제 측정 수치·성능 개선율·JVM 실행 결과를 임의로 만들지 않는다. 검색 실행 계획과 인덱스 후보는 동일 데이터·동일 쿼리에서 실제 측정 예정이며, Redis는 DB 병목 확인 후 TTL·무효화·장애 시 DB 조회로 대체되는지 검증한 경우에만 도입을 검토한다.

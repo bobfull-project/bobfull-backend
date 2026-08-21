@@ -67,7 +67,9 @@ ADR(Architecture Decision Record)은 여러 대안을 비교한 뒤 프로젝트
 ## 재검토 조건 또는 후속 작업
 ```
 
-## 6. Source of Truth
+## 6. 최종 기준
+
+이 디렉터리는 운영 기준과 템플릿을 제공한다. 아직 결정하지 않은 배포·AWS·구체적인 락·트랜잭션 방식은 미리 ADR로 만들지 않는다.
 
 ADR 내용과 과거 설계가 충돌할 경우 다음 순서를 우선한다.
 
@@ -84,9 +86,9 @@ ADR 내용과 과거 설계가 충돌할 경우 다음 순서를 우선한다.
 
 ## 7. 현재 적용 범위 핵심
 
-- Redis는 Refresh Token·Access Token Blacklist(ADR 0006), 검색 Cache(#62), 채팅 Pub/Sub(ADR 0011)에 사용하며, 다중 App 환경에서는 공용 ElastiCache for Valkey로 분리한다(ADR 0014).
-- Kafka는 AI Moderation과 같은 `ChatMessageCreatedEvent`의 독립 Consumer 처리 경계에 사용한다(ADR 0010). Kafka를 채팅 실시간 fan-out이나 결제·환불 Retry에 범용 적용하지 않는다.
-- Kafka Broker는 현재 MSK가 아니라 App EC2와 분리된 전용 EC2의 단일 KRaft Broker로 운영한다(ADR 0018). 이는 비용·운영 범위 선택이며 Kafka HA 완료를 의미하지 않는다.
+- Redis는 Refresh Token·Access Token Blacklist(ADR 0006), 검색 캐시(#62), 채팅 Pub/Sub(ADR 0011)에 사용하며, 다중 App 환경에서는 공용 ElastiCache for Valkey로 분리한다(ADR 0014).
+- Kafka는 AI Moderation과 같은 `ChatMessageCreatedEvent`를 별도 Consumer가 처리해야 할 때 사용한다(ADR 0010). Kafka를 채팅 실시간 전달이나 결제·환불 재시도에 범용 적용하지 않는다.
+- Kafka Broker는 현재 MSK가 아니라 App EC2와 분리된 전용 EC2의 단일 KRaft Broker로 운영한다(ADR 0018). 이는 비용·운영 범위 선택이며 Kafka Broker 다중화를 완료했다는 뜻이 아니다.
 - Backend 공식 Public Endpoint는 Route 53 → ALB + ACM HTTPS → App EC2 구조다(ADR 0012).
 - App 배포는 ALB Target Group 기반 Blue-Green을 사용한다(ADR 0013). Blue-Green은 배포 안전성 전략이고, 실행 중 App 장애 우회는 `ALB + Active App 2대`가 담당한다.
 - Traffic Auto Scaling은 실제 측정 결과 현재 범위에서 미도입하고 Active App EC2 2대를 유지한다(ADR 0015).
@@ -116,16 +118,16 @@ ADR 내용과 과거 설계가 충돌할 경우 다음 순서를 우선한다.
 | [0016](./0016-blue-green-db-schema-compatibility.md) | Blue-Green DB Schema 호환 전략 | `Accepted` |
 | [0017](./0017-keep-ai-consumer-integrated.md) | AI Consumer Worker/MSA 미분리 | `Accepted` (`MEASURED_AND_REJECTED`) |
 | [0018](./0018-kafka-dedicated-ec2-over-msk.md) | MSK 미도입 / Kafka 전용 EC2 운영 | `Accepted` |
-| [0019](./0019-bounded-refund-reconciliation.md) | 환불 정합성 재조정 상한과 Human Escalation | `Accepted` |
+| [0019](./0019-bounded-refund-reconciliation.md) | 환불 정합성 재조정 상한과 Human 확인 경계 | `Accepted` |
 
 ## 9. 2026-08-18 최종 보강·담당 리뷰
 
 Issue #285와 Draft PR #286에서 기존 ADR 및 신규 후보를 최신 구현/Evidence와 대조하고 담당자 리뷰를 반영했다.
 
 - `0001`: 예약 담당 리뷰에서 최신 락 순서·REPEATABLE_READ 첫 Lock Query·취소/환불 경계와 일치 확인
-- `0010`: #274 동일 Transactional Outbox 조건 비교와 #258 `messageId` key 최종 결정을 재확인. Kafka를 속도 또는 유일한 durability 근거로 표현하지 않음
+- `0010`: #274 동일 Transactional Outbox 조건 비교와 #258 `messageId` key 최종 결정을 재확인. Kafka를 속도 또는 작업 유실을 막는 유일한 근거로 표현하지 않음
 - `0012~0016`: 인프라 담당 리뷰에서 실제 AWS/Evidence와 핵심 사실관계 일치 확인
-- `0013`: 후속 #191 Evidence를 추가해 Inactive STOP·Prometheus Target UP·STOP guardrail의 Source of Truth를 보강하고, Blue-Green 배포 전략과 `ALB + Active App 2대` Runtime HA를 명확히 분리
+- `0013`: 후속 #191 Evidence를 추가해 Inactive STOP·Prometheus Target UP·STOP guardrail의 최종 기준을 보강하고, Blue-Green 배포 전략과 실행 중 App 장애 우회를 담당하는 `ALB + Active App 2대` 구성을 명확히 분리
 - `0014`: 식당/검색 담당 리뷰에서 #62 검색 Cache의 실제 범위와 공용 Redis 서술이 일치함을 확인. #61/#235 Query·Index 튜닝은 ADR로 승격하지 않음
 - `0017`: #192 Human 결정과 통합 실행 유지 결론 일치 확인
 - `0018`: 인프라 리뷰에서 제안된 `MSK 미도입 / Kafka 전용 EC2` 운영 배치 결정을 #169 근거로 별도 기록

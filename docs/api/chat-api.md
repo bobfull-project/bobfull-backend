@@ -1,6 +1,6 @@
 # 채팅 / 신고 API
 
-> Source of Truth: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
+> 최종 기준: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
 
 이 문서는 현재 `develop`의 실제 HTTP 계약을 사람이 읽기 쉬운 상세 명세 형태로 풀어쓴 문서다.
 수정 전 전체 API 명세의 상세 설명·JSON 예시를 참고하되, 최신 코드에 존재하지 않는 API는 제외하고 현재 도메인 문서 계약을 우선 반영했다.
@@ -130,7 +130,7 @@
 - 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료된다. OWNER와 ADMIN은 참여하지 않는다.
 - 예약이 `CANCELLED` 또는 `CLOSED`가 되면 신규 메시지 전송은 종료하지만 기존 메시지는 조회할 수 있다.
 - `now >= TimeSlot.endAt`(노쇼 처리 허용과 동일한 경계, Issue #175)부터는 예약 상태가 아직 `CONFIRMED`여도 신규 메시지 전송을 즉시 차단한다. CLOSED 전이 스케줄러의 처리 지연과 무관하게 이 시간 비교가 우선 적용된다.
-- 메시지는 DB에 저장한다. DB 커밋 뒤 Redis Pub/Sub이 인스턴스별 Simple Broker로 실시간 fan-out하며, Redis는 전달 보장·재생을 제공하지 않는다. Redis 장애로 놓친 메시지는 이 HTTP cursor 조회로 복구한다.
+- 메시지는 DB에 저장한다. DB 커밋 뒤 Redis Pub/Sub이 각 인스턴스의 Simple Broker로 실시간 전달한다. Redis는 메시지를 저장하거나 다시 보내주지 않으므로, Redis 장애로 놓친 메시지는 이 HTTP cursor 조회로 다시 가져온다.
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
 - 읽음 처리, 이미지·파일, 메시지 수정·삭제, 사용자 차단, Redis Streams·Redis Pub/Sub 재전송 Outbox는 범위에서 제외한다. AI Moderation의 Kafka는 실시간 전파와 독립된 분석 경로다. 사용자 신고는 V3 Issue #218 범위에 포함하며, AI Moderation과 사용자 신고는 관리자 Human Review 참고 신호일 뿐 자동 제재 점수·자동 BAN/정지/퇴장에 사용하지 않는다.

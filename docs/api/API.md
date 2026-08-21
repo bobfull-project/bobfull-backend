@@ -1,6 +1,6 @@
 # BobFull API 명세
 
-> Source of Truth: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
+> 최종 기준: 실제 `Controller / DTO / Validation / SecurityConfig / ErrorCode`
 
 현재 BobFull의 Application HTTP API는 **71개**, 운영 Actuator Endpoint는 **2개**다.
 
@@ -74,7 +74,7 @@
 
 ## 정합성 유지 규칙
 
-1. 실제 코드가 최종 Source of Truth다.
+1. 실제 코드가 최종 기준이다.
 2. Controller `Method + Path` 변경 시 해당 도메인 문서도 같은 PR에서 수정한다.
 3. DTO/Validation 변경 시 해당 API의 Request/Response 예시와 필드 계약도 수정한다.
 4. Security/ErrorCode 변경 시 권한·Error 섹션도 함께 수정한다.

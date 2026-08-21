@@ -2,13 +2,13 @@
 
 ## 검증 대상
 
-`ChatMessage`를 DB에 저장·커밋한 뒤 Redis Pub/Sub으로 모든 애플리케이션 인스턴스에 전달하고, 각 인스턴스가 자신의 STOMP 세션으로 한 번 fan-out하는 경로다. AI Moderation의 Transactional Outbox→Kafka 경로는 별도이며 유지한다.
+`ChatMessage`를 DB에 저장·커밋한 뒤 Redis Pub/Sub으로 모든 애플리케이션 인스턴스에 전달하고, 각 인스턴스가 자신의 STOMP 세션으로 한 번 전달하는 경로다. AI Moderation의 Transactional Outbox→Kafka 경로는 별도이며 유지한다.
 
 ## 측정 계약
 
 - Primary KPI: 서로 다른 인스턴스 A↔B의 N건 실시간 수신·누락·중복 수.
 - Secondary KPI: DB commit→Redis publish→원격 STOMP 수신 latency, Redis publish 실패 수, subscriber 재연결 시간, messages/sec.
-- Guardrail: ChatMessage DB 저장 1건, Redis subscriber의 DB 재저장·재발행 0건, 로컬 직접 STOMP+Redis 이중 전달 0건, 기존 참여 권한 유지.
+- 안전 확인: ChatMessage DB 저장 1건, Redis subscriber의 DB 재저장·재발행 0건, 로컬 직접 STOMP+Redis 이중 전달 0건, 기존 참여 권한 유지.
 
 ## 기준 코드
 
@@ -38,10 +38,10 @@
 |---|---|---|---|
 | 저장 후 Redis payload 발행 | 없음 | 단위 테스트로 JSON/channel 확인 | PASS |
 | 커밋 전·롤백 Redis 발행 | 해당 없음 | TransactionSynchronization 테스트에서 0회 | PASS |
-| subscriber local STOMP fan-out | 없음 | destination 1회 단위 테스트 | PASS |
+| subscriber local STOMP 전달 | 없음 | destination 1회 단위 테스트 | PASS |
 | Redis publish 실패 시 저장 경로 예외 전파 | 해당 없음 | publisher가 catch+metric | PASS |
 | A→B / B→A Redis subscriber 수신·인스턴스별 1회 전달 | NOT_RUN | 실제 Redis와 독립 A/B listener container에서 방별 각각 1회 | PASS |
-| 같은 인스턴스 local fan-out 회귀·다른 방 destination 격리 | NOT_RUN | A/B 모두 `/sub/chat/rooms/10`, `/sub/chat/rooms/11` 각 1회 | PASS |
+| 같은 인스턴스 local 전달 회귀·다른 방 destination 격리 | NOT_RUN | A/B 모두 `/sub/chat/rooms/10`, `/sub/chat/rooms/11` 각 1회 | PASS |
 | 실제 App A:8080 ↔ App B:8081 STOMP client, ChatMessage DB 1건 | NOT_RUN | A→B·B→A 각 1회, 메시지별 DB 행 1건 | PASS |
 | Redis 중단·복구, cursor N/N 복구, ALB/WSS 검증 | NOT_RUN | NOT_RUN | NOT_RUN |
 
@@ -59,7 +59,7 @@
   --rerun-tasks
 ```
 
-결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local fan-out, Redis 장애 격리, Controller 직접 발행 제거를 확인한다. Human이 아래 단일 실행 명령으로 전체 build exit code 0을 확인했다. 이전 `NoSuchFileException`의 원인은 확정하지 않았으며, 아래 격리 실행에서는 재현되지 않았다.
+결과: `BUILD SUCCESSFUL` (2026-08-12). 단일 인스턴스 자동 테스트는 Redis payload와 local STOMP 전달, Redis 장애가 요청 처리 전체로 번지지 않는지, Controller 직접 발행 제거를 확인한다. Human이 아래 단일 실행 명령으로 전체 build exit code 0을 확인했다. 이전 `NoSuchFileException`의 원인은 확정하지 않았으며, 아래 격리 실행에서는 재현되지 않았다.
 
 ```bash
 ./gradlew --stop
@@ -92,7 +92,7 @@ rm -rf build
 
 ## 결과 해석
 
-Phase A는 Redis Pub/Sub의 핵심 cross-instance fan-out, 두 Spring Boot 프로세스의 인증 STOMP A↔B 전달, 방별 local STOMP 목적지 격리 및 ChatMessage 단일 저장을 검증한다. 유실률·성능 또는 운영 WSS 성공은 주장하지 않는다.
+Phase A는 Redis Pub/Sub의 인스턴스 간 전달, 두 Spring Boot 프로세스의 인증 STOMP A↔B 전달, 방별 local STOMP 목적지 격리 및 ChatMessage 단일 저장을 검증한다. 유실률·성능 또는 운영 WSS 성공은 주장하지 않는다.
 
 ## 검증 한계
 

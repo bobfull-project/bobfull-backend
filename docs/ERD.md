@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적과 기준
 
-이 문서는 확정된 API와 프로젝트 정책을 구현 가능한 관계형 데이터 모델로 표현한다. 현재 정적 스키마의 Source of Truth는 실제 `Entity / @Table / @Column / @ElementCollection / Repository / Migration / Index` 정의이며, ERD는 그 구현을 사람이 검토할 수 있는 형태로 기록한다.
+이 문서는 확정된 API와 프로젝트 정책을 구현 가능한 관계형 데이터 모델로 표현한다. 현재 정적 스키마의 최종 기준은 실제 `Entity / @Table / @Column / @ElementCollection / Repository / Migration / Index` 정의이며, ERD는 그 구현을 사람이 검토할 수 있는 형태로 기록한다.
 
 - 기준: [`BOBFULL_API_SPEC_COMPLETE.md`](./BOBFULL_API_SPEC_COMPLETE.md), [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md)
 - 범위: V1 예약·결제·환불 조회와 V2 취소·노쇼·채팅·운영 조회, V3 채팅 AI Moderation·Outbox·Restaurant Feedback Insight에 필요한 영속 데이터
@@ -15,7 +15,7 @@
 - 대조: Entity/Table/Column 타입·NULL·PK·FK·UNIQUE·값 기반 참조, `@ElementCollection` 테이블, 실제 `@Index`와 `@UniqueConstraint`, API Spec의 식별자·저장값·계산값
 - 결과: 코드 전용·문서 전용 스키마 요소와 API Spec ↔ ERD 간 명백한 정적 계약 모순을 확인하지 못했다. BLOCKER / MAJOR / MINOR는 0건이다.
 
-이 결과는 정적 설계 문서 기준선이며, 성능 측정 뒤 Index 채택·제거 또는 #67 Final Claim Gate를 확정하는 근거는 아니다.
+이 결과는 정적 설계 문서 기준선이며, 성능 측정 뒤 Index 채택·제거 또는 #67 최종 주장 검토를 확정하는 근거는 아니다.
 
 ## 2. 핵심 데이터 모델 요약
 
@@ -224,8 +224,8 @@ erDiagram
         bigint chat_message_id "값 기반 참조. ChatMessage.id. 물리 FK 아님"
         bigint restaurant_id "값 기반 참조. Restaurant.id. 물리 FK 아님"
         varchar(64) prompt_version "activePromptVersion 등 적용 Prompt 계약"
-        varchar(32) provider "분석 Provider. Gate 제외는 BOBFULL_RULE"
-        varchar(128) model_name "분석 모델. Gate 제외는 normal-exclude"
+        varchar(32) provider "분석 Provider. Provider 호출 제외는 BOBFULL_RULE"
+        varchar(128) model_name "분석 모델. Provider 호출 제외는 normal-exclude"
         datetime(6) analyzed_at "결과 또는 terminal 제외 기록 시각"
         enum status "COMPLETED, EXCLUDED_INPUT_PII, EXCLUDED_CANDIDATE, EXCLUDED_OUTPUT_VALIDATION"
         datetime(6) created_at "생성 시각"
@@ -526,8 +526,8 @@ erDiagram
 | `chat_message_id` | BIGINT | N | UNIQUE `uk_feedback_analysis_message_prompt`(`chat_message_id`, `prompt_version`)의 선행 컬럼 | 값 참조 → `chat_message.chat_message_id`(물리 FK 아님). `ChatMessage.chatRoomId → ChatRoom.reservationId → Reservation.timeSlotId → TimeSlot.sharedTableId → SharedTable.restaurantId` 경로로 `restaurant_id`를 역산해 저장 |
 | `restaurant_id` | BIGINT | N | INDEX `idx_feedback_analysis_restaurant_prompt`의 선행 컬럼 | 값 참조 → `restaurant.restaurant_id`(물리 FK 아님) |
 | `prompt_version` | VARCHAR(64) | N | UNIQUE 후행 컬럼, INDEX 후행 컬럼 | 처리 시점의 `activePromptVersion`. 버전별 결과를 보존하며 OWNER 집계는 현재 `activePromptVersion` 값만 사용 |
-| `provider` | VARCHAR(32) | N |  | 분석 Provider. Gate 제외(`EXCLUDED_INPUT_PII`/`EXCLUDED_CANDIDATE`/`EXCLUDED_OUTPUT_VALIDATION`)는 고정값 `BOBFULL_RULE` |
-| `model_name` | VARCHAR(128) | N |  | 분석 모델. Gate 제외는 고정값 `normal-exclude` |
+| `provider` | VARCHAR(32) | N |  | 분석 Provider. Provider 호출 후보에서 제외된 경우(`EXCLUDED_INPUT_PII`/`EXCLUDED_CANDIDATE`/`EXCLUDED_OUTPUT_VALIDATION`)는 고정값 `BOBFULL_RULE` |
+| `model_name` | VARCHAR(128) | N |  | 분석 모델. Provider 호출 후보에서 제외된 경우는 고정값 `normal-exclude` |
 | `analyzed_at` | DATETIME(6) | N | INDEX 후행 컬럼 | 완료 또는 terminal 제외 기록 시각. OWNER 최근 7일 집계 기준 컬럼 |
 | `status` | ENUM('COMPLETED', 'EXCLUDED_INPUT_PII', 'EXCLUDED_CANDIDATE', 'EXCLUDED_OUTPUT_VALIDATION') | N |  | `COMPLETED`만 `RestaurantFeedbackItem`을 가진다. 나머지 3개는 Item 0개인 terminal 제외 상태 |
 | `created_at`, `updated_at` | DATETIME(6) | Y |  | 생성·수정 시각 |
@@ -618,7 +618,7 @@ OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 `
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
 | `chat_room.reservation_id` | 예약당 채팅방 1개 | DB UNIQUE |
 | `chat_moderation.chat_message_id` | 메시지당 분석 기록 1건 | DB UNIQUE는 INSERT 멱등성, JPA `@Version`은 stale UPDATE 방지 |
-| `restaurant_feedback_analysis(chat_message_id, prompt_version)` | 동일 메시지·동일 Prompt 버전 결과 1건, 버전별 결과는 공존 | DB UNIQUE `uk_feedback_analysis_message_prompt`는 동일 Kafka Event 재전달·동시 처리 경쟁 시 INSERT 멱등성만 보장(Provider 동시 중복 호출 자체는 보장하지 않음) |
+| `restaurant_feedback_analysis(chat_message_id, prompt_version)` | 동일 메시지·동일 Prompt 버전 결과 1건, 버전별 결과는 공존 | DB UNIQUE `uk_feedback_analysis_message_prompt`는 동일 Kafka Event 재전달·동시 처리 경쟁 시 중복 INSERT를 막아 최종 저장 결과가 1건으로 수렴하게 한다. Provider 동시 중복 호출 자체는 막지 않는다. |
 | `restaurant_feedback_item(restaurant_feedback_analysis_id, category, aspect_type, normalized_aspect, opinion_type, sentiment)` | 동일 Analysis 안에서 5-field 조합 Item 중복 저장 금지 | DB UNIQUE `uk_feedback_item_analysis_key` |
 | `payment.payment_id` | Payment 내부 식별자 | PK, AUTO_INCREMENT |
 | `payment.portone_payment_id` | PortOne 외부 결제 식별자 중복 금지 | DB UNIQUE + 상태 전이 멱등 처리 |
@@ -629,7 +629,7 @@ OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 `
 | CREATE partySize | 테이블 정원 이하 | 동적 규칙이므로 트랜잭션 내 애플리케이션 검증 |
 | JOIN partySize | availableCapacity 이하 | 동적 규칙이므로 임시 선점·PAID 합계 조회와 트랜잭션 검증 |
 
-정원 초과 방지는 단순 CHECK로 보장할 수 없다. 같은 회차의 `PAID` 참여 인원과 만료 전 `READY` 결제 인원을 트랜잭션 안에서 다시 검증해야 한다. MySQL 부분 UNIQUE 인덱스를 전제하지 않으므로, TimeSlot의 활성 Reservation 최대 1건과 유효 CREATE READY 최대 1건은 DB 단순 UNIQUE가 아니라 TimeSlot 행 비관적 락, 활성 Reservation 조회, 유효 CREATE READY 조회로 보장한다.
+정원 초과 방지는 단순 CHECK로 막을 수 없다. 같은 회차의 `PAID` 참여 인원과 만료 전 `READY` 결제 인원을 트랜잭션 안에서 다시 검증해야 한다. MySQL 부분 UNIQUE 인덱스를 전제하지 않으므로, TimeSlot의 활성 Reservation 최대 1건과 유효 CREATE READY 최대 1건은 DB 단순 UNIQUE가 아니라 TimeSlot 행 비관적 락, 활성 Reservation 조회, 유효 CREATE READY 조회로 막는다.
 
 동일 TimeSlot에 동시에 여러 CREATE 요청을 보내는 구현 테스트에서 활성 Reservation 또는 유효 CREATE READY의 성공은 최대 1건이어야 한다. 나머지 요청은 `ACTIVE_RESERVATION_ALREADY_EXISTS`를 반환한다. JOIN READY 생성과 `availableCapacity` 계산도 같은 TimeSlot 잠금 경계에서 수행한다.
 

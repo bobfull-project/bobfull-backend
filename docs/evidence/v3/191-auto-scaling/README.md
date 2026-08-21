@@ -14,7 +14,7 @@
 
 - Primary KPI: Hikari Active/Pending, Connection Acquire Latency, Stress Test latency와 dropped iterations
 - Secondary KPI: App CPU, RDS CPU, RDS `Threads_connected`, DatabaseConnections, ALB 요청 분산
-- Guardrail: Blue-Green 배포의 START/STOP, Target Group health, ALB traffic switch, public API 검증, Prometheus Active target 갱신/UP 확인, rollback fail-safe 유지
+- 안전 확인: Blue-Green 배포의 START/STOP, Target Group health, ALB traffic switch, public API 검증, Prometheus Active target 갱신/UP 확인, 실패 시 이전 Active를 멈추지 않는 조건 유지
 
 ## 기준 코드
 
@@ -80,7 +80,7 @@ Inactive 환경은 사용자 트래픽을 받지 않지만 Spring Boot/Hikari가
 
 Inactive EC2 STOP이 API 응답시간을 개선했다고 단정하지 않는다. 동일 Stress Test에서 Active Hikari 10/10 및 Pending 증가가 다시 발생했으므로, Inactive Connection 문제와 Active App Pool 병목은 별개로 해석한다.
 
-## Blue-Green 운영 Guardrail
+## Blue-Green 운영 안전 조건
 
 최종 Blue-Green 흐름은 다음과 같다.
 
@@ -101,7 +101,7 @@ Inactive START
 -> 기존 Active STOP
 ```
 
-Fail-safe 기준:
+실패 시 처리 기준:
 
 - Inactive EC2 START, EC2 running 대기, SSM Online 대기, 배포 또는 Target Group health 검증이 실패하면 Listener traffic을 전환하지 않는다.
 - ALB 전환 확인, public readiness 또는 public API 검증이 실패하면 기존 Listener default action으로 rollback한다.
@@ -109,7 +109,7 @@ Fail-safe 기준:
 - Prometheus target 전환 또는 신규 Active 2대의 UP 검증에 실패하면 기존 Active EC2를 STOP하지 않는다.
 - Rollback Window 종료 후 기존 Active EC2를 STOP하기 직전에 ALB Listener weight를 다시 조회한다.
 - 신규 Active Target Group weight가 100이고 기존 Target Group weight가 0일 때만 기존 Active EC2를 STOP한다.
-- Rollback Window 중 수동 rollback 등으로 Listener 상태가 바뀌면 현재 Blue/Green weight와 skip reason을 로그에 남기고 기존 Active EC2 STOP을 건너뛴다.
+- Rollback Window 중 수동 rollback 등으로 Listener 상태가 바뀌면 현재 Blue/Green weight와 STOP을 건너뛴 이유를 로그에 남기고 기존 Active EC2 STOP을 건너뛴다.
 - Stop 대상은 ALB 전환 이후 다시 계산하지 않고 배포 시작 시점에 저장한 기존 Active instance id만 사용한다.
 
 ## Active Hikari 병목 분석
@@ -208,7 +208,7 @@ Hikari Active가 Pool 10의 10/10에서 Pool 12의 최대 약 2로 나타난 것
 - Inactive Blue-Green EC2는 평상시 STOP 상태로 유지한다.
 - 배포 시 Inactive EC2를 START하고, ALB 전환 및 Prometheus target UP 확인 후 기존 Active를 600초 Rollback Window 동안 유지한다.
 - Rollback Window 종료 시 ALB Listener weight를 다시 확인해 신규 Active Target Group weight가 100이고 기존 Target Group weight가 0일 때만 기존 Active를 STOP한다.
-- Prometheus target 전환 또는 신규 Active 2대의 UP 검증에 실패하면 기존 Active EC2를 STOP하지 않아, 모니터링 공백 상태에서 Rollback 대상을 제거하지 않도록 한다.
+- Prometheus target 전환 또는 신규 Active 2대의 UP 검증에 실패하면 기존 Active EC2를 STOP하지 않는다. 모니터링이 비어 있는 상태에서 되돌아갈 대상을 없애지 않기 위한 조건이다.
 - 향후 App CPU 또는 처리량 포화가 실제 지표로 확인될 때 Auto Scaling을 재검토한다.
 
 ## 검증 한계

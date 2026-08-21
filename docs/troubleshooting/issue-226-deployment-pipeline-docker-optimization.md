@@ -233,7 +233,7 @@ PR2 재배포의 14m 19s는 동일 SHA Image 재사용 조건이므로, 새 이�
 
 다음 병목은 Docker 이미지가 아니라 배포 아키텍처다. 단일 EC2에서 기존 컨테이너를 교체하는 방식은 컨테이너 중단과 새 컨테이너 readiness 사이의 다운타임을 완전히 제거하기 어렵다.
 
-후속 개선은 EC2 다중화와 ALB Health Check 기반 무중단 배포로 넘어가야 한다. 최소 2개 이상의 backend target을 두고, 새 target이 health check를 통과한 뒤 트래픽을 전환하는 구조가 필요하다.
+후속 개선은 EC2 다중화와 ALB Health Check 기반 Blue-Green 배포로 넘어가야 한다. 최소 2개 이상의 backend target을 두고, 새 target이 health check를 통과한 뒤 트래픽을 전환하는 구조가 필요하다.
 
 Gradle Build/Test 병목은 별도 이슈에서 테스트 구조, Spring context 재사용, Kafka Testcontainers 대기, 병렬 실행 가능성을 분리해 다루는 것이 적절하다.
 
@@ -247,7 +247,7 @@ CI/CD 최적화는 한 단계만 보면 효과를 과대평가하기 쉽다. PR1
 중복 작업 제거
 → Docker image/layer 전송량 축소
 → 테스트 병목 분리
-→ 무중단 배포 아키텍처 도입
+→ Health Check 통과 후 트래픽을 전환하는 Blue-Green 배포 아키텍처 도입
 ```
 
 Issue #226은 앞의 두 단계를 처리했고, 남은 큰 병목은 Gradle 테스트 시간과 단일 EC2 배포 구조다.

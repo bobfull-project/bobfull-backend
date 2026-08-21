@@ -8,7 +8,7 @@ BobFull Backend의 외부 진입점을 App EC2 직접 공개 구조에서 Route 
 
 - Primary KPI: 외부 Backend API 진입점이 `https://api.bobfull.click` HTTPS ALB 경로로 동작하고, App EC2 `:8080` 직접 공개가 제거된 상태
 - Secondary KPI: ALB Target Group `Healthy`, HTTP `:80` 요청의 HTTPS `:443` 301 Redirect, Monitoring EC2의 Prometheus 접근 유지
-- Guardrail: `/actuator/health`가 `UP`을 반환하고, App EC2 `:8080` 접근 허용 범위가 ALB SG와 Monitoring SG로 제한된 상태
+- 안전 확인: `/actuator/health`가 `UP`을 반환하고, App EC2 `:8080` 접근 허용 범위가 ALB SG와 Monitoring SG로 제한된 상태
 
 ## 기준 코드
 
@@ -138,7 +138,7 @@ App EC2 `:8080`에서 `0.0.0.0/0` 접근을 제거하고 ALB SG와 Monitoring SG
 
 - AWS 콘솔 화면, 리소스 ARN, Security Group ID, EC2 Public IP는 민감정보·운영정보 노출을 피하기 위해 저장소에 기록하지 않았다.
 - Before 상태는 이미 변경 완료 후였으므로 재현하지 않았고, Issue #206에 기록된 변경 전 구조를 기준으로 비교했다.
-- 성능, 처리량, p95/p99 latency, 장기 장애 전환, 다중 EC2 무중단 배포는 측정하지 않았다.
+- 성능, 처리량, p95/p99 latency, 장기 장애 전환, 다중 EC2 Blue-Green 배포 중 요청 연속성은 측정하지 않았다.
 - Frontend Base URL, PortOne Webhook/Callback 등 외부 설정은 이 Evidence에서 직접 검증하지 않았다.
 - WAF, Auto Scaling, 다중 EC2, RDS/Redis 고가용성은 이번 범위가 아니다.
 

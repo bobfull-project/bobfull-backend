@@ -24,7 +24,7 @@ This issue does not introduce Flyway or Liquibase. The verified scope is the cur
 | performance | `src/test/resources/application-performance.yml` | `create-drop` |
 | prod | `src/main/resources/application-prod.yml` | `${JPA_DDL_AUTO:validate}` |
 | local docker compose app | `docker-compose.yml` | `${JPA_DDL_AUTO:-update}` |
-| AWS deploy fallback | `scripts/aws/deploy-backend-v1.sh` | `validate` when Parameter Store omits `jpa-ddl-auto` |
+| AWS deploy 대체값 | `scripts/aws/deploy-backend-v1.sh` | Parameter Store에 `jpa-ddl-auto`가 없으면 `validate` 사용 |
 
 The production default was changed from `update` to `validate` after the operating RDS schema was verified against the current Entity mapping. Local and performance profiles were not changed by this issue.
 
@@ -36,7 +36,7 @@ The existing explicit SQL file is:
 
 | File | Purpose |
 |---|---|
-| `docs/migrations/issue-138-shared-table-display-number.sql` | One-time MySQL 8 migration for `shared_table.display_number` backfill and uniqueness |
+| `docs/migrations/issue-138-shared-table-display-number.sql` | `shared_table.display_number` 기존 데이터 채움과 UNIQUE 적용을 위한 MySQL 8 1회성 migration |
 
 Current policy:
 
@@ -294,7 +294,7 @@ Conclusion:
 
 Limit:
 
-- 본 검증은 nullable column 추가와 같은 Additive Schema 변경에 대한 호환성 검증이며, 기존 column `MODIFY / RENAME / DROP` 등 destructive migration의 Rollback 안전성을 보장하지 않는다.
+- 본 검증은 nullable column 추가와 같은 additive schema 변경에 대한 호환성 검증이며, 기존 column `MODIFY / RENAME / DROP`처럼 되돌리기 어려운 migration의 Rollback 안전성까지 확인한 것은 아니다.
 - Not verified: existing column `MODIFY`, `RENAME`, `DROP`, type change, `NOT NULL` enforcement, and other destructive migration patterns.
 
 Cleanup:

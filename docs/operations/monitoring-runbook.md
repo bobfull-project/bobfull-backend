@@ -34,7 +34,7 @@ GRAFANA_SLACK_WEBHOOK_URL=<slack-incoming-webhook-url>
 GRAFANA_SLACK_RECIPIENT=<slack-channel-name>
 ```
 
-`BOBFULL_BACKEND_METRICS_TARGET`는 기존 단일 App EC2 측정용 fallback이다. `BOBFULL_BACKEND_METRICS_TARGETS`가 비어 있을 때만 사용한다.
+`BOBFULL_BACKEND_METRICS_TARGET`는 기존 단일 App EC2 측정용 대체값이다. `BOBFULL_BACKEND_METRICS_TARGETS`가 비어 있을 때만 사용한다.
 
 ## Blue/Green Active App 2대 측정 설정
 

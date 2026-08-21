@@ -160,7 +160,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - V2에서 최초 예약 결제 완료 시 예약당 채팅방 1개를 생성한다. 별도 생성 API는 없다.
 - 유효 참여자는 결제 완료 참여자 중 `CANCELLED`가 아닌 참여자다. 유효 참여자만 접근하며, `CANCELLED` 참여자는 즉시 접근이 종료되고 OWNER와 ADMIN은 참여하지 않는다.
 - 예약이 `CANCELLED` 또는 `CLOSED`면 새 메시지 전송을 종료하고, 기존 메시지는 조회할 수 있다. `CONFIRMED → CLOSED` 전이는 스케줄러가 처리하지만, 스케줄러 지연과 무관하게 `now >= TimeSlot.endAt`부터는 새 메시지 전송을 즉시 차단한다(Issue #175).
-- 메시지는 DB에 저장하며 과거 메시지는 cursor 기반으로 조회한다. V3 #170은 DB 커밋 후 Redis Pub/Sub(`bobfull:chat:messages`)으로 각 애플리케이션 인스턴스에 실시간 전파한다. Pub/Sub은 best-effort이며 재생하지 않으므로, 단절 중 놓친 메시지는 DB cursor 조회가 공식 복구 경로다. Redis 발행 실패는 저장된 메시지를 롤백하지 않는다.
+- 메시지는 DB에 저장하며 과거 메시지는 cursor 기반으로 조회한다. V3 #170은 DB 커밋 후 Redis Pub/Sub(`bobfull:chat:messages`)으로 각 애플리케이션 인스턴스에 실시간 전파한다. Pub/Sub은 메시지를 저장하거나 다시 보내주지 않으므로, 단절 중 놓친 메시지는 DB cursor 조회가 공식 복구 경로다. Redis 발행 실패는 저장된 메시지를 롤백하지 않는다.
 - WebSocket 연결 Endpoint는 `/ws`다.
 - STOMP 전송 경로는 `/pub/chat/rooms/{chatRoomId}/messages`, 구독 경로는 `/sub/chat/rooms/{chatRoomId}`다.
 - HTTP 조회 경로는 `GET /api/chat/rooms/{chatRoomId}/messages`다.
@@ -189,7 +189,7 @@ RefundStatus: REQUESTED, PROCESSING, COMPLETED, FAILED
 - 실패 결제·환불 재처리, 정산 데이터 재집계
 - 부하 테스트, 검색 성능·이벤트 처리·AI Moderation·Restaurant Feedback Insight·모니터링·배포 고도화
 
-Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 fan-out만 수행하고, 영속·재처리·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Restaurant Feedback Insight는 같은 ChatMessage Event를 별도 Consumer Group으로 재사용한다. Redis Pub/Sub과 Kafka는 서로 대체하지 않는다.
+Redis는 ERD 엔티티가 아니며 인증·검색 캐시와 V3 채팅 Pub/Sub에 사용한다. 채팅은 DB 커밋 뒤 Redis Pub/Sub으로 실시간 전달만 수행하고, 메시지 저장·재전송·AI 분석은 담당하지 않는다. Kafka는 V3 AI Moderation의 Outbox 기반 비동기 분석·재처리 경로이며, Restaurant Feedback Insight는 같은 ChatMessage Event를 별도 Consumer Group으로 재사용한다. Redis Pub/Sub과 Kafka는 서로 대체하지 않는다.
 
 Restaurant Feedback Insight는 코드·테스트·Evidence 기준으로 구현됐지만 production 기본 설정은 `bobfull.kafka.restaurant-insight.consumer-enabled=false`, `bobfull.ai.restaurant-insight.enabled=false`다. 배포 스크립트의 환경변수 주입 경로가 존재하더라도 실제 운영에서 enabled 상태라고 단정하지 않는다.
 
