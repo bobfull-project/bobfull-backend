@@ -618,7 +618,7 @@ OWNER 조회(`GET /api/owner/restaurants/{restaurantId}/feedback-insights`)는 `
 | `reservation_participant` | 같은 회원의 같은 예약 중복 참여 금지 | `(reservation_id, member_id)` UNIQUE |
 | `chat_room.reservation_id` | 예약당 채팅방 1개 | DB UNIQUE |
 | `chat_moderation.chat_message_id` | 메시지당 분석 기록 1건 | DB UNIQUE는 INSERT 멱등성, JPA `@Version`은 stale UPDATE 방지 |
-| `restaurant_feedback_analysis(chat_message_id, prompt_version)` | 동일 메시지·동일 Prompt 버전 결과 1건, 버전별 결과는 공존 | DB UNIQUE `uk_feedback_analysis_message_prompt`는 동일 Kafka Event 재전달·동시 처리 경쟁 시 최종 INSERT가 1건으로 수렴하는지만 막는다. Provider 동시 중복 호출 자체는 막지 않는다. |
+| `restaurant_feedback_analysis(chat_message_id, prompt_version)` | 동일 메시지·동일 Prompt 버전 결과 1건, 버전별 결과는 공존 | DB UNIQUE `uk_feedback_analysis_message_prompt`는 동일 Kafka Event 재전달·동시 처리 경쟁 시 중복 INSERT를 막아 최종 저장 결과가 1건으로 수렴하게 한다. Provider 동시 중복 호출 자체는 막지 않는다. |
 | `restaurant_feedback_item(restaurant_feedback_analysis_id, category, aspect_type, normalized_aspect, opinion_type, sentiment)` | 동일 Analysis 안에서 5-field 조합 Item 중복 저장 금지 | DB UNIQUE `uk_feedback_item_analysis_key` |
 | `payment.payment_id` | Payment 내부 식별자 | PK, AUTO_INCREMENT |
 | `payment.portone_payment_id` | PortOne 외부 결제 식별자 중복 금지 | DB UNIQUE + 상태 전이 멱등 처리 |

@@ -59,7 +59,7 @@
 
 - 기존 인증 Redis(`RefreshTokenStore`, `AccessTokenBlacklistStore`, key prefix `auth:`)와 같은 Redis 인스턴스를 재사용한다.
 - 검색 캐시는 `bobfull:search:` prefix로 완전히 분리했다. serializer는 `StringRedisTemplate` + `tools.jackson.databind.ObjectMapper`(JSON), 인증 쪽과 동일한 `StringRedisTemplate` 계열이라 별도 serializer 충돌이 없다.
-- 장애 영향 분리: `RestaurantSearchCacheStore`는 Redis 예외(연결 실패 등)를 전부 삼키고 로그만 남긴다. 그래서 검색 캐시가 실패해도 요청은 DB 조회로 계속 처리된다(Human 결정 Q2). 인증 Redis는 Blacklist 조회 실패 시 요청을 막지 않고, Refresh Token 조회 실패 시 재발급을 거부한다. 검색 캐시와 인증 기능은 각자 다른 클래스, 다른 key prefix, 별도 예외 처리를 사용하므로 서로의 장애가 영향을 주지 않는다.
+- 장애 영향 분리: `RestaurantSearchCacheStore`는 Redis 예외(연결 실패 등)를 전부 삼키고 로그만 남긴다. 그래서 검색 캐시가 실패해도 요청은 DB 조회로 계속 처리된다(Human 결정 Q2). 인증 Redis는 Blacklist 조회 실패 시 요청을 막지 않고, Refresh Token 조회 실패 시 재발급을 거부한다. 검색 캐시와 인증 기능은 같은 Redis 인스턴스를 쓰지만, 각자 다른 클래스·key prefix·예외 처리를 사용하므로 한 기능의 예외 처리 결과가 다른 기능 로직으로 직접 전파되지는 않는다.
 
 ### 성능 관련 부수 발견과 수정
 
