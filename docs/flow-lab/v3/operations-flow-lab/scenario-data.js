@@ -122,10 +122,25 @@ const paymentFollowupTopology = {
     "emailExecutor-emailProcessor": "M1000 210 V235", "emailProcessor-email": "M1000 305 V330"
   },
   labels: {},
+  /* region.tint(opt-in) — 배경에 카테고리 색을 옅게 채우고 점선 테두리를 준다. 핵심 TX(sync)와
+     COMMIT 이후 독립 처리(async)가 서로 다른 실행 컨텍스트라는 게 옅은 배경만으로는 잘 안 보인다는
+     피드백을 반영해, region-bg 자체에 카테고리 fill을 넣어 "박스가 나뉘어 있다"가 한눈에 보이게 한다. */
   regions: [
-    { label: "핵심 거래 TX · Outbox PENDING 기록", x: 10, y: 20, w: 710, h: 180 },
-    { label: "COMMIT 이후 · 독립 후속 처리", x: 740, y: 20, w: 350, h: 390 }
-  ]
+    { label: "핵심 거래 TX · Outbox PENDING 기록", x: 10, y: 20, w: 710, h: 180, tint: "sync" },
+    { label: "COMMIT 이후 · 독립 후속 처리", x: 740, y: 20, w: 350, h: 390, tint: "async" }
+  ],
+  /* Ch0 Showcase 전용 카테고리 tint(opt-in) — 실제 트랜잭션 경계(핵심 TX vs COMMIT 이후 독립 처리)를
+     그대로 따라간다. user는 결제한 사용자 요청이 만드는 도메인 엔티티, sync는 같은 핵심 TX 안의
+     Outbox 기록·COMMIT, async는 AFTER_COMMIT 이후 독립 처리다. 다른 topology는 nodeCategories가
+     없으므로 이 tint의 영향을 받지 않는다. categorized:true는 renderCanvas가 이 topology를 그릴 때만
+     .categorized-topology CSS scope를 붙이게 하는 opt-in 플래그다. */
+  categorized: true,
+  nodeCategories: {
+    payment: "user", reservation: "user", participant: "user",
+    chatOutbox: "sync", emailOutbox: "sync", commit: "sync",
+    afterCommit: "async", chatProcessor: "async", chatroom: "async",
+    emailExecutor: "async", emailProcessor: "async", email: "async"
+  }
 };
 const paymentFollowupSteps = [
   step("payment-success", "PortOne", "Payment", "● PortOne 외부 결제 검증을 통과해 결제가 완료됩니다", "사용자가 결제를 마쳤고, PortOne 외부 결제 검증까지 확인됐습니다.",
@@ -222,7 +237,16 @@ const serviceUnifiedTopology = {
     { label: "일반 사용자", x: 10, y: 25, w: 1180, h: 100, emphasis: true, role: "user" },
     { label: "사장님", x: 10, y: 185, w: 1180, h: 90, emphasis: true, role: "owner" },
     { label: "자동 관리", x: 10, y: 333, w: 1180, h: 177, emphasis: true, role: "auto" }
-  ]
+  ],
+  /* Lane 배경(region.role)은 이미 있던 구분이고, 여기 nodeCategories는 각 node 테두리·active 강조에도
+     같은 Lane 색을 입혀 "이 node가 어느 주체 소관인가"를 Lane뿐 아니라 node 자체에서도 보이게 한다.
+     cat-owner/cat-auto는 category CSS에서 role-owner/role-auto를 그대로 재사용한다(새 색 추가 없음). */
+  categorized: true,
+  nodeCategories: {
+    "o-register": "owner", "o-setup": "owner", "o-reservation": "owner", "o-payout": "owner", "o-noshow": "owner",
+    "u-explore": "user", "u-select": "user", "u-pay": "user", "u-confirm": "user", "u-chat": "user", "u-meal": "user", "u-done": "user",
+    "a-paid": "auto", "a-accumulate": "auto", "a-judge": "auto", "a-close": "auto", "a-mealend": "auto", "a-chatroom": "auto", "a-email": "auto"
+  }
 };
 const serviceUnifiedSteps = [
   step("register", "사장님", "식당 등록", "1. 식당 정보를 새로 등록해요", "사장님이 BobFull에 식당 정보를 등록합니다.",
@@ -261,16 +285,21 @@ const serviceUnifiedSteps = [
 ];
 
 /* 인프라 흐름 탭(실제 요청은 어떤 인프라를 지나가는가) — #169/#206 Evidence와 GitHub Actions/scripts/aws
-   기준으로 검증된 실제 구성만 반영한다. CloudFront/S3 프론트엔드는 이 저장소에서 확인되지 않아 제외한다.
+   기준으로 검증된 실제 구성만 반영한다. 이 탭의 4개 Scenario(일반 API/채팅/AI 검수/배포)는 전부
+   api.bobfull.click(백엔드) 요청 경로만 다루므로, www.bobfull.click 프론트엔드(CloudFront/S3, 최종
+   인프라 구성도에서 확인됨)는 이 topology 범위 밖이다 — 프론트엔드 배치는 fullArchitectureTopology
+   (전체 인프라 구성도)에서 다룬다.
    재검증 결과 가장 중요한 수정: "AI Consumer"는 별도 node/서버가 아니다 — ChatModerationConsumer는
    평범한 @KafkaListener @Component로, Web/API와 같은 프로세스·같은 JAR·같은 EC2에서 돈다
    (#192 "통합 모놀리스 유지" 최종 결정). 그래서 이 topology에는 별도 consumer node를 두지 않고,
    Kafka→App EC2로 다시 들어오는 edge로 "같은 프로세스가 소비한다"를 표현한다(node sublabel로도
-   명시). Blue/Green은 Target Group 뒤의 Application 배포 그룹일 뿐이고, RDS/Redis/Kafka/S3는
+   명시). Blue/Green은 Target Group 뒤의 Application 배포 그룹일 뿐이고, RDS/Valkey/Kafka/S3는
    특정 색 전용이 아니라 공유 Infrastructure다 — 이 구분이 드러나도록 Region을 역할별 Layer로
    나눴다. [ 일반 API / 채팅 / AI 검수 / 배포 ] 4개 Scenario는 이 하나의 고정 topology를 공유하고
    Step마다 활성 Node/Edge만 다르다(Topology="무엇이 연결돼 있나" vs Scenario="이번 요청이 어디를
-   지나가나"). CloudFront는 이번에도 재확인했지만 실제 사용 근거가 없어 계속 제외한다. */
+   지나가나"). ElastiCache 노드는 실제 엔진 기준(ADR-0014, #169 evidence)으로 "ElastiCache Valkey"로
+   표기한다 — Redis Pub/Sub·Redis Cache는 Valkey가 제공하는 Redis 호환 프로토콜/기능 이름이라
+   그대로 둔다. */
 const infraTopology = {
   /* viewBox 세로를 650→460으로 압축했다(가로는 그대로) — Showcase Stage는 Chapter 모드의
      canvas-slot과 달리 높이 상한이 없어서, 세로로 긴 비율의 topology는 화면을 거의 다 채워
@@ -291,7 +320,7 @@ const infraTopology = {
     ["client", "Client"], ["route53", "Route 53"], ["alb", "ALB (HTTPS)"],
     ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
     ["ec2Blue1", "Blue EC2 #1"], ["ec2Blue2", "Blue EC2 #2"], ["ec2Green1", "Green EC2 #1"], ["ec2Green2", "Green EC2 #2"],
-    ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"], ["s3", "S3(식당 이미지)"],
+    ["rds", "RDS MySQL"], ["redis", "ElastiCache Valkey"], ["kafka", "Kafka EC2"], ["s3", "S3(식당 이미지)"],
     ["llm", "LLM(OpenAI)"],
     ["gha", "GitHub Actions"], ["ecr", "ECR"], ["ssm", "SSM Run Command"]
   ],
@@ -330,12 +359,21 @@ const infraTopology = {
     "gha-ecr": [795, 217], "ecr-ssm": [795, 317]
   },
   regions: [
-    { label: "Entry / Routing", x: 10, y: 5, w: 445, h: 100 },
-    { label: "Application (Blue/Green)", x: 130, y: 115, w: 540, h: 195 },
-    { label: "Shared Data / Messaging", x: 120, y: 340, w: 445, h: 90 },
-    { label: "AI", x: 565, y: 340, w: 115, h: 90 },
-    { label: "Deployment Control Plane", x: 730, y: 115, w: 120, h: 300 }
-  ]
+    { label: "Entry / Routing", x: 10, y: 5, w: 445, h: 100, tint: "user" },
+    { label: "Application (Blue/Green)", x: 130, y: 115, w: 540, h: 195, tint: "sync" },
+    { label: "Shared Data / Messaging", x: 120, y: 340, w: 445, h: 90, tint: "external" },
+    { label: "AI", x: 565, y: 340, w: 115, h: 90, tint: "external" },
+    { label: "Deployment Control Plane", x: 730, y: 115, w: 120, h: 300, tint: "async" }
+  ],
+  /* Ch0 인프라 흐름 전용 카테고리 — 진입(user)/App EC2(sync)/공유 Data·Messaging·LLM(external)/
+     배포 제어(async) 4개로, region.tint과 1:1로 맞춘다. */
+  categorized: true,
+  nodeCategories: {
+    client: "user", route53: "user", alb: "user",
+    tgBlue: "sync", tgGreen: "sync", ec2Blue1: "sync", ec2Blue2: "sync", ec2Green1: "sync", ec2Green2: "sync",
+    rds: "external", redis: "external", kafka: "external", s3: "external", llm: "external",
+    gha: "async", ecr: "async", ssm: "async"
+  }
 };
 const infraSteps = {
   api: [
@@ -353,10 +391,10 @@ const infraSteps = {
   chat: [
     step("chat-1", "User A", "Green EC2 #1", "● User A가 ALB를 거쳐 Green EC2 #1에 채팅 메시지를 보냅니다", "User A가 ALB를 거쳐 활성 Target Group(Green) 뒤의 EC2 #1에 접속해 메시지를 보냅니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["client", "route53", "alb", "tgGreen", "ec2Green1"], ["client-route53", "route53-alb", "alb-tgGreen", "tgGreen-ec2Green1"], "request", null, "core") }),
-    step("chat-2", "Green EC2 #1", "ElastiCache Redis", "◆ 메시지를 받은 애플리케이션 서버가 Redis Pub/Sub 채널에 메시지를 발행합니다", "Green EC2 #1이 메시지를 저장한 뒤 공유 ElastiCache Redis(Pub/Sub)로 신호를 전파합니다 — Redis는 Blue·Green 전용으로 나뉘어 있지 않은 하나의 공유 인프라입니다. Redis 역할은 Cache와 Pub/Sub 두 가지입니다.",
+    step("chat-2", "Green EC2 #1", "ElastiCache Valkey", "◆ 메시지를 받은 애플리케이션 서버가 Redis Pub/Sub 채널에 메시지를 발행합니다", "Green EC2 #1이 메시지를 저장한 뒤 공유 ElastiCache Valkey(Redis Pub/Sub 호환)로 신호를 전파합니다 — Valkey는 Blue·Green 전용으로 나뉘어 있지 않은 하나의 공유 인프라입니다. 역할은 Cache와 Pub/Sub 두 가지입니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["ec2Green1", "redis"], ["ec2Green1-appPool", "appPool-redis"], "broadcast", null, "core", ["client", "route53", "alb", "tgGreen"]),
         evidenceReferences: [evidence.appHa, evidence.redis] }),
-    step("chat-3", "ElastiCache Redis", "Green EC2 #2", "✓ Redis Pub/Sub이 메시지를 구독 중인 다른 애플리케이션 서버에도 전달합니다", "다른 인스턴스(Green EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
+    step("chat-3", "ElastiCache Valkey", "Green EC2 #2", "✓ Redis Pub/Sub이 메시지를 구독 중인 다른 애플리케이션 서버에도 전달합니다", "다른 인스턴스(Green EC2 #2)가 신호를 받아 자기에게 접속한 User B에게 실시간으로 전달합니다 — 서버가 달라도 같은 채팅방이 연결됩니다.",
       { factStatus: FACT.VERIFIED, topologyKey: "infra", visual: visual(["redis", "ec2Green2"], ["appPool-redis", "appPool-ec2Green2"], "broadcast", "delivered", "core", ["client", "route53", "alb", "tgGreen", "ec2Green1"]),
         decisionBadge: "#169 verified · 실제 다중 EC2 + 공용 ElastiCache 검증",
         evidenceReferences: [evidence.appHa] })
@@ -399,28 +437,31 @@ const infraSteps = {
    이 데이터는 "실제로 무엇이 어디에 배치되어 있는가"(Topology)를 보여준다. 그래서 Scenario/Step/
    token 애니메이션이 없고, 모든 node·edge가 항상 중립(회색)이며 Orange는 쓰지 않는다 — 클릭한
    node와 직접 연결된 edge만 선택 강조(active 재사용)로 표시한다.
-   Repository 재조사 결과를 기준으로만 포함했다(#274 이후 재검증, 2026-08-15 기준):
-   ACTIVE로 확인된 것만 포함 — Route53/ALB/Blue-Green EC2/RDS(Single-AZ)/Redis(ElastiCache)/
+   Repository 재조사 결과 + Human이 확인한 최종 인프라 구성도를 기준으로 포함했다(#274 이후
+   재검증, 2026-08-19 최종 구성도 반영):
+   ACTIVE로 확인된 것만 포함 — Route53/CloudFront/Frontend S3(www.bobfull.click, 최종 구성도에서
+   실제 배포 완료로 확인됨)/ALB/Blue-Green EC2/RDS(Single-AZ)/ElastiCache Valkey(ADR-0014,
+   #169 evidence — 코드/설정의 "Redis"는 Valkey가 제공하는 Redis 호환 프로토콜 이름)/
    Kafka(자체 EC2 단일 KRaft)/S3/Lambda(restaurant-image-validator, 이번 조사에서 새로 확인)/
    OpenAI/PortOne/SMTP/GitHub Actions(OIDC)/ECR/SSM Run Command/Parameter Store(실제 secret
-   원천)/Prometheus·Grafana(메트릭)/Slack(Grafana 알림 전용, 앱 코드 연동 아님)/CloudWatch Logs
-   (로그 전용, 메트릭 아님). CloudFront는 계획만 있고 구현 근거가 없어 제외했다
-   (docs/deployment/aws-v1-backend.md의 "제외 범위" 언급뿐). Auto Scaling/RDS Multi-AZ/MSK/
-   별도 AI Consumer EC2도 구현 근거가 없어 넣지 않았다. V2 인프라 이미지는 이번 대화에도 저장소에도
-   없어 비교를 생략하고 현재 Repository 증거만 기준으로 삼았다.
+   원천)/Prometheus·Grafana(단일 Monitoring EC2의 monitoring/docker-compose.yml로 함께 운영)/
+   Slack(Grafana 알림 전용, 앱 코드 연동 아님)/CloudWatch Logs(로그 전용, 메트릭 아님).
+   Auto Scaling/RDS Multi-AZ/MSK/별도 AI Consumer EC2는 여전히 구현 근거가 없어 넣지 않았다.
    Node 100x70/edge M-H-V 관례, region 배경 재사용 등 기존 topology와 동일한 그리기 규칙을 그대로
    따른다 — "AWS VPC" region은 Application·Shared를 감싸는 큰 배경이라 regions 배열 맨 앞에 둬서
-   가장 먼저(가장 뒤에) 그려지게 했다(이후 항목이 그 위에 그려짐). Application EC2 4대 → Shared
-   인프라 5종(RDS/Redis/Kafka/S3/LLM)로 가는 fan-out은 요약 Map과 같은 "Application Pool" 가상
+   가장 먼저(가장 뒤에) 그려지게 했다(이후 항목이 그 위에 그려짐). CloudFront/Frontend S3는 VPC
+   밖의 관리형 서비스라 VPC region 바깥(Client/Entry 열)에 둔다. Application EC2 4대 → Shared
+   인프라 5종(RDS/Valkey/Kafka/S3/LLM)로 가는 fan-out은 요약 Map과 같은 "Application Pool" 가상
    합류점 방식을 그대로 재사용해 "Blue/Green이 각각 다른 자원을 쓴다"는 오해를 여기서도 막는다. */
 const fullArchitectureTopology = {
   viewBox: "0 0 1400 830",
   nodes: [
-    ["users", "Users / Browser"], ["route53", "Route 53"], ["alb", "ALB (HTTPS)"],
+    ["users", "Users / Browser"], ["route53", "Route 53"], ["cloudfront", "CloudFront"], ["frontendS3", "Frontend S3"],
+    ["alb", "ALB"],
     ["tgBlue", "TG Blue"], ["tgGreen", "TG Green"],
     ["blue1", "Blue EC2 #1"], ["blue2", "Blue EC2 #2"], ["green1", "Green EC2 #1"], ["green2", "Green EC2 #2"],
-    ["rds", "RDS MySQL"], ["redis", "ElastiCache Redis"], ["kafka", "Kafka EC2"],
-    ["s3", "S3(식당 이미지)"], ["lambda", "Image Validator Lambda"],
+    ["rds", "RDS MySQL"], ["redis", "ElastiCache Valkey"], ["kafka", "Kafka EC2"],
+    ["s3", "S3"], ["lambda", "Lambda"],
     ["openai", "OpenAI(LLM)"], ["portone", "PortOne"], ["smtp", "SMTP/Mail"],
     ["developer", "Developer / GitHub"], ["ghaction", "GitHub Actions"], ["ecr", "ECR"],
     ["ssm", "SSM Run Command"], ["paramstore", "Parameter Store"],
@@ -428,6 +469,7 @@ const fullArchitectureTopology = {
   ],
   nodePositions: {
     users: [40, 40], route53: [40, 140], alb: [40, 240],
+    cloudfront: [40, 340], frontendS3: [40, 440],
     tgBlue: [300, 90], tgGreen: [600, 90],
     blue1: [240, 220], blue2: [390, 220], green1: [540, 220], green2: [690, 220],
     rds: [260, 430], redis: [410, 430], kafka: [560, 430],
@@ -436,13 +478,16 @@ const fullArchitectureTopology = {
     developer: [1130, 40], ghaction: [1130, 150], ecr: [1130, 260], ssm: [1130, 370], paramstore: [1130, 480],
     prometheus: [260, 630], grafana: [430, 630], slack: [600, 630], cloudwatch: [770, 630]
   },
-  nodeSublabels: {
-    blue1: "AI Consumer 포함", blue2: "AI Consumer 포함", green1: "AI Consumer 포함", green2: "AI Consumer 포함",
-    rds: "Single-AZ", redis: "Cache / Pub-Sub", kafka: "단일 KRaft Broker",
-    s3: "식당 이미지", lambda: "업로드 검증", slack: "Grafana Alert 전용", cloudwatch: "Logs(메트릭 아님)"
-  },
+  /* Node 안에는 기술명만 남긴다 — "AI Consumer 포함"/"Single-AZ"/"Grafana Alert 전용" 같은 부연
+     설명은 전체 인프라 구성도를 처음 보는 사람에게는 잡음이라, Node 클릭 시 열리는 상세 패널
+     (fullArchitectureNodeDetails)에서만 설명한다. */
   edges: {
     "users-route53": "M140 75 V140", "route53-alb": "M140 210 V240",
+    /* CloudFront/Frontend S3는 Route53(www.bobfull.click)의 또 다른 분기다 — alb 박스를 그대로
+       내려가면 관통하므로, alb 오른쪽 바깥(x=190)으로 우회한 뒤 cloudfront 옆(중간 높이)으로
+       들어간다. alb-tgBlue/tgGreen이 쓰는 것과 같은 우회 관례를 재사용한다. */
+    "route53-cloudfront": "M140 210 H190 V375 H140",
+    "cloudfront-frontendS3": "M140 410 V440",
     "alb-tgBlue": "M140 275 H190 V125 H300",
     /* tgBlue/tgGreen이 같은 y(90~160)에 나란히 있어서, alb-tgGreen이 그냥 직선으로 가면 tgBlue
        박스를 관통한다 — tgBlue 위(y=80, 박스 top=90보다 위)로 넘어간 뒤 tgGreen으로 내려간다. */
@@ -474,15 +519,30 @@ const fullArchitectureTopology = {
     "ssm-green1": "M1130 405 H1080 V25 H590 V220", "ssm-green2": "M1130 405 H1080 V25 H740 V220"
   },
   regions: [
+    /* AWS VPC는 안쪽 Application/Shared Data를 감싸는 바깥 wrapper라 따로 tint를 주지 않는다 —
+       안쪽 region과 겹쳐 칠하면 오히려 더 탁해진다. 안쪽 7개 region만 카테고리별로 tint한다. */
     { label: "AWS VPC", x: 200, y: 20, w: 640, h: 560 },
-    { label: "Client / Entry", x: 20, y: 20, w: 160, h: 290 },
-    { label: "Application (Blue/Green)", x: 220, y: 60, w: 600, h: 280 },
-    { label: "Shared Data / Messaging", x: 220, y: 400, w: 600, h: 160 },
-    { label: "Image Pipeline", x: 860, y: 400, w: 200, h: 200 },
-    { label: "AI / External Services", x: 860, y: 20, w: 200, h: 310 },
-    { label: "Deployment Control Plane", x: 1100, y: 20, w: 260, h: 560 },
-    { label: "Monitoring / Observability", x: 220, y: 600, w: 900, h: 140 }
-  ]
+    { label: "Client / Entry / Frontend", x: 20, y: 20, w: 160, h: 500, tint: "user" },
+    { label: "Application (Blue/Green)", x: 220, y: 60, w: 600, h: 280, tint: "sync" },
+    { label: "Shared Data / Messaging", x: 220, y: 400, w: 600, h: 160, tint: "external" },
+    { label: "Image Pipeline", x: 860, y: 400, w: 200, h: 200, tint: "external" },
+    { label: "AI / External Services", x: 860, y: 20, w: 200, h: 310, tint: "external" },
+    { label: "Deployment Control Plane", x: 1100, y: 20, w: 260, h: 560, tint: "async" },
+    { label: "Monitoring EC2 (Docker: Prometheus + Grafana)", x: 220, y: 600, w: 900, h: 140, tint: "async" }
+  ],
+  /* 요약 인프라 흐름(infraTopology)과 같은 4개 카테고리를 그대로 재사용한다 — 여기는 Node 수가
+     많아 Shared Data/Image Pipeline/AI External Services 3개 region 전부가 external, Deployment
+     Control Plane과 Monitoring 둘 다 "요청 경로와 독립적으로 도는 운영 채널"이라는 의미로 async를
+     공유한다. */
+  categorized: true,
+  nodeCategories: {
+    users: "user", route53: "user", cloudfront: "user", frontendS3: "user", alb: "user",
+    tgBlue: "sync", tgGreen: "sync", blue1: "sync", blue2: "sync", green1: "sync", green2: "sync",
+    rds: "external", redis: "external", kafka: "external", s3: "external", lambda: "external",
+    openai: "external", portone: "external", smtp: "external",
+    developer: "async", ghaction: "async", ecr: "async", ssm: "async", paramstore: "async",
+    prometheus: "async", grafana: "async", slack: "async", cloudwatch: "async"
+  }
 };
 /* Node 클릭 시 Detail Panel에 그대로 뿌리는 짧은 구조화 설명 — Role/Runtime/Connected To/Network/
    Evidence 5개 필드로 고정한다(길게 쓰지 않는다, Diagram 안 설명은 sublabel 1~2단어로 충분).
@@ -490,16 +550,18 @@ const fullArchitectureTopology = {
    또는 생략한다. */
 const fullArchitectureNodeDetails = {
   users: { role: "실제 사용자 브라우저/앱", runtime: "BobFull 프론트엔드 클라이언트", connectedTo: "Route 53", network: "Public Internet", evidence: "—" },
-  route53: { role: "DNS 라우팅", runtime: "api.bobfull.click → ALB Alias", connectedTo: "ALB(HTTPS)", network: "관리형 DNS(콘솔 관리)", evidence: "docs/evidence/v3/206-backend-ingress-https/README.md" },
+  route53: { role: "DNS 라우팅", runtime: "api.bobfull.click → ALB Alias, www.bobfull.click → CloudFront Alias", connectedTo: "ALB(HTTPS), CloudFront", network: "관리형 DNS(콘솔 관리)", evidence: "docs/evidence/v3/206-backend-ingress-https/README.md" },
+  cloudfront: { role: "프론트엔드 정적 배포 CDN", runtime: "www.bobfull.click Origin", connectedTo: "Route 53, Frontend S3(Origin)", network: "관리형 CDN(VPC 밖)", evidence: "—" },
+  frontendS3: { role: "프론트엔드 정적 파일 호스팅", runtime: "Static Website Hosting", connectedTo: "CloudFront(Origin)", network: "Public(S3 Static Website, VPC 밖)", evidence: "docs/deployment/aws-v1-backend.md §CORS와 S3 프론트엔드 Origin" },
   alb: { role: "HTTPS 진입점 · Blue/Green Target Group 가중치 라우팅", runtime: "ACM 인증서 · Listener Weight 100/0 ↔ 0/100", connectedTo: "TG Blue, TG Green", network: "콘솔 관리(Public Subnet 추정, VPC/Subnet은 IaC 없이 콘솔 관리)", evidence: "scripts/aws/deploy-backend-blue-green-v1.sh" },
   tgBlue: { role: "Blue Deployment Group Target Group", runtime: "Health Check: /actuator/health/readiness", connectedTo: "ALB, Blue EC2 #1/#2", network: "App Security Group", evidence: "deploy-backend-blue-green-v1.sh" },
   tgGreen: { role: "Green Deployment Group Target Group", runtime: "Health Check: /actuator/health/readiness", connectedTo: "ALB, Green EC2 #1/#2", network: "App Security Group", evidence: "deploy-backend-blue-green-v1.sh" },
-  blue1: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
-  blue2: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
-  green1: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
-  green2: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Redis, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용)", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
-  rds: { role: "핵심 관계형 데이터(예약·결제·회원 등 영속 데이터)", runtime: "MySQL, Single-AZ(Multi-AZ 아님)", connectedTo: "Application(Blue/Green) 전체 — Blue·Green 전용으로 나뉘어 있지 않다", network: "Private, App SG만 접근(추정)", evidence: "docs/evidence/v3/169-app-ha/README.md" },
-  redis: { role: "Cache + Pub/Sub(다중 서버 채팅 전파)", runtime: "ElastiCache, TLS(REDIS_SSL_ENABLED)", connectedTo: "Application(Blue/Green) 전체", network: "Private", evidence: "application-prod.yml, ADR-0011" },
+  blue1: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Valkey, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용), Public Subnet 2a", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  blue2: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Valkey, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용), Public Subnet 2c", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  green1: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Valkey, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용), Public Subnet 2a", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  green2: { role: "Web/API + STOMP + Kafka Consumer(같은 프로세스)", runtime: "Spring Boot Application, Docker 컨테이너(SSM으로 배포)", connectedTo: "RDS, Valkey, Kafka, S3, OpenAI, PortOne, SMTP, Prometheus, CloudWatch", network: "App Security Group(ALB/Monitoring SG만 허용), Public Subnet 2c", evidence: "ChatModerationConsumer.java, deploy-backend-v1.sh" },
+  rds: { role: "핵심 관계형 데이터(예약·결제·회원 등 영속 데이터)", runtime: "MySQL, Single-AZ(Multi-AZ 아님)", connectedTo: "Application(Blue/Green) 전체 — Blue·Green 전용으로 나뉘어 있지 않다", network: "Private, App SG만 접근(추정), Private Subnet 2a/2c(DB Subnet Group)", evidence: "docs/evidence/v3/169-app-ha/README.md" },
+  redis: { role: "Cache + Pub/Sub(다중 서버 채팅 전파)", runtime: "ElastiCache for Valkey, TLS(REDIS_SSL_ENABLED) — Redis 호환 프로토콜", connectedTo: "Application(Blue/Green) 전체", network: "Private, Private Subnet 2a/2c", evidence: "docs/adr/0014-shared-redis-elasticache.md, docs/evidence/v3/169-app-ha/README.md" },
   kafka: { role: "비동기 AI 검수 메시지 전달", runtime: "자체 EC2, 단일 KRaft Broker(MSK 아님)", connectedTo: "Application(발행 + 소비, 같은 프로세스 내부 Consumer)", network: "Private", evidence: "docs/evidence/v3/169-app-ha/README.md" },
   s3: { role: "식당 이미지 저장", runtime: "Presigned URL 업로드", connectedTo: "Application, Image Validator Lambda", network: "—", evidence: "RestaurantImageS3Config.java, ADR-0007" },
   lambda: { role: "업로드 이미지 검증", runtime: "S3 ObjectCreated 트리거(temp/restaurants/** → 검증 후 최종 경로로 복사)", connectedTo: "S3", network: "—", evidence: "lambda/restaurant-image-validator, docs/adr/0007" },
@@ -511,8 +573,8 @@ const fullArchitectureNodeDetails = {
   ecr: { role: "컨테이너 이미지 저장소", runtime: "—", connectedTo: "SSM Run Command", network: "—", evidence: "push-image-to-ecr-v1.sh" },
   ssm: { role: "무중단 배포 실행 — 비활성(Standby) Blue/Green 그룹에만 배포", runtime: "AWS-RunShellScript 문서", connectedTo: "Blue/Green EC2, Parameter Store", network: "—", evidence: "run-ssm-backend-deploy-v1.sh" },
   paramstore: { role: "애플리케이션 Secret 원천(DB/Redis/Kafka/OpenAI/PortOne/Mail 등)", runtime: "SSM Run Command가 배포 시점에 fetch_parameter()로 조회", connectedTo: "SSM Run Command", network: "—", evidence: "deploy-backend-v1.sh:fetch_parameter" },
-  prometheus: { role: "메트릭 수집", runtime: "Actuator Prometheus Export", connectedTo: "Application, Grafana", network: "—", evidence: "monitoring/docker-compose.yml" },
-  grafana: { role: "메트릭 대시보드 + 알림 규칙", runtime: "—", connectedTo: "Prometheus, Slack", network: "—", evidence: "monitoring/grafana/dashboards, provisioning/alerting" },
+  prometheus: { role: "메트릭 수집", runtime: "Actuator Prometheus Export, Monitoring EC2 위 Docker Compose(Grafana와 같은 EC2)", connectedTo: "Application, Grafana", network: "—", evidence: "monitoring/docker-compose.yml" },
+  grafana: { role: "메트릭 대시보드 + 알림 규칙", runtime: "Monitoring EC2 위 Docker Compose(Prometheus와 같은 EC2)", connectedTo: "Prometheus, Slack", network: "—", evidence: "monitoring/grafana/dashboards, provisioning/alerting" },
   slack: { role: "Grafana 알림 수신 채널 — 앱 코드가 직접 연동하지 않는다", runtime: "Webhook(GRAFANA_SLACK_WEBHOOK_URL)", connectedTo: "Grafana", network: "External", evidence: "monitoring/grafana/provisioning/alerting/contact-points.yml" },
   cloudwatch: { role: "애플리케이션 로그 저장 — 메트릭 도구가 아니다(메트릭은 Prometheus/Grafana)", runtime: "awslogs Docker log driver", connectedTo: "Application", network: "—", evidence: "deploy-backend-v1.sh(--log-driver=awslogs)" }
 };
@@ -528,27 +590,51 @@ const fullArchitectureNodeDetails = {
    모니터링만 예외로 Client에서 시작하지 않는다(사용자 요청이 아니라 Application이 스스로
    내보내는 지표/로그이므로). */
 const archPathClientToApp = ["users", "route53", "alb", "tgGreen", "green1"];
+/* Client→App 공통 진입 4단계 자막 — 이 경로를 재사용하는 모든 sequence(식당 등록/결제 승인/Kafka
+   발행)가 그대로 공유한다. 마지막(green1) 자막은 sequence마다 실제로 무슨 요청을 처리하는지가
+   달라서 여기 포함하지 않고 각 sequence.captions에서 따로 쓴다. */
+const archEntryCaptions = [
+  "사용자가 브라우저에서 요청을 보냅니다",
+  "Route 53이 도메인 요청을 ALB로 연결합니다",
+  "ALB(HTTPS)가 요청을 현재 활성 Target Group으로 전달합니다",
+  "활성 Target Group(Green)이 요청을 뒤쪽 EC2로 라우팅합니다"
+];
 /* 전체 구성도는 App에서 여러 외부 자원으로 fan-out하는 구조다. 이를 한 줄 path로 연결하면
    RDS→Redis나 Slack→CloudWatch처럼 실제로 없는 관계를 만들어 버린다. 각 버튼은 실제 실행
-   단위별 sequence를 차례로 재생하며, 매 sequence는 독립적으로 App 또는 Kafka에서 시작한다. */
+   단위별 sequence를 차례로 재생하며, 매 sequence는 독립적으로 App 또는 Kafka에서 시작한다.
+   captions는 path와 길이가 같은 1:1 자막 배열이다 — "현재 연결: A → B"라는 기계적인 문구 대신
+   그 hop에서 실제로 무슨 일이 일어나는지 한 문장으로 설명한다(Human 이해도 리뷰 피드백 반영).
+   CloudFront/Frontend S3는 이 4개 그룹 어디에도 나오지 않는다 — 여기 있는 sequence는 전부
+   api.bobfull.click 백엔드 요청 경로이고, 프론트엔드 정적 파일 배포는 이 요청들과 무관한 별도
+   경로다. 두 Node는 클릭형 Detail Panel에서만 확인할 수 있으면 충분하다. */
 const archFlowGroups = [
   { id: "restaurant", label: "① 사장님 식당 등록", sequences: [
-    { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, "s3", "lambda"] }
+    { label: "식당 이미지 업로드 검증", path: [...archPathClientToApp, "s3", "lambda"],
+      captions: [...archEntryCaptions, "사장님이 식당 이미지 업로드를 요청합니다", "검증을 통과한 이미지를 S3에 저장합니다", "S3에 저장된 이미지를 Lambda가 검증합니다"] }
   ] },
   { id: "reservation", label: "② 예약·결제·채팅방·이메일", sequences: [
-    { label: "결제 승인", path: [...archPathClientToApp, "portone"] },
-    { label: "예약 상태 저장", path: ["green1", "rds"] },
-    { label: "채팅방 실시간 준비", path: ["green1", "redis"] },
-    { label: "확정 이메일 발송", path: ["green1", "smtp"] }
+    { label: "결제 승인", path: [...archPathClientToApp, "portone"],
+      captions: [...archEntryCaptions, "애플리케이션이 결제 승인 요청을 처리합니다", "PortOne(외부 PG)에 결제 승인을 요청하고 결과를 확인합니다"] },
+    { label: "예약 상태 저장", path: ["green1", "rds"],
+      captions: ["결제 승인 결과를 반영해 예약 상태를 갱신합니다", "갱신된 예약 상태를 RDS MySQL에 저장합니다"] },
+    { label: "채팅방 실시간 준비", path: ["green1", "redis"],
+      captions: ["예약이 확정되면 채팅방 참여자에게 알릴 준비를 합니다", "Redis Pub/Sub 채널에 신호를 발행해 다른 서버에 접속한 사용자에게도 전달합니다"] },
+    { label: "확정 이메일 발송", path: ["green1", "smtp"],
+      captions: ["예약 확정 이메일 발송을 요청합니다", "SMTP를 통해 사용자에게 확정 이메일을 발송합니다"] }
   ] },
   { id: "chat-ai", label: "③ 채팅 AI 분석", sequences: [
-    { label: "Kafka 발행", path: [...archPathClientToApp, "kafka"] },
-    { label: "AI Consumer가 소비 후 LLM 호출", path: ["kafka", "green1", "openai"] },
-    { label: "검수 결과 저장", path: ["green1", "rds"] }
+    { label: "Kafka 발행", path: [...archPathClientToApp, "kafka"],
+      captions: [...archEntryCaptions, "채팅 메시지를 저장한 뒤 \"AI 검수 필요\" 이벤트를 기록합니다", "기록된 이벤트를 Kafka에 발행합니다"] },
+    { label: "AI Consumer가 소비 후 LLM 호출", path: ["kafka", "green1", "openai"],
+      captions: ["Kafka에 검수 필요 이벤트가 발행되어 있습니다", "같은 EC2 안의 AI Consumer가 이 이벤트를 소비합니다", "규칙만으로 판단하기 애매한 메시지만 OpenAI에 판정을 요청합니다"] },
+    { label: "검수 결과 저장", path: ["green1", "rds"],
+      captions: ["LLM/Rule 판정 결과를 검증합니다", "검증된 검수 결과를 RDS MySQL에 저장합니다"] }
   ] },
   { id: "monitoring", label: "④ 모니터링·알람", sequences: [
-    { label: "메트릭 수집·알림", path: ["green1", "prometheus", "grafana", "slack"] },
-    { label: "애플리케이션 로그 기록", path: ["green1", "cloudwatch"] }
+    { label: "메트릭 수집·알림", path: ["green1", "prometheus", "grafana", "slack"],
+      captions: ["애플리케이션이 Actuator로 메트릭을 노출합니다", "Prometheus가 주기적으로 메트릭을 수집합니다", "Grafana가 수집된 메트릭을 대시보드로 보여주고 알림 규칙을 평가합니다", "알림 규칙에 걸리면 Grafana가 Slack으로 알림을 보냅니다"] },
+    { label: "애플리케이션 로그 기록", path: ["green1", "cloudwatch"],
+      captions: ["애플리케이션이 로그를 표준출력으로 남깁니다", "awslogs 드라이버가 로그를 CloudWatch Logs에 저장합니다(메트릭 아님)"] }
   ] }
 ];
 archFlowGroups.forEach((group) => { group.nodes = [...new Set(group.sequences.flatMap((sequence) => sequence.path))]; });
@@ -626,9 +712,18 @@ const aiModerationJourneyTopology = {
     /* emphasis 없이 기본(작은) 라벨로 줄였는데도 라벨 y가 node 상단(190)과 거의 붙어 있어 여전히
        ChatMessage 글자와 겹쳐 보였다 — region을 위로 늘려(y:150,h:125, 바닥은 그대로 275) 라벨이
        node 위 24px 여백에서 시작하게 했다. node/좌표는 그대로다. */
-    { label: "DB Transaction", x: 480, y: 150, w: 260, h: 125 },
+    { label: "DB Transaction", x: 480, y: 150, w: 260, h: 125, tint: "sync" },
+    /* AI 검수 파이프라인 region은 Kafka/Consumer(external)부터 Rule/LLM/Validator(async)까지 섞여
+       있어 region 전체를 하나의 카테고리로 tint하지 않는다 — 기존 emphasis(굵은 Orange 라벨)만
+       그대로 유지하고, 색 구분은 이 안의 개별 node(nodeCategories)에 맡긴다. */
     { label: "AI 검수 파이프라인", x: 655, y: 10, w: 825, h: 440, emphasis: true }
-  ]
+  ],
+  categorized: true,
+  nodeCategories: {
+    app: "user", db: "sync", outbox: "sync", processor: "sync", scheduler: "sync",
+    kafka: "external", "ai-llm": "external",
+    consumer: "async", insightConsumer: "async", "ai-rule": "async", "ai-fast": "async", "ai-context": "async", "ai-validator": "async", "ai-modDb": "async"
+  }
 };
 const aiModerationJourneySteps = [
   step("send", "Client", "ChatMessageCommandService", "● 사용자가 채팅 메시지를 전송합니다", "사용자가 채팅 메시지를 보내면 서버가 저장할 준비를 시작합니다 — 메시지 저장과 Outbox 이벤트 기록을 같은 트랜잭션으로 묶습니다.",
@@ -1748,7 +1843,7 @@ public void onMessage(Message message, byte[] pattern) {
           nextAction: "다른 서버들에게 새 메시지 알리기",
           limits: "Blue-Green Green 환경(bobfull-ec2-green-1/-2) 대상 실제 AWS 검증이다.",
           evidenceReferences: [evidence.appHa, evidence.redis] }),
-      step("publish", "App EC2 #1", "ElastiCache Redis", "↠ 다른 서버들에게 새 메시지를 알렸어요", "서버 1번이 여러 서버가 함께 쓰는 Redis Pub/Sub 채널에 '새 메시지가 왔다'고 publish했습니다.",
+      step("publish", "App EC2 #1", "ElastiCache Valkey", "↠ 다른 서버들에게 새 메시지를 알렸어요", "서버 1번이 여러 서버가 함께 쓰는 Redis Pub/Sub 채널에 '새 메시지가 왔다'고 publish했습니다.",
         { domainState: "ChatMessage 확정 저장됨(COMMITTED)", redis: "bobfull-ec2-green-1 PUBLISH 확인(messageId=29, 30)", factStatus: FACT.VERIFIED,
           visual: visual(["app", "db", "redis"], ["redis-publish"], "broadcast", null, "redis", ["db"]),
           codeReferences: ["RedisChatMessagePublisher.publish"],
@@ -1764,7 +1859,7 @@ public void onMessage(Message message, byte[] pattern) {
     }
 }` , annotations: [{"from": 2, "to": 5, "text": "다른 인스턴스들이 구독 중인 채널로 한 번 전파한다."}, {"from": 6, "to": 10, "text": "핵심: 실패해도 로그와 지표만 남기고 재시도하지 않는다 — best-effort라는 계약이 코드에 그대로 드러난다."}]},
           evidenceReferences: [evidence.appHa] }),
-      step("cross-instance", "ElastiCache Redis", "App EC2 #2 → Client B", "↠ 다른 서버가 받아서 상대방에게 전달했어요", "완전히 다른 서버(App EC2 #2)의 Redis Subscriber가 이 알림을 받아서, 자기한테 접속한 상대방(Client B)에게 실시간으로 메시지를 보여줬습니다.",
+      step("cross-instance", "ElastiCache Valkey", "App EC2 #2 → Client B", "↠ 다른 서버가 받아서 상대방에게 전달했어요", "완전히 다른 서버(App EC2 #2)의 Redis Subscriber가 이 알림을 받아서, 자기한테 접속한 상대방(Client B)에게 실시간으로 메시지를 보여줬습니다.",
         { domainState: "서버 간(cross-instance) 전달 확인(messageId=29, 30)", redis: "bobfull-ec2-green-2 SUBSCRIBE 확인 · 사용자 화면 A↔B 양방향 PASS",
           factStatus: FACT.VERIFIED,
           visual: visual(["redis", "app-a", "app-b", "stomp"], ["redis-app-a", "redis-app-b", "local-stomp", "local-stomp-b"], "broadcast", "delivered", "redis", ["db"]),

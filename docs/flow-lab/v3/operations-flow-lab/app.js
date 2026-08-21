@@ -90,10 +90,14 @@ function regionBgSvg(t) {
   return t.regions.map((region) => {
     const laneCls = region.emphasis ? " lane" : "";
     const roleCls = region.role ? ` role-${region.role}` : "";
+    /* region.tint(opt-in) — 실제 트랜잭션·인프라 경계(예: 핵심 TX vs AFTER_COMMIT, App vs Shared
+       Infra)를 점선 테두리 + 옅은 카테고리 배경색으로 구분한다. nodeCategories와 같은 user/sync/
+       async/external 색만 재사용해 새 색을 늘리지 않는다. 이 필드를 안 쓰는 기존 region은 그대로다. */
+    const tintCls = region.tint ? ` tint-${region.tint}` : "";
     const labelY = region.y + (region.emphasis ? 24 : 16);
     const textX = region.role ? region.x + 34 : region.x + 14;
     const icon = region.role ? `<g class="lane-icon role-${region.role}">${laneIconSvg(region.role, region.x + 22, labelY - 4)}</g>` : "";
-    return `<g class="region"><rect class="region-bg${laneCls}${roleCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/>${icon}<text class="region-label${laneCls}${roleCls}" x="${textX}" y="${labelY}">${region.label}</text></g>`;
+    return `<g class="region"><rect class="region-bg${laneCls}${roleCls}${tintCls}" x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" rx="10"/>${icon}<text class="region-label${laneCls}${roleCls}" x="${textX}" y="${labelY}">${region.label}</text></g>`;
   }).join("");
 }
 /* Ch0는 발표·GIF용 Showcase이므로, 학습용 Step 데이터의 구어체 자막만 이 화면에서 발표체로
@@ -156,7 +160,10 @@ function renderCanvas(data) {
     /* secondaryNodes(opt-in) — Scheduler처럼 "reliability 보조 장치"로만 표시할 node는 항상
        점선 테두리를 준다(baseline과 같은 방식이지만 임의 topology에서 재사용 가능하게 일반화). */
     const secondaryCls = t.secondaryNodes && t.secondaryNodes.includes(id) ? " secondary" : "";
-    const cls = (active ? "active" : committed ? "committed" : "dim") + secondaryCls;
+    /* nodeCategories(opt-in, Ch0 핵심 시스템 흐름 전용) — 실제 트랜잭션 경계에 따라 user/sync/async
+       tint을 추가한다. 이 맵이 없는 topology는 카테고리 class가 안 붙으므로 기존 렌더링과 동일하다. */
+    const categoryCls = t.nodeCategories && t.nodeCategories[id] ? ` cat-${t.nodeCategories[id]}` : "";
+    const cls = (active ? "active" : committed ? "committed" : "dim") + secondaryCls + categoryCls;
     const text = committed ? `${label} ✓` : label;
     /* async(Async Queue)는 실제 운영 경로가 아니라 Ch5 실험 비교용 baseline이므로, 활성 상태여도
        점선 테두리와 보조 라벨로 "이건 비교 기준선이다"를 항상 구분해서 보여준다. */
@@ -181,7 +188,9 @@ function renderCanvas(data) {
   const badgeSvg = badgeSvgFor(t, v.badge);
   /* animateNodes(AI 채팅 검수 unified topology만 씀) — 활성화되는 순간 살짝 커졌다 제자리로
      돌아오는 pop-in을 준다. 이 topology 안에서만 켜지므로 다른 Chapter 렌더링은 그대로다. */
-  const topologyClass = `${t.animateNodes ? " zoom-topology" : ""}${isServiceShowcase ? " service-topology" : ""}`;
+  /* categorized(opt-in, Ch0 전용 신규 topology만 씀) — nodeCategories/region.tint를 쓰는 topology에만
+     .categorized-topology CSS scope를 붙인다. 기존 Ch1~6 topology는 이 플래그가 없어 그대로다. */
+  const topologyClass = `${t.animateNodes ? " zoom-topology" : ""}${isServiceShowcase ? " service-topology" : ""}${t.categorized ? " categorized-topology" : ""}`;
   const caption = state.mode === "showcase" ? showcaseCaption(data.action) : data.action;
   $("canvas").innerHTML = `<svg class="topology${topologyClass}" viewBox="${t.viewBox}" role="img" aria-label="현재 Chapter의 고정 흐름 topology — 활성 path 위의 token만 이동한다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g>${badgeSvg}</svg><div class="flow-outcome ${v.outcome || ""}">${v.outcome ? `${outcomeLabel(v.outcome)} · ${caption}` : ""}</div>`;
   $("flowCaption").textContent = caption.replace(/^[✓×◆●↻↓↠▲?]\s*/, "");
@@ -487,6 +496,25 @@ function renderDecisionHighlights() {
    인프라 흐름 — scenario-data.js). 렌더링은 어느 경우든 findStep()/renderCanvas()를 그대로 재사용한다 —
    Showcase 전용 시각화 로직을 새로 만들지 않는다. problem/solution/outcomes 문구는 각 Step의
    factStatus/Evidence 범위를 벗어나지 않게 작성했다(과장 금지). */
+/* categorized topology를 쓰는 Ch0 Scenario마다, 실제 그 topology의 nodeCategories/region.tint에
+   쓴 key만 legend로 보여준다 — 색은 4개(user/sync/async/external)로 고정하고 Scenario마다 그
+   색이 실제로 무엇을 뜻하는지 label만 다르게 설명한다. */
+const SHOWCASE_CATEGORY_LEGEND = {
+  "payment-followup": [["user", "사용자 진입"], ["sync", "동기 백엔드"], ["async", "비동기 처리"]],
+  "service-unified": [["user", "일반 사용자"], ["owner", "사장님"], ["auto", "자동 관리"]],
+  "ai-moderation": [["user", "사용자 진입"], ["sync", "동기 백엔드"], ["async", "비동기 처리"], ["external", "외부 시스템"]],
+  "infra-api": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]],
+  "infra-chat": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]],
+  "infra-moderation": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]],
+  "infra-deploy": [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·Messaging"], ["async", "배포 제어"]]
+};
+function categoryLegendHtml(entries) {
+  return entries.map(([cat, label]) => `<span><i class="dot cat-${cat}"></i>${label}</span>`).join("");
+}
+/* 전체 인프라 구성도(fullArchitectureTopology) 전용 범례 — 요약 인프라 흐름과 같은 4색을 쓰되,
+   여기는 Shared Data/Image Pipeline/AI External Services 3개 region이 전부 external이라 label을
+   그 실제 뜻대로 조금 더 구체적으로 적는다. */
+const ARCH_CATEGORY_LEGEND = [["user", "접속·진입"], ["sync", "애플리케이션"], ["external", "공유 Data·외부 시스템"], ["async", "배포·운영 채널"]];
 const SHOWCASE_TABS = [
   { id: "service", label: "서비스 흐름", question: "BobFull은 어떻게 사용하는 서비스인가?" },
   { id: "core", label: "핵심 시스템 흐름", question: "복잡한 기능을 백엔드에서 어떻게 안전하게 처리했는가?" },
@@ -580,19 +608,35 @@ function archNodeSvg(t, id, label, cls) {
   const sublabelSvg = sublabel ? `<text x="50" y="58" class="node-sublabel">${sublabel}</text>` : "";
   const mainY = sublabel ? 38 : 42;
   const compress = label.length > 9 ? ` textLength="84" lengthAdjust="spacingAndGlyphs"` : "";
-  return `<g class="canvas-node${cls ? ` ${cls}` : ""}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
+  /* nodeCategories(opt-in) — 요약 인프라 흐름과 같은 user/sync/async/external tint를 전체 인프라
+     구성도의 Node에도 붙인다. fullArchitectureTopology에만 있으므로 다른 topology는 그대로다. */
+  const categoryCls = t.nodeCategories && t.nodeCategories[id] ? ` cat-${t.nodeCategories[id]}` : "";
+  return `<g class="canvas-node${cls ? ` ${cls}` : ""}${categoryCls}" data-node="${id}" transform="translate(${x} ${y})"><g class="node-inner"><rect width="100" height="70" rx="6"/><text x="50" y="${mainY}"${compress}>${label}</text>${sublabelSvg}</g></g>`;
 }
-/* 전체 인프라 구성도의 흐름 강조 — Edge는 항상 구조적 배경(회색, pool 기반 fan-out 그대로)만
-   보여주고 절대 강조하지 않는다. 실행 순서를 보여주는 것은 오직 Node 자체의 반짝임뿐이다 —
-   방문 순서대로 Node를 하나씩 active(주황)로 켜고, 이미 지나간 Node는 committed(초록)로 남는다.
-   Edge 경로를 계산하거나 강조하려 했던 이전 시도(고정 pool waypoint, 좌표 기반 자동 라우팅)는
-   전부 제거했다 — "선 빼고 Node만 순서대로 반짝이기"가 최종 방향이다. */
+/* 두 Node의 실제 좌표(박스 중심)만 보고 그때그때 강조선을 계산한다 — pool 같은 가상 waypoint를
+   거치는 고정 t.edges 문자열은 재사용하지 않는다(path가 "green1"→"rds"처럼 고정 edge에 없는
+   구간도 자유롭게 잇기 때문). dx/dy 중 더 큰 축으로 먼저 꺾어(elbow) 대부분의 실제 배치에서
+   다른 Node 박스를 덜 가로지르게 한다 — 완벽한 장애물 회피는 아니고, "이 구간을 지금 지나간다"는
+   방향성을 보여주는 근사 경로다. */
+function archNodeCenter(t, id) { const [x, y] = t.nodePositions[id]; return [x + 50, y + 35]; }
+function computeArchActivePath(t, fromId, toId) {
+  const [x1, y1] = archNodeCenter(t, fromId);
+  const [x2, y2] = archNodeCenter(t, toId);
+  if (Math.abs(x1 - x2) < 2) return `M${x1} ${y1} V${y2}`;
+  if (Math.abs(y1 - y2) < 2) return `M${x1} ${y1} H${x2}`;
+  return Math.abs(x1 - x2) >= Math.abs(y1 - y2) ? `M${x1} ${y1} H${x2} V${y2}` : `M${x1} ${y1} V${y2} H${x2}`;
+}
+/* 전체 인프라 구성도의 흐름 강조 — 구조적 배경 Edge(회색, pool 기반 fan-out)는 항상 그대로 두고,
+   그 위에 "지금 방문 중인 경로"만 computeArchActivePath()로 계산한 강조선을 얹는다. 이미 지나간 구간은
+   committed(초록), 마지막(현재) 구간만 active(주황 + 흐르는 token)로 표시해 요약 Scenario Map과
+   같은 색 관례를 유지한다. Node 클릭으로 단일 Node만 살펴보는 모드(archSelected)에서는 특정
+   경로가 없으므로 강조선을 그리지 않는다. */
 function renderArchCanvas() {
   const t = fullArchitectureTopology;
   const regionSvg = regionBgSvg(t);
   let nodesSvg;
-  const edgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector dim" d="${path}"/>`).join("");
-  const tokenSvg = "";
+  const staticEdgeSvg = Object.entries(t.edges).map(([id, path]) => `<path id="arch-edge-${id}" class="connector dim" d="${path}"/>`).join("");
+  let dynamicEdgeSvg = "", tokenSvg = "";
   if (state.archSelected) {
     nodesSvg = t.nodes.map(([id, label]) => archNodeSvg(t, id, label, id === state.archSelected ? "active" : "")).join("");
   } else {
@@ -603,23 +647,43 @@ function renderArchCanvas() {
     const committedNodes = visitedNodes.slice(0, -1);
     nodesSvg = t.nodes.map(([id, label]) =>
       archNodeSvg(t, id, label, id === activeNode ? "active" : committedNodes.includes(id) ? "committed" : "")).join("");
+    const segments = visitedNodes.slice(1).map((id, i) => [visitedNodes[i], id]);
+    dynamicEdgeSvg = segments.map(([from, to], i) =>
+      `<path class="connector ${i === segments.length - 1 ? "active" : "committed"}" d="${computeArchActivePath(t, from, to)}"/>`).join("");
+    if (segments.length) {
+      const [lastFrom, lastTo] = segments[segments.length - 1];
+      tokenSvg = `<g class="token event"><rect x="-5" y="-5" width="10" height="10" transform="rotate(45)"/><animateMotion dur="1.1s" repeatCount="indefinite" fill="remove" path="${computeArchActivePath(t, lastFrom, lastTo)}"/></g>`;
+    }
   }
+  const edgeSvg = staticEdgeSvg + dynamicEdgeSvg;
   const flow = archFlowGroups[state.archFlowIndex];
   const sequence = flow.sequences[state.archSequenceIndex];
   const path = sequence.path;
   const step = Math.min(state.archPathStep, path.length - 1);
+  /* captions[step]가 "지금 이 hop에서 실제로 무슨 일이 일어나는지"를 한 문장으로 설명한다 —
+     예전의 "현재 연결: A → B" 기계적 문구를 대체한다. captions가 없는(정의 안 된) sequence만
+     예전 방식으로 fallback한다. */
   const fromId = step > 0 ? path[step - 1] : null;
   const toId = path[step];
   const nodeLabel = (id) => id && t.nodes.find(([nodeId]) => nodeId === id)?.[1];
+  const fallbackCaption = fromId && fromId !== toId ? `현재 연결: ${nodeLabel(fromId)} → ${nodeLabel(toId)}` : `시작 지점: ${nodeLabel(toId) || flow.label}`;
   const progress = state.archSelected
     ? "선택한 구성 요소의 역할과 연결 정보를 확인하고 있습니다."
     : state.archHolding
       ? `${flow.label} · ${sequence.label} 확인 완료`
-      : toId && fromId && fromId !== toId
-        ? `현재 연결: ${nodeLabel(fromId)} → ${nodeLabel(toId)}`
-        : `시작 지점: ${nodeLabel(toId) || flow.label}`;
-  $("archCanvas").innerHTML = `<svg class="topology arch-topology" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g></svg><p class="arch-progress">${progress}</p>`;
+      : (sequence.captions && sequence.captions[step]) || fallbackCaption;
+  const archTopologyClass = t.categorized ? " categorized-topology" : "";
+  $("archCanvas").innerHTML = `<svg class="topology arch-topology${archTopologyClass}" viewBox="${t.viewBox}" role="img" aria-label="BobFull 전체 인프라 구성도 — Node를 클릭하면 선택 강조된다"><g class="regions">${regionSvg}</g><g class="connectors">${edgeSvg}</g><g class="tokens">${tokenSvg}</g><g class="nodes">${nodesSvg}</g></svg><p class="arch-progress">${progress}</p>`;
+  $("archLegend").innerHTML = t.nodeCategories ? categoryLegendHtml(ARCH_CATEGORY_LEGEND) : "";
+  $("archLegend").hidden = !t.nodeCategories;
   renderArchFlowButtons();
+  /* 재생바는 특정 Node를 골라 살펴보는 중(archSelected)에는 의미가 없으므로 감춘다 — 그 상태는
+     이미 "선택한 구성 요소의 역할과 연결 정보를 확인하고 있습니다" 문구로 따로 안내한다. */
+  $("archControls").hidden = !!state.archSelected;
+  if (!state.archSelected) {
+    $("archPlayPause").textContent = archPlaying ? "⏸ Pause" : "▶ Play";
+    $("archStepCounter").textContent = archGroupProgress(flow);
+  }
 }
 function renderArchFlowButtons() {
   $("archFlowButtons").innerHTML = archFlowGroups.map((group, i) =>
@@ -664,8 +728,10 @@ function archFlowTick() {
   }
   renderArchCanvas();
 }
+let archPlaying = true;
 function startArchFlowCycle() {
   stopArchFlowCycle();
+  archPlaying = true;
   state.archSelected = null;
   state.archSequenceIndex = 0;
   state.archPathStep = 0;
@@ -678,6 +744,64 @@ function startArchFlowCycle() {
 function scheduleArchResume() {
   clearTimeout(state.archResumeTimeout);
   state.archResumeTimeout = setTimeout(startArchFlowCycle, 4000);
+}
+/* 재생바(Prev/Play·Pause/Next/Replay) — 요약 Scenario Map의 재생바와 같은 조작 관례를 그대로
+   따른다. Prev/Next는 수동 조작이므로 자동 순환을 멈추고, Play는 현재 위치 그대로 순환을 다시
+   시작한다(startArchFlowCycle처럼 위치를 0으로 리셋하지 않는다). */
+function archPauseCycle() { archPlaying = false; stopArchFlowCycle(); renderArchCanvas(); }
+function archResumeCycle() {
+  stopArchFlowCycle();
+  archPlaying = true;
+  state.archSelected = null;
+  state.archFlowTimer = setInterval(archFlowTick, 1350);
+  renderArchCanvas();
+}
+function archStepForward() {
+  const group = archFlowGroups[state.archFlowIndex];
+  const path = group.sequences[state.archSequenceIndex].path;
+  if (state.archPathStep < path.length - 1) {
+    state.archPathStep++;
+  } else if (state.archSequenceIndex < group.sequences.length - 1) {
+    state.archSequenceIndex++; state.archPathStep = 0;
+  } else {
+    state.archFlowIndex = (state.archFlowIndex + 1) % archFlowGroups.length;
+    state.archSequenceIndex = 0; state.archPathStep = 0;
+  }
+  state.archHolding = false;
+  renderArchCanvas();
+}
+function archStepBackward() {
+  if (state.archPathStep > 0) {
+    state.archPathStep--;
+  } else if (state.archSequenceIndex > 0) {
+    state.archSequenceIndex--;
+    state.archPathStep = archFlowGroups[state.archFlowIndex].sequences[state.archSequenceIndex].path.length - 1;
+  } else if (state.archFlowIndex > 0) {
+    state.archFlowIndex--;
+    const prevGroup = archFlowGroups[state.archFlowIndex];
+    state.archSequenceIndex = prevGroup.sequences.length - 1;
+    state.archPathStep = prevGroup.sequences[state.archSequenceIndex].path.length - 1;
+  }
+  state.archHolding = false;
+  renderArchCanvas();
+}
+function archManualStep(stepFn) {
+  state.archSelected = null;
+  archPlaying = false;
+  stopArchFlowCycle();
+  stepFn();
+}
+function archReplayCurrentGroup() {
+  state.archSelected = null;
+  state.archSequenceIndex = 0; state.archPathStep = 0; state.archHolding = false;
+  if (archPlaying) { stopArchFlowCycle(); state.archFlowTimer = setInterval(archFlowTick, 1350); }
+  renderArchCanvas();
+}
+function archGroupProgress(group) {
+  const total = group.sequences.reduce((sum, sequence) => sum + sequence.path.length, 0);
+  let done = 0;
+  for (let i = 0; i < state.archSequenceIndex; i++) done += group.sequences[i].path.length;
+  return `${done + state.archPathStep + 1} / ${total}`;
 }
 function selectArchFlow(idx) {
   state.archFlowIndex = idx;
@@ -722,6 +846,12 @@ function renderShowcaseStep() {
   $("showcaseProblem").hidden = !scenario.problem;
   $("showcaseProblem").textContent = scenario.problem;
   $("showcaseSolution").textContent = scenario.solution;
+  /* categorized topology(nodeCategories/region.tint)를 쓰는 Scenario만 범례를 보여준다 — 매핑이
+     없는 Scenario(AI 장애 대응·다중 서버 채팅처럼 기존 Ch1~6 topology를 그대로 재사용하는 경우)는
+     legend 없이 그대로다. */
+  const legendEntries = SHOWCASE_CATEGORY_LEGEND[scenario.id];
+  $("showcaseLegend").hidden = !legendEntries;
+  if (legendEntries) $("showcaseLegend").innerHTML = categoryLegendHtml(legendEntries);
   renderCanvas(data);
   $("showcaseStepCounter").textContent = `Step ${state.showcaseStep + 1} / ${steps.length}`;
   $("showcaseOutcomes").innerHTML = scenario.outcomes.map((text) => `<span class="showcase-outcome">${text} ✓</span>`).join("");
@@ -835,6 +965,10 @@ $("archFlowButtons").onclick = (event) => {
   const button = event.target.closest("button[data-flow]"); if (!button) return;
   selectArchFlow(Number(button.dataset.flow));
 };
+$("archPrev").onclick = () => archManualStep(archStepBackward);
+$("archNext").onclick = () => archManualStep(archStepForward);
+$("archPlayPause").onclick = () => { archPlaying ? archPauseCycle() : archResumeCycle(); };
+$("archReplay").onclick = archReplayCurrentGroup;
 $("showcaseBackToDocs").onclick = () => {
   const ref = currentShowcase().steps[0];
   if (!ref.chapter) return;
